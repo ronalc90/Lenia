@@ -108,6 +108,7 @@ uniform sampler2D uTintLut;          // 256 × ${TINT_LUT_ROWS}: row 0 = matter 
  * Species tint at grid point g: atV = the tinted colormap colour at matter value v, body = the
  * species' body colour (value .6, for its contour and glow), both averaged over the nearby tints by
  * a gaussian of each creature's radius. Returns how much of them to use (0 = untinted).
+ * Needs uGrid and uDishMode declared before it (the render shader).
  */
 float tintAt(vec2 g, float v, out vec3 atV, out vec3 body) {
   float wsum = 0.0;
@@ -118,7 +119,10 @@ float tintAt(vec2 g, float v, out vec3 atV, out vec3 body) {
   for (int i = 0; i < ${MAX_TINTS}; i++) {
     if (i >= uTintCount) break;
     vec4 t = uTint[i];
-    vec2 d = (g - t.xy) / max(t.z, 1.0);
+    vec2 d = g - t.xy;
+    // On the torus a creature across the edge keeps its colour on both sides (the short way round).
+    if (uDishMode == 0) d -= uGrid * floor(d / uGrid + 0.5);
+    d /= max(t.z, 1.0);
     float w = exp(-dot(d, d));
     if (w < 0.004) continue;
     float row = (t.w + 0.5) / ${TINT_LUT_ROWS}.0;

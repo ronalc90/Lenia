@@ -184,7 +184,7 @@ export class BestiaryPanel implements Panel {
     const p = c.portrait!;
     p.className = `portrait r-${s.rarity}`;
     if (s.portrait) {
-      const url = portraitURL(s.portrait);
+      const url = portraitURL(s.portrait, s.hue);
       if (c.img!.getAttribute('src') !== url) c.img!.src = url;
       if (c.img!.parentElement !== p) {
         p.textContent = '';

@@ -699,7 +699,7 @@ function speciesBody(
   /** Species identity is on (the game sends a scientific line): plain name as the title. */
   const named = s.scientificName !== undefined;
   const portrait = h('div', { class: `portrait r-${s.rarity}` });
-  if (s.portrait) portrait.appendChild(h('img', { src: portraitURL(s.portrait), alt: '' }));
+  if (s.portrait) portrait.appendChild(h('img', { src: portraitURL(s.portrait, s.hue), alt: '' }));
   else portrait.appendChild(h('span', { class: 'noimg' }));
 
   let title: HTMLElement;

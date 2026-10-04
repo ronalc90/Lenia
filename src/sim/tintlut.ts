@@ -3,9 +3,9 @@
  * colormap (the art palette, or a cosmetic one), so tints follow whatever palette is equipped.
  *
  * Each entry keeps its OKLCH lightness — every species is exactly as bright as untinted matter —
- * and takes the hue with the chroma the band allows: none in the faint haze, full in the body, a
- * hint in the hot core (the same banding as src/ui/art/matter.ts tintedStops; tested against its
- * matterLUT2D). Row 0 of the texture is the colormap itself.
+ * and takes the hue with the chroma the band allows: none in the faint haze, all of the body, a clear
+ * hint in the hot core (the art direction's banding, src/ui/art/matter.ts tintedStops, made stronger
+ * so every colour family reads at phone size). Row 0 of the texture is the colormap itself.
  *
  * OKLab: Björn Ottosson (2020), public domain. Pure functions, no GL.
  */
@@ -70,14 +70,23 @@ function oklch(L: number, C: number, hDeg: number): [number, number, number] {
   return [fromLinear(clamp01(lin[0])) * 255, fromLinear(clamp01(lin[1])) * 255, fromLinear(clamp01(lin[2])) * 255];
 }
 
-/** Share of the hue each matter value takes: none in the haze, full in the body, a hint in the core. */
+/**
+ * Share of the hue each matter value takes: none in the faint haze, all of the body, and still a
+ * clear hint in the hot core. Stronger than the art direction's first rows (matter.ts tintedStops:
+ * 0.85 body, 0.15 core) by the owner's call: "cada especie un color claramente distinto" at phone
+ * size, where most of a creature is its bright core.
+ */
 export function tintWeight(v: number): number {
   if (v <= 0.04) return 0;
-  if (v < 0.14) return ((v - 0.04) / 0.1) * 0.85;
-  if (v <= 0.7) return 0.85;
-  if (v < 0.94) return 0.85 - ((v - 0.7) / 0.24) * 0.7;
-  return 0.15;
+  if (v < 0.12) return (v - 0.04) / 0.08;
+  if (v <= 0.7) return 1;
+  if (v < 0.94) return 1 - ((v - 0.7) / 0.24) * 0.45;
+  return 0.55;
 }
+
+/** Chroma the tinted body reaches (OKLCH), and the floor near white so the core still shows its hue. */
+const BODY_CHROMA = 0.19;
+const CORE_CHROMA = 0.11;
 
 /**
  * Knots where the hue is applied exactly: the values of the matter colormap's stops
@@ -88,6 +97,27 @@ export function tintWeight(v: number): number {
 const KNOTS: readonly number[] = MATTER_STOPS.map((s) => s[0]);
 
 /** Colormap colour at v by linear interpolation of its 256 entries. */
+/** sRGB 0..255 of `hsl(h s% l%)` (CSS Color 4). */
+function hslRgb(h: number, sat: number, light: number): [number, number, number] {
+  const f = (n: number): number => {
+    const k = (n + h / 30) % 12;
+    return light - sat * Math.min(light, 1 - light) * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+  };
+  return [f(0) * 255, f(8) * 255, f(4) * 255];
+}
+
+/**
+ * OKLCH hue (degrees) of a species accent `hsl(h 70% 60%)` (SpeciesView.hue, the colour of its card,
+ * label, halo and Bestiary portrait). The two hue wheels differ by up to ~40° (HSL 200 sky blue is
+ * OKLCH ~235), so the dish converts: the tint on the dish is the card's colour family.
+ */
+export function accentHueToOklch(hslHue: number): number {
+  const h = ((hslHue % 360) + 360) % 360;
+  const [r, g, b] = hslRgb(h, 0.7, 0.6);
+  const [, A, B] = rgbToOklab(r, g, b);
+  return ((Math.atan2(B, A) * 180) / Math.PI + 360) % 360;
+}
+
 function sampleLut(base: Uint8Array, v: number, c: number): number {
   const x = Math.min(255, Math.max(0, v * 255));
   const i = Math.min(254, Math.floor(x));
@@ -116,7 +146,7 @@ export function tintRow(base: Uint8Array, hueDeg: number, out: Uint8Array, offse
       continue;
     }
     const [L, A, B] = rgbToOklab(r, g, b);
-    const t = oklch(L, Math.max(Math.hypot(A, B), L > 0.85 ? 0.07 : 0.15), hueDeg);
+    const t = oklch(L, Math.max(Math.hypot(A, B), L > 0.85 ? CORE_CHROMA : BODY_CHROMA), hueDeg);
     tinted.set([Math.round(r + (t[0] - r) * w), Math.round(g + (t[1] - g) * w), Math.round(b + (t[2] - b) * w)], k * 3);
   }
   let k = 0;
@@ -154,11 +184,11 @@ export class TintRows {
   setBase(base: Uint8Array): void {
     this.base.set(base);
     this.data.set(base, 0);
-    this.hues.forEach((h, j) => tintRow(this.base, h, this.data, (j + 1) * 256 * 4));
+    this.hues.forEach((h, j) => tintRow(this.base, accentHueToOklch(h), this.data, (j + 1) * 256 * 4));
     this.dirty = true;
   }
 
-  /** Row index (1..) for a hue in degrees. */
+  /** Row index (1..) for a species accent hue (SpeciesView.hue, HSL degrees). */
   rowFor(hueDeg: number): number {
     const h = ((hueDeg % 360) + 360) % 360;
     let best = -1;
@@ -172,7 +202,7 @@ export class TintRows {
     });
     if (best >= 0 && (bestD < 0.5 || this.hues.length >= MAX_TINT_ROWS)) return best + 1;
     this.hues.push(h);
-    tintRow(this.base, h, this.data, this.hues.length * 256 * 4);
+    tintRow(this.base, accentHueToOklch(h), this.data, this.hues.length * 256 * 4);
     this.dirty = true;
     return this.hues.length;
   }

@@ -738,14 +738,15 @@ void main() {
   vec3 tintBody = uContour;
   float tw = uTintCount > 0 ? tintAt(g, v, tintV, tintBody) : 0.0;
   mat = mix(mat, tintV, tw);
-  vec3 contourC = mix(uContour, tintBody * 1.15, 0.85 * tw);
+  vec3 contourC = mix(uContour, tintBody * 1.15, tw);
   // Soft relief: the field as a gel surface lit from the top-left, so bodies
   // read as volumes and saturated cores do not go flat.
   vec3 n = normalize(vec3(-grad * 5.0, 1.0));
   vec3 l = normalize(LIGHT);
   float shade = dot(n, l) - l.z;                  // 0 on flat matter
   // Shadows sink into deep cyan/indigo instead of grey (stays luminous).
-  mat = mix(mat, mat * uShadow, clamp(-shade * 1.4, 0.0, 0.85));
+  // (a tinted creature's shadows stay its own colour: a neutral shade instead of the cyan one)
+  mat = mix(mat, mat * mix(uShadow, vec3(0.62), tw), clamp(-shade * 1.4, 0.0, 0.85));
   mat *= 1.0 + 0.35 * max(shade, 0.0);
   float spec = pow(max(dot(n, normalize(l + vec3(0.0, 0.0, 1.0))), 0.0), 48.0);
   mat += vec3(0.9, 0.97, 1.0) * spec * 0.35 * smoothstep(0.15, 0.45, v);
@@ -764,8 +765,8 @@ void main() {
   // in its own colour).
   if (uGlowAmt > 0.0) {
     float gl = texture(uGlow, g / uGrid).r;
-    vec3 gw = mix(uGlowWide, tintBody * 0.75, 0.85 * tw);
-    vec3 gc = mix(uGlowCore, tintBody, 0.85 * tw);
+    vec3 gw = mix(uGlowWide, tintBody * 0.8, tw);
+    vec3 gc = mix(uGlowCore, tintBody, tw);
     col += (gw * gl + gc * gl * gl * 1.4) * uGlowAmt;
   }
 

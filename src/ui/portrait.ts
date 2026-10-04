@@ -11,6 +11,7 @@ import { matterColor } from '../core/palette';
 import type { Pattern } from '../core/types';
 import { paletteColor } from '../store/apply';
 import { DEFAULT_ITEM, type MatterStop } from '../store/catalog';
+import { accentHueToOklch, tintRow } from '../sim/tintlut';
 
 const cache = new WeakMap<Pattern, Map<string, string>>();
 let palette: { id: string; stops: readonly MatterStop[] } | null = null;
@@ -27,6 +28,30 @@ export function portraitPaletteId(): string {
 
 function colorAt(v: number): [number, number, number, number] {
   return palette ? paletteColor(palette.stops, v) : matterColor(v);
+}
+
+/** Tinted colormaps (256 × RGBA8) per palette and species hue: the same rows the dish uses. */
+const tintLuts = new Map<string, Uint8Array>();
+
+/**
+ * The colormap a species is drawn with: its hue's tinted copy of the current palette (sim/tintlut.ts),
+ * so a portrait has the colour of the creature on the dish, its card and its label.
+ */
+function tintLut(hue: number): Uint8Array {
+  const key = `${portraitPaletteId()}|${Math.round(hue * 2) / 2}`;
+  let lut = tintLuts.get(key);
+  if (!lut) {
+    const base = new Uint8Array(256 * 4);
+    for (let i = 0; i < 256; i++) {
+      const [r, g, b, a] = colorAt(i / 255);
+      base.set([r, g, b, Math.round(a * 255)], i * 4);
+    }
+    lut = new Uint8Array(256 * 4);
+    tintRow(base, accentHueToOklch(hue), lut);
+    if (tintLuts.size > 64) tintLuts.clear();
+    tintLuts.set(key, lut);
+  }
+  return lut;
 }
 
 /** Bilinear sample of a pattern at fractional coords (outside = 0). */
@@ -60,8 +85,12 @@ function bounds(p: Pattern): { x0: number; y0: number; x1: number; y1: number } 
   return { x0, y0, x1, y1 };
 }
 
-/** Render a pattern to a canvas of `size` px, body filling `fill` of the side. */
-export function renderPattern(p: Pattern, size = 128, fill = 0.72): HTMLCanvasElement {
+/**
+ * Render a pattern to a canvas of `size` px, body filling `fill` of the side; with `hue` (SpeciesView.hue)
+ * in the species' colour.
+ */
+export function renderPattern(p: Pattern, size = 128, fill = 0.72, hue?: number): HTMLCanvasElement {
+  const lut = hue !== undefined && Number.isFinite(hue) ? tintLut(hue) : null;
   const c = document.createElement('canvas');
   c.width = size;
   c.height = size;
@@ -79,8 +108,16 @@ export function renderPattern(p: Pattern, size = 128, fill = 0.72): HTMLCanvasEl
       const px = cxp + (x + 0.5 - size / 2) * scale - 0.5;
       const py = cyp + (y + 0.5 - size / 2) * scale - 0.5;
       const v = sample(p, px, py);
-      const [r, g, bb, a] = colorAt(v);
       const i = (y * size + x) * 4;
+      if (lut) {
+        const k = Math.min(255, Math.max(0, Math.round(v * 255))) * 4;
+        img.data[i] = lut[k];
+        img.data[i + 1] = lut[k + 1];
+        img.data[i + 2] = lut[k + 2];
+        img.data[i + 3] = lut[k + 3];
+        continue;
+      }
+      const [r, g, bb, a] = colorAt(v);
       img.data[i] = r;
       img.data[i + 1] = g;
       img.data[i + 2] = bb;
@@ -91,8 +128,8 @@ export function renderPattern(p: Pattern, size = 128, fill = 0.72): HTMLCanvasEl
   return c;
 }
 
-export function portraitURL(p: Pattern): string {
-  const key = portraitPaletteId();
+export function portraitURL(p: Pattern, hue?: number): string {
+  const key = `${portraitPaletteId()}|${hue === undefined ? '' : Math.round(hue * 2) / 2}`;
   let byPalette = cache.get(p);
   if (!byPalette) {
     byPalette = new Map();
@@ -100,7 +137,7 @@ export function portraitURL(p: Pattern): string {
   }
   let url = byPalette.get(key);
   if (!url) {
-    url = renderPattern(p).toDataURL('image/png');
+    url = renderPattern(p, 128, 0.72, hue).toDataURL('image/png');
     // A player rarely switches more than a few palettes: keep the last three per portrait.
     if (byPalette.size >= 3) byPalette.delete(byPalette.keys().next().value as string);
     byPalette.set(key, url);
