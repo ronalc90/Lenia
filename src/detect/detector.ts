@@ -114,6 +114,10 @@ const DOMINANT_SHARE = 0.8;
 const COLONY_MATCH = 2;
 /** Static signature features are averaged over this many recent steps. */
 const STATIC_SPAN = 400;
+/** Number of static (shape) features at the start of the signature (MASS … PARTS). */
+const N_STATIC = SIG.PARTS + 1;
+/** Shape drift needs two STATIC_SPAN windows of history, minus this slack (two snapshot periods). */
+const DRIFT_SLACK = 20;
 
 function mod(a: number, n: number): number {
   return ((a % n) + n) % n;
@@ -238,6 +242,10 @@ interface Track {
   fusedAt: number;
   /** Step of the last fusion or division: shape/motion history before it is stale. */
   structAt: number;
+  /** Step at which it last became stable (−∞ while not stable). */
+  stableSince: number;
+  /** Static-signature distance between the last two STATIC_SPAN windows (−1 = not enough history). */
+  drift: number;
 }
 
 // ───────────────────────────── detector ─────────────────────────────
@@ -393,6 +401,8 @@ class LeniaDetector implements Detector {
         vy: t.vy,
         signature: t.signature,
         parentId: t.parentId,
+        stableSteps: t.state === 'stable' ? step - t.stableSince : 0,
+        shapeDrift: t.drift,
       });
     }
     this.lastReport = { step, creatures, events: [], totalMass, fill };
@@ -566,6 +576,8 @@ class LeniaDetector implements Detector {
       announce: false,
       fusedAt: -Infinity,
       structAt: -Infinity,
+      stableSince: -Infinity,
+      drift: -1,
     };
   }
 
@@ -887,6 +899,7 @@ class LeniaDetector implements Detector {
       else next = 'born';
     }
     if (next !== t.state) {
+      t.stableSince = next === 'stable' ? step : -Infinity;
       if (next === 'stable') events.push({ type: 'stable', id: t.id, x: t.x, y: t.y });
       else if (next === 'exploded') {
         events.push({ type: 'exploded', id: t.id, x: t.x, y: t.y });
@@ -1269,20 +1282,22 @@ class LeniaDetector implements Detector {
 
   // ───────────────────────── signature ─────────────────────────
 
-  private signatureOf(t: Track, R: number, params: LeniaParams): number[] {
-    const sig = new Array<number>(SIG_LENGTH).fill(SIG_UNKNOWN);
+  /**
+   * Mean static (shape) features over the history samples k0 … (step ≤ to). Writes MASS … PARTS
+   * into `out`; returns the number of samples (0 = none).
+   */
+  private staticMeans(t: Track, R: number, k0: number, to: number, out: number[]): number {
     const h = t.hist;
-    if (h.count === 0) return sig;
-    const last = h.get(h.count - 1, F_STEP);
-    const k0 = Math.min(h.firstSince(Math.max(last - STATIC_SPAN, t.structAt)), h.count - 1);
-    const n = h.count - k0;
+    let n = 0;
     let mass = 0;
     let rg = 0;
     let dens = 0;
     let grad = 0;
     let parts = 0;
     const hs = new Float64Array(NH);
-    for (let k = k0; k < h.count; k++) {
+    for (let k = Math.max(0, k0); k < h.count; k++) {
+      if (h.get(k, F_STEP) > to) break;
+      n++;
       mass += h.get(k, F_MASS);
       rg += h.get(k, F_RG);
       dens += h.get(k, F_DENS);
@@ -1290,13 +1305,37 @@ class LeniaDetector implements Detector {
       parts += h.get(k, F_PARTS);
       for (let j = 0; j < NH; j++) hs[j] += h.get(k, F_H + j);
     }
+    if (n === 0) return 0;
     mass /= n;
-    sig[SIG.MASS] = mass / (R * R);
-    sig[SIG.RG] = rg / n / R;
-    sig[SIG.DENSITY] = dens / n;
-    sig[SIG.EDGE] = mass > 0 ? ((grad / n) * R) / mass : 0;
-    for (let j = 0; j < NH; j++) sig[SIG.H1 + j] = hs[j] / n;
-    sig[SIG.PARTS] = parts / n;
+    out[SIG.MASS] = mass / (R * R);
+    out[SIG.RG] = rg / n / R;
+    out[SIG.DENSITY] = dens / n;
+    out[SIG.EDGE] = mass > 0 ? ((grad / n) * R) / mass : 0;
+    for (let j = 0; j < NH; j++) out[SIG.H1 + j] = hs[j] / n;
+    out[SIG.PARTS] = parts / n;
+    return n;
+  }
+
+  private signatureOf(t: Track, R: number, params: LeniaParams): number[] {
+    const sig = new Array<number>(SIG_LENGTH).fill(SIG_UNKNOWN);
+    const h = t.hist;
+    if (h.count === 0) return sig;
+    const last = h.get(h.count - 1, F_STEP);
+    // Static features: mean over the last STATIC_SPAN steps after the last fusion/division (the
+    // newest sample always counts).
+    const since = (from: number): number => h.firstSince(Math.max(from, t.structAt));
+    this.staticMeans(t, R, Math.min(since(last - STATIC_SPAN), h.count - 1), last, sig);
+    // Shape drift: is the body still changing? Compare the last window with the one before it
+    // (both after the last fusion/division). A finished creature (even a pulsing one, whose
+    // oscillation averages out over a window) barely drifts; a morphing blob drifts a lot.
+    t.drift = -1;
+    if (last - Math.max(t.structAt, h.get(0, F_STEP)) >= 2 * STATIC_SPAN - DRIFT_SLACK) {
+      const prev = new Array<number>(N_STATIC).fill(SIG_UNKNOWN);
+      const recent = new Array<number>(N_STATIC).fill(SIG_UNKNOWN);
+      const nPrev = this.staticMeans(t, R, since(last - 2 * STATIC_SPAN), last - STATIC_SPAN - 1e-9, prev);
+      const nRecent = this.staticMeans(t, R, since(last - STATIC_SPAN), last, recent);
+      if (nPrev >= 8 && nRecent >= 8) t.drift = signatureDistance(prev, recent);
+    }
     const mo = t.motion;
     if (mo && t.behavior !== null) {
       const T = 1 / Math.max(1e-6, params.dt);

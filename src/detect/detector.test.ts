@@ -96,6 +96,47 @@ describe('detector: catalog creatures', () => {
   });
 });
 
+describe('detector: settled shapes (species registration gate)', () => {
+  it('reports how long a creature has been stable and whether its shape still changes', () => {
+    const { reports } = runLogged('O2u', { steps: 1500 });
+    const at = (step: number) => reports.find((r) => r.step === step)!.creatures.find((c) => c.state === 'stable')!;
+    // Two 400-step shape windows are needed before the drift is known.
+    expect(at(600).shapeDrift).toBe(-1);
+    expect(at(600).stableSteps).toBeGreaterThan(0);
+    const end = at(1500);
+    expect(end.stableSteps).toBeGreaterThanOrEqual(900);
+    expect(end.shapeDrift).toBeGreaterThanOrEqual(0);
+    expect(end.shapeDrift).toBeLessThan(0.3);
+  });
+
+  it('a body that keeps changing drifts; the same body at rest does not', () => {
+    // A synthetic creature: a soft disc on a 64×64 dish whose radius grows slowly (8 → 11 cells
+    // over 1 500 steps: never a mass "explosion", so it is stable) vs. the same disc at rest.
+    const params: LeniaParams = { ...ORBIUM };
+    const run = (grow: boolean) => {
+      const det = createDetector();
+      let last: DetectorReport | null = null;
+      for (let step = 0; step <= 1500; step += 10) {
+        const r = grow ? 8 + (3 * step) / 1500 : 9.5;
+        const A = new Float32Array(64 * 64);
+        for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
+          const d = Math.hypot(x + 0.5 - 32, y + 0.5 - 32);
+          A[y * 64 + x] = 0.7 * Math.max(0, Math.min(1, r - d));
+        }
+        last = det.update(snapshotFromCpu(A, 64, 64, 2, step), params);
+      }
+      return last!.creatures[0];
+    };
+    const growing = run(true);
+    const still = run(false);
+    expect(growing.state).toBe('stable');
+    expect(growing.stableSteps).toBeGreaterThan(800);
+    expect(growing.shapeDrift).toBeGreaterThan(1);
+    expect(still.shapeDrift).toBeGreaterThanOrEqual(0);
+    expect(still.shapeDrift).toBeLessThan(0.05);
+  });
+});
+
 describe('detector: behaviours', () => {
   it('Circium perturbed by a rotation pulses; Helicium cavus pedes spins in place', () => {
     const circ = runSpecies('C0v', { size: 64, steps: 1200, rotation: 0.7 }).last.creatures;
