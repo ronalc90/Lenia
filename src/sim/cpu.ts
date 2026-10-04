@@ -1,10 +1,12 @@
 import { cellInDish, type DishShape } from '../core/dish';
 import type { LeniaParams, Pattern } from '../core/types';
 import { lysisPenalty, rotateDiscCpu, type LysisDisc, type Turn } from './deflect';
+import { fft2Any } from './fft';
 
 /**
  * Reference Lenia on the CPU (FFT convolution). Used by unit tests, the detector
- * calibration and the balance bot. Grid sides must be powers of 2.
+ * calibration and the balance bot. Power-of-two sides use the radix-2 FFT below; other sides of
+ * the form 2^a·Q (Q odd ≤ 63, e.g. the live 192×240 and 128×160 grids) use fft.ts.
  *
  * Exactly Chan's kn=1 / gn=1 formulation:
  *   kernel core  K(r) = (4 r (1 - r))^4 per ring, rings = b peaks
@@ -12,7 +14,7 @@ import { lysisPenalty, rotateDiscCpu, type LysisDisc, type Turn } from './deflec
  *   update       A <- clip(A + dt * G(K * A), 0, 1)
  *
  * Topology: toroidal by default (legacy, catalog tests). With `setDish` the world is the round
- * petri dish of ADR-022: cells whose centre lies outside the disc are always 0 (the glass is
+ * petri dish of ADR-025: cells whose centre lies outside the disc are always 0 (the glass is
  * absorbing), so the FFT's wrap-around only ever reads zeros as long as the grid keeps more than
  * R empty cells across the wrap (checked by `setDish`). Creatures are kept off the glass by
  * `deflect.ts` turns (`applyTurns`), exactly as the GPU does.
@@ -23,6 +25,8 @@ export class CpuLenia {
   /** 1 for cells inside the dish (null = toroidal, every cell is inside). */
   private mask: Uint8Array | null = null;
   private scratch: Float32Array | null = null;
+  /** Both sides are powers of two (radix-2 path); otherwise the mixed-radix fft.ts. */
+  private readonly pow2: boolean;
   /** Active lysis discs (deflect.ts LysisPlanner); empty = none. */
   private lysis: LysisDisc[] = [];
   /** Per-cell lysis penalty, rebuilt when the discs change. */
@@ -39,7 +43,7 @@ export class CpuLenia {
     readonly h: number,
     params: LeniaParams,
   ) {
-    if ((w & (w - 1)) !== 0 || (h & (h - 1)) !== 0) throw new Error('CpuLenia needs power-of-2 sides');
+    this.pow2 = (w & (w - 1)) === 0 && (h & (h - 1)) === 0;
     this.A = new Float32Array(w * h);
     this.re = new Float64Array(w * h);
     this.im = new Float64Array(w * h);
@@ -144,14 +148,14 @@ export class CpuLenia {
         this.re[i] = this.A[i];
         this.im[i] = 0;
       }
-      fft2(this.re, this.im, this.w, this.h, false);
+      this.fft(this.re, this.im, false);
       for (let i = 0; i < N; i++) {
         const a = this.re[i];
         const b = this.im[i];
         this.re[i] = a * this.kre[i] - b * this.kim[i];
         this.im[i] = a * this.kim[i] + b * this.kre[i];
       }
-      fft2(this.re, this.im, this.w, this.h, true);
+      this.fft(this.re, this.im, true);
       const mask = this.mask;
       const lys = this.lysisMap;
       for (let i = 0; i < N; i++) {
@@ -181,7 +185,12 @@ export class CpuLenia {
     const k = buildKernelImage(w, h, this.params.R, this.params.rings);
     this.kre.set(k);
     this.kim.fill(0);
-    fft2(this.kre, this.kim, w, h, false);
+    this.fft(this.kre, this.kim, false);
+  }
+
+  private fft(re: Float64Array, im: Float64Array, inverse: boolean): void {
+    if (this.pow2) fft2(re, im, this.w, this.h, inverse);
+    else fft2Any(re, im, this.w, this.h, inverse);
   }
 }
 
