@@ -36,9 +36,11 @@ Read before changing anything: [`docs/GDD.md`](docs/GDD.md) (design, Spanish, v1
 4. **Simulation invariants** (do not "improve" these without an ADR):
    - Update rule `A <- clip01(A + dt * G(K * A))` with Chan's polynomial kernel core `(4r(1-r))^4` and growth
      `2*max(0, 1-(u-mu)^2/(9 sigma^2))^4 - 1` (ADR-002). CPU reference and shaders must agree.
-   - The dish is **toroidal in simulation and on screen**; no border penalty (ADR-004).
-   - Fixed grid aspect 4:5 (192x240 medium, 128x160 low, 224x280 high). Resizing a panel changes zoom only
-     (ADR-010).
+   - The dish is a **round petri dish with absorbing glass** that grows with the Placa route (Ø128 → Ø224, capped by
+     quality); swimmers are turned off the glass by the deflector, which must see every 10-step snapshot (the dish
+     never steps blind). No wrap anywhere (ADR-025, supersedes ADR-004; the CPU reference keeps the torus for tests).
+   - Fixed square grid per quality profile (low 168², medium/high 232²), allocated once; the dish is the disc inside
+     it. Resizing a panel changes zoom only (ADR-010, ADR-025).
    - **RGBA16F ping-pong, never 8-bit** for the simulation state. No `readPixels` per frame (one snapshot every
      10 steps).
    - Seeds always carry asymmetric noise; early seeds are spores built from the nearest catalog template

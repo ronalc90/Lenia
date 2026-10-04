@@ -98,7 +98,8 @@ ADR that supersedes the old one.
 
 ## ADR-004: Toroidal dish, no border penalty
 
-- **Status:** Accepted (2026-10-04). GDD correction 2; resolves the GDD open question on toroidal dishes.
+- **Status:** Superseded by ADR-025 (round walled dish) for the game; kept for the CPU reference tests and the
+  classic loop's legacy saves. Was Accepted (2026-10-04). GDD correction 2; resolves the GDD open question on toroidal dishes.
 - **Context:** GDD v1 simulated a torus but treated border contact as "exploded" in the detector, and assumed the
   dish was shown with a border. That punishes a normal behaviour of every swimmer (leaving one side, entering the
   other) and makes the detector disagree with the simulation.
@@ -416,14 +417,61 @@ ADR that supersedes the old one.
   integrators swap the art in following ARTE.md §12.
 
 
+## ADR-025: Round walled petri dish that grows; glass deflection instead of wrap
+
+
+- **Status:** Accepted (2026-10-04; live since v0.014). Supersedes ADR-004 (toroidal dish). Owner play-test decision.
+  Draft and measurements: [`docs/DISH.md`](docs/DISH.md).
+- **Context:** The owner rejected creatures passing through the edges: they must collide with the walls, the dish
+  must be a round glass petri dish, and it must grow with the Placa upgrade (start small, capped by device
+  quality). Measured on the CPU (docs/DISH.md): every boundary rule inside Lenia (absorbing, mirror, repulsive
+  band, "glass presence", renormalised kernel, advection, textured/chiral variants) is lethal or regime-dependent
+  — Orbium dies on near head-on hits, Scutium dies under the rules that spare Orbium, and stronger rules grow a
+  film or labyrinth from the glass. Separately, colliding Orbium seed the worm maze, which no carrying-capacity
+  penalty can stop without killing the fauna first (the maze survives a growth penalty of 0.3; Scutium dies at
+  0.03).
+- **Decision:**
+  - The grid stays a fixed square per quality profile (low 168², medium/high 232²), allocated once. The living
+    area is the disc of cell centres within the rim radius; matter outside is always 0 (absorbing glass). State
+    textures are read clamp-to-edge, so with 4 empty cells around the largest dish the convolution is exactly
+    zero-padded. No wrap anywhere (simulation, detector, camera, overlay, game distances).
+  - Placa levels set the rim diameter: **128**, 160, 192, 224 cells, capped by quality (low 160, medium/high 224).
+    *(Amended v0.015: the ladder started at Ø96; fitted to a phone a Ø96 Orbium filled a big share of the screen —
+    owner: «es muy grande». The start dish holds 3 creatures, measured: `cycleBalance.DISH_CAPACITY`, docs/ESPECIES.md §5.)*
+    Growth only moves the rim (all matter kept), animated over 1.5 s with the camera easing out.
+  - **Glass deflection** (`src/sim/deflect.ts`): after each detector update, swimmers about to reach the rim or
+    another swimmer are turned to the mirror direction by rigid rotations of their matter (≤ 60° per update,
+    bilinear, identical on GPU and CPU). Spinners, exploded blobs and mazes are never steered.
+  - **Lysis** (same file, `LYSIS`): a blob the detector flags as a runaway gets a local −1 growth disc for
+    60 steps (≤ 8 discs), and the game tells the player why. Overgrown detection + free sterilise stay as the
+    last safety net.
+  - The update rule A ← clip(A + dt·G(K∗A)) inside the dish is unchanged (ADR-002 holds).
+- **Consequences:**
+  - Orbium survives 99 % of rim impacts (vs 0 % with a bare wall); swimmers bounce like billiard balls; collisions
+    between swimmers become elastic encounters, which also removes most maze nucleation. Remaining mazes keep
+    using the overgrown detection and free sterilise.
+  - The detector, camera, overlay and game drop toroidal maths; `wrapDist` becomes `dishDist`; seeds and free spots
+    keep a margin from the glass (seed radius + 0.5 R; auto-seeder 2 R).
+  - The detector must not read deflection turns as spinning (a bouncing swimmer turns 60–180° once per impact).
+  - Saves keep the grid bytes; old 4:5 saves are centred and cropped into the new square grid.
+  - The GDD (§4 "Bordes", Placa row of §8, §9 "sobre el toro") gets "(Corrección v1.2)" notes; CLAUDE.md's
+    invariant "The dish is toroidal" becomes "The dish is a round walled disc that grows (ADR-025)".
+  - *(Amended v0.015)* **The dish never steps blind** (`src/sim/detectGate.ts`): at each 10-step snapshot
+    boundary stepping waits until that snapshot is taken; a slow readback slows the dish instead of letting
+    swimmers cross ~60 steps unsteered and die on the glass (the empty session-1 dish of v0.014,
+    `tests/unit/starter-dish.test.ts`).
+
+
 ## ADR-027: Time-lapse in the session runs and incubation under the start card
 
 - **Status:** Accepted (2026-10-04). Source: the owner ("partidas de ~15 s que crecen, súper fluido"); design in
   [`docs/RITMO.md`](docs/RITMO.md) §4.
 - **Context:** a seed needs 400 steps to turn stable (13 s at 30 steps/s), so a 15 s run would end before its first
   creature paid. CLAUDE.md forbids paying for anything that is not stable and "improving" the Lenia rule without an ADR.
-- **Decision:** during a run the dish advances **`SESSION_SIM_PACE` = 3** times more steps per real second (90
-  steps/s; with the Incubadora at most `SIM_PACE_MAX` = 4, 120 steps/s). The update rule, `dt`, kernel, growth, dish
+- **Decision:** during a run the dish advances **`SESSION_SIM_PACE` = 1.5** times more steps per real second (45
+  steps/s; with the Incubadora ×4/3, 60 steps/s; cap `SIM_PACE_MAX` = 4). *(Amended v0.015: was 3 = 90 steps/s; the
+  owner found the creatures zipping around — «se mueve muy rápido». A seed is now stable in 8,9 s; the run's first
+  seconds are carried by the pre-incubated starter. Session bot before/after: docs/ESPECIES.md §5.)* The update rule, `dt`, kernel, growth, dish
   topology, the RGBA16F state, the detector (400 steps to "stable", 800 for a new species) and the "only stable pays"
   gate **do not change**: there are only more steps per second, like a microscope time-lapse. Every run starts with
   the Nevera's pure-template creature(s) **incubated** for `PREINCUBATE_STEPS` = 420 real simulation steps under the

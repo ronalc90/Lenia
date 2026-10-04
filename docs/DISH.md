@@ -397,40 +397,6 @@ A single Orbium in Ø96 spawned within 22 cells of the centre: 8/10 lived 2000 s
 glass before the deflector's second look); within 8 cells: 10/10. Ø96 is harsh with more than two swimmers (collisions every few hundred steps); its capacity of 5 is generous. For
 the session bot: model Ø96 as crowding at 2 with a doubled collision hazard.
 
-## 9. ADR-025 draft (for DECISIONS.md; supersedes ADR-004)
+## 9. ADR-025
 
-**ADR-025: Round walled petri dish that grows; glass deflection instead of wrap**
-
-- **Status:** Proposed (2026-10-04). Supersedes ADR-004 (toroidal dish). Owner play-test decision.
-- **Context:** The owner rejected creatures passing through the edges: they must collide with the walls, the dish
-  must be a round glass petri dish, and it must grow with the Placa upgrade (start small, capped by device
-  quality). Measured on the CPU (docs/DISH.md): every boundary rule inside Lenia (absorbing, mirror, repulsive
-  band, "glass presence", renormalised kernel, advection, textured/chiral variants) is lethal or regime-dependent
-  — Orbium dies on near head-on hits, Scutium dies under the rules that spare Orbium, and stronger rules grow a
-  film or labyrinth from the glass. Separately, colliding Orbium seed the worm maze, which no carrying-capacity
-  penalty can stop without killing the fauna first (the maze survives a growth penalty of 0.3; Scutium dies at
-  0.03).
-- **Decision:**
-  - The grid stays a fixed square per quality profile (low 168², medium/high 232²), allocated once. The living
-    area is the disc of cell centres within the rim radius; matter outside is always 0 (absorbing glass). State
-    textures are read clamp-to-edge, so with 4 empty cells around the largest dish the convolution is exactly
-    zero-padded. No wrap anywhere (simulation, detector, camera, overlay, game distances).
-  - Placa levels set the rim diameter: 96, 128, 160, 192, 224 cells, capped by quality (low 160, medium/high 224).
-    Growth only moves the rim (all matter kept), animated over 1.5 s with the camera easing out.
-  - **Glass deflection** (`src/sim/deflect.ts`): after each detector update, swimmers about to reach the rim or
-    another swimmer are turned to the mirror direction by rigid rotations of their matter (≤ 60° per update,
-    bilinear, identical on GPU and CPU). Spinners, exploded blobs and mazes are never steered.
-  - **Lysis** (same file, `LYSIS`): a blob the detector flags as a runaway gets a local −1 growth disc for
-    60 steps (≤ 8 discs), and the game tells the player why. Overgrown detection + free sterilise stay as the
-    last safety net.
-  - The update rule A ← clip(A + dt·G(K∗A)) inside the dish is unchanged (ADR-002 holds).
-- **Consequences:**
-  - Orbium survives 99 % of rim impacts (vs 0 % with a bare wall); swimmers bounce like billiard balls; collisions
-    between swimmers become elastic encounters, which also removes most maze nucleation. Remaining mazes keep
-    using the overgrown detection and free sterilise.
-  - The detector, camera, overlay and game drop toroidal maths; `wrapDist` becomes `dishDist`; seeds and free spots
-    keep a margin from the glass (seed radius + 0.5 R; auto-seeder 2 R).
-  - The detector must not read deflection turns as spinning (a bouncing swimmer turns 60–180° once per impact).
-  - Saves keep the grid bytes; old 4:5 saves are centred and cropped into the new square grid.
-  - The GDD (§4 "Bordes", Placa row of §8, §9 "sobre el toro") gets "(Corrección v1.2)" notes; CLAUDE.md's
-    invariant "The dish is toroidal" becomes "The dish is a round walled disc that grows (ADR-025)".
+Accepted and moved to [`DECISIONS.md`](../DECISIONS.md#adr-025-round-walled-petri-dish-that-grows-glass-deflection-instead-of-wrap) (v0.015), with two amendments: the dish ladder starts at Ø128, and the dish never steps past a snapshot boundary without its snapshot (`src/sim/detectGate.ts`).

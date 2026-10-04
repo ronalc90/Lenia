@@ -20,7 +20,7 @@
 
 > **Cuarta decisión del dueño (partidas cortas):** *«Como es un incremental las partidas deben ser más cortas… 15
 > segundos o así y cada vez ir aumentando»* y *«ajusta los tiempos de vida… a los tiempos de partida»* → **partida 1 de
-> 0:15**, Reloj hasta **2:30** en 15 niveles pequeños, **cámara rápida ×3** (90 pasos/s, ADR-027 propuesto), una
+> 0:15**, Reloj hasta **2:30** en 15 niveles pequeños, **cámara rápida ×1,5** (45 pasos/s, ADR-027; era ×3), una
 > criatura **ya viva** al empezar, **÷30** Esencia por Dato, anillos 2 · 15 · 400 · 12 000 · 80 000, noches en las
 > partidas 4/8/13/20/29/40, final de la historia ≈ 1,7 h. **El diseño, la investigación y la tabla del bot están en
 > [`docs/RITMO.md`](RITMO.md), que manda sobre los números de ritmo de este documento** (§2.2, §2.3, §3.3, §4.2 Reloj,
@@ -285,11 +285,11 @@ de la ruta comprados). Tablas generadas del código: `npx vite-node scripts/tree
 
 | # | Nodo | Anillo · 🌙 | Niveles | Precios (×factor) | Antes → después (de 0 al máximo) |
 |---|---|---|---|---|---|
-| 1 | Placa más grande | 1 · 1 | 3 | 2 · 6 · 18 (×3) | Sitio para 5 criaturas → Sitio para 7 criaturas → Sitio para 9 criaturas → Sitio para 12 criaturas |
+| 1 | Placa más grande | 1 · 1 | 2 | 2 · 6 (×3) | Ø128 → Ø160 → Ø192: Sitio para 3 criaturas → Sitio para 4 criaturas → Sitio para 5 criaturas (Corrección v0.015, `docs/ESPECIES.md` §5) |
 | 2 | Más sitio | 2 · 1 | 3 | 15 · 30 · 60 (×2) | Sitio para 12 criaturas → Sitio para 13 criaturas → Sitio para 14 criaturas → Sitio para 15 criaturas |
 | 3 | Sin apretujones | 3 · 2 | 2 | 400 · 800 (×2) | Sitio para 15 criaturas → Sitio para 16 criaturas → Sitio para 17 criaturas |
 | 4 | Guardería | 3 · 2 | 1 | 400 (×2) | 3 creciendo a la vez → 5 creciendo a la vez |
-| 5 | Incubadora | 3 · 2 | 2 | 400 · 1200 (×3) | Nacen en 4,4 s → Nacen en 3,8 s → Nacen en 3,3 s |
+| 5 | Incubadora | 3 · 2 | 2 | 400 · 1200 (×3) | Nacen en 8,9 s → Nacen en 7,6 s → Nacen en 6,7 s |
 | 6 | Placa gigante | 4 · 3 | 1 | 12.000 (×2) | Sitio para 17 criaturas → Sitio para 20 criaturas |
 | 7 | Placa variada | 4 · 3 | 2 | 12.000 · 24.000 (×2) | +0 % por especie viva → +3 % por especie viva → +6 % por especie viva |
 

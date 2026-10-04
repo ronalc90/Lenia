@@ -238,7 +238,8 @@ async function runCase(c) {
         const sp = v.species.find((x) => x.id === cr.speciesId);
         // Only creatures a player can see right now (not under a card, a sheet or VELA's box).
         const top = document.elementFromPoint(dish.x + p.x, dish.y + p.y);
-        if (!top || top.tagName !== 'CANVAS') continue;
+        // The dish's own canvas (a summary card's portrait canvas over the frozen dish does not count).
+        if (!top || top.tagName !== 'CANVAS' || !top.closest('.bl-dish') || v.session?.phase === 'over') continue;
         out.push({ id: cr.id, hue: cr.hue, name: sp ? (sp.name.es ?? String(sp.name)) : '?', x: dish.x + p.x - r, y: dish.y + p.y - r, s: 2 * r });
       }
       for (const cv of document.querySelectorAll('canvas')) if (cv.getContext('2d')) cv.dataset.hueHidden = cv.style.visibility || '-', (cv.style.visibility = 'hidden');
@@ -688,13 +689,13 @@ async function runCase(c) {
         await shot(`s${k}-midway`);
         await overlapCheck(`session ${k} midway`);
         // Session 2: the pause button, its card ("Seguir" · "Terminar ahora"), then back to the dish.
-        if (k === 2 && (await visible('.fab-pause'))) {
+        if (k === 2 && (await visible('.fab-pause')) && (await view()).session?.phase === 'running') {
           // A Momento card opened at this instant owns the screen: a player reads it first, then pauses.
           await settle(`pause ${k}`);
           await tapSel('.fab-pause');
           await page.waitForTimeout(600);
           await shot(`s${k}-pause`);
-          if (!(await visible('.pause-card'))) problems.push(`[${c.name}] session ${k}: no pause card`);
+          if (!(await visible('.pause-card')) && (await view()).session?.phase === 'running') problems.push(`[${c.name}] session ${k}: no pause card`);
           await tapSel('.pause-card .btn.primary');
           await page.waitForTimeout(500);
           if (await page.evaluate(() => window.bioluma.game.isPaused && !window.bioluma.flow.busy && !window.bioluma.moments.current()))

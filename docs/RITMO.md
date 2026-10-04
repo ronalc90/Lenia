@@ -47,7 +47,7 @@ los números viven en [`src/game/cycleBalance.ts`](../src/game/cycleBalance.ts) 
 2. **Lo primero que se compra es tiempo** (R7: «aguantar más» es la mejora más visible). El Reloj tiene **15 niveles
    pequeños** (+5/+10/+15 s): casi cada visita al Árbol alarga la partida siguiente (R5).
 3. **Vida desde el segundo 1** (R4: «números que suben sin hacer nada en el primer minuto»): cada partida empieza con
-   una criatura **ya viva** (incubada antes del reloj) y la placa corre a **cámara rápida ×3**: una semilla nace en
+   una criatura **ya viva** (incubada antes del reloj) y la placa corre a **cámara rápida ×1,5** (Corrección v0.015: era ×3, «se mueve muy rápido»): una semilla nace en
    **4,4 s**, no en 13 s. Nada de esto toca la ciencia (§4).
 4. **Muchas compras baratas al principio, precio ×1,5–×2 por nivel** (R1, R4): ≥ 2 compras tras cada partida y 4–17
    en las primeras diez.
@@ -111,7 +111,7 @@ paga a algo que no es estable**.
 |---|---|---|---|
 | Pagar a las semillas «formándose» una fracción (`BORN_PAY`) | ✗ rompe la puerta «solo paga lo estable» | + | **No** |
 | Bajar la edad estable (400 → 150 pasos) | ✗ el detector llamaría «criatura» a manchas que aún se pueden deshacer | + | **No** |
-| **Cámara rápida**: más pasos por segundo real | ✓ misma regla, mismo `dt`, mismo detector; solo se ve más deprisa (un *time-lapse* de microscopio) | ++ | **Sí: ×3 = 90 pasos/s** |
+| **Cámara rápida**: más pasos por segundo real | ✓ misma regla, mismo `dt`, mismo detector; solo se ve más deprisa (un *time-lapse* de microscopio) | ++ | **Sí: ×1,5 = 45 pasos/s** (era ×3) |
 | **Criaturas ya vivas al empezar** (incubadas bajo la tarjeta de inicio) | ✓ la simulación de verdad corre esos pasos; no pagan hasta que corre el reloj | ++ | **Sí: 1 de base + Nevera** |
 
 ### 4.3 Los tiempos exactos
@@ -119,11 +119,11 @@ paga a algo que no es estable**.
 | Qué | Valor | Constante | Por qué |
 |---|---|---|---|
 | Pasos por segundo base | 30 | `SIM_STEPS_PER_SEC` (= `main.ts` `STEPS_PER_SEC`) | sin cambio |
-| **Cámara rápida en una partida** | **×3 = 90 pasos/s** | `SESSION_SIM_PACE` | la Incubadora ya corría ×3 en móvil; 1,5 pasos por fotograma a 60 fps |
+| **Cámara rápida en una partida** | **×1,5 = 45 pasos/s** (era ×3) | `SESSION_SIM_PACE` | el dueño (v0.014): «se mueve muy rápido»; a ×3 una Nadadora cruzaba la placa en 2 s. El arranque lo sostiene la criatura incubada |
 | Tope de velocidad | ×4 = 120 pasos/s | `SIM_PACE_MAX` | 2 pasos/fotograma a 60 fps, 4 a 30 fps; una instantánea cada 10 pasos (≤ 12/s), nunca una por fotograma |
 | Edad estable | **400 pasos (sin cambio)** → **4,4 s** | `STABLE_AGE_STEPS` | no se toca la ciencia |
 | Registro de especie nueva | 800 pasos estable (sin cambio) → **8,9 s** después | `balance.SPECIES_MIN_STABLE_STEPS` | la criatura de inicio se registra a los ~9 s del reloj: «¡Especie nueva! +3 s» dentro de la partida 1 |
-| Incubadora | ×1 → ×7/6 → ×4/3 sobre la cámara rápida: nacen en **4,4 → 3,8 → 3,3 s** | `MATURE_SPEED_BY_LEVEL` | antes ×2/×3 a 30 pasos/s; ahora el tope de 120 pasos/s; la hoja enseña «Nacen en 4,4 s → 3,8 s» |
+| Incubadora | ×1 → ×7/6 → ×4/3 sobre la cámara rápida: nacen en **8,9 → 7,6 → 6,7 s** (a ×3 eran 4,4 → 3,8 → 3,3 s) | `MATURE_SPEED_BY_LEVEL` | antes ×2/×3 a 30 pasos/s; ahora el tope de 120 pasos/s; la hoja enseña «Nacen en 4,4 s → 3,8 s» |
 | Criaturas vivas al empezar | **1** + Nevera (1/2/3) | `STARTER_CREATURES`, `FRIDGE_PER_LEVEL` | partida 1 con un Orbium pagando desde el segundo 0 |
 | Incubación previa | 420 pasos bajo la tarjeta de inicio (o al final del resumen) | `PREINCUBATE_STEPS` | ya estables al arrancar el reloj; no pagan hasta entonces (la producción solo corre con el reloj) |
 | Semilla segura si nada vive | a los **8 s** (antes 45) | `SESSION_PITY_AFTER` | dos nacimientos |
@@ -159,7 +159,7 @@ atrás; «¡Tiempo!» 1,2 s; resumen con
 
 *Contexto:* el dueño pide partidas de ~15 s que crecen; una semilla tarda 400 pasos en ser estable (13 s a 30 pasos/s)
 y la CLAUDE.md prohíbe pagar a lo que no es estable o «mejorar» la regla de Lenia sin ADR.
-*Decisión:* durante una partida la placa avanza **`SESSION_SIM_PACE` = 3** veces más pasos por segundo real (90
+*Decisión:* durante una partida la placa avanza **`SESSION_SIM_PACE` = 1,5** veces (Corrección v0.015, era 3) más pasos por segundo real (90
 pasos/s; con la Incubadora, como mucho `SIM_PACE_MAX` = 4 → 120 pasos/s). La regla de actualización, `dt`, el núcleo, el
 crecimiento, el toro, el estado RGBA16F, el detector (400 pasos para «estable», 800 para especie nueva) y la puerta «solo
 paga lo estable» **no cambian**: solo hay más pasos por segundo, como un time-lapse de microscopio. Cada partida empieza
