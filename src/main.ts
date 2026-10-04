@@ -7,7 +7,7 @@ import { Camera } from './core/camera';
 import type { DetectorReport, LeniaParams, Quality } from './core/types';
 import { createSimulation } from './sim/webgl';
 import { QUALITY_GRID } from './sim/perf';
-import { createDetector } from './detect/detector';
+import { createDetector, DISH_OVERGROWN_FILL } from './detect/detector';
 import { createGame } from './game/game';
 import { clearSave, loadSave, offlineSeconds, writeSave } from './game/save';
 import { createUI } from './ui/ui';
@@ -18,6 +18,7 @@ import { createLeaderboardClient } from './net/leaderboard';
 import { createPlayerIdentity } from './net/identity';
 import { setupCosmetics } from './app/cosmetics';
 import { createExtraJournal } from './app/journal';
+import { LYSIS_TOAST_MS, lysisTargets } from './app/lysis';
 import { SUPPORTER_JOURNAL } from './store/catalog';
 import { setPortraitPalette } from './ui/portrait';
 import { createStory } from './story';
@@ -494,6 +495,27 @@ function boot(): void {
       .finally(() => (snapInFlight = false));
   }
 
+  let lysisToastAt = -Infinity;
+  /** Dissolve runaway shapeless matter before it grows into a maze (src/app/lysis.ts). */
+  function dissolveShapeless(report: DetectorReport): void {
+    const targets = lysisTargets(report, sim!.params.R, DISH_OVERGROWN_FILL);
+    if (!targets.length) return;
+    for (const t of targets) sim!.erase(t.x, t.y, t.radius);
+    const now = performance.now();
+    if (now - lysisToastAt < LYSIS_TOAST_MS) return;
+    const first = lysisToastAt === -Infinity;
+    lysisToastAt = now;
+    bus.emit('toast', {
+      kind: 'warn',
+      text: first
+        ? {
+            es: 'Materia sin forma: dos manchas se juntaron y crecían sin control. La disolví para salvar la placa.',
+            en: 'Shapeless matter: two blobs merged and grew out of control. I dissolved it to save the dish.',
+          }
+        : { es: 'Disolví materia sin forma.', en: 'Dissolved shapeless matter.' },
+    });
+  }
+
   function frame(now: number): void {
     const dt = Math.min(0.25, (now - last) / 1000);
     last = now;
@@ -515,6 +537,7 @@ function boot(): void {
     }
     // Feed every report so no died/exploded/divided event is lost; time advances once.
     const n = reports.length;
+    for (let i = 0; i < n; i++) dissolveShapeless(reports[i]);
     for (let i = 0; i < n - 1; i++) game.tick(0, reports[i]);
     game.tick(dt, n ? reports[n - 1] : null);
     reports.length = 0;
