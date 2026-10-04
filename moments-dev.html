@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#0B0E12" />
+    <link rel="icon" href="data:," />
+    <title>Bioluma Momentos Dev</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500;1,600&family=JetBrains+Mono:wght@500;600;700;800&display=swap"
+    />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0b0e12;
+        color: #e6edf3;
+        overscroll-behavior: none;
+        font-family: Inter, system-ui, sans-serif;
+      }
+      html[data-theme='light'],
+      html[data-theme='light'] body {
+        background: #edf1f5;
+        color: #0f1720;
+      }
+      #app {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/ui/moments/dev.ts"></script>
+  </body>
+</html>
