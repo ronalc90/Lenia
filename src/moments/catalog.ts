@@ -10,8 +10,9 @@
 import type { GameEvents } from '../core/bus';
 import { BEHAVIOR_COLOR, UI } from '../core/palette';
 import type { Behavior, GameView, Lang, Text } from '../core/types';
-import { BEHAVIOR_MULT, GOLDEN_LIFE, OFFLINE_RATE, SAMPLES_NEW_BEHAVIOR, SAMPLES_NEW_SPECIES } from '../game/balance';
+import { GOLDEN_LIFE, OFFLINE_RATE, SAMPLES_NEW_BEHAVIOR, SAMPLES_NEW_SPECIES } from '../game/balance';
 import { fmt, fmtDuration, fmtFixed, fmtRate } from '../ui/format';
+import { behaviorGuide, bonusText } from './behaviors';
 import type {
   Built,
   Chip,
@@ -68,17 +69,8 @@ const essenceChip = (n: number, sign: '+' | '−', perSec = false): Chip =>
     sign === '+' ? 'good' : 'warn',
     'essence',
   );
-/** "Nadar: ×1,6 Esencia" — the production bonus of a behaviour, named. */
-const BEHAVIOR_VERB_CHIP: Record<Behavior, Text> = {
-  still: t('Quieta', 'Still'),
-  pulsing: t('Latir', 'Pulsing'),
-  swimmer: t('Nadar', 'Swimming'),
-  spinner: t('Girar', 'Spinning'),
-  divider: t('Dividirse', 'Splitting'),
-  colony: t('En colonia', 'In a colony'),
-};
-const behaviorBonusChip = (b: Behavior): Chip =>
-  chip(both((l) => `${BEHAVIOR_VERB_CHIP[b][l]}: ×${fmtFixed(BEHAVIOR_MULT[b], 1, l)} ${l === 'es' ? 'Esencia' : 'Essence'}`), 'good', 'up');
+/** "Nadadora: ×1,6 Esencia" — the production bonus of a behaviour, named (balance.ts, never a copy). */
+const behaviorBonusChip = (b: Behavior): Chip => chip(both((l) => bonusText(b, l)), 'good', 'up');
 const samplesChip = (n: number): Chip =>
   chip(both((l) => `+${n} ${l === 'es' ? (n === 1 ? 'Muestra' : 'Muestras') : n === 1 ? 'Sample' : 'Samples'}`), 'good', 'sample');
 const genomeChip = (n: number): Chip => chip(both((l) => `+${fmt(n, l)} ${l === 'es' ? 'Genoma' : 'Genome'}`), 'violet', 'genome');
@@ -124,12 +116,19 @@ export function priceData(v: GameView): MomentData['price'] | undefined {
   };
 }
 
-/** The price rose noticeably: beyond the free slots, or at least double the empty-dish price. */
-export function priceIsHigh(v: GameView): boolean {
+/**
+ * The seed price went above the empty-dish price for the first time: any
+ * multiplier > 1 (crowding by living creatures, or the dish over its cheap
+ * slots). Owner: "no price ever changes without a visible reason".
+ */
+export function priceRose(v: GameView): boolean {
   const p = v.seedPrice;
   if (!p) return false;
-  return p.satMult > 1 + 1e-9 || p.crowdMult * p.satMult >= 2 - 1e-9;
+  return p.crowdMult > 1 + 1e-9 || p.satMult > 1 + 1e-9;
 }
+
+/** Back-compat name. */
+export const priceIsHigh = priceRose;
 
 const offlineShare: Text =
   OFFLINE_RATE === 0.5
@@ -142,61 +141,14 @@ const offlineShare: Text =
 
 // ───────────────────────────── behaviours ─────────────────────────────
 
-const BEHAVIOR_TEXT: Record<Behavior, { title: Text; lines: Text[]; brief: Text; mood: MomentDef['mood'] }> = {
-  still: {
-    title: t('Una criatura quieta', 'A still creature'),
-    lines: [
-      t('Esta criatura no se mueve: se queda en su sitio.', 'This creature does not move: it stays in its spot.'),
-      t('Quieta también vale: da Esencia normal.', 'Still is fine too: it makes normal Essence.'),
-    ],
-    brief: t('Quieta', 'Still'),
-    mood: 'happy',
-  },
-  pulsing: {
-    title: t('¡Late!', 'It pulses!'),
-    lines: [
-      t('Se hace grande y pequeña, como un corazón.', 'It grows and shrinks, like a heartbeat.'),
-      t('Las que laten dan más Esencia.', 'Pulsing ones make more Essence.'),
-    ],
-    brief: t('¡Late!', 'It pulses!'),
-    mood: 'awed',
-  },
-  swimmer: {
-    title: t('¡Nada!', 'It swims!'),
-    lines: [
-      t('Esta criatura se desliza por la placa sin parar.', 'This creature glides across the dish without stopping.'),
-      t('Las nadadoras dan más Esencia que las quietas.', 'Swimmers make more Essence than still ones.'),
-    ],
-    brief: t('¡Nada!', 'It swims!'),
-    mood: 'awed',
-  },
-  spinner: {
-    title: t('¡Gira!', 'It spins!'),
-    lines: [
-      t('Esta criatura da vueltas y vueltas en círculo.', 'This creature goes round and round in circles.'),
-      t('Las que giran dan todavía más Esencia.', 'Spinning ones make even more Essence.'),
-    ],
-    brief: t('¡Gira!', 'It spins!'),
-    mood: 'awed',
-  },
-  divider: {
-    title: t('¡Se divide!', 'It splits!'),
-    lines: [
-      t('Esta especie se parte en dos, una y otra vez.', 'This species splits in two, again and again.'),
-      t('Cada hija también da Esencia. ¡Mucha más!', 'Every child makes Essence too. Lots more!'),
-    ],
-    brief: t('¡Se divide!', 'It splits!'),
-    mood: 'awed',
-  },
-  colony: {
-    title: t('¡Una colonia!', 'A colony!'),
-    lines: [
-      t('Tres o más iguales, muy juntitas: eso es una colonia.', 'Three or more alike, close together: that is a colony.'),
-      t('Juntas dan mucha más Esencia.', 'Together they make much more Essence.'),
-    ],
-    brief: t('¡Colonia!', 'Colony!'),
-    mood: 'happy',
-  },
+/** Titles and moods; what each behaviour IS comes from src/moments/behaviors.ts (one source for every surface). */
+const BEHAVIOR_TEXT: Record<Behavior, { title: Text; brief: Text; mood: MomentDef['mood'] }> = {
+  still: { title: t('Una criatura quieta', 'A still creature'), brief: t('Quieta', 'Still'), mood: 'happy' },
+  pulsing: { title: t('¡Late como un corazón!', 'It beats like a heart!'), brief: t('¡Pulsante!', 'It pulses!'), mood: 'awed' },
+  swimmer: { title: t('¡Una nadadora!', 'A swimmer!'), brief: t('¡Nadadora!', 'Swimmer!'), mood: 'awed' },
+  spinner: { title: t('¡Gira!', 'It spins!'), brief: t('¡Gira!', 'It spins!'), mood: 'awed' },
+  divider: { title: t('¡Se divide!', 'It splits!'), brief: t('¡Se divide!', 'It splits!'), mood: 'awed' },
+  colony: { title: t('¡Una colonia!', 'A colony!'), brief: t('¡Colonia!', 'Colony!'), mood: 'happy' },
 };
 
 function behaviorMoment(b: Behavior, priority: number): MomentDef {
@@ -205,7 +157,8 @@ function behaviorMoment(b: Behavior, priority: number): MomentDef {
     id: `behavior.${b}` as MomentId,
     priority,
     title: tx.title,
-    lines: tx.lines,
+    // VELA says "what it is"; the card adds what changes, how to get more and how to boost it.
+    lines: [behaviorGuide(b).what],
     brief: tx.brief,
     illustration: b,
     icon: 'behavior',
@@ -518,15 +471,15 @@ export const MOMENTS: MomentDef[] = [
     priority: 62,
     title: t('¿Por qué cuesta más?', 'Why so pricey?'),
     lines: [
-      t('Cada criatura extra encarece la siembra.', 'Each extra creature makes sowing pricier.'),
-      t('Mejora la Placa para tener más espacios baratos.', 'Upgrade the Dish for more cheap slots.'),
+      t('Cuantas más criaturas viven, más cuesta sembrar.', 'The more creatures live, the more sowing costs.'),
+      t('Con la placa llena, cada extra cuesta mucho más. ¡Mejora la Placa!', 'With a full dish, each extra costs much more. Upgrade the Dish!'),
     ],
     brief: t('La siembra sube de precio', 'Sowing got pricier'),
     illustration: 'seedPrice',
     icon: 'tag',
     mood: 'neutral',
     color: UI.warn,
-    trigger: { kind: 'poll', when: (c) => priceIsHigh(c.view()) },
+    trigger: { kind: 'poll', when: (c) => priceRose(c.view()) },
     build: (_p, c) => {
       const v = c.view();
       const price = priceData(v);

@@ -133,7 +133,7 @@ describe('moments: triggers', () => {
     const h = harness();
     emit(h, 'behaviorNew', { behavior: 'swimmer', x: 5, y: 5 });
     h.advance(LONG);
-    expect(h.m.current()!.chips[0].text).toEqual({ es: 'Nadar: ×1,6 Esencia', en: 'Swimming: ×1.6 Essence' });
+    expect(h.m.current()!.chips[0].text).toEqual({ es: 'Nadadora: ×1,6 Esencia', en: 'Swimmer: ×1.6 Essence' });
   });
 
   it('the divider behaviour also counts as the first division', () => {
@@ -175,18 +175,17 @@ describe('moments: triggers', () => {
     expect(h.m.seen('golden')).toBe(false);
   });
 
-  it('seed price: opens when the price passes double, not before', () => {
-    const h = harness({}, priceView(2, 2, 1, 3));
-    // satMult 3 > 1 → high
+  it('seed price: opens the first time ANY multiplier goes above 1 (crowding or a full dish)', () => {
+    const h = harness({}, priceView(0, 0, 2, 1)); // empty dish: base price
+    h.advance(LONG);
+    expect(h.m.current()).toBeNull();
+    Object.assign(h.view, priceView(1, 1, 2, 1)); // one creature alive: ×1,25
     h.advance(LONG);
     expect(h.m.current()?.id).toBe('seedPrice');
-    const h2 = harness({}, priceView(2, 2, 2, 1)); // ×1.5 only
-    h2.advance(LONG);
-    expect(h2.m.current()).toBeNull();
-    Object.assign(h2.view, priceView(4, 4, 5, 1)); // ×2 crowding
+    expect(h.m.current()?.data.price?.crowdMult).toBe(1.25);
+    const h2 = harness({}, priceView(0, 2, 1, 3)); // saturation alone
     h2.advance(LONG);
     expect(h2.m.current()?.id).toBe('seedPrice');
-    expect(h2.m.current()?.data.price?.crowdMult).toBe(2);
   });
 
   it('"cheaper" needs the price explained first, a death and a real drop', () => {
