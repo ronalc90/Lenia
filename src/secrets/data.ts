@@ -161,14 +161,14 @@ export const SECRET_DEFS: readonly SecretDef[] = [
     code: 'PS3am',
     flavor: t('Nadie la ha visto a pleno día.', 'No one has seen it in broad daylight.'),
     journal: t(
-      'En el mundo de los discos, a deshoras, apareció otra cosa. Ambigua. A la luz del día no está. No pienso contárselo a nadie.',
-      'In the world of discs, at an ungodly hour, something else appeared. Ambiguous. In daylight it is not there. I am not telling anyone.',
+      'En el mundo de los escudos, a deshoras, apareció otra cosa. Ambigua. A la luz del día no está. No pienso contárselo a nadie.',
+      'In the world of shields, at an ungodly hour, something else appeared. Ambiguous. In daylight it is not there. I am not telling anyone.',
     ),
     companion: t('De día no estaba en el catálogo. Anotado… en secreto.', 'It wasn’t in the daytime catalog. Noted… secretly.'),
     hints: [
       t('Algunas especies tienen horario.', 'Some species keep hours.'),
-      t('Vuelve al Mundo 5 · Discos pasada la medianoche.', 'Go back to World 5 · Discs after midnight.'),
-      t('Mundo 5 · Discos, entre las 00:00 y las 04:00, o con luna llena.', 'World 5 · Discs, between 00:00 and 04:00, or under a full moon.'),
+      t('Vuelve al Mundo 4 · Escudos pasada la medianoche.', 'Go back to World 4 · Shields after midnight.'),
+      t('Mundo 4 · Escudos, entre las 00:00 y las 04:00, o con luna llena.', 'World 4 · Shields, between 00:00 and 04:00, or under a full moon.'),
     ],
     glyph: 'eye',
     cosmetic: 'selene',

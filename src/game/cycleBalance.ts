@@ -88,12 +88,13 @@ export const SIM_STEPS_PER_SEC = 30;
 /** Steps a seed needs before the detector calls it stable (detector.ts: "age ≥ 400 steps"). [detect] */
 export const STABLE_AGE_STEPS = 400;
 /**
- * Time-lapse: during a session the dish runs this many times faster than SIM_STEPS_PER_SEC (90
+ * Time-lapse: during a session the dish runs this many times faster than SIM_STEPS_PER_SEC (45
  * steps/s). The update rule, dt, the detector and every gate stay exactly the same — only more steps
- * per real second — so a seed is stable in 400 / 90 ≈ 4,4 s instead of 13 s and a 15 s run has room
- * for life. ADR-027 (docs/RITMO.md §4). [owner: 15 s runs; measured: the Incubadora already ran ×3]
+ * per real second — so a seed is stable in 400 / 45 ≈ 8,9 s instead of 13 s. Was ×3: creatures zipped
+ * across the dish (owner, v0.014: "se mueve muy rápido"); the run's first seconds are carried by the
+ * pre-incubated starter. ADR-027 (docs/RITMO.md §4). [owner]
  */
-export const SESSION_SIM_PACE = 3;
+export const SESSION_SIM_PACE = 1.5;
 /** Hard cap of the dish speed (pace × Incubadora): 120 steps/s, 2 steps per frame at 60 fps. [design; frame floor] */
 export const SIM_PACE_MAX = 4;
 /**
@@ -147,9 +148,11 @@ export const SEED_PRICE_STEP_MAX = 3;
 /**
  * The physical limit is room: creatures (alive, forming, or seeds not yet seen) the dish holds, by
  * dish size index (core/dish DISH_DIAMETERS Ø96 … Ø224). A full dish refuses a tap for free
- * ("Placa llena"). Measured on the CPU dish: Ø96 holds ~5 spaced Orbium, Ø224 ~15 that still swim. [owner; measured]
+ * ("Placa llena"). Measured on the CPU dish with glass deflection (Orbium, 8 runs × 1 200 steps, ESPECIES/DISH
+ * notes): alive after the run ≈ 1,3 / 1,4 / 0,9 for 2 / 3 / 4 planted in Ø128, 1,6–1,8 for 2–5 in Ø160 and
+ * Ø192 — more swimmers only collide more. Ø224 (GPU only) by area. Was [5, 7, 9, 12, 15] on a Ø96 base. [measured]
  */
-export const DISH_CAPACITY = [5, 7, 9, 12, 15];
+export const DISH_CAPACITY = [3, 4, 5, 7];
 /** Guardería: extra seeds that may be forming at once, on top of balance SEED_NURSERY_MAX. [owner: pure gain] */
 export const NURSERY_TREE_BONUS = 2;
 /** Sin apretujones: extra room per level ("caben más juntas"). [owner: pure gain] */
@@ -258,11 +261,26 @@ export const WORLD_ESSENCE_STEP = 0.1;
  * Esencia → Datos: one Dato per this much Esencia earned in the session (spent or not). Linear on
  * purpose, so the summary shows it as one division a child can follow ("1.250 ÷ 250 = 5").
  * [plan: ÷100; bot: today's in-session economy earns ~3× the plan's Esencia per session, and with
- * ÷100 the tree is bought by session 13 and the sessions stall; ÷250 lands on the plan's pacing]
+ * ÷100 the tree is bought by session 13 and the sessions stall; ÷250 lands on the plan's pacing;
+ * ESPECIES (7 species, Ø128 dish of 3, time-lapse ×1,5): ÷30 → ÷25, so a run with few discoveries
+ * still buys two nodes — bot before/after in docs/ESPECIES.md §5]
  */
-export const DATOS_ESSENCE_DIV = 30;
-/** Datos for every species registered for the FIRST TIME EVER during the session. [plan] */
-export const DATOS_PER_NEW_SPECIES = 5;
+export const DATOS_ESSENCE_DIV = 25;
+/**
+ * Datos for every species registered for the FIRST TIME EVER during the session. [plan: 5; ESPECIES:
+ * 10 — one species per World, so each discovery is rarer and worth more; bot]
+ */
+export const DATOS_PER_NEW_SPECIES = 10;
+/**
+ * Datos for every variant (a look-alike form of a Bestiary species, docs/ESPECIES.md) seen for the
+ * first time ever: a small "variante" note, never a new species. [design; bot]
+ */
+export const DATOS_PER_VARIANT = 2;
+/**
+ * Share of a world's random seeds that are one of its variants, once its species is known: enough to
+ * meet each variant in a few sessions, few enough that the dish still shows the world's species. [design]
+ */
+export const VARIANT_SPORE_CHANCE = 0.12;
 /** Datos for every behaviour seen for the first time ever. [plan] */
 export const DATOS_PER_NEW_BEHAVIOR = 3;
 /** Datos for every Encargo completed during the session. [ciclo §3] */
@@ -271,8 +289,8 @@ export const DATOS_PER_ENCARGO = 2;
 export const DATOS_MIN = 3;
 /** Each night after the first adds this to the Esencia part of the conversion. Shown in the summary equation. [plan: "+10 % de Datos por noche"] */
 export const DATOS_NIGHT_BONUS = 0.1;
-/** Records beaten in a session pay this many Datos each (most Esencia, most creatures…). [design] */
-export const DATOS_PER_RECORD = 1;
+/** Records beaten in a session pay this many Datos each (most Esencia, most creatures…). [design; ESPECIES bot: 1 → 2, session 2 had one buy] */
+export const DATOS_PER_RECORD = 2;
 
 // ───────────────────────────── Research tree prices ────────────────
 
@@ -312,19 +330,19 @@ export const NIGHT_MAX = 9;
 export const NIGHT_GATE_FALLBACK = 4;
 /**
  * Gates of the next night, by current night (index = night − 1): sessions finished and species in
- * the Bestiary. Datos alone cannot rush the story. [plan: night 2 at S5, 3 at S9, 4 at S14; owner,
+ * the Bestiary (one species per World since docs/ESPECIES.md: 7 in all). Datos alone cannot rush the story. [plan: night 2 at S5, 3 at S9, 4 at S14; owner,
  * 2nd play-test: "relatively short" — with 2:00–5:00 sessions the story's last question (night 7
  * ready) lands at session 24 ≈ 2 h; bot]
  */
 export const NIGHT_GATES: { sessions: number; species: number }[] = [
-  { sessions: 4, species: 2 },
-  { sessions: 8, species: 4 },
-  { sessions: 13, species: 7 },
-  { sessions: 20, species: 10 },
-  { sessions: 29, species: 12 },
-  { sessions: 40, species: 14 },
-  { sessions: 48, species: 16 },
-  { sessions: 56, species: 17 },
+  { sessions: 4, species: 1 },
+  { sessions: 8, species: 2 },
+  { sessions: 13, species: 3 },
+  { sessions: 20, species: 4 },
+  { sessions: 29, species: 5 },
+  { sessions: 44, species: 6 },
+  { sessions: 52, species: 7 },
+  { sessions: 60, species: 7 },
 ];
 
 // ───────────────────────────── ⏱ Reloj ─────────────────────────────
@@ -379,9 +397,7 @@ export const DROPPER_MASTER_NOISE = 0.08;
  * template (`bias`, added) and less noise (`noise`, removed): Gotero 0 → 27 %, Gotero III → 57 %, the
  * pure template 100 %, about the Clásico table. [measured]
  */
-export const WORLD_SEED_HELP: Readonly<Record<string, { bias: number; noise: number }>> = {
-  cold: { bias: 0.07, noise: 0.12 },
-};
+export const WORLD_SEED_HELP: Readonly<Record<string, { bias: number; noise: number }>> = {};
 /**
  * Measured share of random seeds that become a creature, by Gotero level (rows) and Estabilizador
  * level (columns), Clásico world. The UI prints these, nothing else. 24 cells × 100 seeds plus 13
@@ -409,10 +425,13 @@ export const CHEAP_SEEDS_FACTOR = 0.85;
 
 // ───────────────────────────── 🧫 Placa ────────────────────────────
 
-/** Placa más grande: levels (Ø96 base → Ø128 → Ø160 → Ø192 = DISH_DIAMETERS[0..3]). [plan] */
-export const DISH_TREE_LEVELS = 3;
-/** Placa gigante: dish index it sets (DISH_DIAMETERS[4] = Ø224). [plan] */
-export const DISH_XL_LEVEL = 4;
+/**
+ * Placa más grande: levels (Ø128 base → Ø160 → Ø192 = DISH_DIAMETERS[0..2]). The base was Ø96: on a
+ * phone its creatures looked huge (owner, v0.014), so the ladder starts one size up. [plan; owner]
+ */
+export const DISH_TREE_LEVELS = 2;
+/** Placa gigante: dish index it sets (DISH_DIAMETERS[3] = Ø224). [plan] */
+export const DISH_XL_LEVEL = 3;
 /** Más sitio: cheap creature slots per level (on top of balance DISH_FREE_SLOTS). [plan] */
 export const SLOTS_PER_LEVEL = 1;
 /**
@@ -421,7 +440,7 @@ export const SLOTS_PER_LEVEL = 1;
  * RITMO: the time-lapse already gives ×3, the cap keeps 30 fps on phones]
  */
 export const MATURE_SPEED_BY_LEVEL = [1, 7 / 6, 4 / 3];
-/** Ecosistema: +this production per distinct species alive on the dish, per level. [plan: +3 % → +6 %] */
+/** Ecosistema: +this production per species in the Bestiary, per level (was: alive at once; one species per World now). [plan: +3 % → +6 %] */
 export const ECOSYSTEM_PER_SPECIES = 0.03;
 
 // ───────────────────────────── 🌱 Vida ─────────────────────────────

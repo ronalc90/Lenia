@@ -405,7 +405,7 @@ export function createSecrets(deps: SecretsDeps): Secrets {
       const names = REGIME_NAMES.get(r.secretId)!;
       const named = (id: string | null) => id !== null && names.has(v.species.find((s) => s.id === id)?.catalogName ?? '');
       // The cryptid keeps hours: one of its kind alive on the dish at night or under a full moon
-      // (it lives in Mundo 5 · Discos, where it would otherwise be met by day, docs/CLARIDAD.md J-26).
+      // (it lives in Mundo 4 · Escudos as a variant of the Escudo, where it would otherwise be met by day, docs/CLARIDAD.md J-26).
       const seen =
         r.when === 'nightOrFullMoon'
           ? cryptidAwake(now()) && v.creatures.some((c) => c.state === 'stable' && named(c.speciesId))

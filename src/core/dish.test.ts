@@ -116,11 +116,11 @@ describe('dish geometry', () => {
 
 describe('dish growth', () => {
   it('maps size indices to ladder diameters capped by the device', () => {
-    expect(dishDiameterFor(0)).toBe(96);
-    expect(dishDiameterFor(4)).toBe(224);
+    expect(dishDiameterFor(0)).toBe(128);
+    expect(dishDiameterFor(3)).toBe(224);
     expect(dishDiameterFor(9)).toBe(224);
-    expect(dishDiameterFor(4, 160)).toBe(160);
-    expect(dishDiameterFor(1, 100)).toBe(96);
+    expect(dishDiameterFor(3, 160)).toBe(160);
+    expect(dishDiameterFor(1, 100)).toBe(128);
   });
 
   it('grows the rim first and lets the camera catch up, keeping every intermediate rim inside the target', () => {

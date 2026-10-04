@@ -49,6 +49,8 @@ export interface SpeciesState {
   common?: Text | null;
   /** (sessions) The World the species was found in (game/worlds WorldId), frozen at registration. */
   world?: string | null;
+  /** Catalog codes of look-alike forms (species/looks VARIANTS) seen as this species ("variante"). */
+  variantsSeen?: string[];
 }
 
 export interface Regime {
@@ -392,6 +394,9 @@ function species(x: unknown): SpeciesState {
       ? { common: { es: str(x.common.es, 48), en: str(x.common.en, 48) } }
       : {}),
     ...(typeof x.world === 'string' && x.world ? { world: str(x.world, 16) } : {}),
+    ...(Array.isArray(x.variantsSeen)
+      ? { variantsSeen: x.variantsSeen.filter((v): v is string => typeof v === 'string').slice(0, 16).map((v) => str(v, 8)) }
+      : {}),
   };
 }
 

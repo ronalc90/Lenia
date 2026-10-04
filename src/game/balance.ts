@@ -227,6 +227,12 @@ export const SEED_BODY_FROM_RG = 1.5;
 export const SEED_BODY_MIN_R = 0.6;
 /** Seeds younger than this (s) that the detector has not reported yet still block their spot. [design] */
 export const SEED_SPACING_MEMORY = 3;
+/**
+ * …but only until the detector has looked at it: two snapshots (one every 10 steps) after it was
+ * placed it is a reported creature or nothing (owner, v0.014: "dice que hay entidades al lado estando
+ * la placa vacía"). [detect: snapshot every 10 steps]
+ */
+export const SEED_SEEN_STEPS = 20;
 /** Long press seed radius multiplier (cost ×2.25 follows from the formula). [doc §7] */
 export const SEED_BIG_RADIUS = 1.5;
 /** Seed radius in units of R. [doc §4: radio ≈ R] */

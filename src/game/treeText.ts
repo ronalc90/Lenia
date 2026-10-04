@@ -56,7 +56,7 @@ export const NODE_TEXT: Record<string, { name: Text; desc: Text }> = {
   nursery: { name: t('Guardería', 'Nursery'), desc: t('Más semillas pueden crecer a la vez.', 'More seeds can grow at the same time.') },
   incubator: { name: t('Incubadora', 'Incubator'), desc: t('Las semillas se hacen criaturas más deprisa.', 'Seeds become creatures faster.') },
   dishXL: { name: t('Placa gigante', 'Giant dish'), desc: t('La placa más grande que existe.', 'The biggest dish there is.') },
-  ecosystem: { name: t('Placa variada', 'Mixed dish'), desc: t('Más especies distintas a la vez: más Esencia.', 'More different species at once: more Essence.') },
+  ecosystem: { name: t('Placa variada', 'Mixed dish'), desc: t('Cada especie de tu Bestiario: más Esencia.', 'Every species in your Bestiary: more Essence.') },
   // 🌱 Vida
   culture: { name: t('Cultivo', 'Culture'), desc: t('Un caldo más rico: todas dan más Esencia.', 'A richer broth: they all give more Essence.') },
   nutrient: { name: t('Comida extra', 'Extra food'), desc: t('Criaturas con más forma dan más Esencia.', 'Creatures with more shape give more Essence.') },
@@ -64,7 +64,7 @@ export const NODE_TEXT: Record<string, { name: Text; desc: Text }> = {
   swimAffinity: { name: t('Nadadoras', 'Swimmers'), desc: t('Las que nadan dan más Esencia.', 'The swimming ones give more Essence.') },
   stillAffinity: { name: t('Tranquilas', 'Calm ones'), desc: t('Las quietas y las que laten dan más Esencia.', 'Still ones and the ones that pulse give more Essence.') },
   colonyAffinity: { name: t('Familias', 'Families'), desc: t('Las colonias y las que se dividen dan más Esencia.', 'Colonies and the ones that split give more Essence.') },
-  symbiosis: { name: t('Amistad', 'Friendship'), desc: t('Dos especies distintas juntas se ayudan.', 'Two different species side by side help each other.') },
+  symbiosis: { name: t('Amistad', 'Friendship'), desc: t('Dos criaturas juntas se ayudan.', 'Two creatures side by side help each other.') },
   abundance: { name: t('Vida abundante', 'Abundant life'), desc: t('Toda la placa da más Esencia.', 'The whole dish gives more Essence.') },
   eternalLife: { name: t('Vida eterna', 'Eternal life'), desc: t('Cada nivel, un poco más de Esencia. Sin final.', 'Every level, a bit more Essence. Never ends.') },
   // 🔬 Descubrir
@@ -79,10 +79,10 @@ export const NODE_TEXT: Record<string, { name: Text; desc: Text }> = {
   encyclopedia: { name: t('Gran enciclopedia', 'Great encyclopedia'), desc: t('Todos los Datos de cada sesión crecen.', 'All the Data of every session grows.') },
   // 🌍 Mundos
   worldGyro: { name: t('Mundo 3 · Remolinos', 'World 3 · Whirls'), desc: t('Nace una criatura que gira como un remolino.', 'A creature that spins like a whirl is born.') },
-  worldCold: { name: t('Mundo 2 · Frío', 'World 2 · Cold'), desc: t('Un mundo lento: criaturas finas y transparentes.', 'A slow world: thin, see-through creatures.') },
-  worldLegs: { name: t('Mundo 6 · Patas', 'World 6 · Legs'), desc: t('Criaturas con patitas que caminan por la placa.', 'Creatures with little legs that walk the dish.') },
-  worldShields: { name: t('Mundo 4 · Escudos', 'World 4 · Shields'), desc: t('Criaturas fuertes con forma de escudo.', 'Strong creatures shaped like shields.') },
-  worldHelix: { name: t('Mundo 5 · Discos', 'World 5 · Discs'), desc: t('Discos, anillos y triángulos que brillan.', 'Glowing discs, rings and triangles.') },
+  worldCold: { name: t('Mundo 2 · Frío', 'World 2 · Cold'), desc: t('Un mundo frío y quieto: un anillo con un agujero.', 'A cold, still world: a ring with a hole.') },
+  worldLegs: { name: t('Mundo 6 · Patas', 'World 6 · Legs'), desc: t('Una escalera larga con agujeros.', 'A long ladder with holes.') },
+  worldShields: { name: t('Mundo 4 · Escudos', 'World 4 · Shields'), desc: t('Un escudo hueco y grande.', 'A big, hollow shield.') },
+  worldHelix: { name: t('Mundo 5 · Hélices', 'World 5 · Helices'), desc: t('Una bailarina retorcida que gira sobre sus patas.', 'A twisted dancer that spins on its legs.') },
   worldGiants: { name: t('Mundo 7 · Gigantes', 'World 7 · Giants'), desc: t('Criaturas enormes: caben menos, pero cada una vale el doble.', 'Huge creatures: fewer fit, but each is worth double.') },
   // ✨ Destello
   spark: { name: t('Destello frecuente', 'Frequent spark'), desc: t('La chispa dorada aparece más a menudo.', 'The golden spark shows up more often.') },
@@ -142,7 +142,7 @@ export const VALUE_TEXT = {
   /** Incubadora: seconds a seed needs to be born (time-lapse × Incubadora). */
   birth: (s: Text) => t(`Nacen en ${s.es} s`, `Hatch in ${s.en} s`),
   mature: (m: Text) => (m.en === '×1' ? t('Nacen a su ritmo', 'Hatch at their own pace') : t(`Nacen ${m.es} más rápido`, `Hatch ${m.en} faster`)),
-  perSpecies: (p: string) => t(`+${p} % por especie viva`, `+${p}% per species alive`),
+  perSpecies: (p: string) => t(`+${p} % por especie del Bestiario`, `+${p}% per Bestiary species`),
   essenceMult: (m: Text) => t(`Esencia ${m.es}`, `Essence ${m.en}`),
   essencePlus: (p: string) => t(`Esencia +${p} %`, `Essence +${p}%`),
   allEssence: (m: Text) => t(`Toda la Esencia ${m.es}`, `All Essence ${m.en}`),
@@ -171,12 +171,12 @@ export const VALUE_TEXT = {
 
 /** World cards (start card picker). Names live in NODE_TEXT for the tree; the first world here. */
 export const WORLD_TEXT: Record<string, { name: Text; short: Text; desc: Text }> = {
-  classic: { name: t('Mundo 1 · Clásico', 'World 1 · Classic'), short: t('Clásico', 'Classic'), desc: t('Donde empezó todo: nadadoras redondas.', 'Where it all began: round swimmers.') },
+  classic: { name: t('Mundo 1 · Clásico', 'World 1 · Classic'), short: t('Clásico', 'Classic'), desc: t('Donde empezó todo: la Nadadora.', 'Where it all began: the Swimmer.') },
   gyro: { name: NODE_TEXT.worldGyro.name, short: t('Remolinos', 'Whirls'), desc: NODE_TEXT.worldGyro.desc },
   cold: { name: NODE_TEXT.worldCold.name, short: t('Frío', 'Cold'), desc: NODE_TEXT.worldCold.desc },
   legs: { name: NODE_TEXT.worldLegs.name, short: t('Patas', 'Legs'), desc: NODE_TEXT.worldLegs.desc },
   shields: { name: NODE_TEXT.worldShields.name, short: t('Escudos', 'Shields'), desc: NODE_TEXT.worldShields.desc },
-  helix: { name: NODE_TEXT.worldHelix.name, short: t('Discos', 'Discs'), desc: NODE_TEXT.worldHelix.desc },
+  helix: { name: NODE_TEXT.worldHelix.name, short: t('Hélices', 'Helices'), desc: NODE_TEXT.worldHelix.desc },
   giants: { name: NODE_TEXT.worldGiants.name, short: t('Gigantes', 'Giants'), desc: NODE_TEXT.worldGiants.desc },
 };
 
@@ -264,6 +264,7 @@ export const SESSION_UI = {
   nightBonus: (n: number) => t(`Noche ${n}`, `Night ${n}`),
   encyclopedia: t('Enciclopedia', 'Encyclopedia'),
   newSpecies: t('especies nuevas', 'new species'),
+  newVariants: t('variantes nuevas', 'new variants'),
   newBehaviors: t('maneras de moverse nuevas', 'new ways of moving'),
   encargos: t('encargos', 'requests'),
   /** Session 1 shows no Encargo (CLARIDAD §3.3): its silent goals (sow, a creature) are "first goals". */

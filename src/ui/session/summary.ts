@@ -60,7 +60,7 @@ const dec = (x: number, l: Lang): string => String(Math.round(x * 100) / 100).re
 
 /** One row of the equation (pure, for tests and the dev page). */
 export interface EqRow {
-  kind: 'essence' | 'mult' | 'species' | 'behaviors' | 'encargos' | 'goldens' | 'records' | 'book' | 'minimum';
+  kind: 'essence' | 'mult' | 'species' | 'variants' | 'behaviors' | 'encargos' | 'goldens' | 'records' | 'book' | 'minimum';
   /** Tiles left of the "=" ("1.240 Esencia ganada", "÷", "100 …"). */
   tiles: { icon?: string; color?: string; value: string; label: string }[];
   ops: string[];
@@ -96,6 +96,7 @@ export function equationRows(d: DatosBreakdown, l: Lang, night: number, first = 
   }
   const META: Record<DatosBreakdown['terms'][number]['kind'], { icon: string; color: string; label: Text }> = {
     species: { icon: 'species', color: 'var(--bl-good)', label: SESSION_UI.newSpecies },
+    variants: { icon: 'species', color: 'var(--bl-accent)', label: SESSION_UI.newVariants },
     behaviors: { icon: 'behavior', color: 'var(--bl-accent)', label: SESSION_UI.newBehaviors },
     // Session 1 shows no Encargo: what it counts there are the first goals (sow, a creature that stays).
     encargos: { icon: 'encargo', color: 'var(--bl-gold)', label: first ? SESSION_UI.firstSteps : SESSION_UI.encargos },
@@ -140,6 +141,7 @@ export function datosExplain(d: DatosBreakdown, l: Lang, night: number, goal?: {
   if (d.nightMult > 1) terms.push({ icon: 'moon', value: `×${dec(d.nightMult, l)}`, label: SESSION_UI.nightBonus(night)[l], active: true });
   const KIND: Record<DatosBreakdown['terms'][number]['kind'], { icon: PriceExplain['totalIcon']; label: Text }> = {
     species: { icon: 'creatures', label: SESSION_UI.newSpecies },
+    variants: { icon: 'creatures', label: SESSION_UI.newVariants },
     behaviors: { icon: 'behavior', label: SESSION_UI.newBehaviors },
     encargos: { icon: 'check', label: SESSION_UI.encargos },
     goldens: { icon: 'spark', label: SESSION_UI.sparks },

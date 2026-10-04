@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import catalogSigs from '../detect/catalogSignatures.json';
 import { catalogGroup } from '../species/identity';
+import { LOOKALIKE, SPECIES_LOOKS, isVariant, lookSpecies, visualDistance } from '../species/looks';
 import { CATALOG } from '../sim/catalog';
 import * as B from './balance';
 import { CpuLenia } from '../sim/cpu';
@@ -53,7 +54,8 @@ describe('worlds (the rules as cards, no knobs)', () => {
     expect(route.map((n) => n.world)).toEqual(WORLDS.slice(1).map((w) => w.id));
     for (const w of WORLDS.slice(1)) expect(TREE_BY_ID[w.node!].world).toBe(w.id);
     WORLDS.forEach((w, i) => expect(w.n).toBe(i + 1));
-    expect(worldSpeciesCount('classic')).toBe(2); // O2u and O2b are one species for the detector
+    // One visibly new species per world (docs/ESPECIES.md); O2b and O4i are Nadadora variants.
+    for (const w of WORLDS) expect(worldSpeciesCount(w.id), w.id).toBe(1);
   });
 
   it('a newer world never pays less than the one before (it is picked for you on the start card)', () => {
@@ -65,11 +67,11 @@ describe('worlds (the rules as cards, no knobs)', () => {
     }
   });
 
-  it('Frío: an exact quarter-turned copy of its thinnest creature lives where a free angle blurs it to death', () => {
-    // Session play found World 2 barren (every seed faded): Orbium ignis's rim is too thin for the
-    // bilinear turn of a free angle. Its seeds turn by quarter turns instead (cycleBalance WORLD_SEED_HELP).
+  it('Frío: Circium\'s ring lives from any angle (no quarter-turn help needed any more)', () => {
+    // The old Frío grew Orbium ignis, whose rim was too thin for the bilinear turn of a free angle
+    // (cycleBalance WORLD_SEED_HELP.cold). Its new species, the Anillo, takes a free angle.
     const P = WORLD_BY_ID.cold.params;
-    const tpl = scaledTemplate(catalogByCode('O2ui')!, P.R);
+    const tpl = scaledTemplate(catalogByCode('C0v')!, P.R);
     const after = (pattern: typeof tpl, rotation: number): number => {
       const sim = new CpuLenia(64, 64, P);
       applySeedCpu(sim.A, 64, 64, { x: 32, y: 32, radius: Math.max(pattern.w, pattern.h) / 2, density: 1, noise: 0, shape: 'pattern', pattern, bias: 1, rotation, rngSeed: 7 });
@@ -78,13 +80,35 @@ describe('worlds (the rules as cards, no knobs)', () => {
       return sim.mass() / m0;
     };
     expect(after(rotateQuarter(tpl, 1), 0)).toBeGreaterThan(0.6);
-    expect(after(tpl, 0.6)).toBeLessThan(0.05);
-    expect(exactTurns('cold')).toBe(true);
+    expect(after(tpl, 0.6)).toBeGreaterThan(0.6);
     expect(exactTurns('classic')).toBe(false);
     const fx = { dropper: 0, stabilizer: 0, masterDropper: false };
-    expect(seedConfig(fx, 'cold').bias).toBeGreaterThan(seedConfig(fx, 'classic').bias);
-    expect(seedConfig(fx, 'cold').noise).toBeLessThan(seedConfig(fx, 'classic').noise);
     expect(seedConfig(fx, 'classic')).toEqual(seedConfig(fx));
+  });
+
+  it('each world brings ONE species a child tells apart from every species of the worlds before it', () => {
+    const seen: string[] = [];
+    for (const w of WORLDS) {
+      for (const c of w.species) {
+        expect(isVariant(c), c).toBe(false);
+        expect(SPECIES_LOOKS.some((l) => l.code === c), c).toBe(true);
+        for (const k of seen) expect(visualDistance(c, k), `${c} vs ${k}`).toBeGreaterThanOrEqual(LOOKALIKE);
+        seen.push(c);
+      }
+    }
+    expect(seen).toEqual(SPECIES_LOOKS.map((l) => l.code));
+  });
+
+  it('a world\'s variants are look-alikes of a species already known by then, never seeded', () => {
+    const known = new Set<string>();
+    for (const w of WORLDS) {
+      for (const c of w.species) known.add(c);
+      for (const v of w.variants ?? []) {
+        expect(isVariant(v), v).toBe(true);
+        expect(known.has(lookSpecies(v)), v).toBe(true);
+        expect(w.species).not.toContain(v);
+      }
+    }
   });
 
   it('presets are plain LeniaParams the dish can take', () => {

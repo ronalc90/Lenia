@@ -56,7 +56,13 @@ import {
   latinName,
   normalizePortrait,
   portraitScore,
-  sameCatalogSpecies,
+  featureChips,
+  fixedFamily,
+  isVariant,
+  speciesLook,
+  variantNote,
+  lookName,
+  lookalikeOf,
   SHAPE_LABELS,
   shapeKind,
   speciesHue,
@@ -126,6 +132,7 @@ import {
   noteProduction,
   noteSeed,
   noteSpecies,
+  noteVariant,
   noteSpend,
   pityDue,
   recentDatos,
@@ -351,7 +358,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
   let econAcc = 0;
   let golden: Golden | null = null;
   /** Seeds placed lately (t = seconds left in memory) and the radius of matter they stamped. */
-  let recentSeeds: { x: number; y: number; t: number; r: number }[] = [];
+  /** Seeds placed lately: `step` = the last report's step when placed (the detector sees it after that). */
+  let recentSeeds: { x: number; y: number; t: number; r: number; step: number }[] = [];
   /** State of each creature in the previous report (a 'died' creature that was exploded dissolved). */
   let lastStates = new Map<number, Creature['state']>();
   let pendingMutations: { x: number; y: number; parent: string; t: number }[] = [];
@@ -397,6 +405,9 @@ export function createGame(deps: GameDeps, save?: string): Game {
     // Saves from before species identity: freeze a hue and a Latin name now (deterministic).
     for (const sp of s.species) {
       if (sp.hue === undefined) sp.hue = speciesHue(sp.signature, sp.catalogCode, takenHues(sp));
+      // A World species wears its own fixed colour (docs/ESPECIES.md §4), whatever an old save froze.
+      const fixed = fixedFamily(sp.catalogCode);
+      if (fixed) sp.hue = fixed.hue;
       if (!sp.catalogCode && !sp.latin) sp.latin = newLatin(sp.signature, sp.behavior, sp.rings.length, sp);
       if (!sp.shape) sp.shape = shapeKind(sp.catalogCode ? catalogPortrait(sp.catalogCode) : portraitOf(sp), sp.signature);
       if (!sp.common) sp.common = commonName(sp.shape as ShapeKind, sp.behavior, sp.hue, takenCommon(sp));
@@ -465,23 +476,14 @@ export function createGame(deps: GameDeps, save?: string): Game {
     return parts;
   }
 
-  /** Distinct species with a stable member on the dish (Ecosistema). */
-  function speciesAlive(): number {
-    const set = new Set<string>();
-    for (const c of creatures) {
-      const id = c.state === 'stable' ? creatureSpecies.get(c.id) : undefined;
-      if (id) set.add(id);
-    }
-    return set.size;
-  }
-
   /** (sessions) The tree's Vida route, the world, Ecosistema, Sprint final and Abono. */
   function sessionParts(): { id: string; name: Text; mult: number }[] {
     const out = [{ id: 'tree', name: TEXT.multTree, mult: fx.prodMult }];
     const wm = worldEssenceMult(worldNow());
     if (wm !== 1) out.push({ id: 'world', name: TEXT.multWorld, mult: wm });
     if (fx.cataloguing > 0) out.push({ id: 'cataloguing', name: NODE_TEXT_CATALOGUING, mult: 1 + fx.cataloguing });
-    if (fx.ecosystem > 0) out.push({ id: 'ecosystem', name: TEXT.multEcosystem, mult: 1 + fx.ecosystem * speciesAlive() });
+    // Placa variada: per species in the Bestiary (one species per World: "at once" was always 1).
+    if (fx.ecosystem > 0) out.push({ id: 'ecosystem', name: TEXT.multEcosystem, mult: 1 + fx.ecosystem * s.species.length });
     const se = ses();
     if (se) {
       const sprint = sessionProdMult(se, fx);
@@ -740,6 +742,12 @@ export function createGame(deps: GameDeps, save?: string): Game {
         }
       }
     }
+    // Once its species is in the Bestiary, a world now and then grows one of its look-alike forms
+    // (a "variante": a few Datos and a note on the card, never a new species; docs/ESPECIES.md).
+    const variants = WORLD_BY_ID[worldNow()].variants ?? [];
+    if (!guaranteed && variants.length && s.species.some((x) => x.catalogCode && lookalikeOf(x.catalogCode) === code)) {
+      if (rng() < C.VARIANT_SPORE_CHANCE) code = variants[Math.floor(rng() * variants.length) % variants.length];
+    }
     const e = catalogByCode(code);
     return e ? scaledTemplate(e, s.calib.R) : null;
   }
@@ -805,7 +813,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
   function recordSeed(x: number, y: number, cost: number, manual: boolean, countSeed = true, bodyR = s.calib.R, from?: { x: number; y: number }): void {
     if (countSeed) s.stats.seeds++;
-    recentSeeds.push({ x, y, t: recentMemory(), r: bodyR });
+    recentSeeds.push({ x, y, t: recentMemory(), r: bodyR, step: reportStep });
     if (!s.flags.firstSeed) {
       s.flags.firstSeed = true;
       unlockJournal('firstSeed');
@@ -841,11 +849,44 @@ export function createGame(deps: GameDeps, save?: string): Game {
     return out.concat(extra);
   }
 
+  /**
+   * A placed seed blocks its spot only until the detector has had time to see it (B.SEED_SEEN_STEPS):
+   * from then on it is either a reported creature (an obstacle where it IS now, it may have swum away)
+   * or nothing (it faded). Otherwise a swimmer that left its planting spot, or a spore that died,
+   * left an invisible obstacle and a tap on an empty dish read "Muy cerca" (owner, v0.014).
+   */
+  function resolveRecentSeeds(): void {
+    if (!recentSeeds.length) return;
+    recentSeeds = recentSeeds.filter((r) => {
+      if (reportStep < r.step) r.step = reportStep; // a fresh dish restarted the step count
+      return reportStep - r.step < B.SEED_SEEN_STEPS;
+    });
+  }
+
   /** Room for a seed of body radius `bodyR` at (x, y): SEED_GAP·R of empty dish between it and every body. */
   function seedFits(x: number, y: number, bodyR: number, obstacles: { x: number; y: number; r: number }[]): boolean {
     const gap = B.SEED_GAP * s.calib.R;
     for (const o of obstacles) if (gdist(x, y, o.x, o.y) < bodyR + o.r + gap) return false;
     return true;
+  }
+
+  function nearOf(x: number, y: number): { near?: { x: number; y: number; r: number } } {
+    const n = nearestObstacle(x, y);
+    return n ? { near: n } : {};
+  }
+
+  /** The body nearest a refused tap (what the red ring points at), null when none is listed. */
+  function nearestObstacle(x: number, y: number): { x: number; y: number; r: number } | null {
+    let best: { x: number; y: number; r: number } | null = null;
+    let bestD = Infinity;
+    for (const o of seedObstacles()) {
+      const d = gdist(x, y, o.x, o.y) - o.r;
+      if (d < bestD) {
+        bestD = d;
+        best = { x: o.x, y: o.y, r: o.r };
+      }
+    }
+    return best;
   }
 
   /**
@@ -989,8 +1030,10 @@ export function createGame(deps: GameDeps, save?: string): Game {
     let best: CatalogSignature | null = null;
     let bestScore = Infinity;
     // Sessions: a world is a fixed, measured preset — only its own species can be revealed, by
-    // signature alone (Triscutium lives in Discos 3.1 parameter units from its catalog point).
-    const worldGroups = sessions ? new Set(WORLD_BY_ID[worldNow()].species.map(catalogGroup)) : null;
+    // signature alone (a world's preset can sit away from a species' catalog point).
+    // Its variants (look-alikes of a Bestiary species) are recognised too, so they never read as unknown.
+    const wd = WORLD_BY_ID[worldNow()];
+    const worldGroups = sessions ? new Set([...wd.species, ...(wd.variants ?? [])].map(catalogGroup)) : null;
     for (const e of catalogSigs) {
       const entry = catalogByCode(e.code);
       if (entry && !ringsEqual(entry.b, s.calib.rings)) continue;
@@ -1048,8 +1091,14 @@ export function createGame(deps: GameDeps, save?: string): Game {
     let sp: SpeciesState | undefined = idx >= 0 ? s.species[idx] : undefined;
     let isNewSpecies = false;
     const reveal = sp ? null : matchCatalog(sig);
-    // Same catalog species (or one the detector cannot tell apart from it), drifted signature.
-    if (!sp && reveal) sp = s.species.find((x) => sameCatalogSpecies(x.catalogCode, reveal.code));
+    // Same catalog species, one the detector cannot tell apart from it, or a form that LOOKS like it
+    // (a variant, docs/ESPECIES.md): the species already in the Bestiary, never a new one.
+    if (!sp && reveal) sp = s.species.find((x) => !!x.catalogCode && lookalikeOf(x.catalogCode) === lookalikeOf(reveal.code));
+    if (sp && reveal && isVariant(reveal.code) && !(sp.variantsSeen ?? []).includes(reveal.code)) {
+      sp.variantsSeen = [...(sp.variantsSeen ?? []), reveal.code];
+      const sv = ses();
+      if (sv) noteVariant(sv, reveal.code);
+    }
     if (sp) {
       sp.timesSeen++;
       blendSignature(sp, sig);
@@ -1057,7 +1106,9 @@ export function createGame(deps: GameDeps, save?: string): Game {
       // A settled member may give a better portrait than the one stored (checked when due).
       if (!portraitWatch.has(c.id)) portraitWatch.set(c.id, { speciesId: sp.id, at: reportStep + B.PORTRAIT_RECAPTURE_DELAY });
     } else {
-      // Only finished forms found a species; until then the creature pays as an unknown one.
+      // Only finished forms found a species; until then the creature pays as an unknown one. In a World
+      // only its catalog forms found one: an unknown shape is a fragment, never "¡Nueva especie!".
+      if (sessions && !reveal) return;
       if (!finishedForm(c, sig, reveal) || newSpeciesTokens < 1 || crowded(c)) return;
       sp = registerSpecies(c, sig, reveal);
       newSpeciesTokens -= 1;
@@ -1107,7 +1158,10 @@ export function createGame(deps: GameDeps, save?: string): Game {
     }
   }
 
-  function registerSpecies(c: Creature, sig: number[], reveal: CatalogSignature | null): SpeciesState {
+  function registerSpecies(c: Creature, sig: number[], revealed: CatalogSignature | null): SpeciesState {
+    // A variant found before its species founds the species itself (the canonical catalog form).
+    const canon = revealed ? lookalikeOf(revealed.code) : null;
+    const reveal = revealed && canon !== revealed.code ? (catalogSigs.find((e) => e.code === canon) ?? revealed) : revealed;
     const n = ++s.specimenCounter;
     const R = s.calib.R;
     const mut = pendingMutations.find((m) => gdist(m.x, m.y, c.x, c.y) < B.MUTATION_LINK_DIST * R);
@@ -1121,7 +1175,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     const hue = speciesHue(sig, reveal ? reveal.code : null, takenHues());
     // Frozen at registration: the body seen in the catalog pattern (revealed) or read from the signature.
     const shape = shapeKind(reveal ? catalogPortrait(reveal.code) : null, sig);
-    const common = commonName(shape, c.behavior, hue, takenCommon());
+    const common = (reveal && lookName(reveal.code)) || commonName(shape, c.behavior, hue, takenCommon());
     const sp: SpeciesState = {
       id: `sp${n}`,
       n,
@@ -1147,6 +1201,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       shape,
       common,
       ...(sessions ? { world: worldNow() } : {}),
+      ...(revealed && revealed !== reveal ? { variantsSeen: [revealed.code] } : {}),
     };
     if (mut) pendingMutations = pendingMutations.filter((m) => m !== mut);
     s.species.push(sp);
@@ -1211,7 +1266,10 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
   function processReport(report: DetectorReport): void {
     creatures = Array.isArray(report.creatures) ? report.creatures.filter((c) => c && Number.isFinite(c.x) && Number.isFinite(c.y)) : [];
-    if (Number.isFinite(report.step)) reportStep = report.step;
+    if (Number.isFinite(report.step)) {
+      reportStep = report.step;
+      resolveRecentSeeds();
+    }
     updateOvergrown(Number.isFinite(report.fill) ? report.fill : 0);
     for (const c of creatures) {
       if (!knownIds.has(c.id)) {
@@ -1290,7 +1348,10 @@ export function createGame(deps: GameDeps, save?: string): Game {
       behaviorMult,
       complexityMult: 1 + B.NUTRIENT_BONUS * level('nutrient'),
       globalMult: globalMult(),
-      symbiosis: has('symbiosis'),
+      // Amistad (sessions): two creatures side by side help each other, of any species — a World grows
+      // one species (docs/ESPECIES.md), so "two different species" would never happen.
+      symbiosis: has('symbiosis') || (sessions && fx.symbiosis),
+      ...(sessions ? { symbiosisAnySpecies: true, symbiosisMult: C.SYMBIOSIS_TREE_MULT } : {}),
       R: s.calib.R,
       // Round dish: no wrap (an infinite period makes economy's toroidal distance a straight one).
       gridW: dish ? Infinity : grid.w,
@@ -1862,7 +1923,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       const t = turned(scaledTemplate(e, s.calib.R), true);
       const r = Math.max(t.pattern.w, t.pattern.h) / 2;
       out.push({ x: spot.x, y: spot.y, radius: r, density: 1, noise: 0, shape: 'pattern', pattern: t.pattern, bias: 1, rotation: t.rotation, rngSeed: Math.floor(rng() * 2147483647) });
-      recentSeeds.push({ x: spot.x, y: spot.y, t: recentMemory(), r }); // the next plant keeps clear of it
+      recentSeeds.push({ x: spot.x, y: spot.y, t: recentMemory(), r, step: reportStep }); // the next plant keeps clear of it
     }
     return out;
   }
@@ -2248,7 +2309,21 @@ export function createGame(deps: GameDeps, save?: string): Game {
       printCost: B.PRINT_COST[sp.rarity],
       isNew: sp.isNew,
       ...(sessions ? { world: speciesWorld(sp), ...copyOf(sp) } : {}),
+      ...lookOf(sp),
     }));
+  }
+
+  /** What the species looks like as a Bestiary entry (docs/ESPECIES.md): chips, body, variants seen. */
+  function lookOf(sp: SpeciesState): Partial<SpeciesView> {
+    const code = sp.catalogCode ? lookalikeOf(sp.catalogCode) : null;
+    const look = code ? speciesLook(code) : undefined;
+    if (!code || !look) return {};
+    return {
+      lookCode: code,
+      body: look.body,
+      chips: featureChips(code).map((c) => ({ id: c.id, label: c.label })),
+      variantNotes: (sp.variantsSeen ?? []).map((v) => variantNote(v)).filter((x): x is Text => !!x),
+    };
   }
 
   /**
@@ -2447,7 +2522,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       // Spacing: never stamp a spore onto or right next to other matter (they fuse into a maze).
       const spot = clearSpotNear(x, y, seedBodyRadius(spec));
       if (!spot) {
-        bus.emit('seedBlocked', { x, y, reason: 'tooClose' });
+        bus.emit('seedBlocked', { x, y, reason: 'tooClose', ...nearOf(x, y) });
         return null; // nothing charged, no charge used
       }
       let paid = 0;
@@ -2535,7 +2610,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       const bodyR = Math.max(pattern.w, pattern.h) / 2;
       const spot = clearSpotNear(x, y, bodyR);
       if (!spot) {
-        bus.emit('seedBlocked', { x, y, reason: 'tooClose' });
+        bus.emit('seedBlocked', { x, y, reason: 'tooClose', ...nearOf(x, y) });
         return null;
       }
       const from = spot.x !== x || spot.y !== y ? { x, y } : undefined;
@@ -2740,7 +2815,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     const bodyR = Math.max(pattern.w, pattern.h) / 2;
     const spot = clearSpotNear(x, y, bodyR);
     if (!spot) {
-      bus.emit('seedBlocked', { x, y, reason: 'tooClose' });
+      bus.emit('seedBlocked', { x, y, reason: 'tooClose', ...nearOf(x, y) });
       return null;
     }
     const from = spot.x !== x || spot.y !== y ? { x, y } : undefined;

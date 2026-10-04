@@ -287,6 +287,14 @@ export interface SpeciesView {
   copyCost?: number | null;
   /** (game, sessions) Why no copy now: no Copiadora yet, no session running, or it lives in another World. */
   copyBlocked?: 'noCopier' | 'noSession' | 'otherWorld' | null;
+  /** (species) Canonical catalog code of its look (species/looks): the key for comparisons and arrows. */
+  lookCode?: string;
+  /** (species) Its body in plain words with the article: "un anillo con un agujero". */
+  body?: Text;
+  /** (species) 2–3 visual feature chips, size first ("pequeña", "agujero", "quieta"). */
+  chips?: { id: string; label: Text }[];
+  /** (species) Small notes of the look-alike forms seen as this species ("variante: pareja"). */
+  variantNotes?: Text[];
 }
 
 /** (game) The factors of one creature's production (product × global × buffs = Essence/s). */

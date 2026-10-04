@@ -40,7 +40,7 @@ describe('seed spacing (spores stamped next to other matter fuse into a maze)', 
     const before = { essence: g.state.essence, charges: { ...st(g).charges } };
     expect(g.actions.seedAt(96, 120)).toBeNull();
     expect(count('seedBlocked')).toBe(1);
-    expect((log.get('seedBlocked') as GameEvents['seedBlocked'][])[0]).toEqual({ x: 96, y: 120, reason: 'tooClose' });
+    expect((log.get('seedBlocked') as GameEvents['seedBlocked'][])[0]).toMatchObject({ x: 96, y: 120, reason: 'tooClose', near: { x: expect.any(Number), y: expect.any(Number) } });
     expect(count('seed')).toBe(0);
     expect(g.state.essence).toBe(before.essence);
     expect(st(g).charges).toEqual(before.charges);

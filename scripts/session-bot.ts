@@ -44,11 +44,6 @@ const BASE_HAZARD = 1 / 2400;
  * sessions are not 2–3× too rich.
  */
 const MOVER_HAZARD = 1 / 90;
-/**
- * Movers start bumping into each other above this share of the dish's room (3 of the base dish's 5).
- * A fixed 3 made "Placa más grande" a loss in the model: a dish of 9 died as fast as a dish of 5. [model]
- */
-const MOVER_CROWD_SHARE = 0.6;
 const SWIM_SPEED = 0.8;
 const COLLIDE_R = 1.5;
 const COLLIDE_KILL = 0.6;
@@ -208,7 +203,7 @@ class Dish {
       const sure = spec.shape === 'pattern' && (spec.bias ?? 0) >= 1;
       if (pool.length && this.rng() < (sure ? 1 : this.hooks.success())) {
         fate = 'stable';
-        if (tpl && pool.includes(tpl)) species = tpl;
+        if (tpl) species = tpl; // the world's species or one of its variants
         else {
           const known = this.hooks.known();
           const w = pool.map((m) => (known.has(catalogGroup(m.code)) ? 1 : GB.SPORE_NOVELTY * (this.hooks.rare() ? 2 : 1)));
@@ -280,7 +275,8 @@ class Dish {
         }
       } else if (b.state === 'stable') {
         const mover = b.behavior === 'swimmer' || b.behavior === 'spinner';
-        const crowd = Math.max(3, Math.round(MOVER_CROWD_SHARE * (Number.isFinite(this.cap) ? this.cap - 2 : 5)));
+        // Measured (cycleBalance DISH_CAPACITY): in Ø128 two swimmers already meet, more only collide more.
+        const crowd = Number.isFinite(this.cap) ? Math.max(2, this.cap - 1) : 3;
         if (this.rng() < (BASE_HAZARD + (mover && movers >= crowd ? MOVER_HAZARD : 0)) * ds * PER_STEP) {
           this.kill(b, 'died');
           continue;
@@ -358,7 +354,9 @@ const worldPool = (w: WorldId): SpeciesModel[] => WORLD_BY_ID[w].species.map((c)
 /** Template pattern → species: seeding.ts caches scaledTemplate per code and R, so the game's spec carries the same object. */
 const TEMPLATE_SPECIES = new Map<Pattern, SpeciesModel>();
 for (const w of WORLDS) {
-  for (const code of w.species) {
+  // Variants (look-alike forms the game seeds now and then, docs/ESPECIES.md) grow as themselves: the
+  // game reveals them by their own signature and counts them as their species ("variante", Datos).
+  for (const code of [...w.species, ...(w.variants ?? [])]) {
     const e = catalogByCode(code);
     const m = MODEL_BY_CODE.get(code);
     if (!e || !m) continue;

@@ -175,9 +175,10 @@ export function sameDish(a: DishShape, b: DishShape): boolean {
 /**
  * Rim diameters (cells) of the growing dish, smallest first (docs/DISH.md §6). Which index the
  * player has reached is game logic; the largest one a device can run is `maxDiameter`
- * (sim/perf.ts QUALITY_DISH).
+ * (sim/perf.ts QUALITY_DISH). Starts at Ø128, not Ø96: fitted to a phone, a Ø96 Orbium filled a big share
+ * of the screen (owner, v0.014: "es muy grande"); ADR-025 amendment.
  */
-export const DISH_DIAMETERS: readonly number[] = [96, 128, 160, 192, 224];
+export const DISH_DIAMETERS: readonly number[] = [128, 160, 192, 224];
 
 /** Seconds the rim takes to grow to a new size (the camera follows a little slower). */
 export const DISH_GROW_SECONDS = 1.5;

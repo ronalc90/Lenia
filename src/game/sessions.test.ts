@@ -5,7 +5,7 @@ import { createGame } from './game';
 import type { GameState } from './state';
 import { creature, recordingBus, report, run, seededRng } from './testUtil';
 import { WORLD_BY_ID } from './worlds';
-import { rotateQuarter, scaledTemplate } from './seeding';
+import { scaledTemplate } from './seeding';
 import { catalogByCode } from '../sim/catalog';
 
 /** A sessions game (the integrated loop of docs/CICLO.md). */
@@ -92,9 +92,10 @@ describe('sessions cycle: never punish growth', () => {
     s.charges = { free: 0, guaranteed: 0 };
     s.essence = 1000;
     expect(g.view().seedCost).toBe(C.SESSION_SEED_PRICE);
-    // 3 alive + the starter creature (docs/RITMO.md §4.2) leave room for one more seed in the base dish.
-    run(g, 1, report(stable(3)), 0.5);
-    expect(g.view().seedCost).toBe(C.SESSION_SEED_PRICE); // 3 creatures alive: same price
+    // 1 alive + the starter creature (docs/RITMO.md §4.2) leave room for one more seed in the base
+    // dish (Ø128 holds 3, docs/ESPECIES.md §5).
+    run(g, 1, report(stable(1)), 0.5);
+    expect(g.view().seedCost).toBe(C.SESSION_SEED_PRICE); // a creature alive: same price
     expect(g.view().seedPrice).toMatchObject({ crowdMult: 1, satMult: 1, stepMult: 1, capacity: C.DISH_CAPACITY[0] });
     for (const x of [30, 90, 150]) {
       g.actions.seedAt(x, 200);
@@ -216,11 +217,10 @@ describe('sessions cycle: the tree, worlds and nights', () => {
     expect('setCalibration' in g.actions).toBe(false);
   });
 
-  it('Frío seeds are exact quarter turns of its templates with more template; Clásico keeps the free angle', () => {
+  it('seeds take a free angle in every world (no world needs exact quarter turns since the Anillo)', () => {
     const { g } = sessionsGame(3);
     st(g).charges = { free: 5, guaranteed: 0 };
-    const a = g.actions.seedAt(150, 200)!;
-    expect(a.rotation).not.toBe(0);
+    expect(g.actions.seedAt(150, 200)!.rotation).not.toBe(0);
     st(g).research!.datos = 100;
     g.actions.endSessionNow!();
     expect(g.buyNode('worldCold').ok).toBe(true);
@@ -228,11 +228,8 @@ describe('sessions cycle: the tree, worlds and nights', () => {
     expect(g.view().session!.world).toBe('cold');
     st(g).charges = { free: 5, guaranteed: 0 };
     const b = g.actions.seedAt(150, 200)!;
-    expect(b.rotation).toBe(0);
-    const turns = WORLD_BY_ID.cold.species.flatMap((c) => [0, 1, 2, 3].map((k) => rotateQuarter(scaledTemplate(catalogByCode(c)!, 13), k)));
-    expect(turns).toContain(b.pattern);
-    expect(b.bias).toBeCloseTo(C.DROPPER_TREE_BIAS[0] + C.WORLD_SEED_HELP.cold.bias, 6);
-    expect(b.noise).toBeCloseTo(C.DROPPER_TREE_NOISE[0] - C.WORLD_SEED_HELP.cold.noise, 6);
+    expect(b.pattern).toBe(scaledTemplate(catalogByCode('C0v')!, 13));
+    expect(C.WORLD_SEED_HELP.cold).toBeUndefined();
   });
 
   it('the night replaces the Extinction: ready after its sessions, free at the centre', () => {
@@ -269,7 +266,9 @@ describe('sessions cycle: the tree, worlds and nights', () => {
     g.actions.startSession!();
     expect(g.view().essence).toBe(C.SESSION_START_ESSENCE + 40);
     expect(g.session!.encargos).toBe(1);
-    expect(g.session!.bonus).toBe(C.SESSION_TIME_PER_ENCARGO);
+    // Met before the clock runs: it counts (Datos) but adds no time — only what the player does in the
+    // run stretches it (bot: the night's first run was an outlier the next could not beat).
+    expect(g.session!.bonus).toBe(0);
   });
 });
 

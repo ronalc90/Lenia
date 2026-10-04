@@ -74,19 +74,20 @@ function oklch(L: number, C: number, hDeg: number): [number, number, number] {
  * Share of the hue each matter value takes: none in the faint haze, all of the body, and still a
  * clear hint in the hot core. Stronger than the art direction's first rows (matter.ts tintedStops:
  * 0.85 body, 0.15 core) by the owner's call: "cada especie un color claramente distinto" at phone
- * size, where most of a creature is its bright core.
+ * size, where most of a creature is its bright core. v0.015: the core keeps 80 % of the hue at chroma
+ * 0.15 (was 55 % at 0.11): solid bodies like the Anillo read white with a coloured rim (docs/ESPECIES.md).
  */
 export function tintWeight(v: number): number {
   if (v <= 0.04) return 0;
   if (v < 0.12) return (v - 0.04) / 0.08;
   if (v <= 0.7) return 1;
-  if (v < 0.94) return 1 - ((v - 0.7) / 0.24) * 0.45;
-  return 0.55;
+  if (v < 0.94) return 1 - ((v - 0.7) / 0.24) * 0.2;
+  return 0.8;
 }
 
 /** Chroma the tinted body reaches (OKLCH), and the floor near white so the core still shows its hue. */
 const BODY_CHROMA = 0.19;
-const CORE_CHROMA = 0.11;
+const CORE_CHROMA = 0.15;
 
 /**
  * Knots where the hue is applied exactly: the values of the matter colormap's stops

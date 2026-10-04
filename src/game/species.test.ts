@@ -47,18 +47,21 @@ describe('only finished forms found a species', () => {
     expect(g.view().species[0].catalogName).toBeNull();
   });
 
-  it('catalog forms register even as bound pairs; species the detector cannot tell apart register once', () => {
+  it('a look-alike form (a variant) is its species, never a new one; even found first it founds that species', () => {
     const { bus, count } = recordingBus();
     const g = createGame({ bus, rng: seededRng(2) });
-    // Parorbium dividuus is a bound pair (PARTS ≈ 1.2): a real catalog form, so it may register.
+    // Parorbium dividuus is two Orbiums side by side (PARTS ≈ 1.2): a Nadadora variant (docs/ESPECIES.md).
     g.tick(0.5, report([creature({ id: 1, x: 30, y: 30, signature: sigOf('O4d'), ...settled })]));
-    // Orbium unicaudatus, then a bicaudatus-like signature: same bestiary entry (catalog group).
+    // Orbium unicaudatus, then bicaudatus: the same Bestiary entry.
     g.tick(0.5, report([creature({ id: 2, x: 120, y: 30, signature: sigOf('O2u'), ...settled })]));
     g.tick(0.5, report([creature({ id: 3, x: 120, y: 180, signature: sigOf('O2b'), ...settled })]));
     const v = g.view();
-    expect(count('speciesNew')).toBe(2);
-    expect(v.species.map((s) => s.catalogName).sort()).toEqual(['Orbium unicaudatus', 'Parorbium dividuus']);
-    expect(v.species.find((s) => s.catalogName === 'Orbium unicaudatus')!.timesSeen).toBe(2);
+    expect(count('speciesNew')).toBe(1);
+    expect(v.species.map((s) => s.catalogName)).toEqual(['Orbium unicaudatus']);
+    expect(v.species[0].name).toBe('Nadadora celeste');
+    expect(v.species[0].timesSeen).toBe(3);
+    expect(v.species[0].variantNotes!.map((n) => n.es)).toEqual(['variante: pareja', 'variante: dos colas']);
+    expect(v.species[0].chips!.length).toBeGreaterThanOrEqual(2);
   });
 
   it('matching an already registered species stays immediate', () => {
@@ -80,20 +83,21 @@ describe('species identity', () => {
     g.tick(0.5, report([creature({ id: 3, x: 140, y: 20, signature: sigOf('OG2g'), behavior: 'spinner', ...settled })]));
     // A 4th new species waits for the registration token bucket (3 at once, then one per 15 s).
     for (let i = 0; i < 40; i++) g.tick(0.5, report([creature({ id: 4, x: 20, y: 200, signature: NOVEL, behavior: 'pulsing', ...settled })]));
-    const [orb, syn, gyro, novel] = g.view().species;
+    // Synorbium ignis (two joined Orbiums) is a Nadadora variant: three species, not four.
+    const [orb, gyro, novel] = g.view().species;
+    expect(g.view().species.length).toBe(3);
     expect(orb.name).toBe('Nadadora celeste');
     expect(orb.scientificName).toBe('Orbium unicaudatus');
     expect(orb.catalogName).toBe('Orbium unicaudatus');
     expect(orb.colorName).toEqual({ es: 'celeste', en: 'sky' });
-    expect(syn.name).toBe('Pareja dorada');
-    expect(gyro.name).toBe('Media luna malva'); // violeta (its own colour) is too close to the two taken ones
+    expect(gyro.name).toBe('Remolino violeta'); // its own colour from first sight
     expect(novel.scientificName).toMatch(/^[A-Z][a-z]+ [a-z]+$/); // procedural Latin
     expect(novel.catalogName).toBeNull();
     expect(orb.subtitle).toBe('Criatura 1');
-    // Four species, four colour families, well apart.
-    const hues = [orb, syn, gyro, novel].map((x) => x.hue!);
-    expect(new Set(hues.map((h) => colorFamily(h).id)).size).toBe(4);
-    for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) expect(hueDistance(hues[i], hues[j])).toBeGreaterThanOrEqual(25);
+    // Three species, three colour families, well apart.
+    const hues = [orb, gyro, novel].map((x) => x.hue!);
+    expect(new Set(hues.map((h) => colorFamily(h).id)).size).toBe(3);
+    for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) expect(hueDistance(hues[i], hues[j])).toBeGreaterThanOrEqual(25);
     expect(COLOR_FAMILIES.map((f) => f.hue)).toContain(novel.hue);
     // The toast/event carries the same name, and creatures carry their species' hue.
     expect((log.get('speciesNew')![0] as { name: string }).name).toBe('Nadadora celeste');
@@ -103,12 +107,12 @@ describe('species identity', () => {
     for (let i = 0; i < 30; i++) {
       g.tick(0.5, report([creature({ id: 10 + i, x: 20, y: 200, signature: NOVEL.map((v, k) => (k === SIG.MASS ? v * 1.04 : v)), ...settled })]));
     }
-    expect(g.view().species[3].name).toBe(novel.name);
-    expect(g.view().species[3].hue).toBe(novel.hue);
+    expect(g.view().species[2].name).toBe(novel.name);
+    expect(g.view().species[2].hue).toBe(novel.hue);
     // English.
     g.actions.setSetting('lang', 'en');
     expect(g.view().species[0].name).toBe('Sky swimmer');
-    expect(g.view().species[1].name).toBe('Golden pair');
+    expect(g.view().species[1].name).toBe('Violet whirl');
     expect(g.view().species[0].subtitle).toBe('Creature 1');
     // A name the player chose wins.
     g.actions.renameSpecies(orb.id, 'Pepita');

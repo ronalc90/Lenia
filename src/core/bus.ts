@@ -15,7 +15,8 @@ export interface GameEvents {
    * matter); 'growing' = enough seeds are still forming ("⏳ Espera…", GameView.seedsGrowing);
    * 'full' = (sessions) the dish has no room left ("Placa llena: mejora la Placa para más sitio").
    */
-  seedBlocked: { x: number; y: number; reason: 'tooClose' | 'growing' | 'full' };
+  /** `near` (tooClose): the body in the way, in grid cells, for the red ring. */
+  seedBlocked: { x: number; y: number; reason: 'tooClose' | 'growing' | 'full'; near?: { x: number; y: number; r: number } };
   /** Seeding refused for lack of essence. */
   seedDenied: { x: number; y: number; cost: number };
   creatureBorn: { id: number; x: number; y: number };

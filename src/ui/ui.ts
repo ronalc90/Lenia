@@ -1795,7 +1795,7 @@ class BiolumaUI implements UI {
       const msg = e.reason === 'tooClose' ? tx(TEXT.seedTooClose) : e.reason === 'full' && room ? tx(TEXT.dishFull(room)) : '';
       if (msg) {
         const cut = msg.search(/[.!] /);
-        ov.seedBlocked(e.x, e.y, cut > 0 ? msg.slice(0, cut + 1) : msg, cut > 0 ? msg.slice(cut + 2) : '');
+        ov.seedBlocked(e.x, e.y, cut > 0 ? msg.slice(0, cut + 1) : msg, cut > 0 ? msg.slice(cut + 2) : '', e.near);
       }
       // A full dish: every creature's place blinks, so "full" is something you can see (CLARIDAD J-160).
       if (e.reason === 'full' && this.v) {

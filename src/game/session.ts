@@ -96,6 +96,8 @@ export interface SessionState {
   species: string[];
   /** Species registered for the first time ever this session. */
   newSpecies: string[];
+  /** Look-alike forms (variants, species/looks) seen for the first time ever this session. */
+  newVariants?: string[];
   /** Behaviours seen for the first time ever this session. */
   newBehaviors: Behavior[];
   encargos: number;
@@ -233,6 +235,7 @@ export function beginSession(r: ResearchState, fx: TreeEffects): { research: Res
     peakCreatures: 0,
     species: [],
     newSpecies: [],
+    newVariants: [],
     newBehaviors: [],
     encargos: 0,
     goldens: 0,
@@ -423,6 +426,13 @@ export function noteSpecies(s: SessionState, fx: TreeEffects, speciesId: string,
   return extend(s, fx.timePerSpecies, 'species');
 }
 
+/** A variant (look-alike form, never a new species) seen for the first time ever: a few Datos. */
+export function noteVariant(s: SessionState, code: string): void {
+  if (s.phase === 'over') return;
+  const v = (s.newVariants ??= []);
+  if (!v.includes(code)) v.push(code);
+}
+
 export function noteBehavior(s: SessionState, behavior: Behavior, firstEver: boolean): void {
   if (firstEver && !s.newBehaviors.includes(behavior)) s.newBehaviors.push(behavior);
 }
@@ -435,7 +445,10 @@ export function noteBehavior(s: SessionState, behavior: Behavior, firstEver: boo
 export function noteEncargo(s: SessionState, fx: TreeEffects): SessionEvent[] {
   if (s.phase === 'over') return [];
   s.encargos++;
-  return s.n >= C.ENCARGO_TIME_FROM_SESSION ? extend(s, fx.timePerEncargo, 'encargo') : [];
+  // Only an Encargo met while the clock runs adds time: one already met when the run is set up (a new
+  // night's list ticking off what you already have) is not something the player did in this run, and
+  // its +3 s made the night's first run an outlier the next one could not beat (bot: S5 −10 %).
+  return s.n >= C.ENCARGO_TIME_FROM_SESSION && s.phase === 'running' ? extend(s, fx.timePerEncargo, 'encargo') : [];
 }
 
 export function noteGolden(s: SessionState, fx: TreeEffects): SessionEvent[] {
@@ -473,7 +486,7 @@ export interface DatosBreakdown {
   /** floor(base × nightMult). */
   fromEssence: number;
   /** Additive terms: count × each = value. */
-  terms: { kind: 'species' | 'behaviors' | 'encargos' | 'goldens' | 'records'; count: number; each: number; value: number }[];
+  terms: { kind: 'species' | 'variants' | 'behaviors' | 'encargos' | 'goldens' | 'records'; count: number; each: number; value: number }[];
   /** fromEssence + Σ terms. */
   sub: number;
   /** Gran enciclopedia: every Dato ×bookMult (1 = none); `book` = what it adds, floor(sub × bookMult) − sub. */
@@ -532,6 +545,7 @@ export function computeDatos(s: SessionState, fx: TreeEffects, records: number):
     if (count > 0 && each > 0) terms.push({ kind, count, each, value: count * each });
   };
   add('species', s.newSpecies.length, fx.datosPerSpecies);
+  add('variants', s.newVariants?.length ?? 0, C.DATOS_PER_VARIANT);
   add('behaviors', s.newBehaviors.length, fx.datosPerBehavior);
   add('encargos', s.encargos, C.DATOS_PER_ENCARGO);
   add('goldens', s.goldens, fx.datosPerGolden);
@@ -698,6 +712,7 @@ export function validateSession(x: unknown): SessionState | null {
     peakCreatures: Math.floor(num(x.peakCreatures)),
     species: strs(x.species, 256),
     newSpecies: strs(x.newSpecies, 256),
+    newVariants: strs(x.newVariants, 64),
     newBehaviors: Array.isArray(x.newBehaviors) ? x.newBehaviors.filter((b): b is Behavior => BEHAVIORS.includes(b as Behavior)) : [],
     encargos: Math.floor(num(x.encargos)),
     goldens: Math.floor(num(x.goldens)),

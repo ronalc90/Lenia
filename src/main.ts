@@ -9,6 +9,7 @@ import { matterLUT } from './core/palette';
 import { createSimulation } from './sim/webgl';
 import { QUALITY_DISH } from './sim/perf';
 import { Deflector } from './sim/deflect';
+import { mustWaitForDetection } from './sim/detectGate';
 import { DishAnimator, dishDiameterFor, dishForGrid, type DishShape } from './core/dish';
 import { ART_RENDER_STYLE } from './ui/art/matter';
 import { DEFAULT_ITEM } from './store/catalog';
@@ -942,6 +943,15 @@ function boot(): void {
   const reports: DetectorReport[] = [];
   let epoch = 0;
   let snapInFlight = false;
+  /** Step of the last snapshot taken for the detector (the deflector steers from it). */
+  let detectedStep = -1;
+  /** True while stepping must wait for the snapshot of this boundary (src/sim/detectGate.ts). */
+  function detectionDue(): boolean {
+    const s = sim!;
+    if (!mustWaitForDetection(s.stepCount, detectedStep, DETECT_EVERY)) return false;
+    requestDetection();
+    return mustWaitForDetection(s.stepCount, detectedStep, DETECT_EVERY);
+  }
   let lastView = 0;
   let lastAudio = 0;
   let lastSave = performance.now();
@@ -979,6 +989,7 @@ function boot(): void {
   function requestDetection(): void {
     const s = sim!;
     if (snapInFlight || s.contextLost) return;
+    detectedStep = s.stepCount;
     // Debug lockstep (tests only): a synchronous readback, so the detector sees every 10th step even
     // when the test browser renders far slower than the dish steps.
     if (debugTime.lockstep) {
@@ -1125,7 +1136,7 @@ function boot(): void {
       if (game.session?.phase !== 'ready' || s.contextLost) preincubate = 0;
       else if (!document.hidden) {
         let budget = Math.min(preincubate, PREINCUBATE_PER_FRAME);
-        while (budget > 0 && !snapInFlight) {
+        while (budget > 0 && !detectionDue()) {
           const k = Math.min(budget, DETECT_EVERY - (s.stepCount % DETECT_EVERY));
           s.advance(k);
           budget -= k;
@@ -1142,11 +1153,11 @@ function boot(): void {
       const whole = Math.floor(acc);
       let n = Math.min(whole, 4 * game.speed * debugTime.scale);
       acc -= whole; // any backlog beyond the cap is dropped, the sim just runs slower
-      stepped = n;
-      while (n > 0) {
+      while (n > 0 && !detectionDue()) {
         const k = Math.min(n, DETECT_EVERY - (s.stepCount % DETECT_EVERY));
         s.advance(k);
         n -= k;
+        stepped += k;
         if (s.stepCount % DETECT_EVERY === 0) requestDetection();
       }
     }

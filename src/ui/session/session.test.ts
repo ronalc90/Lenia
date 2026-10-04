@@ -35,9 +35,9 @@ describe('the Datos equation on the end card', () => {
     expect(x.terms.map((t) => t.value)).toEqual(['9', '×1,1']);
     expect(x.total).toBe(String(d.fromEssence)); // 9 × 1,1 → 9: the equation adds up by itself
     expect(x.rule).toMatch(new RegExp(`^Por cada ${C.DATOS_ESSENCE_DIV} de Esencia, 1 Dato`));
-    expect(x.rows!.map((r) => r.label)).toEqual(['+5', '=']);
+    expect(x.rows!.map((r) => r.label)).toEqual([`+${C.DATOS_PER_NEW_SPECIES}`, '=']);
     expect(x.rows![1].text).toBe(`${d.total} Datos al terminar`);
-    expect(d.fromEssence + 5).toBe(d.total);
+    expect(d.fromEssence + C.DATOS_PER_NEW_SPECIES).toBe(d.total);
     expect(x.advice).toBe('Más tiempo: te faltan 4 Datos');
   });
 

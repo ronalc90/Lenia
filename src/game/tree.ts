@@ -92,7 +92,7 @@ export interface TreeEffects {
   complexityMult: number;
   /** +fraction of production by behaviour family (Nadadoras / Tranquilas / Familias). */
   affinity: { swim: number; still: number; colony: number };
-  /** Two different species touching both produce SYMBIOSIS_TREE_MULT. */
+  /** Two creatures touching (any species, sessions) both produce SYMBIOSIS_TREE_MULT. */
   symbiosis: boolean;
   // ── 🔬 Discovery ──
   datosPerSpecies: number;

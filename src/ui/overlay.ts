@@ -531,9 +531,14 @@ export class Overlay {
    * A tap with no room (it would fuse with nearby matter): a red "no" ring where the finger was, and the
    * reason pinned to the spot (one label at a time). Nothing was charged.
    */
-  seedBlocked(x: number, y: number, text: string, sub: string): void {
+  seedBlocked(x: number, y: number, text: string, sub: string, near?: { x: number; y: number; r: number }): void {
     const base = Math.max(22, 13 * this.camera.scale * 1.25);
-    this.ripples.push({ x, y, t0: this.now, dur: 0.55, color: C.danger, maxR: base * 0.95, rings: 2, width: 2.6 });
+    if (near) {
+      // The ring sits on the matter in the way (owner: "a veces dice que hay entidades al lado estando la
+      // placa vacía"); a small tick marks the finger.
+      this.ripples.push({ x: near.x, y: near.y, t0: this.now, dur: 0.7, color: C.danger, maxR: Math.max(base * 0.8, near.r * this.camera.scale * 1.15), rings: 2, width: 2.6 });
+      this.ripples.push({ x, y, t0: this.now, dur: 0.4, color: C.danger, maxR: base * 0.45, rings: 1, width: 2 });
+    } else this.ripples.push({ x, y, t0: this.now, dur: 0.55, color: C.danger, maxR: base * 0.95, rings: 2, width: 2.6 });
     if (this.ripples.length > 24) this.ripples.shift();
     if (this.now - this.lastBlockedLabel < BLOCKED_LABEL_GAP_S) return;
     this.lastBlockedLabel = this.now;

@@ -68,7 +68,7 @@ export const ACT_TITLES: Record<Act, Text> = {
  * really lives in each world, in world order (CLARIDAD J-129; the GDD's seed species Helicium
  * solidus and Kronium dividuus live in no world, so asking for them was an impossible goal).
  */
-export const ALBOR_SPECIES_CODES: readonly string[] = ['O2u', 'O2ui', 'OG2g', 'S1s', 'C0v', 'H3cp', '3GH2n'];
+export const ALBOR_SPECIES_CODES: readonly string[] = ['O2u', 'C0v', 'OG2g', 'S2s', 'H3cp', 'P4cp', '3GH2n'];
 /** Their catalog names (what SpeciesView.catalogName holds). */
 export const SEED_SPECIES: readonly string[] = ALBOR_SPECIES_CODES.map((c) => catalogByCode(c)?.name ?? c);
 /** Catalog names that count as each of the seven: the species and the forms the detector cannot tell from it. */

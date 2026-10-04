@@ -52,7 +52,7 @@ function ownPath(id: string, into: Record<string, number> = {}): Record<string, 
 const PLAN: Record<string, [string, number, number, number][]> = {
   time: [['clock', 1, 6, 1.5], ['clock2', 2, 3, 2], ['fridge', 2, 3, 2], ['sprint', 3, 3, 2], ['encTime', 3, 2, 2], ['clock3', 3, 3, 2], ['clock4', 4, 3, 2]],
   dropper: [['dropper', 1, 3, 2], ['startEssence', 2, 4, 2], ['freeSeeds', 3, 3, 2], ['stabilizer', 3, 5, 1.5], ['bigSeed', 3, 1, 2], ['autoSeeder', 3, 6, 1.5], ['cheapSeeds', 4, 3, 2], ['dropperMax', 5, 1, 2]],
-  dish: [['dish', 1, 3, 3], ['slots', 2, 3, 2], ['crowdCost', 3, 2, 2], ['nursery', 3, 1, 2], ['incubator', 3, 2, 3], ['dishXL', 4, 1, 2], ['ecosystem', 4, 2, 2]],
+  dish: [['dish', 1, 2, 3], ['slots', 2, 3, 2], ['crowdCost', 3, 2, 2], ['nursery', 3, 1, 2], ['incubator', 3, 2, 3], ['dishXL', 4, 1, 2], ['ecosystem', 4, 2, 2]],
   life: [['culture', 1, 5, 1.5], ['nutrient', 2, 3, 2], ['culture2', 3, 3, 2], ['swimAffinity', 3, 3, 2], ['stillAffinity', 3, 3, 2], ['colonyAffinity', 4, 3, 2], ['symbiosis', 4, 1, 2], ['abundance', 4, 1, 2], ['eternalLife', 5, 99, 1.1]],
   discovery: [['notebook', 1, 3, 2], ['print', 2, 1, 2], ['cataloguing', 3, 5, 1.5], ['archive', 3, 2, 2], ['microscope', 3, 2, 2], ['discoBonus', 4, 2, 2], ['rareSpores', 4, 1, 2], ['mutations', 4, 1, 2], ['encyclopedia', 5, 3, 2]],
   // Plan rings and node count; the world order follows the measured yield (docs/CICLO.md §4.3).
@@ -129,15 +129,15 @@ describe('always more: "antes → después"', () => {
     expect(beforeAfter({ clock: 6, clock2: 1 }, 'clock2').after!.es).toBe('Sesión 1:05');
     expect(beforeAfter({ culture: 1 }, 'culture')).toMatchObject({ before: { es: 'Esencia ×1,15' }, after: { es: 'Esencia ×1,32', en: 'Essence ×1.32' } });
     expect(beforeAfter({}, 'dish')).toMatchObject({ before: { es: `Sitio para ${C.DISH_CAPACITY[0]} criaturas` }, after: { es: `Sitio para ${C.DISH_CAPACITY[1]} criaturas`, en: `Room for ${C.DISH_CAPACITY[1]} creatures` } });
-    expect(beforeAfter({}, 'slots')).toMatchObject({ before: { es: 'Sitio para 5 criaturas' }, after: { es: 'Sitio para 6 criaturas' } });
+    expect(beforeAfter({}, 'slots')).toMatchObject({ before: { es: `Sitio para ${C.DISH_CAPACITY[0]} criaturas` }, after: { es: `Sitio para ${C.DISH_CAPACITY[0] + 1} criaturas` } });
     expect(beforeAfter({}, 'sparkGift')).toMatchObject({ before: { es: 'Regalo: 10 s de Esencia' }, after: { es: 'Regalo: 12 s de Esencia' } });
     expect(beforeAfter({}, 'sprint').after!.es).toBe('Al final: Esencia ×1,5');
-    expect(beforeAfter({}, 'incubator')).toMatchObject({ before: { es: 'Nacen en 4,4 s' }, after: { es: 'Nacen en 3,8 s', en: 'Hatch in 3.8 s' }, better: true });
+    expect(beforeAfter({}, 'incubator')).toMatchObject({ before: { es: 'Nacen en 8,9 s' }, after: { es: 'Nacen en 7,6 s', en: 'Hatch in 7.6 s' }, better: true });
     expect(beforeAfter({}, 'fridge')).toMatchObject({ before: { es: '1 criatura viva al empezar' }, after: { es: '2 criaturas vivas al empezar' } });
     expect(beforeAfter({}, 'cheapSeeds')).toMatchObject({ before: { es: 'Precio normal' }, after: { es: 'Semillas −15 %' } });
     expect(beforeAfter({}, 'autoSeeder')).toMatchObject({ before: { es: 'Nunca' }, after: { es: 'Cada 8 s' } });
     expect(beforeAfter({}, 'spark')).toMatchObject({ before: { es: 'Llega cada 40–45 s' }, after: { es: 'Llega cada 34–38 s' } });
-    expect(beforeAfter({}, 'worldCold')).toMatchObject({ before: { es: '2 especies para encontrar' }, after: { es: '5 especies para encontrar' } });
+    expect(beforeAfter({}, 'worldCold')).toMatchObject({ before: { es: '1 especie para encontrar' }, after: { es: '2 especies para encontrar' } });
     expect(beforeAfter({ clock: C.TIME_CLOCK_LEVELS }, 'clock').after).toBeNull();
   });
 
@@ -174,7 +174,8 @@ describe('prices: one rule, nothing hidden', () => {
     expect(nodeCost('clock', 2)).toBe(niceRound(C.TREE_RING_START[1] * C.TIME_CLOCK_GROWTH ** 2));
     expect(nodeCost('clock', C.TIME_CLOCK_LEVELS)).toBe(Infinity);
     expect(nodeCost('clock2', 2)).toBe(4 * C.TREE_RING_START[2]);
-    expect(nodeCost('dish', 2)).toBe(9 * C.TREE_RING_START[1]);
+    expect(nodeCost('dish', 1)).toBe(3 * C.TREE_RING_START[1]);
+    expect(nodeCost('dish', 2)).toBe(Infinity); // Ø128 → Ø160 → Ø192, then Placa gigante
     expect(nodeCost('stabilizer', 1)).toBe(niceRound(C.TREE_RING_START[3] * 1.5));
   });
 
@@ -299,10 +300,10 @@ describe('effects', () => {
     }
   });
 
-  it('time-lapse: a seed is born in 4,4 s, faster with the Incubadora, never past the speed cap', () => {
+  it('time-lapse: a seed is born in 8,9 s, faster with the Incubadora, never past the speed cap', () => {
     expect(baseEffects().simPace).toBe(C.SESSION_SIM_PACE);
-    expect(birthSeconds(baseEffects())).toBeCloseTo(400 / 90, 6);
-    expect(birthSeconds(treeEffects({ incubator: 2 }))).toBeCloseTo(400 / 120, 6);
+    expect(birthSeconds(baseEffects())).toBeCloseTo(400 / 45, 6);
+    expect(birthSeconds(treeEffects({ incubator: 2 }))).toBeCloseTo(400 / 60, 6);
     expect(C.SESSION_SIM_PACE * C.MATURE_SPEED_BY_LEVEL[C.MATURE_SPEED_BY_LEVEL.length - 1]).toBeLessThanOrEqual(C.SIM_PACE_MAX);
     expect(baseEffects().fridge).toBe(C.STARTER_CREATURES);
   });

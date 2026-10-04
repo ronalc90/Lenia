@@ -16,6 +16,10 @@ export interface ProductionCtx {
   complexityMult: number;
   globalMult: number;
   symbiosis: boolean;
+  /** Pairs of the SAME species count too (sessions: one species per World, docs/ESPECIES.md). */
+  symbiosisAnySpecies?: boolean;
+  /** Multiplier of a symbiotic creature (default balance SYMBIOSIS_MULT). */
+  symbiosisMult?: number;
   R: number;
   gridW: number;
   gridH: number;
@@ -95,7 +99,7 @@ export function computeProduction(creatures: readonly Creature[], ctx: Productio
       for (let j = i + 1; j < items.length; j++) {
         const a = items[i];
         const b = items[j];
-        if (a.group === b.group || a.group.startsWith('#') || b.group.startsWith('#')) continue;
+        if ((a.group === b.group && !ctx.symbiosisAnySpecies) || a.group.startsWith('#') || b.group.startsWith('#')) continue;
         if (wrapDist(a.c.x, a.c.y, b.c.x, b.c.y, ctx.gridW, ctx.gridH) <= d2) a.sym = b.sym = true;
       }
     }
@@ -103,7 +107,7 @@ export function computeProduction(creatures: readonly Creature[], ctx: Productio
   let total = 0;
   for (const it of items) {
     if (it.sym) symbiotic++;
-    it.d.symbiosis = it.sym ? B.SYMBIOSIS_MULT : 1;
+    it.d.symbiosis = it.sym ? (ctx.symbiosisMult ?? B.SYMBIOSIS_MULT) : 1;
     const v = it.yield * it.d.symbiosis * ctx.globalMult;
     per.set(it.c.id, v);
     detail.set(it.c.id, it.d);
