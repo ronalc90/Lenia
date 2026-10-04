@@ -18,8 +18,12 @@ const GRIDS: Record<Quality, [number, number]> = {
   medium: [192, 240],
   high: [224, 280],
 };
-/** Base simulation rate (steps per second) at speed ×1. */
-const STEPS_PER_SEC = 60;
+/**
+ * Base simulation rate (steps per second) at speed ×1. Orbium swims ~0.24
+ * cells/step, so 30 steps/s keeps motion graceful and readable while halving
+ * the GPU load on phones; the Incubadora doubles/quadruples it.
+ */
+const STEPS_PER_SEC = 30;
 /** Detector cadence in simulation steps. */
 const DETECT_EVERY = 10;
 const AUTOSAVE_MS = 30_000;
@@ -141,6 +145,7 @@ function boot(): void {
 
   const detector = createDetector();
   game.setGridSize(gridW, gridH);
+  audio.setDishSize?.(gridW, gridH);
 
   if (saved.dish && saved.dishW === gridW && saved.dishH === gridH) {
     sim.importState(saved.dish, gridW, gridH);
@@ -183,6 +188,7 @@ function boot(): void {
   let lastView = 0;
   let lastAudio = 0;
   let lastSave = performance.now();
+  let lastRate = -1;
   const start = last;
 
   function syncParams(): void {
@@ -222,6 +228,11 @@ function boot(): void {
     game.tick(dt, pending);
     pending = null;
 
+    const rate = paused ? 0 : STEPS_PER_SEC * game.speed;
+    if (rate !== lastRate) {
+      lastRate = rate;
+      (ui as { setSimRate?: (r: number) => void }).setSimRate?.(rate);
+    }
     s.render({ camera, time: (now - start) / 1000, quality });
     ui.frame((now - start) / 1000, dt);
 
