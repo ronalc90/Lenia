@@ -5,19 +5,22 @@
  *   [💧 2] × [×1,5 · 2 vivas] × [×3 · placa llena: 2 de 1] = [9]
  *   ●●○ cheap slots · 🎁 free seeds · hold for a big seed · "Mejora la Placa"
  *
- *  - createSeedPriceSheet(root, opts)  the sheet the seed button opens (hold the
- *                                      price or tap its "i")
+ *  - createSeedPriceSheet(root, opts)  the sheet ONE tap on the price opens: the
+ *                                      equation with today's numbers, the rule in
+ *                                      plain words, "today it costs N because…"
+ *                                      (built on the generic price.ts sheet)
  *  - SlotMeter                         a tiny DOM meter for next to the seed button:
  *                                      a dot per cheap slot, filled per creature,
- *                                      reddish past capacity; ↓ green / ↑ amber
- *                                      arrow when the price changes
+ *                                      reddish past capacity; every price change
+ *                                      shows ↓ green / ↑ amber + a reason chip
+ *  - seedPriceReason(prev, next)       why it changed, in one line (tested)
  *  - drawSlotMeter(ctx, …)             the same meter on a canvas
  *  - priceTerms(…)                     the pure breakdown (tested)
  */
 import { UI } from '../../core/palette';
 import type { GameView, Lang, SeedPriceView } from '../../core/types';
 import { fmt, fmtFixed } from '../format';
-import { moIcon } from './icons';
+import { createPriceSheet, dotsHtml, PriceTicker, type PriceExplain, type PriceReason, type PriceRowView } from './price';
 import { MS, tr } from './strings';
 
 export interface PriceTerm {
@@ -79,6 +82,104 @@ export function priceTerms(p: SeedPriceView, cost: number, lang: Lang): PriceBre
   };
 }
 
+// ───────────────────────────── today's reason, in words ─────────────────────────────
+
+/** "Hoy cuesta 9 porque hay 2 criaturas vivas y la placa está llena (2 de 1 espacios)." */
+export function seedPriceToday(p: SeedPriceView, cost: number, lang: Lang): string {
+  const total = fmt(cost, lang);
+  const over = p.used > p.freeSlots;
+  if (p.freeSeeds > 0)
+    return lang === 'es'
+      ? `Tienes ${p.freeSeeds} ${p.freeSeeds === 1 ? 'siembra gratis' : 'siembras gratis'}: la próxima no cuesta nada.`
+      : `You have ${p.freeSeeds} free ${p.freeSeeds === 1 ? 'seed' : 'seeds'}: the next one costs nothing.`;
+  if (p.alive <= 0)
+    return lang === 'es' ? `Hoy cuesta ${total}: el mínimo, la placa está vacía.` : `It costs ${total} now: the minimum, the dish is empty.`;
+  const alive =
+    lang === 'es'
+      ? `hay ${p.alive} ${p.alive === 1 ? 'criatura viva' : 'criaturas vivas'}`
+      : `${p.alive} ${p.alive === 1 ? 'creature is' : 'creatures are'} alive`;
+  const full =
+    lang === 'es'
+      ? ` y la placa está llena (${p.used} de ${p.freeSlots} espacios)`
+      : ` and the dish is full (${p.used} of ${p.freeSlots} slots)`;
+  return lang === 'es' ? `Hoy cuesta ${total} porque ${alive}${over ? full : ''}.` : `It costs ${total} now because ${alive}${over ? full : ''}.`;
+}
+
+/** The seed price as a generic PriceExplain (equation, slots, free seeds, big seed, rule, today). */
+export function seedPriceExplain(v: GameView, lang: Lang, o: { onSeeDish?(): void } = {}): PriceExplain | null {
+  const p = v.seedPrice;
+  if (!p) return null;
+  const b = priceTerms(p, v.seedCost, lang);
+  const rows: PriceRowView[] = [
+    {
+      icon: 'slot',
+      label: tr(MS.spSlots, lang),
+      dots: b.slots,
+      text:
+        b.slots.over > 0
+          ? tr(MS.spSlotsOver, lang, { n: b.slots.over, s: mult(p.satMult > 1 ? Math.pow(p.satMult, 1 / b.slots.over) : 3, lang) })
+          : tr(MS.spSlotsFree, lang, { n: Math.max(0, b.slots.free - b.slots.used) }),
+      tone: b.slots.over > 0 ? 'warn' : undefined,
+    },
+  ];
+  if (b.freeSeeds > 0) rows.push({ icon: 'gift', text: b.freeSeeds === 1 ? tr(MS.spFree1, lang) : tr(MS.spFree, lang, { n: b.freeSeeds }), tone: 'good' });
+  rows.push({ icon: 'big', text: tr(MS.spBig, lang, { m: b.bigMult }) });
+  return {
+    title: tr(MS.spTitle, lang),
+    icon: 'tag',
+    total: b.total,
+    totalLabel: tr(MS.spTotal, lang),
+    totalIcon: 'essence',
+    terms: b.terms.map((t) => ({ icon: ICON_OF[t.kind], value: t.value, label: t.label, active: t.active, tone: t.kind === 'sat' && t.active ? 'warn' : undefined })),
+    rows,
+    rule: tr(MS.spRule, lang),
+    advice: seedPriceToday(p, v.seedCost, lang),
+    action: b.adviseDish && o.onSeeDish ? { label: tr(MS.spDish, lang), run: o.onSeeDish } : undefined,
+    closeLabel: tr(MS.close, lang),
+  };
+}
+
+// ───────────────────────────── why it changed ─────────────────────────────
+
+export interface PriceSnap extends SeedPriceView {
+  cost: number;
+}
+
+export function snapOf(v: GameView): PriceSnap | null {
+  return v.seedPrice ? { ...v.seedPrice, cost: v.seedCost } : null;
+}
+
+/**
+ * One line saying why the seed price just changed, from what changed in the
+ * breakdown ("+1 criatura viva → ×1,25", "Placa llena: 4 de 3 espacios → ×3",
+ * "Murió una criatura → más barato", "¡Gratis! (lluvia de esporas)"). Null when
+ * nothing the player can see changed.
+ */
+export function seedPriceReason(prev: PriceSnap, next: PriceSnap, lang: Lang): PriceReason | null {
+  const eps = 1e-9;
+  const dir: -1 | 0 | 1 = next.cost < prev.cost - eps ? -1 : next.cost > prev.cost + eps ? 1 : 0;
+  if (next.freeSeeds > prev.freeSeeds) return { text: tr(MS.rsFree, lang), dir: -1 };
+  if (next.freeSlots > prev.freeSlots) return { text: tr(MS.rsSlots, lang, { n: next.freeSlots }), dir: dir || -1 };
+  if (!dir && Math.abs(next.base - prev.base) < eps) return null;
+  if (next.satMult > prev.satMult + eps)
+    return { text: tr(MS.rsFull, lang, { used: next.used, free: next.freeSlots, s: mult(next.satMult, lang) }), dir: 1 };
+  if (next.satMult < prev.satMult - eps)
+    return {
+      text: next.satMult <= 1 + eps ? tr(MS.rsRoom, lang) : tr(MS.rsFull, lang, { used: next.used, free: next.freeSlots, s: mult(next.satMult, lang) }),
+      dir: -1,
+    };
+  const d = next.alive - prev.alive;
+  if (d > 0) return { text: tr(d === 1 ? MS.rsAlive1 : MS.rsAliveN, lang, { n: d, m: mult(next.crowdMult, lang) }), dir: 1 };
+  if (d < 0) return { text: tr(d === -1 ? MS.rsDied1 : MS.rsDiedN, lang, { n: -d }), dir: -1 };
+  if (Math.abs(next.base - prev.base) > eps) return { text: tr(MS.rsBase, lang, { b: fmt(next.base, lang) }), dir };
+  return dir ? { text: tr(MS.rsOther, lang), dir } : null;
+}
+
+/** For a long-press: "Semilla grande ×2,25". */
+export function bigSeedReason(p: SeedPriceView, lang: Lang): PriceReason {
+  return { text: tr(MS.rsBig, lang, { m: mult(p.bigMult, lang) }), dir: 1 };
+}
+
 // ───────────────────────────── the sheet ─────────────────────────────
 
 export interface SeedPriceSheetOpts {
@@ -101,142 +202,49 @@ export interface SeedPriceSheet {
 
 const ICON_OF: Record<PriceTerm['kind'], 'drop' | 'creatures' | 'slot'> = { base: 'drop', crowd: 'creatures', sat: 'slot' };
 
+/** The seed price sheet: createPriceSheet fed by seedPriceExplain. Open it with ONE tap on the price. */
 export function createSeedPriceSheet(root: HTMLElement, opts: SeedPriceSheetOpts): SeedPriceSheet {
-  const layer = document.createElement('div');
-  layer.className = 'mo-sp-layer';
-  layer.hidden = true;
-  const scrim = document.createElement('div');
-  scrim.className = 'mo-sp-scrim';
-  const sheet = document.createElement('div');
-  sheet.className = 'mo-sp';
-  sheet.setAttribute('role', 'dialog');
-  sheet.setAttribute('aria-modal', 'true');
-  layer.append(scrim, sheet);
-  root.appendChild(layer);
-  let open = false;
-  let lastKey = '';
-
-  function render(v: GameView): void {
-    const p = v.seedPrice;
-    const L = opts.lang();
-    if (!p) {
-      sheet.innerHTML = '';
-      return;
-    }
-    const b = priceTerms(p, v.seedCost, L);
-    const key = JSON.stringify([b, L]);
-    if (key === lastKey) return;
-    lastKey = key;
-    const tiles = b.terms
-      .map((t) => {
-        return `<div class="mo-sp-tile k-${t.kind}${t.active ? ' on' : ''}">
-          <span class="mo-sp-ti">${moIcon(ICON_OF[t.kind], 18)}</span>
-          <b class="mo-sp-v">${t.value}</b>
-          <span class="mo-sp-l">${t.label}</span>
-        </div>`;
-      })
-      .join('');
-    const dots: string[] = [];
-    for (let i = 0; i < b.slots.free; i++) dots.push(`<i class="mo-dot${i < Math.min(b.slots.used, b.slots.free) ? ' on' : ''}"></i>`);
-    for (let i = 0; i < Math.min(b.slots.over, 6); i++) dots.push('<i class="mo-dot over"></i>');
-    const freeLeft = Math.max(0, b.slots.free - b.slots.used);
-    const slotText =
-      b.slots.over > 0 ? tr(MS.spSlotsOver, L, { n: b.slots.over }) : tr(MS.spSlotsFree, L, { n: freeLeft });
-    sheet.setAttribute('aria-label', tr(MS.spTitle, L));
-    sheet.innerHTML = `
-      <div class="mo-sp-head">
-        <span class="mo-sp-hi">${moIcon('tag', 22)}</span>
-        <h3>${tr(MS.spTitle, L)}</h3>
-        <button type="button" class="mo-sp-x" aria-label="${tr(MS.close, L)}">${moIcon('close', 20)}</button>
-      </div>
-      <div class="mo-sp-eq">${tiles}<span class="mo-sp-op eq" aria-hidden="true">=</span>
-        <div class="mo-sp-tile k-total on"><span class="mo-sp-ti">${moIcon('essence', 18)}</span><b class="mo-sp-v">${b.total}</b><span class="mo-sp-l">${tr(MS.spTotal, L)}</span></div>
-      </div>
-      <div class="mo-sp-row ${b.slots.over > 0 ? 'over' : ''}">
-        <span class="mo-sp-rl">${tr(MS.spSlots, L)}</span>
-        <span class="mo-dots" aria-hidden="true">${dots.join('')}</span>
-        <span class="mo-sp-rv">${slotText}</span>
-      </div>
-      ${
-        b.freeSeeds > 0
-          ? `<div class="mo-sp-row gift">${moIcon('gift', 18)}<span class="mo-sp-rv">${
-              b.freeSeeds === 1 ? tr(MS.spFree1, L) : tr(MS.spFree, L, { n: b.freeSeeds })
-            }</span></div>`
-          : ''
-      }
-      <div class="mo-sp-row big">${moIcon('big', 18)}<span class="mo-sp-rv">${tr(MS.spBig, L, { m: b.bigMult })}</span></div>
-      <p class="mo-sp-hint">${b.adviseDish ? tr(MS.spHint, L) : tr(MS.spHintRoom, L)}</p>
-      ${b.adviseDish && opts.onSeeDish ? `<button type="button" class="mo-btn mo-sp-dish">${tr(MS.spDish, L)}</button>` : ''}
-    `;
-    sheet.querySelector('.mo-sp-x')?.addEventListener('click', () => api.close());
-    sheet.querySelector('.mo-sp-dish')?.addEventListener('click', () => {
-      api.close();
-      opts.onSeeDish?.();
-    });
-  }
-
-  scrim.addEventListener('click', () => api.close());
-  const onKey = (e: KeyboardEvent) => {
-    if (open && e.key === 'Escape') api.close();
-  };
-  window.addEventListener('keydown', onKey);
-
-  const api: SeedPriceSheet = {
-    el: layer,
+  const sheet = createPriceSheet(root, { reduceMotion: opts.reduceMotion, onClose: opts.onClose });
+  const explain = (v: GameView) => seedPriceExplain(v, opts.lang(), { onSeeDish: opts.onSeeDish });
+  return {
+    el: sheet.el,
     get isOpen() {
-      return open;
+      return sheet.isOpen;
     },
     open(view) {
-      lastKey = '';
-      render(view);
-      layer.hidden = false;
-      layer.classList.toggle('rm', !!opts.reduceMotion?.());
-      open = true;
-      requestAnimationFrame(() => layer.classList.add('show'));
-      (sheet.querySelector('.mo-sp-x') as HTMLElement | null)?.focus();
+      const x = explain(view);
+      if (x) sheet.open(x);
     },
     update(view) {
-      if (open) render(view);
+      if (!sheet.isOpen) return;
+      const x = explain(view);
+      if (x) sheet.update(x);
     },
-    close() {
-      if (!open) return;
-      open = false;
-      layer.classList.remove('show');
-      setTimeout(() => {
-        if (!open) layer.hidden = true;
-      }, 220);
-      opts.onClose?.();
-    },
-    dispose() {
-      window.removeEventListener('keydown', onKey);
-      layer.remove();
-    },
+    close: () => sheet.close(),
+    dispose: () => sheet.dispose(),
   };
-  return api;
 }
 
 // ───────────────────────────── slot meter ─────────────────────────────
 
 /**
  * Tiny meter for next to the seed button: a dot per cheap slot (filled per
- * creature), reddish dots past capacity, and an arrow when the price changes.
+ * creature), reddish dots past capacity, and — every time the price changes —
+ * an ↑ amber / ↓ green arrow with a one-line reason chip for ~2 s.
  */
 export class SlotMeter {
   readonly el: HTMLElement;
   private dots: HTMLElement;
-  private arrowEl: HTMLElement;
-  private lastCost: number | null = null;
+  private ticker = new PriceTicker();
+  private last: PriceSnap | null = null;
   private lastKey = '';
-  private timer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private lang: () => Lang) {
     this.el = document.createElement('span');
     this.el.className = 'mo-meter';
     this.dots = document.createElement('span');
     this.dots.className = 'mo-dots';
-    this.arrowEl = document.createElement('span');
-    this.arrowEl.className = 'mo-meter-arrow';
-    this.el.append(this.dots, this.arrowEl);
+    this.el.append(this.dots, this.ticker.el);
   }
 
   update(view: GameView): void {
@@ -250,29 +258,25 @@ export class SlotMeter {
     const key = `${p.freeSlots}|${p.used}`;
     if (key !== this.lastKey) {
       this.lastKey = key;
-      let html = '';
-      for (let i = 0; i < p.freeSlots; i++) html += `<i class="mo-dot${i < Math.min(p.used, p.freeSlots) ? ' on' : ''}"></i>`;
-      for (let i = 0; i < Math.min(over, 4); i++) html += '<i class="mo-dot over"></i>';
-      if (over > 4) html += `<em>+${over - 4}</em>`;
-      this.dots.innerHTML = html;
+      this.dots.innerHTML = dotsHtml({ free: p.freeSlots, used: p.used, over }, 4);
       this.el.classList.toggle('over', over > 0);
       const L = this.lang();
       this.el.setAttribute(
         'aria-label',
-        over > 0 ? tr(MS.spSlotsOver, L, { n: over }) : tr(MS.spSlotsFree, L, { n: Math.max(0, p.freeSlots - p.used) }),
+        over > 0 ? tr(MS.spSlotsOver, L, { n: over, s: mult(Math.pow(p.satMult, 1 / over), L) }) : tr(MS.spSlotsFree, L, { n: Math.max(0, p.freeSlots - p.used) }),
       );
     }
-    const cost = view.seedCost;
-    if (this.lastCost !== null && Math.abs(cost - this.lastCost) > 1e-9) {
-      const down = cost < this.lastCost;
-      const L = this.lang();
-      this.arrowEl.innerHTML = moIcon(down ? 'down' : 'up', 14);
-      this.arrowEl.title = tr(down ? MS.cheaper : MS.pricier, L);
-      this.arrowEl.className = `mo-meter-arrow show ${down ? 'down' : 'up'}`;
-      if (this.timer) clearTimeout(this.timer);
-      this.timer = setTimeout(() => (this.arrowEl.className = 'mo-meter-arrow'), 1800);
+    const snap = snapOf(view)!;
+    if (this.last) {
+      const r = seedPriceReason(this.last, snap, this.lang());
+      if (r) this.ticker.show(r);
     }
-    this.lastCost = cost;
+    this.last = snap;
+  }
+
+  /** Show a reason now (e.g. bigSeedReason while the player holds for a big seed). */
+  flash(r: PriceReason): void {
+    this.ticker.show(r);
   }
 }
 
