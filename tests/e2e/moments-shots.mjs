@@ -130,6 +130,18 @@ const PLAN = [
   ['species-vs-laptop', '?vs=1&menu=0&still=1', LAPTOP, 1500],
   ['card-secondSpecies-laptop', '?m=secondSpecies&t=2&menu=0', LAPTOP, 1200],
   ['card-secondSpecies-light-en', '?m=secondSpecies&t=2&menu=0&theme=light&lang=en', PHONE, 1200],
+  // Behaviour cards (4 answers) and the Behaviour Guide.
+  ['card-behavior.divider-light-en', `?m=behavior.divider&t=${FREEZE['behavior.divider']}&menu=0&theme=light&lang=en`, PHONE, 900],
+  ['card-behavior.colony-laptop', `?m=behavior.colony&t=${FREEZE['behavior.colony']}&menu=0`, LAPTOP, 900],
+  ['guide', '?guide=1&menu=0&still=1', PHONE, 1500],
+  ['guide-focus-spinner-light-en', '?guide=1&focus=spinner&menu=0&still=1&theme=light&lang=en', PHONE, 1500],
+  ['guide-laptop', '?guide=1&menu=0&still=1&bseen=still,swimmer,spinner,pulsing', LAPTOP, 1500],
+  // Every price change says why (chip above the price, ~2 s).
+  ['price-ticker-up', '?ticker=up&menu=0&still=1', PHONE, 800],
+  ['price-ticker-full', '?ticker=full&menu=0&still=1', PHONE, 800],
+  ['price-ticker-down-en', '?ticker=down&menu=0&still=1&lang=en', PHONE, 800],
+  ['price-ticker-free', '?ticker=free&menu=0&still=1', PHONE, 800],
+  ['price-ticker-big-laptop', '?ticker=big&menu=0&still=1', LAPTOP, 800],
   // Seed price sheet.
   ['price-sheet', '?price=1&menu=0&still=1', PHONE, 900],
   ['price-sheet-light-en', '?price=1&menu=0&still=1&theme=light&lang=en', PHONE, 900],

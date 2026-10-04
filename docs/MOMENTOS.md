@@ -43,15 +43,17 @@ together; a moment with a delay waits for the player to *see* the event first.
 | `upgrade` | first `upgradeBought` | Lab tab | Dropper: 4 real spores before (1 ✓) / now (3 ✓); Dish: one more cheap slot; others: level pips (drawn) | name + level, effect text | — |
 | `autoseed` | first `seed` with manual = false | the seed, ×1.8 | robot dropper planting real spores, "−2" | −cost | — |
 | `calibration` | first `calibrationChanged`, **after the slider rests 1.6 s** | Calibrate tab | **the same spore under the old and the new rules** (simulated with the player's μ/σ/R/dt) ✓/✗ | "σ 0,0150 → 0,0260" | — |
-| `seedPrice` | seed price first ≥ 2× the empty-dish price, or over the free slots | seed pill | dish with N cheap slots filling; price tag bounces, **×3** past capacity, formula | Siembra: 9, Espacios 2/1 | — |
+| `seedPrice` | the FIRST time any price multiplier goes above ×1 (a living creature → crowding ×1,25, or the dish over its cheap slots) | seed pill | dish with N cheap slots filling; price tag bounces per creature, **×3** past capacity, formula | Siembra: 2,5, Espacios 1/1 | — |
 | `seedCheaper` | price drops right after a death (after `seedPrice`) | the spot | **brief label only**: "Murió una criatura → sembrar es más barato" | Siembra: N | — |
 | `overgrown` | `dishOvergrown {on:true}` | **zoom out**, whole dish | Orbium at high σ budding into ×25 blobs → grey/orange, "0/s"; primary button **Limpiar placa** (`sterilizeDish`) + "Entendido" | 0 Esencia/s, Placa llena | — |
 | `extinctionReady` | `extinction.available` | Extinguish button / Genome tab | full dish (catalog sprites) → white-out → genome helix "+N" | +N Genoma | — |
 | `extinction` | `extinctionDone` (after the ritual) | Genome tab | "Se queda" (Bestiario, Genoma, Muestras) vs "Se reinicia" (Esencia→20, Mejoras→0, Placa→∅) | +N Genoma, Era N | — |
 | `offline` | `offlineReturn` with essence > 0 | HUD essence | night lab: creatures working, drops into a jar, counter | +X Esencia, 3 h 10 min | — |
 
-Every behaviour card names its production bonus twice: a chip *"Nadar: ×1,6 Esencia"* (from `BEHAVIOR_MULT`) and a
-badge in the diagram. The calibration line also warns that *some rules make life multiply out of control* ("…¡y con σ alto todo se desborda!").
+Every behaviour card answers four things (§2c): VELA says **Qué es**, then rows **Qué cambia** ("Nadadora: ×1,6 Esencia ·
+comparada con una quieta ×1", from `BEHAVIOR_MULT`), **Cómo conseguir más** (rules + a real catalog example),
+**Cómo mejorarla** (its Afinidad + "Ver"), and the honest note (dividers can overflow the dish; colony = 3+ alike within 3 R),
+plus a "Guía completa" link to the Behaviour Guide. The calibration line also warns that *some rules make life multiply out of control* ("…¡y con σ alto todo se desborda!").
 
 ### Behaviour rules (src/moments/moments.ts)
 
@@ -101,6 +103,40 @@ the behaviour must be clear."* A reusable card, for the Bestiary sheet, the crea
 API: `speciesInputFromView(view, speciesId)` → `createSpeciesCard(container, input, { lang, reduceMotion?,
 onShowUpgrade?, compact? })` / `createSpeciesCompare(container, a, b, opts)`; pure helpers `speciesBreakdown`,
 `compareSpecies`, `shapeLabel`, `boostersFor`, `behaviorMultFor`, `hueColor`, `paintPortrait`.
+
+## 2c. Behaviour Guide (`src/moments/behaviors.ts`, `src/ui/moments/behavior-guide.ts`)
+
+Owner: *"explain what 'nadadora' means… what changes?"*. One source of truth (`behaviorGuide(b)`) feeds the behaviour
+Momentos, the guide sheet, the species card and the status pills. Each behaviour answers:
+
+| | Source (never a copy) |
+|---|---|
+| 👁 **Qué es** — "Se desliza por la placa sin parar, siempre hacia delante." + the looping real-Lenia diagram | `behaviors.ts` text |
+| ↑ **Qué cambia** — "Nadadora: ×1,6 Esencia" · "comparada con una quieta ×1" (still: "es la base") | `BEHAVIOR_MULT` (balance.ts) |
+| ⚗ **Cómo conseguir más** — "Formas de disco con cola, con las reglas del principio." + *Orbium unicaudatus · μ 0,15 · σ 0,015* | example = the viable catalog species the **detector** classes with that behaviour (catalogSignatures.json) nearest to `BASE_CALIBRATION`; none invented (pulsing/divider/colony: hint only) |
+| ⬆ **Cómo mejorarla** — "Afinidad nadadora · nivel 1 · +8 % por nivel" [Ver] (locked: "Se desbloquea: …") | `AFFINITY_OF` (= game.ts behaviorMult mapping), `AFFINITY_BONUS`, `view.upgrades`; `extraBoosters(b)` for research-tree nodes later |
+| ⚠ Ojo (divider) — "Si se dividen demasiado, la placa se desborda y deja de producir." · ⓘ La regla (colony) — "3 o más de la misma especie, a menos de 3 R entre sí." | detector colony rule (`COLONY_MIN`, `COLONY_DIST_R`) |
+
+The **guide sheet** shows all six side by side (1 column on phones, 2–3 on laptops) with their diagrams; behaviours not seen
+yet (`view.behaviorsSeen`) are **silhouettes** (dimmed diagram + "?") with a hint: *"¿Has visto alguna girar?"*. Opening it
+at a behaviour scrolls to it and highlights it.
+
+## 2d. Prices never change without a visible reason (`src/ui/moments/price.ts`, `seedprice.ts`)
+
+- **Reason chip on every change**: `SlotMeter.update(view)` compares the new `view.seedPrice` with the previous one and shows
+  ↑ amber / ↓ green plus a one-line chip above the price for ~2.2 s: "+1 criatura viva → ×1,25", "+2 criaturas vivas → ×1,5",
+  "Placa llena: 4 de 3 espacios → ×3", "Hay sitio otra vez → más barato", "Murió una criatura → más barato",
+  "Placa mejorada: 3 espacios baratos", "¡Gratis! (lluvia de esporas)", "Nuevo precio base: 3". While the player holds for a
+  big seed: `seedMeter.flash(bigSeedReason(view.seedPrice!, lang))` → "Semilla grande ×2,25". Pure: `seedPriceReason(prev,
+  next, lang)` (tested).
+- **One tap** on the price pill opens the sheet: the equation with today's numbers (2 × ×1,5 × ×3 = 9, inactive factors
+  dimmed), the rule in plain words — *"Sembrar cuesta más cuantas más criaturas viven. Cuando la placa se llena, cada
+  criatura extra lo encarece mucho. Mejora la Placa para tener más espacios baratos."* — slot dots, free seeds, big seed,
+  and *today's* reason ("Hoy cuesta 9 porque hay 2 criaturas vivas y la placa está llena (2 de 1 espacios).") + "Ver Placa".
+- **First-time Momento** `seedPrice` fires the first time ANY multiplier > 1 appears (crowding included).
+- **Generic**: `createPriceSheet(root).open(explain: PriceExplain)` explains any price (terms with icons, rows, rule,
+  advice, action); `PriceTicker.show({ text, dir })` is the arrow + reason chip for any price. Tree-node or upgrade costs can
+  build their own `PriceExplain` / `PriceReason`.
 
 ## 2. One thing per event (story ⇄ moments)
 
@@ -166,10 +202,13 @@ nombres en latín… Se fue"). Consider moving those two lines to a tiny non-tut
 | `src/ui/moments/seedprice.ts` | `createSeedPriceSheet`, `SlotMeter`, `drawSlotMeter`, `priceTerms` |
 | `src/ui/moments/help.ts` | "¿Qué pasó?" sheet (+ explain-mode and label-mode selectors) |
 | `src/ui/moments/species-card.ts` | Species card and "vs" comparison (hue, shape, behaviour diagram, yield equation, boosters) |
+| `src/moments/behaviors.ts` | What each behaviour means: what / bonus / how to get / how to boost / note / hint (pure, tested) |
+| `src/ui/moments/behavior-guide.ts` | Behaviour Guide sheet + the rows inside behaviour Momentos |
+| `src/ui/moments/price.ts` | Generic price sheet (`PriceExplain`) and `PriceTicker` (arrow + reason chip) |
 | `src/ui/moments/icons.ts`, `strings.ts`, `moments.css`, `index.ts` | Parts |
 | `src/ui/moments/*.test.ts` | Pills, price breakdown, species card (equation, affinities, shapes, comparison sentences), **the clips really do what the cards say** (fade dies, flood floods, live = one creature, swimmer travels, spinner circles in place, pulser pulses, overgrow buds into > 10 blobs, high σ overflows) |
 | `moments-dev.html`, `src/ui/moments/dev.ts` | Dev page around a real 128×128 CPU dish |
-| `tests/e2e/moments-shots.mjs` | 63 screenshots, 390×844 and 1366×768, dark/light, es/en |
+| `tests/e2e/moments-shots.mjs` | 73 screenshots, 390×844 and 1366×768, dark/light, es/en |
 
 No new dependencies. `src/ui/story/portraits.ts` (VELA) is reused read-only.
 
@@ -193,7 +232,18 @@ const momentsUI = createMomentsUI(root, moments, {
   getTargetRect?(id), creaturePos?(id), speciesPortrait?(speciesId), onAction?(action, id),
   portraitFactory?(), onSound?(kind), theme?(), speciesInfo?(speciesId), onShowUpgrade?(upgradeId),
 });
-momentsUI.timeScale(); momentsUI.busy; momentsUI.mountHelp(el); momentsUI.relabel(); momentsUI.dispose();
+momentsUI.timeScale(); momentsUI.busy; momentsUI.mountHelp(el); momentsUI.openBehaviorGuide(b?); momentsUI.relabel(); momentsUI.dispose();
+//   new optional options: upgrades?(), seenBehaviors?(), extraBoosters?(b)
+// behaviour guide (pure data in src/moments/behaviors.ts)
+behaviorGuide(b) / bonusText(b, lang) / baselineText(lang) / behaviorExample(b) / AFFINITY_OF / BEHAVIOR_ORDER;
+createBehaviorGuideSheet(root, { lang, reduceMotion?, seen?, upgrades?, onShowUpgrade?, extraBoosters?, onClose? }).open(focus?);
+createBehaviorGuide(container, sameOpts) → { el, focus(b), refresh(), dispose() };  behaviorRowsHtml(b, ctx);
+statusLayer.hitTest(px, py) → { id, behavior, state } | null;   createSpeciesCard(…, { …, onBehavior?(b) })
+// prices (generic)
+createPriceSheet(root, { reduceMotion?, onClose? }) → { open(explain), update(explain), close(), isOpen, el, dispose() };
+new PriceTicker().show({ text, dir: -1 | 0 | 1 });   seedPriceExplain(view, lang, { onSeeDish? }) → PriceExplain | null;
+seedPriceReason(prev: PriceSnap, next: PriceSnap, lang) → PriceReason | null;  snapOf(view);  bigSeedReason(price, lang);
+seedPriceToday(price, cost, lang);  seedMeter.flash(reason);
 drawCreatureStatus(ctx, creatureView, { x, y, r }, { lang, time, reduceMotion, alpha?, selected?, taken?, view? });
 new StatusLayer().draw(ctx, creatures, toScreen, { lang, time, dt, reduceMotion, onAll, selectedId, view });
 createSeedPriceSheet(root, { lang, reduceMotion?, onSeeDish?, onClose? });  new SlotMeter(lang);  drawSlotMeter(ctx, x, y, price, o);
@@ -277,15 +327,24 @@ seedMeter.update(view);
 priceSheet.update(view);
 if (view.settings.lang !== momentsLang) { momentsLang = view.settings.lang; momentsUI.relabel(); }
 
-// (6) Seed price: meter next to the seed pill + the sheet behind its "i" (UIDeps.onSeedPriceInfo already exists).
+// (6) Seed price: meter + reason chip next to the price, and the sheet behind ONE tap on the price pill.
 const seedMeter = new SlotMeter(() => game.view().settings.lang);
-ui.seedMeterSlot.appendChild(seedMeter.el);
+ui.seedMeterSlot.appendChild(seedMeter.el);           // seedMeter.update(view) each view update (5): arrow + "why" chip on every change
 const priceSheet = createSeedPriceSheet(root, {
   lang: () => game.view().settings.lang,
   reduceMotion: () => game.view().settings.reduceMotion,
   onSeeDish: () => ui.reveal('upgrade.dish'),
 });
 //   createUI({ …, onSeedPriceInfo: () => priceSheet.open(game.view()) })
+//   ui.ts: the WHOLE seed pill is the button (pill.onclick = deps.onSeedPriceInfo), not only the small "i" / long-press.
+//   Long-press charge start (overlay.chargeStart): seedMeter.flash(bigSeedReason(view.seedPrice!, lang)).
+
+// (6b) Behaviour Guide: moments UI owns the sheet; open it from anywhere.
+//   createMomentsUI(…, { …, upgrades: () => game.view().upgrades, seenBehaviors: () => game.view().behaviorsSeen,
+//                        onShowUpgrade: (id) => ui.reveal(`upgrade.${id}`) })
+//   Bestiary header button "Guía de comportamientos" → momentsUI.openBehaviorGuide()
+//   Tap on a behaviour icon/label anywhere (bestiary filters, creature card) → momentsUI.openBehaviorGuide(behavior)
+//   Status pill tap (5.3): const hit = overlay.statusHit(x, y); if (hit?.behavior) momentsUI.openBehaviorGuide(hit.behavior)
 
 // (7) Offline: the first return is explained by the moment; later returns keep the existing card.
 if (gained > 0 && !(moments.mode === 'full' && moments.wouldShow('offline'))) ui.showOfflineCard(…);
@@ -312,6 +371,7 @@ import { createSpeciesCard, createSpeciesCompare, speciesInputFromView } from '.
 const card = createSpeciesCard(container, speciesInputFromView(view, id)!, {
   lang: () => view.settings.lang, reduceMotion: () => view.settings.reduceMotion,
   onShowUpgrade: (up) => ui.reveal(`upgrade.${up}`),   // ui.reveal maps 'upgrade.<id>' → switch tab + scroll
+  onBehavior: (b) => momentsUI.openBehaviorGuide(b),   // the behaviour tag becomes a button → guide entry
 });
 card.update(speciesInputFromView(nextView, id)!);       // on view updates; card.dispose() on close
 // "Comparar" (two selected species, or the tapped creature vs the best one):
@@ -352,6 +412,10 @@ if (!this.statusHidden && !this.ritual)
   }, { lang: this.lang, time, dt, reduceMotion: rm, onAll: this.statusOnAll, selectedId: this.selectedId, view: { w: this.w, h: this.h } });
 ```
 
+Taps on a pill (before the creature hit-test in the dish tap handler):
+`const hit = this.statusLayer.hitTest(px, py)` → `{ id, behavior, state } | null` (≥ 44 px tall hit area); expose it as
+`overlay.statusHit(px, py)` and, when `hit.behavior`, open `momentsUI.openBehaviorGuide(hit.behavior)`.
+
 Defaults: pills on every creature (6 most informative) during **Era 1**, then **on tap only** (setting in the help sheet:
 *Al principio / Siempre / Al tocar*). The tapped creature always has its pill. Pills step aside while a card explains.
 
@@ -375,9 +439,10 @@ first fade/explosion, ¡VIDA!, Esencia, Especie nueva); later moments are rare. 
 
 - `npm run dev` → `/moments-dev.html` — menu (bottom-left) opens any card or brief label, the help sheet, the price sheet,
   the status pills; options for language, theme, reduce motion. URL params: `?m=stable&t=4.4`, `&mode=brief`,
-  `?status=1`, `?help=1&seen=all`, `?price=1`, `?replay=species`, `?card=sp1` (species card), `?vs=1` (comparison), `?clips=1` (every real-Lenia clip, 5 frames each;
+  `?status=1`, `?help=1&seen=all`, `?price=1`, `?replay=species`, `?card=sp1` (species card), `?vs=1` (comparison),
+  `?guide=1&focus=spinner&bseen=still,swimmer` (Behaviour Guide), `?ticker=up|full|down|free|big` (price reason chip), `?clips=1` (every real-Lenia clip, 5 frames each;
   `&exp=mu,sigma,noise` to try parameters), `?still=1` (freeze the dish), `?lang=en`, `?theme=light`, `?rm=1`, `?menu=0`.
-- `npx vitest run src/moments src/ui/moments` — 117 tests.
+- `npx vitest run src/moments src/ui/moments` — 140 tests.
 - `node tests/e2e/moments-shots.mjs` (`ONLY=card-stable` to filter) → `moments-*.png` in the session scratchpad; fails on
   console errors, page errors or horizontal overflow.
 

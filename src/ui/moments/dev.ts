@@ -17,7 +17,7 @@
 import { Bus, type GameEvents } from '../../core/bus';
 import { Camera } from '../../core/camera';
 import { matterLUT } from '../../core/palette';
-import type { CreatureView, GameView, Lang, SeedPriceView, SpeciesView, UpgradeView } from '../../core/types';
+import type { Behavior, CreatureView, GameView, Lang, SeedPriceView, SpeciesView, UpgradeView } from '../../core/types';
 import { createMoments } from '../../moments/moments';
 import { MOMENT_BY_ID, MOMENT_IDS } from '../../moments/catalog';
 import type { MomentId } from '../../moments/types';
@@ -26,7 +26,7 @@ import { catalogByCode, catalogPattern, paramsOf } from '../../sim/catalog';
 import { applySeedCpu } from '../../sim/seed';
 import { moIcon } from './icons';
 import { createMomentsUI } from './momentsUI';
-import { SlotMeter, createSeedPriceSheet } from './seedprice';
+import { SlotMeter, bigSeedReason, createSeedPriceSheet } from './seedprice';
 import { StatusLayer } from './status';
 import { createSpeciesCard, createSpeciesCompare, speciesInputFromView } from './species-card';
 
@@ -39,6 +39,10 @@ document.documentElement.lang = lang;
 
 const N = 128;
 const LUT = matterLUT();
+/** ?bseen=still,swimmer → behaviours already seen (the guide shows the rest as silhouettes). */
+const SEEN_BEHAVIORS = (q.get('bseen') ?? 'still,swimmer,spinner')
+  .split(',')
+  .filter((b): b is Behavior => ['still', 'pulsing', 'swimmer', 'spinner', 'divider', 'colony'].includes(b));
 
 // ───────────── fake game screen ─────────────
 
@@ -352,7 +356,7 @@ function view(): GameView {
     ],
     genomeNodes: [],
     species: SPECIES,
-    behaviorsSeen: [],
+    behaviorsSeen: SEEN_BEHAVIORS,
     calibration: {
       mu: 0.15,
       sigma: 0.015,
@@ -409,6 +413,8 @@ const ui = createMomentsUI(app, moments, {
   speciesPortrait: (id) => SPECIES.find((x) => x.id === id)?.portrait ?? catalogPattern('O2u'),
   speciesInfo: (id) => speciesInputFromView(view(), id),
   onShowUpgrade: () => undefined,
+  upgrades: () => view().upgrades,
+  seenBehaviors: () => view().behaviorsSeen,
   onAction: (a) => {
     if (a === 'sterilize') sim.A.fill(0);
   },
@@ -419,8 +425,15 @@ root.querySelector('.meter-slot')!.appendChild(meter.el);
 meter.update(view());
 const priceSheet = createSeedPriceSheet(app, { lang: () => lang, reduceMotion: () => reduce, onSeeDish: () => undefined });
 root.querySelector('.dv-price')!.addEventListener('click', () => priceSheet.open(view()));
+// ONE tap on the price opens the explanation.
+root.querySelector('.dv-seed')!.addEventListener('click', () => priceSheet.open(view()));
 
 const status = new StatusLayer();
+ovCv.addEventListener('click', (e) => {
+  const r = ovCv.getBoundingClientRect();
+  const hit = status.hitTest(e.clientX - r.left, e.clientY - r.top);
+  if (hit?.behavior) ui.openBehaviorGuide(hit.behavior);
+});
 let statusOn = q.get('status') === '1';
 
 // ───────────── per-moment staging (so the zoomed dish shows the right thing) ─────────────
@@ -681,7 +694,7 @@ function openSpecies(mode: 'card' | 'vs', id = 'sp1'): void {
   modal.appendChild(inner);
   app.appendChild(modal);
   const v = view();
-  const lc = { lang: () => lang, reduceMotion: () => reduce, onShowUpgrade: () => undefined };
+  const lc = { lang: () => lang, reduceMotion: () => reduce, onShowUpgrade: () => undefined, onBehavior: (b: Behavior) => ui.openBehaviorGuide(b) };
   const comp =
     mode === 'card'
       ? createSpeciesCard(inner, speciesInputFromView(v, id)!, lc)
@@ -694,6 +707,30 @@ function openSpecies(mode: 'card' | 'vs', id = 'sp1'): void {
   });
 }
 if (q.get('card')) openSpecies('card', q.get('card')!);
+if (q.get('guide') === '1') ui.openBehaviorGuide((q.get('focus') as Behavior | null) ?? null);
+
+/** ?ticker=up|full|down|free|big → the seed price changes and says why (chip above the price). */
+const ticker = q.get('ticker');
+if (ticker) {
+  const before: SeedPriceView = { base: 2, alive: 1, crowdMult: 1.25, freeSlots: 2, used: 1, satMult: 1, bigMult: 2.25, freeSeeds: 0 };
+  const after: Record<string, SeedPriceView> = {
+    up: { ...before, alive: 2, used: 2, crowdMult: 1.5 },
+    full: { ...before, alive: 3, used: 3, crowdMult: 1.75, satMult: 3 },
+    down: { ...before, alive: 0, used: 0, crowdMult: 1 },
+    free: { ...before, freeSeeds: 5 },
+    big: before,
+  };
+  const costOf = (p: SeedPriceView) => p.base * p.crowdMult * p.satMult;
+  const v0 = view();
+  meter.update({ ...v0, seedPrice: before, seedCost: costOf(before) });
+  const p1 = after[ticker] ?? after.up;
+  setTimeout(() => {
+    const priceEl = root.querySelector('.dv-seed .price') as HTMLElement;
+    priceEl.textContent = String(Math.round(costOf(p1) * 100) / 100).replace('.', lang === 'es' ? ',' : '.');
+    meter.update({ ...v0, seedPrice: p1, seedCost: costOf(p1) });
+    if (ticker === 'big') meter.flash(bigSeedReason(before, lang));
+  }, 300);
+}
 if (q.get('vs') === '1') openSpecies('vs');
 root.querySelector('.dv-help')!.addEventListener('click', openHelp);
 
@@ -734,6 +771,7 @@ if (q.get('menu') !== '0') {
     ['status pills', () => (statusOn = !statusOn)],
     ['species card', () => openSpecies('card')],
     ['species vs', () => openSpecies('vs')],
+    ['behaviour guide', () => ui.openBehaviorGuide()],
   ]);
   section('Options', [
     [
