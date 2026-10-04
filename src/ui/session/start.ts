@@ -11,6 +11,7 @@ import { SESSION_UI, WORLD_TEXT } from '../../game/treeText';
 import { WORLD_BY_ID, type WorldId } from '../../game/worlds';
 import { fmt, fmtClock } from '../format';
 import { renderPattern } from '../portrait';
+import { Portrait } from '../story/portraits';
 import { artIcon, WORLD_ICON } from '../art/icons';
 import { worldArt, worldColors } from '../art/worlds';
 import { treeIcon } from '../tree/icons';
@@ -53,6 +54,38 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
   const card = layer.querySelector('.ss-card') as HTMLElement;
   let open = false;
   let current: { start: SessionStart; extras: SessionStartExtras } | null = null;
+  let raf = 0;
+
+  /** VELA's line on the first start card (session 2): what the Tree gives today (CLARIDAD J-167). */
+  function startVela(text: string): void {
+    const holder = card.querySelector('.ss-vela') as HTMLElement | null;
+    if (!holder) return;
+    let p: Portrait | null = null;
+    try {
+      p = new Portrait('ss-vela-pic');
+    } catch {
+      p = null;
+    }
+    if (!p) return;
+    const portrait = p;
+    portrait.set('vela', 'happy');
+    portrait.state.reduceMotion = rm();
+    holder.prepend(portrait.canvas);
+    const t0 = performance.now();
+    let last = t0;
+    const talkFor = rm() ? 0 : Math.min(2.4, 0.05 * text.length);
+    cancelAnimationFrame(raf);
+    const loop = () => {
+      const now = performance.now();
+      const t = (now - t0) / 1000;
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const talking = t < talkFor;
+      portrait.frame(t, dt, talking ? 0.35 + 0.35 * Math.abs(Math.sin(t * 13)) : 0, talking);
+      if (open && portrait.canvas.isConnected) raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+  }
 
   /** The world cards: species portraits, "Encontradas 1/2" or "+2 especies", "¡Nuevo!". */
   function worldsHtml(start: SessionStart, l: Lang): string {
@@ -74,7 +107,9 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
         <span class="ss-wfoot">${esc(foot)}</span>
       </button>`;
     };
-    return `<div class="ss-box ss-worlds-box"><h4>${esc(SESSION_UI.pickWorld[l])}</h4><div class="ss-worlds">${start.worlds.map(one).join('')}</div></div>`;
+    // The first time there is a choice, say how it works (CLARIDAD J-169).
+    const hint = start.worlds.length === 2 ? `<p class="ss-whint">${treeIcon('hand', 16)}${esc(SESSION_UI.worldHint[l])}</p>` : '';
+    return `<div class="ss-box ss-worlds-box"><h4>${esc(SESSION_UI.pickWorld[l])}</h4>${hint}<div class="ss-worlds">${start.worlds.map(one).join('')}</div></div>`;
   }
 
   function paintWorldPortraits(): void {
@@ -114,10 +149,13 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
       const fresh = start.fresh
         .filter((id) => TREE_BY_ID[id])
         .slice(0, 8)
-        .map((id) => `<span class="n b-${TREE_BY_ID[id].branch}">${treeIcon(TREE_BY_ID[id].icon, 22)}${esc(id === 'lab' ? (l === 'es' ? 'Noche nueva' : 'New night') : nodeText(id).name[l])}</span>`)
+        .map((id) => `<span class="n b-${TREE_BY_ID[id].branch}">${treeIcon(TREE_BY_ID[id].icon, 22)}${esc(nodeText(id).name[l])}</span>`)
         .join('');
+      // The first start card (session 2): VELA says what this card is (CLARIDAD J-167).
+      const velaLine = start.n === 2 ? (extras.encargo ? SESSION_UI.startVela[l] : SESSION_UI.startVelaNoRequest[l]) : '';
       card.innerHTML = `
         <div class="ss-head"><h2>${esc(SESSION_UI.startTitle(start.n)[l])}</h2></div>
+        ${velaLine ? `<div class="ss-vela"><div class="ss-bubble">${esc(velaLine)}</div></div>` : ''}
         <div class="ss-start-time"><div class="big">${treeIcon('clockIcon', 40)}</div><div><b>${fmtClock(start.seconds)}</b><span>${esc(
           SESSION_UI.startTime(fmtClock(start.seconds))[l],
         )}</span></div></div>
@@ -136,6 +174,7 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
       layer.hidden = false;
       layer.classList.toggle('rm', rm());
       open = true;
+      if (velaLine) startVela(velaLine);
       // The picked world in view (it may be the newest, at the end of the row).
       const list = card.querySelector('.ss-worlds') as HTMLElement | null;
       const on = card.querySelector('.ss-world.on') as HTMLElement | null;
@@ -145,6 +184,7 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
     hide() {
       if (!open) return;
       open = false;
+      cancelAnimationFrame(raf);
       layer.classList.remove('show');
       setTimeout(() => {
         if (!open) layer.hidden = true;

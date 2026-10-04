@@ -82,6 +82,8 @@ export interface TreeViewOptions {
 export interface TreeView {
   readonly el: HTMLElement;
   readonly isOpen: boolean;
+  /** A node's sheet is open (it covers the lower part of the tree). */
+  readonly sheetOpen: boolean;
   update(d: TreeViewData): void;
   open(): void;
   close(): void;
@@ -284,7 +286,8 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
   let sheetKey = '';
   const cam = { x: 0, y: 0, z: 1 };
   let camAnim = 0;
-  let fitted = false;
+  /** The node of the very first purchase, while its sheet stays open ("¡Es tuya para siempre!"). */
+  let firstBought: string | null = null;
 
   const ctxOf = (d: TreeViewData): TreeCtx => ({ levels: d.levels, datos: d.datos, sessions: d.sessions, species: d.species });
   const vpSize = () => ({ w: vp.clientWidth || window.innerWidth, h: vp.clientHeight || window.innerHeight });
@@ -634,8 +637,9 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     const night = nightInfo(ctxOf(data));
     const ready = [...states.values()].filter((s) => s.affordable && s.id !== 'lab').length;
     const parts = [`${tx(TREE_UI.night(night.night), l)}`];
-    if (ready) parts.push(`<b>${esc(tx(TREE_UI.affordable(ready), l))}</b>`);
+    // The night first: on a phone the line ends in "…", and the green nodes already say what is ready.
     if (night.ready && night.next) parts.push(`<b>${esc(tx(TREE_UI.nightReady, l))}</b>`);
+    if (ready) parts.push(`<b>${esc(tx(TREE_UI.affordable(ready), l))}</b>`);
     titleP.innerHTML = parts.join(' · ');
     goLbl.textContent = tx(TREE_UI.newSession, l);
     goBtn.hidden = !opts.onNewSession;
@@ -708,25 +712,12 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     return body;
   }
 
-  function priceBox(def: TreeNodeDef, st: NodeState, l: Lang): string {
-    const r = priceRule(def.id);
-    const g = r.growth;
-    const growthTxt = (Math.round(g * 100) / 100).toString().replace('.', l === 'es' ? ',' : '.');
-    const startTile = `<div class="t"><b>${fmtShort(r.start, l)}</b><span>${esc(tx(TREE_UI.ringStart(String(def.ring)), l))}</span></div>`;
-    const lv = st.level;
-    const factor = Math.pow(g, lv);
-    // Level 0 has nothing to multiply: [start] = [price]. Later: [start] × [×4 · 2 niveles comprados].
-    const tiles =
-      r.single || lv === 0
-        ? `${startTile}<span class="op">=</span>`
-        : `${startTile}<span class="op">×</span><div class="t"><b>×${dec2(factor, l)}</b><span>${esc(
-            tx(TREE_UI.levelsBought(lv, growthTxt), l),
-          )}</span></div><span class="op">=</span>`;
-    const total = `<div class="t total"><b>${fmtShort(st.cost, l)}</b><span>${esc(tx(DATOS_NAME, l))}</span></div>`;
-    const rule = r.single ? tx(TREE_UI.priceRuleOne(fmtShort(r.start, l)), l) : tx(TREE_UI.priceRule(fmtShort(r.start, l), growthTxt), l);
-    return `<button type="button" class="rt-box rt-pricebox" data-price="${def.id}"><h4>${esc(tx(TREE_UI.why, l))}<span class="rt-tap">${treeIcon('plus', 14)}${esc(
-      tx(TREE_UI.tapPrice, l),
-    )}</span></h4><div class="rt-eq">${tiles}${total}</div><p class="rt-rule">${esc(rule)}</p></button>`;
+  /** "¿Por qué cuesta esto? ›": one line; the arithmetic is in the price sheet it opens (CLARIDAD J-90). */
+  function priceBox(def: TreeNodeDef, l: Lang): string {
+    return `<button type="button" class="rt-box rt-pricebox compact" data-price="${def.id}"><h4>${treeIcon('question', 18)}<span>${esc(tx(TREE_UI.why, l))}</span><span class="rt-tap">${treeIcon(
+      'chevronRight',
+      16,
+    )}</span></h4></button>`;
   }
 
   function barsBox(def: TreeNodeDef, st: NodeState, l: Lang): string {
@@ -822,11 +813,18 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
         if (ni.gate) body += gateBar(l === 'es' ? 'Sesiones' : 'Sessions', data.sessions, ni.gate.sessions) + gateBar(l === 'es' ? 'Especies' : 'Species', data.species, ni.gate.species);
       }
     } else {
+      // What it does first (before → after, in words), then the button; the price's arithmetic and
+      // the next levels' prices stay below it, behind "¿Por qué cuesta esto?" (CLARIDAD J-90).
       body += beforeAfterBox(def, st, l);
+      // Until the first purchase, the sheet says how to read it (CLARIDAD J-168).
+      const firstBuy = Object.entries(data.levels).every(([id, n]) => id === 'lab' || !n);
+      if (firstBuy && !st.maxed) body += `<p class="rt-bahint">${esc(tx(SESSION_UI.sheetHint, l))}</p>`;
+      // …and right after it, that it is forever (CLARIDAD J-120; it was a Momento card that waited for
+      // the next session to start and then told it again).
+      else if (firstBought === selected) body += `<p class="rt-bahint got">${esc(tx(SESSION_UI.sheetHintBought, l))}</p>`;
       body += `<p class="rt-desc">${esc(tx(nodeText(def.id).desc, l))}</p>`;
       body += worldBox(def, l);
       if (!st.maxed) {
-        body += priceBox(def, st, l) + barsBox(def, st, l);
         if (st.status === 'locked') {
           body += `<div class="rt-needs">${esc(tx(TREE_UI.needs, l))}: ${st.missingRequires.map((id) => needChip(id, l)).join('')}</div>`;
         } else {
@@ -835,6 +833,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
             st.affordable ? `${esc(tx(TREE_UI.buy, l))} · ${treeIcon('datos', 22)}<b>${fmt(st.cost, l)}</b>` : esc(tx(TREE_UI.missing(fmt(st.missingDatos, l), null), l))
           }</button>`;
         }
+        body += priceBox(def, l) + barsBox(def, st, l);
       }
     }
     sheet.innerHTML = `<div class="rt-grab"></div>
@@ -930,6 +929,8 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
   }
 
   function doBuy(id: string, btn?: HTMLElement): void {
+    // Before onBuy: the host's nodeBought handler calls update() with the new levels synchronously.
+    const wasFirst = id !== 'lab' && Object.entries(data.levels).every(([k, n]) => k === 'lab' || !n);
     const res = opts.onBuy(id);
     if (!res || !res.ok) {
       sound('deny');
@@ -938,6 +939,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     }
     sound(id === 'lab' ? 'night' : 'buy');
     const prev = data;
+    if (wasFirst) firstBought = id;
     data = { ...data, levels: res.levels, datos: res.datos };
     recompute();
     const n = nodes.get(id);
@@ -1005,6 +1007,9 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     get isOpen() {
       return open;
     },
+    get sheetOpen() {
+      return open && selected !== null;
+    },
     update(d) {
       data = { ...d, levels: { ...d.levels } };
       recompute();
@@ -1017,10 +1022,9 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       shownDatos = data.datos;
       datosNum.textContent = fmt(data.datos, lang());
       recompute();
-      if (!fitted) {
-        fitted = true;
-        requestAnimationFrame(() => fitView(false));
-      }
+      // Every visit starts on the whole tree: a pan left over from the last visit (a node picked near
+      // the edge) put the centre under the top bar, and new nodes may have appeared since.
+      requestAnimationFrame(() => fitView(false));
       requestAnimationFrame(() => el.focus({ preventScroll: true }));
     },
     close() {
@@ -1028,12 +1032,14 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       open = false;
       el.hidden = true;
       selected = null;
+      firstBought = null;
       priceSheet.close();
       renderSheet();
     },
     select(id) {
       const prev = selected;
       selected = id && TREE_BY_ID[id] && states.get(id)?.status !== 'hidden' ? id : null;
+      if (selected !== firstBought) firstBought = null;
       if (prev && nodes.get(prev)) nodes.get(prev)!.key = '';
       if (selected && nodes.get(selected)) nodes.get(selected)!.key = '';
       renderNodes();

@@ -1620,3 +1620,16 @@ html[data-theme='light'] .mo-bh-big,
 html[data-theme='light'] .mo-bh-glyph {
   color: #ffffff;
 }
+
+/* The guide's close button stays in reach while the guide scrolls (it opens scrolled to a way of
+   moving, so a top-pinned button would be off screen). */
+.mo-bh-layer .mo-bh-x {
+  position: sticky;
+  top: 0;
+  right: auto;
+  align-self: flex-end;
+  flex: none;
+  margin-bottom: -56px;
+  background: color-mix(in srgb, var(--mo-bg, #141a21) 92%, transparent);
+  backdrop-filter: blur(4px);
+}

@@ -141,7 +141,7 @@ function view(): GameView {
       isNew: false,
     })),
     behaviorsSeen: ['still', 'swimmer', 'spinner', 'pulsing', 'divider'],
-    calibration: { mu: 0.15, sigma: 0.015, R: 13, dt: 0.1, muRange: null, sigmaRange: null, RRange: null, dtRange: null, regimes: [], maxRegimes: 0 },
+    calibration: { mu: 0.15, sigma: 0.015, R: 13, dt: 0.1 },
     journal: [],
     achievements: [],
     extinction: { available: true, genomeGain: 12, gainIn10Min: 14, requirement: { es: '', en: '' }, progress: 1 },

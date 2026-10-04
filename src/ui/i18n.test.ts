@@ -13,12 +13,12 @@ describe('i18n', () => {
 
   it('switches language and fills placeholders', () => {
     setLang('en');
-    expect(t('eraEnd', { n: 3 })).toBe('End of Era 3');
+    expect(t('newSpeciesN', { n: 3 })).toBe('3 new species!');
     expect(tx({ es: 'hola', en: 'hello' })).toBe('hello');
     expect(behaviorName('swimmer')).toBe('Swimmer');
     expect(behaviorName(null)).toBe('Watching how it moves…');
     setLang('es');
-    expect(t('eraEnd', { n: 3 })).toBe('Fin de la Era 3');
+    expect(t('newSpeciesN', { n: 3 })).toBe('¡3 especies nuevas!');
     expect(rarityName('veryRare')).toBe('Muy rara');
     expect(tx(null)).toBe('');
   });

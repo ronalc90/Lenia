@@ -416,12 +416,6 @@ export class MockGame implements GameActions {
       behaviorsSeen,
       calibration: {
         ...this.calibration,
-        muRange: this.tabs.calibrate ? [0.1, 0.5] : null,
-        sigmaRange: this.tabs.calibrate ? [0.005, 0.08] : null,
-        RRange: null,
-        dtRange: this.tabs.calibrate ? [0.05, 0.5] : null,
-        regimes: this.regimes.map((r) => ({ ...r })),
-        maxRegimes: this.tabs.calibrate ? 8 : 0,
       },
       journal: this.journal.map((j) => ({ ...j })),
       achievements: this.achievements,

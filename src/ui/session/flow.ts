@@ -29,8 +29,10 @@ export type SessionFlowSound = SessionHudSound | SummarySound | TreeSound;
 export interface SessionFlowOptions {
   /** Layer for the start card, the summary and the tree (above the dish). */
   root: HTMLElement;
-  /** Where the clock pill goes (above the dish, in the HUD). */
+  /** Where the clock pill goes (the centre of the game's HUD). */
   hudHost: HTMLElement;
+  /** Where the "+12 Datos al terminar" pill goes (the game's dock); default under the clock. */
+  previewHost?: HTMLElement;
   /** The dish container (the "¡Último minuto!" banner and the "¡Tiempo!" stamp go over it). */
   dish: HTMLElement;
   game: Game;
@@ -42,6 +44,8 @@ export interface SessionFlowOptions {
   onSound?(kind: SessionFlowSound): void;
   /** Tap on the Datos preview under the clock (the host opens the price sheet with summary.datosExplain). */
   onPreview?(): void;
+  /** The start card waits while this is true (the one-time welcome card of an old save): never two cards. */
+  holdStart?(): boolean;
 }
 
 export interface SessionFlow {
@@ -49,6 +53,12 @@ export interface SessionFlow {
   update(v: GameView): void;
   /** True while a card or the tree is open: the host keeps the dish (and the clock) paused. */
   readonly busy: boolean;
+  /** The research tree is on screen (story scenes about it wait for it). */
+  readonly treeOpen: boolean;
+  /** A node's sheet is open in the tree (a VELA task pill pointing at the tree waits behind it). */
+  readonly treeSheetOpen: boolean;
+  /** A card covers the screen ("¡Tiempo!", the summary or the start card): nothing else should talk. */
+  readonly cardOpen: boolean;
   openTree(): void;
   /** Re-render texts after a language change. */
   relabel(): void;
@@ -83,6 +93,7 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
     reduceMotion: o.reduceMotion,
     onSound: (k) => sound(k),
     onPreview: o.onPreview,
+    previewHost: o.previewHost,
   });
 
   const start: SessionStartView = createSessionStart(o.root, {
@@ -131,11 +142,17 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
     tree.open();
   }
 
+  let startPending = false;
   function showStart(): void {
     const s = game.session;
     const st = game.sessionStart;
+    startPending = false;
     // Session 1 has no start card: VELA presents the dish (CLARIDAD §3.2 step 1).
     if (!s || !st || s.phase !== 'ready' || s.n <= 1) return;
+    if (o.holdStart?.()) {
+      startPending = true;
+      return;
+    }
     start.show(st, { encargo: o.encargo?.() ?? null });
   }
 
@@ -163,7 +180,7 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
       tree.update(treeData());
       showStart();
     }),
-    bus.on('sessionExtended', ({ seconds, reason }) => hud.extended(seconds, reason)),
+    bus.on('sessionExtended', ({ seconds, reason }) => hud.extended(seconds, reason, reason === 'species' && game.state.species.length <= 1)),
     bus.on('sessionClock', ({ type }) => {
       if (type === 'lastMinute') hud.lastMinute(o.dish);
     }),
@@ -182,6 +199,7 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
 
   return {
     update(v) {
+      if (startPending && !o.holdStart?.()) showStart();
       const s = game.session;
       if (!s) return;
       hud.update(hudViewOf(s, v.session?.sprint ?? 1));
@@ -189,7 +207,17 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
       hud.preview(p ? { datos: p.datos, goal: p.goal ? { name: nodeText(p.goal.id).name, missing: p.goal.missing } : null } : null);
     },
     get busy() {
-      return stamping || start.isOpen || summary.isOpen || tree.isOpen;
+      // A start card waiting for its turn (behind the welcome card) counts: nothing slips in between.
+      return stamping || startPending || start.isOpen || summary.isOpen || tree.isOpen;
+    },
+    get treeOpen() {
+      return tree.isOpen;
+    },
+    get treeSheetOpen() {
+      return tree.sheetOpen;
+    },
+    get cardOpen() {
+      return stamping || startPending || start.isOpen || (summary.isOpen && !tree.isOpen);
     },
     openTree,
     relabel() {

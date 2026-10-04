@@ -7,8 +7,6 @@ import type { Behavior, CreatureState, Lang, Rarity, Text } from '../core/types'
 const S = {
   // Currencies & HUD
   essence: { es: 'Esencia', en: 'Essence' },
-  samples: { es: 'Muestras', en: 'Samples' },
-  genome: { es: 'Genoma', en: 'Genome' },
   perSec: { es: '/s', en: '/s' },
   essAria: { es: 'Esencia: {n}. Ganas {r} por segundo.', en: 'Essence: {n}. You earn {r} per second.' },
   journal: { es: 'Bitácora', en: 'Journal' },
@@ -19,25 +17,10 @@ const S = {
   objectiveDone: { es: '¡Objetivo cumplido!', en: 'Objective complete!' },
 
   // Tabs
-  tabLab: { es: 'Laboratorio', en: 'Lab' },
   tabBestiary: { es: 'Bestiario', en: 'Bestiary' },
-  tabCalibrate: { es: 'Calibrar', en: 'Calibrate' },
-  tabGenome: { es: 'Genoma', en: 'Genome' },
-  introLab: {
-    es: 'Gasta Esencia en mejoras que hacen mejores semillas.',
-    en: 'Spend Essence on upgrades that make better seeds.',
-  },
   introBestiary: {
     es: 'Aquí se guarda cada especie que descubres. ¡Toca una!',
     en: 'Every species you discover is kept here. Tap one!',
-  },
-  introCalibrate: {
-    es: 'Cambia las reglas del universo: cada régimen tiene su fauna.',
-    en: 'Bend the rules of the universe: every regime has its own fauna.',
-  },
-  introGenome: {
-    es: 'Extingue la placa para ganar Genoma y comprar reglas nuevas.',
-    en: 'Extinguish the dish to earn Genome and buy new rules.',
   },
   dismiss: { es: 'Entendido', en: 'Got it' },
   close: { es: 'Cerrar', en: 'Close' },
@@ -60,7 +43,6 @@ const S = {
   printMode: { es: 'Toca dónde poner la copia de {name}', en: 'Tap where to put the copy of {name}' },
   cancel: { es: 'Cancelar', en: 'Cancel' },
   seed: { es: 'Semilla', en: 'Seed' },
-  pipette: { es: 'Pipeta de emergencia', en: 'Emergency pipette' },
   newSpecies: { es: '¡Especie nueva!', en: 'New species!' },
   newBehavior: { es: '¡Nueva manera de moverse!', en: 'New way of moving!' },
   unknownCreature: { es: 'Aún sin nombre', en: 'No name yet' },
@@ -82,7 +64,6 @@ const S = {
   buy: { es: 'Comprar', en: 'Buy' },
   locked: { es: 'Bloqueada', en: 'Locked' },
   lockedSection: { es: 'Por descubrir', en: 'Yet to unlock' },
-  bestiaryUpgrades: { es: 'Mejoras de Muestras', en: 'Sample upgrades' },
   noUpgrades: { es: 'Aún no hay mejoras.', en: 'No upgrades yet.' },
   multGlobal: { es: 'Todo da', en: 'Everything' },
   multBuffs: { es: 'Premio ahora', en: 'Prize now' },
@@ -103,12 +84,7 @@ const S = {
   overgrownText: { es: 'La materia sin forma no da Esencia.', en: 'Shapeless matter gives no Essence.' },
   cleanDish: { es: 'Limpiar placa', en: 'Clean dish' },
   cleanConfirm: { es: '¿Limpiar? Toca otra vez', en: 'Clean? Tap again' },
-  labEmpty: { es: 'Siembra vida para ganar Esencia y desbloquear mejoras', en: 'Sow life to earn Essence and unlock upgrades' },
-  labEmptyHint: { es: 'Toca la placa para sembrar.', en: 'Tap the dish to sow.' },
-  lockLab: { es: 'Se desbloquea al sembrar por primera vez', en: 'Unlocks with your first seed' },
   lockBestiary: { es: 'Se abre con tu primera criatura', en: 'Opens with your first creature' },
-  lockCalibrate: { es: 'Se desbloquea con la mejora Calibrador del Laboratorio', en: "Unlocks with the Lab's Calibrator upgrade" },
-  lockGenome: { es: 'Se desbloquea al acercarte a tu primera Extinción', en: 'Unlocks as you approach your first Extinction' },
 
   // Bestiary
   registered: { es: 'Descubiertas', en: 'Found' },
@@ -130,9 +106,8 @@ const S = {
   era: { es: 'Noche', en: 'Night' },
   livesIn: { es: 'Vive en', en: 'Lives in' },
   print: { es: 'Imprimir', en: 'Print' },
-  plantAnother: { es: 'Plantar otra', en: 'Plant another' },
   makeCopy: { es: 'Hacer una copia', en: 'Make a copy' },
-  printHint: { es: 'Pon otra igual en la placa.', en: 'Put another one like it on the dish.' },
+  copyFree: { es: 'Gratis', en: 'Free' },
   copyHint: { es: 'Pon otra igual en la placa. Cuesta Esencia.', en: 'Put another one like it on the dish. Costs Essence.' },
   outOfRegime: {
     es: 'Esta especie vive en otro mundo: {world}.',
@@ -141,50 +116,6 @@ const S = {
   rename: { es: 'Renombrar', en: 'Rename' },
   save: { es: 'Guardar', en: 'Save' },
   unclassified: { es: '¿Cómo se moverá?', en: 'How will it move?' },
-
-  // Calibrate
-  calWarning: { es: 'Cambiar las reglas puede matar la vida actual.', en: 'Changing the rules may kill current life.' },
-  muLabel: { es: 'Crecimiento', en: 'Growth' },
-  sigmaLabel: { es: 'Tolerancia', en: 'Tolerance' },
-  RLabel: { es: 'Tamaño', en: 'Size' },
-  dtLabel: { es: 'Ritmo', en: 'Pace' },
-  rulesOfLife: { es: 'Reglas de la vida', en: 'Rules of life' },
-  sliderLocked: { es: 'Se desbloquea con el Calibrador', en: 'Unlocked by the Calibrator' },
-  regimes: { es: 'Regímenes', en: 'Regimes' },
-  saveRegime: { es: 'Guardar', en: 'Save' },
-  regimeName: { es: 'Régimen {n}', en: 'Regime {n}' },
-  regimesEmpty: {
-    es: 'Guarda la calibración actual para volver a ella.',
-    en: 'Save the current calibration to come back to it.',
-  },
-  regimesLocked: { es: 'Los regímenes llegan con Calibrador II.', en: 'Regimes arrive with Calibrator II.' },
-  deleteRegime: { es: 'Borrar régimen', en: 'Delete regime' },
-  loadRegime: { es: 'Cargar', en: 'Load' },
-
-  // Genome
-  branchRules: { es: 'Reglas', en: 'Rules' },
-  branchHeritage: { es: 'Herencia', en: 'Heritage' },
-  branchFauna: { es: 'Fauna', en: 'Fauna' },
-  genomeBonus: {
-    es: 'Cada punto gastado suma +2 % de producción.',
-    en: 'Every point spent adds +2% production.',
-  },
-  owned: { es: 'Adquirido', en: 'Owned' },
-  requires: { es: 'Requiere', en: 'Requires' },
-  extinguish: { es: 'Extinguir', en: 'Extinguish' },
-  holdToConfirm: { es: 'Mantén 1,5 s para confirmar', en: 'Hold 1.5 s to confirm' },
-  gainNow: { es: 'Ganarías', en: 'You would gain' },
-  gainIn10: { es: 'En 10 min', en: 'In 10 min' },
-  extinctionLocked: { es: 'Extinción no disponible', en: 'Extinction unavailable' },
-
-  // Extinction ritual
-  eraEnd: { es: 'Fin de la Era {n}', en: 'End of Era {n}' },
-  eraDuration: { es: 'Duración', en: 'Duration' },
-  eraEssence: { es: 'Esencia de la Era', en: 'Era Essence' },
-  eraNewSpecies: { es: 'Especies nuevas', en: 'New species' },
-  eraBest: { es: 'Mejor criatura', en: 'Best creature' },
-  genomeGained: { es: 'Genoma ganado', en: 'Genome gained' },
-  openGenome: { es: 'Abrir el Árbol', en: 'Open the Tree' },
 
   // Offline
   offlineTitle: { es: 'Mientras no estabas', en: 'While you were away' },

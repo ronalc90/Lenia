@@ -3854,6 +3854,10 @@
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
   pointer-events: none;
 }
+/* A paused Momento card speaks alone: the bar fades back under it (main.ts toggles .mo-card-open). */
+.mo-card-open .bl-dish > .bl-objective {
+  visibility: hidden;
+}
 /* It floats over the (always dark) dish: same dark glass in both themes, readable text. */
 .bl-dish > .bl-objective,
 .bl[data-theme='light'] .bl-dish > .bl-objective {
@@ -4744,4 +4748,438 @@
 }
 .mode-pill .mo-dots .mo-ic {
   flex: none;
+}
+
+/* ───────────── Sessions layout (docs/CICLO.md §15): HUD with the clock · dish · dock ─────────────
+ * Three rows on every screen: the HUD (Essence, the session clock in the middle, Bitácora, Ajustes),
+ * the dish, and the dock (Bestiario · Abono or Árbol · the Datos preview). Nothing appears in a new
+ * row or column later: every cell keeps its size from the first frame (no layout shift). The
+ * Bestiary is a drawer over the dish (bottom sheet on a phone, side drawer on a wide screen).
+ */
+.bl.is-wide,
+.bl.is-wide.no-objective,
+.bl.is-wide.no-sheet,
+.bl.is-wide.no-sheet.no-objective {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'hud' 'dish' 'dock';
+}
+.bl-hud {
+  gap: 4px;
+}
+.bl-hud .hud-ess {
+  flex: 0 1 auto;
+}
+.hud-clock {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+.bl:not(.is-wide) .hud-mute,
+.bl:not(.is-wide) .hud-lb {
+  display: none;
+}
+/* The session clock in the HUD: compact, but the biggest number on the screen with the Essence. */
+.hud-clock .ss-hud {
+  min-height: 48px;
+  gap: 8px;
+  padding: 3px 14px 3px 4px;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.hud-clock .ss-dial {
+  width: 40px;
+  height: 40px;
+}
+.hud-clock .ss-dial svg.ring {
+  width: 40px;
+  height: 40px;
+}
+.hud-clock .ss-time b {
+  font-size: 1.6rem;
+}
+.hud-clock .ss-plus {
+  z-index: 6;
+}
+@media (max-width: 380px) {
+  .hud-clock .ss-time small {
+    display: none;
+  }
+  .bl-hud .ess-val {
+    font-size: 1.375rem;
+  }
+}
+
+/* Dock */
+.bl-dock {
+  grid-area: dock;
+  position: relative;
+  z-index: 3;
+  flex: none;
+  padding: 6px max(8px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+}
+.dock-in {
+  display: grid;
+  /* A fixed height: a third line in the Datos preview ("¡Alcanza para…!") must never grow the dock
+     and move the dish (layout-shift.mjs). */
+  height: 60px;
+  /* Sides hug their content (Bestiario, the Datos preview); the middle button gets the rest, so on a
+     narrow phone a long line in it never runs under the preview. */
+  grid-template-columns: minmax(64px, auto) minmax(0, 1fr) minmax(64px, auto);
+  align-items: center;
+  gap: 8px;
+  max-width: 760px;
+  min-height: 60px;
+  margin: 0 auto;
+}
+.dock-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 56px;
+  min-width: 56px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  color: var(--text);
+  font-weight: 700;
+  transition: background 0.15s, transform 0.12s, border-color 0.2s, color 0.2s;
+}
+.dock-btn:active {
+  transform: scale(0.97);
+}
+.dock-bestiary {
+  justify-self: start;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 10px;
+  color: var(--dim);
+  font-size: 0.75rem;
+}
+.dock-bestiary .icw {
+  color: var(--text);
+}
+.dock-bestiary.active,
+.dock-bestiary:hover {
+  color: var(--text);
+  background: rgba(var(--tint-rgb), 0.06);
+}
+.dock-bestiary .dot {
+  top: 6px;
+  right: 10px;
+  left: auto;
+}
+.dock-mid {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+.dock-main {
+  min-width: min(150px, 100%);
+  max-width: 100%;
+  padding: 6px 16px 6px 12px;
+  border-radius: 18px;
+  background: var(--surface-2);
+  border: 1.5px solid var(--line-2);
+}
+.dock-tree {
+  background: var(--bl-accent-fill, #5bc0eb);
+  border-color: transparent;
+  color: var(--bl-accent-ink, #04202e);
+  font-size: 1.05rem;
+  box-shadow: var(--bl-shadow-glow);
+}
+.dock-boost {
+  text-align: left;
+  color: var(--dim);
+}
+.dock-boost .icw {
+  color: var(--good);
+}
+.dock-boost.can {
+  color: var(--text);
+  border-color: var(--good);
+  background: color-mix(in srgb, var(--good) 14%, var(--surface-2));
+  animation: dock-pulse 1.8s ease-in-out infinite;
+}
+.dock-boost.wait .icw {
+  color: var(--faint);
+}
+.dock-tx {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.15;
+}
+.dock-tx b,
+.dock-tx small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dock-tx b {
+  font-size: 1rem;
+}
+.dock-tx small {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.dock-tx small .bx {
+  color: var(--good);
+}
+.dock-tx small .mono {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  vertical-align: top;
+}
+.dock-btn.shake {
+  animation: bl-shake 0.35s var(--ease);
+}
+@keyframes dock-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(var(--good-rgb), 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(var(--good-rgb), 0);
+  }
+}
+.bl.rm .dock-boost.can {
+  animation: none;
+}
+.dock-preview {
+  justify-self: end;
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+/* The Datos preview in the dock: "+12 Datos" over "al terminar"; what it buys only where it fits. */
+.dock-preview .ss-prev.docked {
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 1px;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 52px;
+  max-height: 58px;
+  line-height: 1.05;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 14px;
+  box-shadow: none;
+  backdrop-filter: none;
+  text-align: right;
+  overflow: hidden;
+}
+.dock-preview .ss-prev.docked > .rt-ic {
+  display: none;
+}
+.dock-preview .ss-prev.docked .d {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 0;
+  max-width: 100%;
+  line-height: 1.1;
+}
+.dock-preview .ss-prev.docked .d b {
+  font-size: 1.05rem;
+  white-space: nowrap;
+}
+.dock-preview .ss-prev.docked .d small {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--dim);
+  white-space: nowrap;
+}
+.dock-preview .ss-prev.docked .g {
+  display: none;
+}
+.bl.is-wide .dock-preview .ss-prev.docked .g {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  text-align: right;
+}
+
+/* Bestiary drawer */
+.bl-drawer-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 29;
+  background: rgba(var(--shadow-rgb), calc(0.45 * var(--shadow-k)));
+}
+.bl-drawer {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 82%;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-top: 1px solid var(--line-2);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  box-shadow: 0 -14px 34px rgba(var(--shadow-rgb), calc(0.42 * var(--shadow-k)));
+}
+.bl-drawer.enter {
+  animation: drawer-up var(--bl-t-sheet, 260ms) var(--ease);
+}
+.bl.is-wide .bl-drawer {
+  left: auto;
+  top: 0;
+  width: var(--side-w);
+  height: auto;
+  border-top: 0;
+  border-left: 1px solid var(--line-2);
+  border-radius: 0;
+  box-shadow: -14px 0 34px rgba(var(--shadow-rgb), calc(0.42 * var(--shadow-k)));
+}
+.bl.is-wide .bl-drawer.enter {
+  animation-name: drawer-left;
+}
+@keyframes drawer-up {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+}
+@keyframes drawer-left {
+  from {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+}
+.bl.rm .bl-drawer.enter {
+  animation: none;
+}
+.drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  min-height: 60px;
+  padding: 6px 6px 6px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.drawer-head .icw {
+  color: var(--accent);
+}
+.drawer-title {
+  flex: 1;
+  margin: 0;
+  font: 700 1.3rem/1.1 var(--display);
+}
+.drawer-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--r-sm);
+  color: var(--dim);
+}
+.drawer-x:hover {
+  color: var(--text);
+  background: rgba(var(--tint-rgb), 0.06);
+}
+.bl-drawer .drawer-panel {
+  position: relative;
+  inset: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Pause card (over the dish) */
+.pause-card {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(400px, calc(100% - 32px));
+  padding: 18px 16px 16px;
+  border-radius: 20px;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 18px 48px rgba(var(--shadow-rgb), calc(0.5 * var(--shadow-k)));
+  color: var(--text);
+  text-align: center;
+  animation: bl-pop-in 0.25s var(--ease);
+}
+.pause-card .pc-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font: 700 1.25rem/1.2 var(--display);
+}
+.pause-card .pc-body {
+  margin: 0 0 14px;
+  color: var(--dim);
+  font-size: 0.95rem;
+}
+.pause-card .pc-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* One line per button; on a very narrow phone the row wraps instead of breaking "Terminar ahora". */
+.pause-card .pc-row .btn {
+  flex: 1 1 120px;
+  min-height: 52px;
+  white-space: nowrap;
+  padding-inline: 12px;
+}
+.pause-card .btn.danger-soft {
+  color: var(--danger-text);
+  border-color: color-mix(in srgb, var(--danger-text) 45%, transparent);
+}
+/* A phone HUD has room for "Sesión 1", not for "Siembra para empezar" (the dish says "¡Toca aquí!"). */
+.bl:not(.is-wide) .hud-clock .ss-time small.w {
+  display: none;
+}
+.bl:not(.is-wide) .hud-clock .ss-hud[data-state='wait'] .ss-time small.s {
+  visibility: visible;
+}
+.bl:not(.is-wide) .hud-ess .ess-ic {
+  width: 30px;
+  height: 30px;
+}
+.dock-tx small.short .mono {
+  color: var(--danger-text);
+}
+.dock-tip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  z-index: 4;
+  max-width: min(320px, calc(100% - 16px));
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--good);
+  box-shadow: 0 10px 28px rgba(var(--shadow-rgb), calc(0.4 * var(--shadow-k)));
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.3;
+  animation: bl-pop-in 0.25s var(--ease);
+  transition: opacity 0.3s;
+}
+.dock-tip.out {
+  opacity: 0;
 }

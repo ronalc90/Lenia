@@ -37,6 +37,11 @@ export interface StoryUIOptions {
   revealTarget?(id: string): void;
   /** UI feedback sounds (the audio module may voice VELA's blips). */
   onSound?(kind: StorySound, speaker?: Speaker): void;
+  /**
+   * The task pill pointing at this target steps aside for now (e.g. a tree node's sheet is open: the
+   * sheet's own button is the next step, and the pill would sit on its head). It keeps waiting.
+   */
+  hideTask?(target: string | null): boolean;
 }
 
 export interface StoryUI {
@@ -287,6 +292,7 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
     return null;
   }
 
+  let taskTucked = false;
   function place(r0: DOMRect): void {
     const W = r0.width;
     const H = r0.height;
@@ -321,8 +327,15 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
       }
     }
 
+    // A task pill out of the way while the host says so (and its spotlight with it).
+    const tuck = !task.hidden && !line && !!opts.hideTask?.(tg?.id ?? curTarget?.[0] ?? null);
+    if (tuck !== taskTucked) {
+      taskTucked = tuck;
+      task.style.visibility = tuck ? 'hidden' : '';
+    }
+
     // Spotlight.
-    if (options) spot.set(null);
+    if (options || tuck) spot.set(null);
     else if (tg && (line || taskInfo)) {
       const arrow = big ? null : boxTop ? 'above' : 'below';
       const ripple = !!taskInfo && tg.id === 'dish';

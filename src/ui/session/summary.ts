@@ -72,7 +72,7 @@ export interface EqRow {
  * The Datos equation as rows: essence ÷ 100 = base; × night = fromEssence; + each discovery term;
  * + Gran enciclopedia (a % of everything so far); + the minimum top-up. Every number adds up.
  */
-export function equationRows(d: DatosBreakdown, l: Lang, night: number): EqRow[] {
+export function equationRows(d: DatosBreakdown, l: Lang, night: number, first = false): EqRow[] {
   const rows: EqRow[] = [];
   rows.push({
     kind: 'essence',
@@ -97,7 +97,8 @@ export function equationRows(d: DatosBreakdown, l: Lang, night: number): EqRow[]
   const META: Record<DatosBreakdown['terms'][number]['kind'], { icon: string; color: string; label: Text }> = {
     species: { icon: 'species', color: 'var(--bl-good)', label: SESSION_UI.newSpecies },
     behaviors: { icon: 'behavior', color: 'var(--bl-accent)', label: SESSION_UI.newBehaviors },
-    encargos: { icon: 'encargo', color: 'var(--bl-gold)', label: SESSION_UI.encargos },
+    // Session 1 shows no Encargo: what it counts there are the first goals (sow, a creature that stays).
+    encargos: { icon: 'encargo', color: 'var(--bl-gold)', label: first ? SESSION_UI.firstSteps : SESSION_UI.encargos },
     goldens: { icon: 'spark', color: 'var(--bl-gold)', label: SESSION_UI.sparks },
     records: { icon: 'trophy', color: 'var(--bl-gold)', label: SESSION_UI.records },
   };
@@ -202,8 +203,9 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
       .map((s) => {
         const info = opts.speciesInfo(s.id);
         const hue = info?.hue ?? 195;
+        // A new one says where it went: the dish empties, the Bestiary keeps it (CLARIDAD J-165, F-05).
         return `<div class="ss-sp" style="--hue:${hue}"><div class="pic" data-sp="${esc(s.id)}"></div><span class="nm">${esc(info?.name ?? '?')}</span>${
-          s.isNew ? `<span class="new">${esc(SESSION_UI.isNew[l])}</span>` : ''
+          s.isNew ? `<span class="new">${esc(SESSION_UI.isNew[l])}</span><span class="kept">${esc(SESSION_UI.keptShort[l])}</span>` : ''
         }</div>`;
       })
       .join('');
@@ -288,7 +290,7 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
     show(sum, extras) {
       clearTimers();
       const l = opts.lang();
-      const rows = equationRows(sum.datos, l, Math.max(1, Math.round((sum.datos.nightMult - 1) / C.DATOS_NIGHT_BONUS) + 1));
+      const rows = equationRows(sum.datos, l, Math.max(1, Math.round((sum.datos.nightMult - 1) / C.DATOS_NIGHT_BONUS) + 1), sum.n === 1);
       const staged = !rm() && !opts.instant;
       const vela = velaLine(sum.vela)[l];
       const treeFirst = extras.affordable > 0;
@@ -310,6 +312,7 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
           <p class="ss-formula">${treeIcon('drop', 16)}${esc(SESSION_UI.conversionRule(sum.datos.div)[l])}</p>
           ${rows.map((r, i) => rowHtml(r, i, staged)).join('')}
           <div class="ss-total${staged ? '' : ' done'}"><span class="lbl">${treeIcon('datos', 26)}${esc(DATOS_NAME[l])}</span><b>${staged ? '0' : fmt(sum.datos.total, l)}</b></div>
+          <p class="ss-kept">${esc(SESSION_UI.datosKept[l])}</p>
           ${sum.datos.minimum > 0 ? `<p class="ss-minnote">${esc(SESSION_UI.minimumNote(C.DATOS_MIN)[l])}</p>` : ''}
         </div>
         <div class="ss-side">${speciesBlock(sum, l)}${!sum.species.length ? `${recordsBlock(sum, l)}` : ''}</div>

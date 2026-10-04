@@ -30,6 +30,8 @@ export interface SessionHudOptions {
   onSound?(kind: SessionHudSound): void;
   /** Tap on the Datos preview (the host opens the shared price sheet with summary.datosExplain). */
   onPreview?(): void;
+  /** Where the Datos preview pill goes (default: under the clock). The game's dock passes its slot. */
+  previewHost?: HTMLElement;
 }
 
 /** What the preview pill shows (session.ts sessionPreview + the goal's name). */
@@ -52,8 +54,8 @@ export interface SessionHudView {
 export interface SessionHud {
   readonly el: HTMLElement;
   update(v: SessionHudView): void;
-  /** Green "+5 s" under the clock. */
-  extended(seconds: number, reason?: 'species' | 'encargo' | 'golden'): void;
+  /** Green "+5 s" under the clock; `first`: the first time, in words ("¡Especie nueva: +5 segundos!"). */
+  extended(seconds: number, reason?: 'species' | 'encargo' | 'golden', first?: boolean): void;
   /** The "¡Último minuto!" banner over `over` (the dish container). */
   lastMinute(over: HTMLElement): void;
   /** The "¡Tiempo!" stamp over `over`; resolves after SESSION_TIMESUP_HOLD. */
@@ -89,14 +91,18 @@ export function createSessionHud(container: HTMLElement, opts: SessionHudOptions
   el.setAttribute('role', 'timer');
   el.innerHTML = `<div class="ss-dial"><svg class="ring" viewBox="0 0 40 40" width="46" height="46"><circle class="bg" cx="20" cy="20" r="${R}"/><circle class="fg" cx="20" cy="20" r="${R}" stroke-dasharray="${CIRC.toFixed(
     2,
-  )}" stroke-dashoffset="0"/></svg><span class="ic">${treeIcon('clockIcon', 20)}</span></div><div class="ss-time"><b>3:00</b><small></small></div><span class="ss-sprint"></span>`;
+  )}" stroke-dashoffset="0"/></svg><span class="ic">${treeIcon('clockIcon', 20)}</span></div><div class="ss-time"><b>3:00</b><small class="s"></small><small class="w"></small></div><span class="ss-sprint"></span>`;
   const prev = document.createElement('button');
   prev.type = 'button';
   prev.className = 'ss-prev';
   prev.hidden = true;
   prev.innerHTML = `${treeIcon('datos', 18)}<span class="d"></span><span class="g"></span>`;
   prev.addEventListener('click', () => opts.onPreview?.());
-  wrap.append(el, prev);
+  wrap.append(el);
+  if (opts.previewHost) {
+    prev.classList.add('ss-root', 'docked');
+    opts.previewHost.appendChild(prev);
+  } else wrap.append(prev);
   container.appendChild(wrap);
   const prevD = prev.querySelector('.d') as HTMLElement;
   const prevG = prev.querySelector('.g') as HTMLElement;
@@ -104,7 +110,8 @@ export function createSessionHud(container: HTMLElement, opts: SessionHudOptions
   let prevDatos = -1;
   const fg = el.querySelector('.fg') as SVGCircleElement;
   const num = el.querySelector('.ss-time b') as HTMLElement;
-  const sub = el.querySelector('.ss-time small') as HTMLElement;
+  const sub = el.querySelector('.ss-time small.s') as HTMLElement;
+  const waitSub = el.querySelector('.ss-time small.w') as HTMLElement;
   const sprintEl = el.querySelector('.ss-sprint') as HTMLElement;
   let lastSec = -1;
   let lastState = '';
@@ -138,21 +145,28 @@ export function createSessionHud(container: HTMLElement, opts: SessionHudOptions
       lastSec = sec;
       const used = v.total > 0 ? 1 - v.remaining / v.total : 0;
       fg.style.strokeDashoffset = (CIRC * Math.min(1, Math.max(0, used))).toFixed(2);
-      sub.textContent = st === 'wait' ? SESSION_UI.waiting[l] : SESSION_UI.session(v.n)[l];
+      // "Sesión 3" always; "Siembra para empezar" while waiting (CSS shows one or the other: a narrow
+      // HUD keeps the short one).
+      sub.textContent = SESSION_UI.session(v.n)[l];
+      waitSub.textContent = SESSION_UI.waiting[l];
       el.classList.toggle('sprint', !!v.sprint && st !== 'over');
       sprintEl.textContent = v.sprint ? `${SESSION_UI.sprint[l]} ×${String(Math.round(v.sprint * 10) / 10).replace('.', l === 'es' ? ',' : '.')}` : '';
       el.setAttribute('aria-label', `${SESSION_UI.session(v.n)[l]}: ${text}`);
     },
-    extended(seconds, reason) {
+    extended(seconds, reason, first) {
       if (!(seconds > 0)) return;
       opts.onSound?.('extend');
       const l = opts.lang();
       const chip = document.createElement('span');
       chip.className = 'ss-plus';
       const why = reason === 'species' ? (l === 'es' ? 'especie' : 'species') : reason === 'encargo' ? (l === 'es' ? 'encargo' : 'request') : reason === 'golden' ? (l === 'es' ? 'destello' : 'spark') : '';
-      chip.innerHTML = `${SESSION_UI.plusTime(Math.round(seconds))[l]}${why ? `<small>${why}</small>` : ''}`;
+      // The first new species that lengthens the clock says so in words (CLARIDAD J-170).
+      if (first && reason === 'species') {
+        chip.classList.add('long');
+        chip.textContent = SESSION_UI.newSpeciesTime(Math.round(seconds))[l];
+      } else chip.innerHTML = `${SESSION_UI.plusTime(Math.round(seconds))[l]}${why ? `<small>${why}</small>` : ''}`;
       el.appendChild(chip);
-      setTimeout(() => chip.remove(), 1700);
+      setTimeout(() => chip.remove(), first ? 3200 : 1700);
     },
     lastMinute(over) {
       opts.onSound?.('lastMinute');
@@ -188,7 +202,9 @@ export function createSessionHud(container: HTMLElement, opts: SessionHudOptions
       if (key === prevKey) return;
       prevKey = key;
       prev.hidden = false;
-      prevD.textContent = SESSION_UI.previewDatos(fmt(p.datos, l))[l];
+      // In the dock: "+12 Datos" over "al terminar" (narrow cell); under the clock: one line.
+      if (opts.previewHost) prevD.innerHTML = `<b>${SESSION_UI.previewShort(fmt(p.datos, l))[l]}</b><small>${SESSION_UI.previewEnd[l]}</small>`;
+      else prevD.textContent = SESSION_UI.previewDatos(fmt(p.datos, l))[l];
       const g = p.goal;
       prevG.textContent = g ? (g.missing > 0 ? SESSION_UI.previewNext(g.name[l], fmt(g.missing, l))[l] : SESSION_UI.previewReady(g.name[l])[l]) : '';
       prevG.hidden = !g;
@@ -199,10 +215,11 @@ export function createSessionHud(container: HTMLElement, opts: SessionHudOptions
         prev.classList.add('bump');
       }
       prevDatos = p.datos;
-      prev.setAttribute('aria-label', `${prevD.textContent}${g ? ` · ${prevG.textContent}` : ''}`);
+      prev.setAttribute('aria-label', `${SESSION_UI.previewDatos(fmt(p.datos, l))[l]}${g ? ` · ${prevG.textContent}` : ''}`);
     },
     dispose() {
       wrap.remove();
+      prev.remove();
     },
   };
   return api;

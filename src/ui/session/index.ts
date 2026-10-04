@@ -22,3 +22,4 @@ export {
   type EqRow,
 } from './summary';
 export { createSessionFlow, type SessionFlow, type SessionFlowOptions, type SessionFlowSound } from './flow';
+export { createWelcomeCard, type WelcomeCard } from './welcome';

@@ -17,8 +17,6 @@ import { createUI } from './ui/ui';
 import { createAudio } from './audio/audio';
 import { detectPlatform, endingAchievementId, initPlatform, secretAchievementId, type Platform } from './platform/platform';
 import { TEXT as GAME_TEXT } from './game/content';
-import { DATOS_PER_ENCARGO } from './game/cycleBalance';
-import { treeEffects } from './game/tree';
 import { REACHABLE_BEHAVIORS } from './game/worlds';
 import { hexToRgb } from './ui/art/color';
 import { PALETTE } from './ui/art/tokens';
@@ -31,7 +29,7 @@ import { LYSIS_TOAST_MS, lysisTargets } from './app/lysis';
 import { RunawayWatch } from './sim/runaway';
 import { SUPPORTER_JOURNAL } from './store/catalog';
 import { setPortraitPalette } from './ui/portrait';
-import { CHAIN, createEncargos, createStory, ENCARGOS_STORAGE_KEY, type EncargoReward, type EncargoView } from './story';
+import { createEncargos, createStory, ENCARGOS_STORAGE_KEY, gameGrantOf, type EncargoReward, type EncargoView } from './story';
 import { createEncargoUI, createStoryUI, type StoryArchive, type StorySound } from './ui/story';
 import type { UI, UISound } from './ui/ui';
 import { createMoments, linkStory, type StoryBridge } from './moments';
@@ -47,6 +45,9 @@ import {
 import { COLORMAPS, colormapLUT, createSecretJournal, createSecrets, secretDef } from './secrets';
 import { bigSeedChip, createSeedMeter, seedPriceSheetExplain, type SeedMeter } from './ui/seed-price';
 import { attachSecretInputs, createSecretsUI, createStrokeRecorder, mountBasementEntry, type BasementEntry } from './ui/secrets';
+import { createSessionFlow, createWelcomeCard, datosExplain, type SessionFlow, type SessionFlowSound } from './ui/session';
+import { computeDatos } from './game/session';
+import { nodeText } from './game/tree';
 
 /**
  * Ranking API origin. Set VITE_LEADERBOARD_URL at build time ('' = same origin);
@@ -72,7 +73,7 @@ const DETECT_EVERY = 10;
 const AUTOSAVE_MS = 30_000;
 /** The dish itself is saved less often (a GPU readback); also on pagehide / tab hidden. */
 const DISH_SAVE_MS = 5 * 60_000;
-/** Kernel changes (R, rings) recompile the step shader; wait for the slider to settle. */
+/** Kernel changes (R, rings: a new World) recompile the step shader; let a burst of changes settle. */
 const KERNEL_DEBOUNCE_MS = 350;
 const IDLE_AFTER_MS = 60_000;
 /** Frame interval while idle (30 fps). */
@@ -82,9 +83,9 @@ const SEED_BLOCKED_HINT_MS = 2500;
 
 /**
  * Why the dish is frozen. The simulation and the economy stop while any source is active; the UI's
- * pause button only reflects 'user' (moments, cinematics and the extinction ritual pause silently).
+ * pause button only reflects 'user' (Momentos, cinematics and the session cards pause silently).
  */
-export type PauseSource = 'user' | 'moment' | 'ritual' | 'cinematic';
+export type PauseSource = 'user' | 'moment' | 'cinematic' | 'cards';
 
 /** The seed price sheet as main.ts drives it (open from the pill, refresh while open). */
 interface SeedPriceSheet {
@@ -127,7 +128,7 @@ function boot(): void {
   const saved = loadSave();
   if (saved.savedAt) integrity.noteSavedAt(saved.savedAt);
   integrity.start();
-  const game = createGame({ bus }, saved.game ?? undefined);
+  const game = createGame({ bus, cycle: 'sessions' }, saved.game ?? undefined);
   /** Watches every component for the runaway growth that becomes a maze (early lysis). Declared before any
    * bus handler that resets it ('dishClear' can fire while booting). */
   const runaway = new RunawayWatch();
@@ -158,13 +159,6 @@ function boot(): void {
     game.isPaused = isPaused();
     if (source === 'user') ui.setPaused(on);
   }
-  /**
-   * Extinction ritual: the game resets at once, but the dish is wiped only when the
-   * UI's white-out covers it. Until then the old dish is frozen (no steps, no
-   * detection) so old creatures can't pay into the new era.
-   */
-  let ritual = false;
-  let ritualClearTimer: ReturnType<typeof setTimeout> | null = null;
   let lastInteraction = performance.now();
   let idle = false;
 
@@ -204,12 +198,16 @@ function boot(): void {
   let sheetOpen = (): boolean => false;
   let encargoShowing = (): boolean => false;
   let secretShowing = (): boolean => false;
+  /** A session card (start, summary, welcome) or the research tree is on screen. */
+  let flowBusy = (): boolean => false;
+  let flowRef: SessionFlow | null = null;
+  let welcomeOpen = (): boolean => false;
   const moments = createMoments({
     bus,
     getView: () => game.view(),
-    // Splash/modal/ritual (UI), the ritual flag, VELA talking, a price/guide sheet, a celebration.
+    // Splash/modal (UI), a session card or the tree, VELA talking, a price/guide sheet, a celebration.
     isBlocked: () =>
-      (uiRef?.blocked() ?? true) || ritual || (bridge?.storyShowing() ?? false) || sheetOpen() || encargoShowing() || secretShowing(),
+      (uiRef?.blocked() ?? true) || flowBusy() || (bridge?.storyShowing() ?? false) || sheetOpen() || encargoShowing() || secretShowing(),
     downgrade: (id) => bridge?.covered(id) ?? false,
     // Session 1 has cards only for the basics (seed, life, Essence, shapeless, clock); a new species or
     // way of moving is a brief label there, its full card comes in session 2 (docs/CLARIDAD.md §3.3).
@@ -226,9 +224,11 @@ function boot(): void {
   const story = createStory({
     bus,
     getView: () => game.view(),
-    // Never over a Momento (queued or open), a price / behaviour sheet or a secret's reveal card.
-    isBlocked: () => (uiRef?.blocked() ?? true) || moments.isBusy() || sheetOpen() || secretShowing(),
+    // Never over a Momento (queued or open), a price / behaviour sheet, a secret's reveal card or a
+    // session card ("¡Tiempo!", the summary, the start card); over the Tree it may (t_tree points at it).
+    isBlocked: () => (uiRef?.blocked() ?? true) || moments.isBusy() || sheetOpen() || secretShowing() || encargoShowing() || (flowRef?.cardOpen ?? false) || welcomeOpen(),
     suppress: (id) => storySuppressed.has(id) || (bridge?.suppresses(id) ?? false),
+    ui: (name) => (name === 'tree' ? (flowRef?.treeOpen ?? false) : false),
   });
   bridge = linkStory(moments, story);
   story.on('journal', ({ id, text }) => bus.emit('journalNew', { id, text }));
@@ -251,14 +251,10 @@ function boot(): void {
   });
 
   // ── Encargos (docs/STORY.md §10): VELA's requests: what to grow, for what and why. ──
-  /** Act I mirrors the game's OBJECTIVES one to one (same ids, same Essence): the game pays those itself. */
-  const objectivePaid = new Set(CHAIN.filter((d) => d.reward.objective).map((d) => d.id));
+  /** Act I mirrors the game's OBJECTIVES one to one (same ids, same Essence): the game pays (and counts) those itself. */
   function grantEncargo(r: EncargoReward, enc: EncargoView): void {
-    const essence = objectivePaid.has(enc.id) ? 0 : Math.max(0, r.essence);
-    const samples = Math.max(0, r.samples);
-    // Always told to the game, even when the objective already paid: in the sessions cycle every
-    // Encargo also adds time to the clock and Datos to the summary.
-    game.grantEncargo({ essence, samples });
+    const g = gameGrantOf(enc.id, r, game.cycle);
+    if (g) game.grantEncargo(g);
   }
   const encargos = createEncargos({ bus, getView: () => game.view(), story, grant: grantEncargo });
   /** The Encargos replace the game's objective line and its "objective complete" toast (one thing per event). */
@@ -331,8 +327,6 @@ function boot(): void {
     camera,
     glCanvas,
     leaderboard,
-    // The story tutorial replaces the built-in coach marks (docs/STORY.md §7.4).
-    tutorial: false,
     onRestartTutorial: () => {
       story.restartTutorial();
       // "Explain it all again": every Momento comes back, with its pause.
@@ -343,10 +337,29 @@ function boot(): void {
       game.actions.noteTabOpened?.(tab);
       story.signal(`tab:${tab}`);
       encargos.signal(`tab:${tab}`);
-      if (tab === 'calibrate') prewarmNearbyKernels();
+    },
+    onOpenTree: () => flowRef?.openTree(),
+    // While the research tree covers the game, VELA's task hint sits under the tree's header.
+    topInsetOverride: () => {
+      if (!flowRef?.treeOpen) return null;
+      const r = document.querySelector('.rt-top')?.getBoundingClientRect();
+      return r && r.height > 0 ? r.bottom + 8 : null;
+    },
+    onEndSession: () => {
+      setPause('user', false);
+      secrets.setPaused(false);
+      game.actions.endSessionNow?.();
+    },
+    // "¿Terminar ya? Te llevas N Datos.": what ending now pays (no minimum when ended early).
+    endSessionDatos: () => {
+      const se = game.session;
+      const fx = game.effects;
+      return se && fx ? computeDatos({ ...se, endedEarly: true }, fx, 0).total : 0;
     },
     // One message at a time: a story scene, a Momento, an Encargo bubble or a secret card.
-    isNarrating: () => storyBusy() || (momentsUIRef?.busy ?? false) || encargoShowing() || secretShowing(),
+    // Also a Momento about to open (the dish is easing to a stop) and the session cards: a toast or a
+    // tip would land on them (one message per event, CLARIDAD §3).
+    isNarrating: () => storyBusy() || (momentsUIRef?.busy ?? false) || moments.isBusy() || encargoShowing() || secretShowing() || flowBusy(),
     settingsSections: (el) => {
       storyArchive?.dispose();
       storyArchive = storyUI.mountArchive(el);
@@ -399,14 +412,6 @@ function boot(): void {
         encargos.notePrint();
       }
     },
-    onExtinguish() {
-      ritual = true;
-      if (game.actions.extinguish()) save();
-      else ritual = false;
-    },
-    onRitualWhite() {
-      finishRitual();
-    },
     onUISound(kind) {
       audio.playUI?.(kind);
     },
@@ -458,6 +463,9 @@ function boot(): void {
     getTargetRect: (id) => ui.targetRect(id),
     gridToClient: (x, y) => ui.gridToClient(x, y),
     revealTarget: (id) => ui.reveal(id),
+    // A tree node's sheet is open: its "Comprar" is the next step and the pill would sit on its head
+    // (only the Tree's own tasks run while the Tree is up: «Compra una mejora.» has no target).
+    hideTask: () => flowRef?.treeSheetOpen ?? false,
     onSound: (kind) => {
       // Mute the blips while the Momentos bridge consumes a scene it already told.
       if (bridge?.consuming) return;
@@ -532,20 +540,73 @@ function boot(): void {
   const encUI = createEncargoUI(root, encargos, {
     lang: () => game.view().settings.lang,
     reduceMotion: () => game.view().settings.reduceMotion,
-    // Offers tuck away while VELA talks (lines, choice, ending; not a task hint), a Momento is coming/open,
-    // or a sheet / modal covers the screen.
-    busy: () => (bridge?.storyShowing() ?? false) || moments.isBusy() || momentsUI.busy || sheetOpen() || ui.blocked(),
+    // Offers tuck away while VELA talks (lines, choice, ending, or her task hint near the top of the dish),
+    // a Momento is coming/open, a sheet / modal / the Bestiary covers the screen, a session card or a secret card is up.
+    busy: () => storyBusy() || moments.isBusy() || momentsUI.busy || sheetOpen() || ui.blocked() || ui.drawerOpen || flowBusy() || secretShowing(),
     getTargetRect: (id) => ui.targetRect(id),
     onSound: (k) => audio.playUI?.(k === 'done' ? 'confirm' : 'open'),
-    // Sessions: each Encargo also gives Datos and clock time (the Tree's "Encargos" node raises the time).
-    sessionRewards: () => {
-      const v = game.view();
-      return v.cycle === 'sessions' && v.research ? { datos: DATOS_PER_ENCARGO, seconds: treeEffects(v.research.levels).timePerEncargo } : null;
-    },
   });
   encUI.mountBadge(ui.objectiveSlot);
   encargoShowing = () => encUI.busy;
   let encLang = game.view().settings.lang;
+
+  // ── Lab sessions (docs/CICLO.md): the clock in the HUD, the Datos preview in the dock, the start card,
+  // "¡Tiempo!", the summary and the research tree. The dish waits while any of their cards is open. ──
+  const FLOW_SOUND: Record<SessionFlowSound, UISound | null> = {
+    tick: 'tap',
+    warn: 'hold',
+    lastMinute: 'hold',
+    timesUp: 'confirm',
+    extend: 'buy',
+    open: 'open',
+    tally: 'tap',
+    total: 'confirm',
+    buy: 'buy',
+    deny: 'deny',
+    night: 'confirm',
+    tap: 'tap',
+    close: 'close',
+    reveal: 'open',
+  };
+  // An old save turned into Datos: VELA's welcome card comes first, the start card after it (never two).
+  const migrated = game.migration;
+  let welcomeDone = !migrated;
+  const flow: SessionFlow = createSessionFlow({
+    root,
+    holdStart: () => !welcomeDone,
+    hudHost: ui.clockSlot,
+    previewHost: ui.previewSlot,
+    dish: ui.dishEl,
+    game,
+    bus,
+    lang: () => game.view().settings.lang,
+    reduceMotion: () => game.view().settings.reduceMotion,
+    encargo: () => encargos.current()?.ask ?? null,
+    onSound: (k) => {
+      const u = FLOW_SOUND[k];
+      if (u) audio.playUI?.(u);
+    },
+    // The Datos preview explains itself in the shared price sheet ("¿Cómo se cuentan tus Datos?").
+    onPreview: () => {
+      const se = game.session;
+      const fx = game.effects;
+      const v = game.view();
+      if (!se || !fx) return;
+      const p = v.sessionPreview;
+      const goal = p?.goal ? { name: nodeText(p.goal.id).name, missing: p.goal.missing } : null;
+      priceCore.open(datosExplain(computeDatos(se, fx, 0), v.settings.lang, v.research?.night ?? 1, goal));
+    },
+  });
+  flowRef = flow;
+  // An old save turned into Datos: VELA says so once (game.migration is set only on that load).
+  const welcome = createWelcomeCard(root, { lang: () => game.view().settings.lang, reduceMotion: () => game.view().settings.reduceMotion });
+  flowBusy = () => flow.busy || welcome.isOpen;
+  welcomeOpen = () => welcome.isOpen;
+  if (migrated)
+    void welcome.show(game.research?.datos ?? migrated.refunded + migrated.gift).then(() => {
+      welcomeDone = true;
+    });
+  let flowLang = game.view().settings.lang;
 
   // Secrets: inputs (keys, logo, long press, shake, strokes), effects over the dish, reveal cards.
   const secretInputs = attachSecretInputs(secrets, { essence: ui.essenceEl, dish: ui.dishEl });
@@ -556,7 +617,18 @@ function boot(): void {
     // A reveal card waits while a Momento card is open, VELA is talking (not during a task hint), or a
     // sheet / modal covers the dish (it would time out unseen behind it).
     // A secret found at boot (a full moon, the dish's birthday) waits for VELA's first words.
-    hold: () => momentsUI.busy || (bridge?.storyShowing() ?? false) || sheetOpen() || ui.blocked() || !introDone,
+    // Session 1 is calm (CLARIDAD §3): its Momento cards come one after another, so a reveal waits for
+    // the next session (a date secret like the dish's birthday is found at boot).
+    hold: () =>
+      momentsUI.busy ||
+      (bridge?.storyShowing() ?? false) ||
+      sheetOpen() ||
+      ui.blocked() ||
+      ui.drawerOpen ||
+      flowBusy() ||
+      encargoShowing() ||
+      !introDone ||
+      (game.session?.n === 1 && game.session.phase === 'running'),
     onSound: (k) => audio.playUI?.(k === 'secret' ? 'confirm' : 'open'),
     // iOS asks for the motion sensor from a tap (the basement's button): "shake" works there too.
     requestMotion: secretInputs.requestMotionPermission,
@@ -637,24 +709,9 @@ function boot(): void {
     epoch++; // drop snapshots requested before the clear
     reports.length = 0;
   }
-  function finishRitual(): void {
-    if (ritualClearTimer) clearTimeout(ritualClearTimer);
-    ritualClearTimer = null;
-    if (ritual) {
-      ritual = false;
-      clearDish();
-    }
-  }
   bus.on('dishClear', () => {
     runaway.reset();
-    if (ritual) {
-      // Wipe when the white-out lands; fall back in case the UI never reports it.
-      epoch++;
-      reports.length = 0;
-      ritualClearTimer ??= setTimeout(finishRitual, 5000);
-    } else {
-      clearDish();
-    }
+    clearDish();
   });
   // Store achievements (Steam today; harmless no-op on the web).
   story.on('ending', ({ id }) => platform.unlockAchievement(endingAchievementId(id)));
@@ -752,29 +809,6 @@ function boot(): void {
   }
 
   /**
-   * Compile the step shaders for R ± 1–2 ahead of the R slider (QA3 F11: 0.4–2 s per first use).
-   * One kernel per 400 ms so opening the tab never hitches.
-   */
-  let prewarmTimer: ReturnType<typeof setTimeout> | null = null;
-  function prewarmNearbyKernels(): void {
-    if (prewarmTimer || !sim) return;
-    const v = game.view();
-    const R = sim.params.R;
-    const range = v.calibration.RRange;
-    const want = [R + 1, R - 1, R + 2, R - 2].filter((r) => r >= 2 && (!range || (r >= range[0] && r <= range[1])));
-    const next = () => {
-      const r = want.shift();
-      if (r === undefined || !sim) {
-        prewarmTimer = null;
-        return;
-      }
-      sim.prewarmKernel(r);
-      prewarmTimer = setTimeout(next, 400);
-    };
-    prewarmTimer = setTimeout(next, 400);
-  }
-
-  /**
    * Save. `dish`: 'sync' reads the dish now (page hidden, import, reset: rare, a hitch is fine),
    * 'none' writes the game state only (the 30 s autosave), or a dish read asynchronously.
    */
@@ -808,6 +842,13 @@ function boot(): void {
   }
 
   // ── Main loop ──
+  /**
+   * Development / e2e builds only (the debug handle): run time faster so a player test can play
+   * whole sessions (tests/e2e/session-play.mjs). `lockstep`: the game's clock follows the steps the
+   * dish really ran (a software-rendered test browser runs far below 30 steps/s; without it the clock
+   * would end sessions before anything grows). Always { scale: 1, lockstep: false } in a release.
+   */
+  const debugTime = { scale: 1, lockstep: false };
   let last = performance.now();
   let acc = 0;
   /** Detector reports produced since the last game tick (async readbacks). */
@@ -823,6 +864,7 @@ function boot(): void {
   let lastRate = -1;
   const start = last;
 
+  let momentCardShown = false;
   let kernelWantSince = 0;
   let kernelWantKey = '';
   /** Push calibration to the GPU: growth params at once, kernel changes debounced. */
@@ -850,20 +892,30 @@ function boot(): void {
   function requestDetection(): void {
     const s = sim!;
     if (snapInFlight || s.contextLost) return;
+    // Debug lockstep (tests only): a synchronous readback, so the detector sees every 10th step even
+    // when the test browser renders far slower than the dish steps.
+    if (debugTime.lockstep) {
+      detect(s.snapshot());
+      return;
+    }
     snapInFlight = true;
     const myEpoch = epoch;
     s.snapshotAsync()
       .then((snap) => {
         if (myEpoch !== epoch) return;
-        const report = detector.update(snap, s.params);
-        // Dissolve a maze nucleus while it is still small (src/sim/runaway.ts, docs/DISH.md §5b).
-        const caught = runaway.update(report, snap, s.params);
-        for (const e of caught.erase) s.erase(e.x, e.y, e.radius);
-        if (caught.started.length) noteDissolved(caught.started[0]);
-        reports.push(report);
+        detect(snap);
       })
       .catch((err) => console.warn('snapshot failed', err))
       .finally(() => (snapInFlight = false));
+  }
+  function detect(snap: ReturnType<NonNullable<typeof sim>['snapshot']>): void {
+    const s = sim!;
+    const report = detector.update(snap, s.params);
+    // Dissolve a maze nucleus while it is still small (src/sim/runaway.ts, docs/DISH.md §5b).
+    const caught = runaway.update(report, snap, s.params);
+    for (const e of caught.erase) s.erase(e.x, e.y, e.radius);
+    if (caught.started.length) noteDissolved(caught.started[0]);
+    reports.push(report);
   }
 
   let lysisToastAt = -Infinity;
@@ -909,12 +961,14 @@ function boot(): void {
     // A Momento eases the dish to a stop (1 → 0 in ~0.45 s) and back; at 0 it holds setPause('moment').
     const ts = momentsUI.timeScale();
 
-    if (!isPaused() && !ritual && !document.hidden) {
-      acc += dt * STEPS_PER_SEC * game.speed * ts;
+    let stepped = 0;
+    if (!isPaused() && !document.hidden) {
+      acc += dt * STEPS_PER_SEC * game.speed * ts * debugTime.scale;
       // Never fall into a spiral of death: cap work per frame.
       const whole = Math.floor(acc);
-      let n = Math.min(whole, 4 * game.speed);
+      let n = Math.min(whole, 4 * game.speed * debugTime.scale);
       acc -= whole; // any backlog beyond the cap is dropped, the sim just runs slower
+      stepped = n;
       while (n > 0) {
         const k = Math.min(n, DETECT_EVERY - (s.stepCount % DETECT_EVERY));
         s.advance(k);
@@ -926,11 +980,12 @@ function boot(): void {
     const n = reports.length;
     for (let i = 0; i < n; i++) dissolveShapeless(reports[i]);
     for (let i = 0; i < n - 1; i++) game.tick(0, reports[i]);
-    game.tick(dt * ts, n ? reports[n - 1] : null);
+    const gameDt = debugTime.lockstep ? (game.speed > 0 ? stepped / (STEPS_PER_SEC * game.speed) : isPaused() ? 0 : dt) : dt * ts * debugTime.scale;
+    game.tick(gameDt, n ? reports[n - 1] : null);
     reports.length = 0;
     if (portraitRequests) for (const r of portraitRequests.call(game)) capturePortrait(r.speciesId, r.x, r.y, r.size, r.creatureId);
 
-    const rate = isPaused() || ritual ? 0 : STEPS_PER_SEC * game.speed * ts;
+    const rate = isPaused() ? 0 : STEPS_PER_SEC * game.speed * ts;
     if (rate !== lastRate) {
       lastRate = rate;
       (ui as { setSimRate?: (r: number) => void }).setSimRate?.(rate);
@@ -951,8 +1006,20 @@ function boot(): void {
       // or its brief label: one label at a time on the dish, docs/ARTE.md §10).
       ui.setCreatureLabels(moments.labelsOnAll(view.era), momentsUI.busy && moments.current() !== null);
       ui.update(view);
+      flow.update(view);
+      setPause('cards', flowBusy());
+      // A paused Momento card is the one message on screen: the Encargo bar steps back under it (on a wide
+      // screen the card beside the dish reached the bar's end).
+      if (momentsUI.cardOpen !== momentCardShown) {
+        momentCardShown = momentsUI.cardOpen;
+        root.classList.toggle('mo-card-open', momentCardShown);
+      }
       seedMeter.update(view);
       priceSheet.update(view);
+      if (view.settings.lang !== flowLang) {
+        flowLang = view.settings.lang;
+        flow.relabel();
+      }
       if (view.settings.lang !== storyLang) {
         storyLang = view.settings.lang;
         storyUI.relabel();
@@ -1037,6 +1104,8 @@ function boot(): void {
       encUI,
       secrets,
       secretsUI,
+      flow,
+      debugTime,
     });
   }
   leaderboard?.startAutoSubmit();

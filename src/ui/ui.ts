@@ -1,8 +1,9 @@
 /**
- * Bioluma UI root: HUD, objective bar, dish (GL canvas + overlay + floating
- * controls), tab bar + bottom panel (side panel on wide screens), modals,
- * toasts and all the juice. Vanilla TS; the game drives it through
- * `update(view)` (~10×/s) and `frame(t, dt)` (every animation frame).
+ * Bioluma UI root: HUD (Essence, the session clock slot, Bitácora, Ajustes), the Encargo bar, the dish
+ * (GL canvas + overlay + floating controls), the dock (Bestiario, Abono or Árbol, the Datos preview
+ * slot), the Bestiary drawer, modals, toasts and all the juice. Vanilla TS; the game drives it through
+ * `update(view)` (~10×/s) and `frame(t, dt)` (every animation frame). The session screens (start card,
+ * summary, tree) are mounted by src/ui/session/flow.ts over this root.
  */
 import './ui.css';
 import { bus } from '../core/bus';
@@ -12,31 +13,25 @@ import type { Behavior, BuyQty, GameActions, GameView, Lang, Text } from '../cor
 import { TABS, type Ctx, type Panel, type TabId, type TextSize, type ThemePref, type ToastKind } from './ctx';
 import { h, ic, loadJSON, reconcile, saveJSON, setAttr, setHTML, setStyle, setText, show, toggle, vibrate } from './dom';
 import { fmt, fmtClock, fmtDuration, fmtRate, fmtShort } from './format';
-import { behaviorName, getLang, setLang, stateName, t, tx, type StrKey } from './i18n';
+import { behaviorName, getLang, setLang, stateName, t, tx } from './i18n';
 import { icon, logo } from './icons';
 import { DishInput } from './input';
-import { emptyState, type EmptyArt } from './empty';
 import { TEXT } from '../game/content';
 import {
   ModalHost,
   openAchievementCard,
-  openEraSummary,
   openJournal,
   openOffline,
   openSettings,
   openSpecies,
-  type EraSummary,
 } from './modals';
 import { hueHex, Overlay, type OverlayCosmetics, type OverlayLayer, type OverlayLayerSlot } from './overlay';
 import { BestiaryPanel } from './panel-bestiary';
-import { CalibratePanel } from './panel-calibrate';
-import { GenomePanel } from './panel-genome';
-import { LabPanel } from './panel-lab';
 import { openLeaderboard } from './leaderboard';
 import type { LeaderboardClient } from './leaderboard-types';
 import { createSplash, type Splash } from './splash';
 import { Toasts } from './toasts';
-import { Tutorial } from './tutorial';
+import { SESSION_UI } from '../game/treeText';
 
 export interface UIDeps {
   actions: GameActions;
@@ -50,9 +45,13 @@ export interface UIDeps {
   onErase(x: number, y: number): void;
   onBrush(x: number, y: number): void;
   onPrint(speciesId: string, x: number, y: number): void;
-  /** After the 1.5 s hold confirm. */
-  onExtinguish(): void;
   onPauseToggle(): void;
+  /** Dock "Árbol" between sessions (the session flow opens the research tree). */
+  onOpenTree?(): void;
+  /** Pause card "Terminar ahora", after its confirmation: end the running session now. */
+  onEndSession?(): void;
+  /** Datos the running session is worth if it ended now (the "Terminar ahora" confirmation). */
+  endSessionDatos?(): number;
   exportSave(): string;
   importSave(s: string): boolean;
   resetSave(): void;
@@ -61,12 +60,6 @@ export interface UIDeps {
   onScreenshot?(): void;
   /** Optional: UI-only feedback sounds (game events already reach audio through the bus). */
   onUISound?(kind: UISound): void;
-  /**
-   * Optional: the extinction ritual reached full white (≈3 s after
-   * `extinctionStart`). Best moment to clear the simulation so the player
-   * never sees the dish pop empty.
-   */
-  onRitualWhite?(): void;
   /** Optional online leaderboard; the HUD trophy button is hidden without it. */
   leaderboard?: LeaderboardClient;
   /** Optional: the "i" next to the seed cost (price explainer); the button shows only when given. */
@@ -82,14 +75,17 @@ export interface UIDeps {
   isNarrating?(): boolean;
   /** Optional: a tab was opened by the player (story signals such as 'tab:bestiary'). */
   onTabOpen?(tab: TabId): void;
-  /** Optional: Settings "restart tutorial" replays this tutorial instead of the built-in coach marks. */
+  /**
+   * Optional: where messages near the top may start instead of under the Encargo bar (page px), e.g.
+   * under the research tree's header while the tree covers the game. Null = the default.
+   */
+  topInsetOverride?(): number | null;
+  /** Optional: Settings "restart tutorial" replays VELA's tutorial (the story layer). */
   onRestartTutorial?(): void;
   /** Optional: extra Settings sections (e.g. the story archive), mounted at the end of Settings. */
   settingsSections?(container: HTMLElement): void;
   /** Show the title screen on start (default true). Its tap also unlocks audio. */
   splash?: boolean;
-  /** Run the first-run interactive tutorial (default true). */
-  tutorial?: boolean;
   /** Optional: the title screen was dismissed (game can start music, timers...). */
   onSplashDone?(): void;
   /** Optional: something else owns the camera right now (a Momento zoom): "follow" waits. */
@@ -168,6 +164,14 @@ export interface UI {
   readonly dishEl: HTMLElement;
   /** The HUD essence counter (long press = a secret). */
   readonly essenceEl: HTMLElement;
+  /** Centre of the HUD: the session clock (src/ui/session hud). */
+  readonly clockSlot: HTMLElement;
+  /** Right cell of the dock: the "+12 Datos al terminar" preview (src/ui/session hud). */
+  readonly previewSlot: HTMLElement;
+  /** Open (or close) the Bestiary drawer. */
+  openBestiary(open?: boolean): void;
+  /** The Bestiary drawer is open (bubbles that hang from the top of the dish wait: they would cover its head). */
+  readonly drawerOpen: boolean;
 }
 
 export function createUI(root: HTMLElement, deps: UIDeps): UI {
@@ -178,10 +182,7 @@ export function createUI(root: HTMLElement, deps: UIDeps): UI {
 
 interface Prefs {
   intros: TabId[]; // dismissed intro lines
-  tabsSeen: TabId[]; // tabs already auto-opened once
   hints: string[]; // gesture hints already shown
-  collapsed: boolean;
-  calKey: string; // calibration unlock state last seen in the Calibrar tab
   textSize?: TextSize;
 }
 
@@ -194,10 +195,7 @@ function sanitizePrefs(raw: unknown): Prefs {
   const strs = (x: unknown): string[] => (Array.isArray(x) ? x.filter((v): v is string => typeof v === 'string').slice(0, 64) : []);
   return {
     intros: ids(o.intros),
-    tabsSeen: ids(o.tabsSeen),
     hints: strs(o.hints),
-    collapsed: o.collapsed === true,
-    calKey: typeof o.calKey === 'string' ? o.calKey : '',
     textSize: o.textSize === 'large' ? 'large' : 'normal',
   };
 }
@@ -206,9 +204,6 @@ const THEME_KEY = 'bioluma.theme';
 const TAP_AGAIN_HINT_MS = 8000;
 /** Simulation steps per second at ×1 (main.ts STEPS_PER_SEC): creature age is shown in seconds. */
 const AGE_STEPS_PER_SEC = 30;
-const TAB_LABEL: Record<TabId, StrKey> = { lab: 'tabLab', bestiary: 'tabBestiary', calibrate: 'tabCalibrate', genome: 'tabGenome' };
-const TAB_ICON: Record<TabId, string> = { lab: 'lab', bestiary: 'bestiary', calibrate: 'calibrate', genome: 'genome' };
-const LOCK_HINT: Record<TabId, StrKey> = { lab: 'lockLab', bestiary: 'lockBestiary', calibrate: 'lockCalibrate', genome: 'lockGenome' };
 
 /**
  * Bring an element into view by scrolling ONLY its nearest vertically scrollable ancestor (a panel, a
@@ -225,6 +220,12 @@ export function scrollIntoViewY(el: HTMLElement, margin = 8): void {
   else if (r.bottom > b.bottom - margin) sc.scrollTop += Math.min(r.bottom - b.bottom + margin, r.top - b.top - margin);
 }
 
+/** A multiplier with two decimals at most, in the player's language: ×1,25 / ×1.56. */
+function multText(x: number, lang: Lang): string {
+  const v = Math.round(x * 100) / 100;
+  return String(v).replace('.', lang === 'es' ? ',' : '.');
+}
+
 /** Restart a one-shot CSS animation class. */
 function retriggerClass(el: HTMLElement, cls: string): void {
   el.classList.remove(cls);
@@ -239,10 +240,10 @@ class BiolumaUI implements UI {
   // HUD
   private essVal!: HTMLElement;
   private essRate!: HTMLElement;
-  private curSamples!: HTMLElement;
-  private curSamplesVal!: HTMLElement;
-  private curGenome!: HTMLElement;
-  private curGenomeVal!: HTMLElement;
+  /** Centre of the HUD: the session clock is mounted here (src/ui/session/flow.ts). */
+  readonly clockSlot = h('div', { class: 'hud-clock' });
+  /** Dock: the Datos preview pill is mounted here. */
+  readonly previewSlot = h('div', { class: 'dock-preview' });
   private journalBtn!: HTMLButtonElement;
   private journalDot!: HTMLElement;
   private muteBtn!: HTMLButtonElement;
@@ -299,19 +300,25 @@ class BiolumaUI implements UI {
     h: number;
     speciesId: string | null;
   } | null = null;
-  // Sheet
-  private sheet!: HTMLElement;
-  private tabsEl!: HTMLElement;
-  private panelsEl!: HTMLElement;
-  private tabBtns = {} as Record<TabId, { btn: HTMLButtonElement; dot: HTMLElement; label: HTMLElement }>;
-  private panels: Partial<Record<TabId, Panel>> = {};
-  /** Shown in the panel area for a tab that is still locked (or the Lab before the first seed). */
-  private lockedPanel = h('section', { class: 'panel panel-locked', role: 'tabpanel', hidden: true });
-  /** Tab whose locked card is showing, if any. */
-  private lockedTab: TabId | null = null;
-  private lockedKey = '';
-  /** Unlock state seen at the previous update (ping animation on unlock). */
-  private tabUnlocked: Partial<Record<TabId, boolean>> = {};
+  // Bestiary drawer (bottom sheet on a phone, side drawer on a wide screen; over the dish, never resizing it)
+  private drawer!: HTMLElement;
+  private drawerScrim!: HTMLElement;
+  private drawerTitle!: HTMLElement;
+  private bestiary: Panel | null = null;
+  private bestiaryOpen = false;
+  // Dock
+  private dock!: HTMLElement;
+  private bestiaryBtn!: HTMLButtonElement;
+  private bestiaryDot!: HTMLElement;
+  private bestiaryLabel!: HTMLElement;
+  private treeBtn!: HTMLButtonElement;
+  private treeLabel!: HTMLElement;
+  private boostBtn!: HTMLButtonElement;
+  private boostKey = '';
+  private dockKey = '';
+  // Pause card ("Seguir" / "Terminar ahora")
+  private pauseCard!: HTMLElement;
+  private pauseConfirm = false;
   private modals: ModalHost;
   private modalLayer = h('div', { class: 'bl-modals' });
   private fx!: HTMLElement;
@@ -319,7 +326,6 @@ class BiolumaUI implements UI {
   // State
   private v: GameView | null = null;
   private lang: Lang = getLang();
-  private active: TabId | null = null;
   private prefs: Prefs;
   private mode: 'seed' | 'erase' | 'print' = 'seed';
   private printId: string | null = null;
@@ -335,13 +341,8 @@ class BiolumaUI implements UI {
   private ctx: Ctx;
   private gestured = false;
   private lastOffline = { at: 0, seconds: -1 };
-  private prevSamples = -1;
-  private prevGenome = -1;
-  private eraSeen: { era: number; at: number; exact: boolean } | null = null;
-  private eraSummary: EraSummary | null = null;
   private wide = false;
   private splash: Splash | null = null;
-  private tutorial: Tutorial | null = null;
   private pendingOffline: { seconds: number; essence: number } | null = null;
   private lbBtn!: HTMLButtonElement;
   private objBar!: HTMLElement;
@@ -371,8 +372,6 @@ class BiolumaUI implements UI {
     this.bindResize();
     this.bindGesture();
     this.bindTheme();
-    toggle(this.el, 'sheet-collapsed', this.prefs.collapsed);
-    if (deps.tutorial !== false) this.tutorial = new Tutorial(this.tutorialHost());
     if (deps.splash !== false) {
       this.splash = createSplash(this.el, {
         reduceMotion: () => !!this.v?.settings.reduceMotion,
@@ -401,44 +400,6 @@ class BiolumaUI implements UI {
     }
   }
 
-  private tutorialHost() {
-    const rel = (r: DOMRect) => {
-      const b = this.el.getBoundingClientRect();
-      return { x: r.left - b.left, y: r.top - b.top, w: r.width, h: r.height, r: 12 };
-    };
-    return {
-      root: this.el,
-      view: () => this.v,
-      dishRect: () => {
-        const cam = this.camera;
-        const d = this.dish.getBoundingClientRect();
-        const b = this.el.getBoundingClientRect();
-        const s = cam.scale;
-        const w = Math.min(cam.gridW * s, d.width);
-        const hh = Math.min(cam.gridH * s, d.height);
-        return { x: d.left - b.left + (d.width - w) / 2, y: d.top - b.top + (d.height - hh) / 2, w, h: hh, r: 18 };
-      },
-      dishOrigin: () => {
-        const d = this.dish.getBoundingClientRect();
-        const b = this.el.getBoundingClientRect();
-        return { x: d.left - b.left, y: d.top - b.top };
-      },
-      rectOf: (sel: string) => {
-        const el = this.el.querySelector(sel) as HTMLElement | null;
-        if (!el || !el.offsetParent) return null;
-        const r = el.getBoundingClientRect();
-        return r.width > 0 && r.height > 0 ? rel(r) : null;
-      },
-      creatureScreen: (id: number) => this.overlay.creatureScreen(id),
-      goldenScreen: () => this.overlay.goldenScreen(),
-      activeTab: () => this.active,
-      switchTab: (tab: TabId) => this.switchTab(tab, true),
-      blocked: () => !!this.splash?.visible || this.modals.open || this.overlay.ritualActive,
-      sound: (k: 'tap' | 'confirm' | 'open') => this.sound(k),
-      reduceMotion: () => !!this.v?.settings.reduceMotion,
-    };
-  }
-
   // ───────────────────────────── construction ─────────────────────────────
 
   private makeCtx(): Ctx {
@@ -459,7 +420,6 @@ class BiolumaUI implements UI {
       setBuyQty: (q) => {
         this.buyQty = q;
         this.actions.setBuyQty(q);
-        if (this.v && this.active) this.panels[this.active]?.update(this.v);
       },
       openSpecies: (id) => {
         this.modals.find('species')?.close();
@@ -471,7 +431,7 @@ class BiolumaUI implements UI {
       toast: (text, kind, iconName, onClick) => this.toasts.push(text, kind, iconName, onClick),
       vibrate: (p) => this.vibrate(p),
       sound: (k) => this.sound(k),
-      switchTab: (tab) => this.switchTab(tab, true),
+      switchTab: () => this.openBestiary(true),
       restartTutorial: () => this.restartTutorial(),
       themePref: () => this.themePref(),
       setTheme: (p) => this.setTheme(p),
@@ -508,28 +468,25 @@ class BiolumaUI implements UI {
       if (held > 700) return;
       this.openJournal('stats');
     });
-    this.curSamplesVal = h('span', { class: 'mono' }, '0');
-    this.curGenomeVal = h('span', { class: 'mono' }, '0');
-    this.curSamples = h('div', { class: 'cur cur-samples pending' }, ic('samples', 24), this.curSamplesVal);
-    this.curGenome = h('div', { class: 'cur cur-genome pending' }, ic('genome', 24), this.curGenomeVal);
     this.journalDot = h('span', { class: 'dot pulse', hidden: true });
     this.journalBtn = h('button', { type: 'button', class: 'hud-btn', html: icon('journal') }, this.journalDot);
     this.journalBtn.addEventListener('click', () => this.openJournal('journal'));
-    this.muteBtn = h('button', { type: 'button', class: 'hud-btn', html: icon('sound') });
+    this.muteBtn = h('button', { type: 'button', class: 'hud-btn hud-mute', html: icon('sound') });
     this.muteBtn.addEventListener('click', () => {
       if (!this.v) return;
       this.sound('toggle');
       this.actions.setSetting('muted', !this.v.settings.muted);
     });
-    this.lbBtn = h('button', { type: 'button', class: 'hud-btn', html: icon('trophy'), hidden: !this.deps.leaderboard });
+    this.lbBtn = h('button', { type: 'button', class: 'hud-btn hud-lb', html: icon('trophy'), hidden: !this.deps.leaderboard });
     this.lbBtn.addEventListener('click', () => this.openLeaderboard());
     this.settingsBtn = h('button', { type: 'button', class: 'hud-btn', html: icon('settings') });
     this.settingsBtn.addEventListener('click', () => this.openSettings());
+    // Essence on the left, the session clock in the middle (what the player watches), menus on the right.
     const hud = h(
       'header',
       { class: 'bl-hud' },
       essBtn,
-      h('div', { class: 'hud-cur' }, this.curSamples, this.curGenome),
+      this.clockSlot,
       h('div', { class: 'hud-actions' }, this.lbBtn, this.journalBtn, this.muteBtn, this.settingsBtn),
     );
 
@@ -609,25 +566,49 @@ class BiolumaUI implements UI {
     this.dish.append(gl, this.overlay.canvas, this.dishUI, this.objEl);
     this.renderPause();
 
-    // Sheet
-    this.tabsEl = h('nav', { class: 'bl-tabs', role: 'tablist' });
-    for (const id of TABS) {
-      const label = h('span', { class: 'tab-l' });
-      const dot = h('span', { class: 'dot', hidden: true });
-      // Every tab exists from the first frame (no pop-in); locked ones are dimmed with a small lock.
-      const lock = h('span', { class: 'tab-lock', html: icon('lock', 12), 'aria-hidden': 'true' });
-      const btn = h('button', { type: 'button', class: 'tab locked', role: 'tab', 'data-tab': id }, ic(TAB_ICON[id], 24), label, dot, lock);
-      btn.addEventListener('click', () => this.onTabClick(id));
-      this.tabBtns[id] = { btn, dot, label };
-      this.tabsEl.appendChild(btn);
-    }
-    const handle = h('div', { class: 'bl-handle', role: 'button', tabindex: '0' }, h('span'));
-    this.bindHandle(handle);
-    this.panelsEl = h('div', { class: 'bl-panels' }, this.lockedPanel);
-    this.sheet = h('section', { class: 'bl-sheet' }, handle, this.tabsEl, this.panelsEl);
+    // Dock: Bestiary always; Abono while a session runs, the Tree between sessions; the Datos preview.
+    this.bestiaryDot = h('span', { class: 'dot pulse', hidden: true });
+    this.bestiaryLabel = h('span', { class: 'dock-l' });
+    this.bestiaryBtn = h('button', { type: 'button', class: 'dock-btn dock-bestiary', 'data-tab': 'bestiary' }, ic('bestiary', 26), this.bestiaryLabel, this.bestiaryDot);
+    this.bestiaryBtn.addEventListener('click', () => {
+      this.sound(this.bestiaryOpen ? 'close' : 'open');
+      this.openBestiary(!this.bestiaryOpen);
+    });
+    this.treeLabel = h('span', { class: 'dock-l' });
+    this.treeBtn = h('button', { type: 'button', class: 'dock-btn dock-main dock-tree', hidden: true }, ic('tree', 26), this.treeLabel);
+    this.treeBtn.addEventListener('click', () => {
+      this.sound('open');
+      this.deps.onOpenTree?.();
+    });
+    this.boostBtn = h('button', { type: 'button', class: 'dock-btn dock-main dock-boost', hidden: true });
+    this.boostBtn.addEventListener('click', () => this.onBoostTap());
+    this.dock = h(
+      'nav',
+      { class: 'bl-dock' },
+      h('div', { class: 'dock-in' }, this.bestiaryBtn, h('div', { class: 'dock-mid' }, this.boostBtn, this.treeBtn), this.previewSlot),
+    );
+
+    // Bestiary drawer: over the dish (bottom sheet on a phone, side drawer on a wide screen).
+    this.drawerScrim = h('div', { class: 'bl-drawer-scrim', hidden: true });
+    this.drawerScrim.addEventListener('click', () => this.openBestiary(false));
+    this.drawerTitle = h('h2', { class: 'drawer-title' });
+    const drawerClose = h('button', { type: 'button', class: 'drawer-x', html: icon('close', 22) });
+    drawerClose.addEventListener('click', () => {
+      this.sound('close');
+      this.openBestiary(false);
+    });
+    this.drawer = h(
+      'section',
+      { class: 'bl-drawer', role: 'dialog', 'aria-modal': 'false', hidden: true },
+      h('header', { class: 'drawer-head' }, ic('bestiary', 26), this.drawerTitle, drawerClose),
+    );
+
+    // Pause card: what pausing means, and the way out of a session ("Terminar ahora").
+    this.pauseCard = h('div', { class: 'pause-card', role: 'dialog', hidden: true });
 
     this.fx = h('div', { class: 'bl-fx' });
-    this.el.append(hud, this.dish, this.sheet, this.modalLayer, this.fx);
+    this.el.append(hud, this.dish, this.dock, this.drawerScrim, this.drawer, this.modalLayer, this.fx);
+    this.dishUI.appendChild(this.pauseCard);
     toggle(this.el, 'no-objective', true);
 
     // Dish input
@@ -635,13 +616,13 @@ class BiolumaUI implements UI {
       tap: (x, y) => this.onTap(x, y),
       bigTap: (x, y) => this.onBigTap(x, y),
       brush: (x, y) => {
-        if (!this.camera.isOnDish(x, y) || this.overlay.ritualActive) return;
+        if (!this.camera.isOnDish(x, y)) return;
         const g = this.camera.screenToGrid(x, y);
         this.hideFirstHint();
         this.deps.onBrush(g.x, g.y);
       },
       erase: (x, y) => {
-        if (!this.camera.isOnDish(x, y) || this.overlay.ritualActive) return;
+        if (!this.camera.isOnDish(x, y)) return;
         const g = this.camera.screenToGrid(x, y);
         this.deps.onErase(g.x, g.y);
         this.overlay.ripple(g.x, g.y, 'erase');
@@ -687,32 +668,26 @@ class BiolumaUI implements UI {
     setText(this.overgrownEl.querySelector('.og-title') as HTMLElement, t('overgrownTitle'));
     setText(this.overgrownEl.querySelector('.og-sub') as HTMLElement, t('overgrownText'));
     setText(this.overgrownEl.querySelector('.og-btn-l') as HTMLElement, t('cleanDish'));
-    setAttr(this.curSamples, 'title', t('samples'));
-    setAttr(this.curGenome, 'title', t('genome'));
     setText(this.objLabel, t('objective'));
-    for (const id of TABS) {
-      setText(this.tabBtns[id].label, t(TAB_LABEL[id]));
-      setAttr(this.tabBtns[id].btn, 'aria-label', t(TAB_LABEL[id]));
-    }
+    setText(this.bestiaryLabel, t('tabBestiary'));
+    setText(this.drawerTitle, t('tabBestiary'));
+    setAttr(this.drawer.querySelector('.drawer-x') as HTMLElement, 'aria-label', t('close'));
+    setText(this.treeLabel, tx(SESSION_UI.dockTree));
     this.renderPause();
     this.modeKey = '';
+    this.boostKey = '';
+    this.dockKey = '';
   }
 
-  private ensurePanels(): void {
-    if (this.panels.lab) return;
-    this.panels = {
-      lab: new LabPanel(this.ctx),
-      bestiary: new BestiaryPanel(this.ctx),
-      calibrate: new CalibratePanel(this.ctx),
-      genome: new GenomePanel(this.ctx),
-    };
-    for (const id of TABS) {
-      const p = this.panels[id]!;
-      p.el.hidden = true;
-      p.el.id = `bl-panel-${id}`;
-      setAttr(this.tabBtns[id].btn, 'aria-controls', p.el.id);
-      this.panelsEl.appendChild(p.el);
-    }
+  private ensureBestiary(): Panel {
+    if (this.bestiary) return this.bestiary;
+    const p = new BestiaryPanel(this.ctx);
+    p.el.id = 'bl-panel-bestiary';
+    p.el.classList.add('drawer-panel');
+    setAttr(this.bestiaryBtn, 'aria-controls', p.el.id);
+    this.drawer.appendChild(p.el);
+    this.bestiary = p;
+    return p;
   }
 
   // ───────────────────────────── public API ─────────────────────────────
@@ -730,19 +705,17 @@ class BiolumaUI implements UI {
     }
     toggle(this.el, 'rm', view.settings.reduceMotion);
     this.applyTheme();
-    this.ensurePanels();
+    const bestiary = this.ensureBestiary();
 
     this.updateHUD(view);
     this.updateObjective(view);
     this.publishTopInset();
-    this.updateTabs(view, first);
+    this.updateDock(view);
     this.updateDishUI(view);
     this.overlay.setView(view);
     this.updateCard(view);
-    if (this.active) this.panels[this.active]!.update(view);
+    if (this.bestiaryOpen) bestiary.update(view);
     for (const kind of ['settings', 'journal', 'species']) this.modals.find(kind)?.update?.(view);
-    this.trackEra(view);
-    this.tutorial?.update(view);
   }
 
   frame(timeSec: number, dtSec: number): void {
@@ -760,11 +733,10 @@ class BiolumaUI implements UI {
     this.overlay.draw(timeSec, dtSec);
     this.tweenEssence(dtSec);
     this.positionCard();
-    this.tutorial?.frame(dtSec);
   }
 
   blocked(): boolean {
-    return !!this.splash?.visible || this.modals.open || this.overlay.ritualActive;
+    return !!this.splash?.visible || this.modals.open;
   }
 
   targetRect(id: string): DOMRect | null {
@@ -784,10 +756,12 @@ class BiolumaUI implements UI {
     };
     if (id === 'dish') return q('.bl-dish');
     if (id === 'hud.essence') return q('.hud-ess');
-    if (id === 'hud.samples') return q('.cur-samples');
-    if (id === 'hud.genome') return q('.cur-genome');
     // Session clock and research tree are mounted by their own modules, maybe outside this root.
     if (id === 'hud.clock') return q('.ss-hud', document);
+    if (id === 'hud.datos') return q('.ss-prev', document);
+    if (id === 'boost') return q('.dock-boost');
+    if (id === 'tree.dock') return q('.dock-tree');
+    if (id === 'start.world') return q('.ss-world.on', document) ?? q('.ss-world', document);
     if (id === 'tree.open') return q('.ss-btn[data-act="tree"]', document);
     if (id === 'tree.center') return q('.rt-node[data-id="lab"]', document);
     if (id === 'tree.next') return q('.rt-node.can', document);
@@ -795,8 +769,7 @@ class BiolumaUI implements UI {
     if (id.startsWith('tree.node.')) return q(`.rt-node[data-id="${CSS.escape(id.slice(10))}"]`, document);
     if (id === 'seed') return q('.mode-pill');
     if (id === 'objective') return q('.bl-objective');
-    if (id === 'extinguish') return q('.ext-btn');
-    if (id.startsWith('tab.')) return q(`.bl-tabs .tab[data-tab="${id.slice(4)}"]`);
+    if (id.startsWith('tab.')) return q(`.bl-dock [data-tab="${id.slice(4)}"]`);
     if (id.startsWith('upgrade.')) return q(`[data-up="${id.slice(8)}"] .buy`);
     if (id === 'creature') {
       const c = this.v?.creatures.find((cr) => cr.state === 'stable');
@@ -814,36 +787,44 @@ class BiolumaUI implements UI {
   }
 
   reveal(id: string): void {
-    // An upgrade lives in its own tab (Catalogación is in the Bestiary).
-    const upTab = id.startsWith('upgrade.') ? (this.v?.upgrades.find((u) => u.id === id.slice(8))?.tab as TabId | undefined) : undefined;
-    const tab: TabId | null = id.startsWith('tab.')
-      ? (id.slice(4) as TabId)
-      : id.startsWith('upgrade.')
-        ? (upTab && TABS.includes(upTab) ? upTab : 'lab')
-        : id === 'extinguish'
-          ? 'genome'
-          : null;
-    if (tab && TABS.includes(tab) && this.v?.tabs[tab]) this.switchTab(tab, true);
-    const sel = id.startsWith('upgrade.') ? `[data-up="${id.slice(8)}"]` : id === 'extinguish' ? '.ext-btn' : null;
-    const target = sel ? (this.el.querySelector(sel) as HTMLElement | null) : null;
-    if (target) scrollIntoViewY(target);
+    // The Bestiary is the only drawer; upgrades live in the research tree (the session flow opens it).
+    if (id === 'tab.bestiary') this.openBestiary(true);
+  }
+
+  get drawerOpen(): boolean {
+    return this.bestiaryOpen;
+  }
+
+  openBestiary(open = true): void {
+    if (open === this.bestiaryOpen) return;
+    const v = this.v;
+    if (open && !v) return;
+    this.bestiaryOpen = open;
+    const p = this.ensureBestiary();
+    show(this.drawer, open);
+    show(this.drawerScrim, open);
+    toggle(this.bestiaryBtn, 'active', open);
+    setAttr(this.bestiaryBtn, 'aria-expanded', open ? 'true' : 'false');
+    toggle(this.el, 'drawer-open', open);
+    if (open && v) {
+      retriggerClass(this.drawer, 'enter');
+      p.update(v);
+      p.onShow?.();
+      this.deps.onTabOpen?.('bestiary');
+    }
   }
 
   restartTutorial(): void {
     this.modals.closeAll();
-    if (this.deps.onRestartTutorial) {
-      this.deps.onRestartTutorial();
-      return;
-    }
-    // An explicit replay works even if the integrator disabled the auto tutorial.
-    if (!this.tutorial) this.tutorial = new Tutorial(this.tutorialHost());
-    this.tutorial.restart();
+    this.deps.onRestartTutorial?.();
   }
 
   setPaused(p: boolean): void {
     this.paused = p;
     this.overlay.paused = p;
     this.renderPause();
+    this.pauseConfirm = false;
+    this.renderPauseCard();
   }
 
   setCosmetics(c: OverlayCosmetics): void {
@@ -930,20 +911,6 @@ class BiolumaUI implements UI {
       'title',
       mu ? `${t('multGlobal')} ×${fmtShort(mu.global, lang)} · ${t('multBuffs')} ×${fmtShort(mu.buffs, lang)}` : null,
     );
-
-    // Fixed slots from the start: a dim "—" until the currency is earned (no pop-in, no reflow).
-    // The sessions loop has neither (Datos live in the session HUD): their places stay empty.
-    const classic = v.cycle !== 'sessions';
-    const hasSamples = classic && (v.tabs.bestiary || v.samples > 0);
-    const hasGenome = classic && (v.tabs.genome || v.genome > 0 || v.era > 1);
-    toggle(this.curSamples, 'pending', !hasSamples);
-    toggle(this.curGenome, 'pending', !hasGenome);
-    setText(this.curSamplesVal, hasSamples ? fmt(v.samples, lang) : '—');
-    setText(this.curGenomeVal, hasGenome ? fmt(v.genome, lang) : '—');
-    if (this.prevSamples >= 0 && v.samples > this.prevSamples) this.bump(this.curSamples);
-    if (this.prevGenome >= 0 && v.genome > this.prevGenome) this.bump(this.curGenome);
-    this.prevSamples = v.samples;
-    this.prevGenome = v.genome;
 
     show(this.journalDot, v.journal.some((e) => !e.read));
     setHTML(this.muteBtn, icon(v.settings.muted ? 'mute' : 'sound'));
@@ -1066,7 +1033,9 @@ class BiolumaUI implements UI {
   private publishTopInset(): void {
     let v = '64px';
     let toast = '52px';
-    if (!this.objEl.hidden) {
+    const over = this.deps.topInsetOverride?.() ?? null;
+    if (over !== null) v = `${Math.round(over)}px`;
+    else if (!this.objEl.hidden) {
       const r = this.objEl.getBoundingClientRect();
       if (r.height > 0) {
         v = `${Math.max(64, Math.round(r.bottom + 8))}px`;
@@ -1092,177 +1061,158 @@ class BiolumaUI implements UI {
     }
   }
 
-  // ───────────────────────────── tabs & sheet ─────────────────────────────
+  // ───────────────────────────── dock ─────────────────────────────
 
-  private updateTabs(v: GameView, first: boolean): void {
-    const visible = TABS.filter((id) => v.tabs[id]);
-    const calKey = this.calKey(v);
-    // Fresh profile: the current calibration unlocks count as already seen.
-    if (first && !this.prefs.calKey) this.prefs.calKey = calKey;
-    for (const id of TABS) {
-      const vis = v.tabs[id];
-      const b = this.tabBtns[id];
-      // Locked tabs stay tappable (they explain how to unlock): no aria-disabled, a data flag instead.
-      toggle(b.btn, 'locked', !vis);
-      setAttr(b.btn, 'data-locked', vis ? 'false' : 'true');
-      // Unlocked just now: a gentle glow/ping on the tab, nothing moves.
-      if (vis && this.tabUnlocked[id] === false) retriggerClass(b.btn, 'unlocked');
-      this.tabUnlocked[id] = vis;
-      let dot = false;
-      if (id === 'lab') dot = v.upgrades.some((u) => u.tab === 'lab' && u.unlocked && !u.maxed && u.affordable);
-      else if (id === 'bestiary')
-        dot = v.species.some((s) => s.isNew) || v.upgrades.some((u) => u.tab === 'bestiary' && u.unlocked && !u.maxed && u.affordable);
-      else if (id === 'calibrate') dot = this.active !== 'calibrate' && calKey !== this.prefs.calKey;
-      else dot = v.genomeNodes.some((n) => n.available && !n.owned && n.affordable) || v.extinction.available;
-      show(b.dot, vis && dot);
-      // Glowing, pinging dot = "something to do here" (never on the open tab).
-      toggle(b.dot, 'pulse', vis && dot && id !== this.active);
+  /**
+   * The dock under the dish: Bestiario always (a dot for a species not looked at yet); Abono while a
+   * session runs, the Tree between sessions (from session 2: session 1 has no Datos yet). Every cell
+   * keeps its size, so nothing moves when a button appears.
+   */
+  private updateDock(v: GameView): void {
+    const lang = this.lang;
+    const se = v.session ?? null;
+    const newSp = v.species.some((sp) => sp.isNew);
+    show(this.bestiaryDot, newSp && !this.bestiaryOpen);
+    const between = !!se && se.phase === 'ready' && se.n > 1;
+    const running = !!se && se.phase === 'running';
+    const key = `${between}|${running}|${lang}`;
+    if (key !== this.dockKey) {
+      this.dockKey = key;
+      show(this.treeBtn, between);
+      setAttr(this.treeBtn, 'aria-label', tx(SESSION_UI.goTree));
     }
-    if (this.active === 'calibrate' && calKey !== this.prefs.calKey) {
-      this.prefs.calKey = calKey;
+    const b = v.boost ?? null;
+    const showBoost = running && !!b && !!this.actions.buyBoost;
+    show(this.boostBtn, showBoost);
+    if (!showBoost || !b) {
+      this.boostKey = '';
+      return;
+    }
+    const wait = Math.ceil(b.wait ?? 0);
+    // The first time it is on sale and affordable, it says what it does and what it costs (CLARIDAD
+    // J-163, F-14: before buying), once, when nothing else is talking.
+    if (b.affordable && !this.prefs.hints.includes('boost') && !this.deps.isNarrating?.() && !this.splash?.visible) {
+      this.prefs.hints.push('boost');
       this.savePrefs();
+      this.showDockTip(this.boostBtn, `${tx(SESSION_UI.boostDesc)} ${tx(SESSION_UI.boostPrice)}`);
     }
-
-    // First time a tab unlocks it opens itself (doc §13); the panel area itself never changes size.
-    let autoOpen: TabId | null = null;
-    for (const id of visible) {
-      if (!this.prefs.tabsSeen.includes(id)) {
-        this.prefs.tabsSeen.push(id);
-        if (!first || visible.length === 1) autoOpen = id;
-        this.savePrefs();
-      }
-    }
-    if (autoOpen && !this.overlay.ritualActive) {
-      this.switchTab(autoOpen, true);
-      return;
-    }
-    // A locked card that became unlocked shows the real panel.
-    if (this.lockedTab && v.tabs[this.lockedTab]) {
-      this.switchTab(this.lockedTab, false);
-      return;
-    }
-    if (this.lockedTab) {
-      this.renderLocked(this.lockedTab, v);
-      return;
-    }
-    if (!this.active || !v.tabs[this.active]) {
-      if (visible.length) this.switchTab(visible[0], false);
-      else this.showLockedTab('lab');
-    }
-  }
-
-  /** The panel area for a locked tab: a designed card that explains how it unlocks. */
-  private showLockedTab(id: TabId): void {
-    this.lockedTab = id;
-    this.active = id;
-    for (const tid of TABS) {
-      const on = tid === id;
-      toggle(this.tabBtns[tid].btn, 'active', on);
-      setAttr(this.tabBtns[tid].btn, 'aria-selected', on ? 'true' : 'false');
-      const p = this.panels[tid];
-      if (p) p.el.hidden = true;
-    }
-    this.lockedPanel.hidden = false;
-    if (this.v) this.renderLocked(id, this.v);
-  }
-
-  private renderLocked(id: TabId, v: GameView): void {
-    const key = `${id}|${this.lang}|${v.tabs[id]}`;
-    if (key === this.lockedKey) return;
-    this.lockedKey = key;
-    const art: Record<TabId, EmptyArt> = { lab: 'dish', bestiary: 'bestiary', calibrate: 'calibrate', genome: 'genome' };
-    this.lockedPanel.textContent = '';
-    const scroll = h('div', { class: 'panel-scroll' });
-    scroll.appendChild(
-      id === 'lab'
-        ? emptyState('dish', t('tabLab'), t('labEmpty'), t('labEmptyHint'))
-        : emptyState(art[id], t(TAB_LABEL[id]), t(LOCK_HINT[id])),
+    const bk = `${b.cost}|${b.count}|${b.affordable}|${wait}|${b.needsLife}|${lang}`;
+    if (bk === this.boostKey) return;
+    this.boostKey = bk;
+    const mult = `×${multText(b.nextMult, lang)}`;
+    this.boostBtn.className = `dock-btn dock-main dock-boost${b.affordable ? ' can' : ''}${wait > 0 || b.needsLife ? ' wait' : ''}`;
+    this.boostBtn.textContent = '';
+    // "Abono" over "×1,25 · 💧 15" (what it does · its price), "×1,25 · en 0:12" while it is not on sale
+    // yet, or "Falta vida" with nothing alive. Two short lines: it fits a phone dock next to the preview.
+    const bx = h('span', { class: 'bx' }, mult);
+    this.boostBtn.append(
+      ic('nutrient', 26),
+      h(
+        'span',
+        { class: 'dock-tx' },
+        h('b', null, tx(TEXT.boost)),
+        b.needsLife && wait === 0
+          ? h('small', null, tx(SESSION_UI.boostNeedsLife))
+          : wait > 0
+            ? h('small', null, bx, ` · ${tx(SESSION_UI.boostWait(fmtClock(wait)))}`)
+            : h('small', { class: b.affordable ? '' : 'short' }, bx, ' · ', h('span', { class: 'mono', html: `${icon('essence', 13)}${fmtShort(b.cost, lang)}` })),
+      ),
     );
-    this.lockedPanel.appendChild(scroll);
+    setAttr(this.boostBtn, 'aria-label', `${tx(TEXT.boost)} ${mult}: ${fmt(b.cost, lang)} ${t('essence')}. ${tx(SESSION_UI.boostDesc)}`);
+    setAttr(this.boostBtn, 'title', `${tx(SESSION_UI.boostDesc)} ${tx(SESSION_UI.boostPrice)}`);
   }
 
-  private calKey(v: GameView): string {
-    const c = v.calibration;
-    return [c.muRange, c.sigmaRange, c.RRange, c.dtRange].map((r) => (r ? `${r[0]}-${r[1]}` : 'x')).join('|') + `|${c.maxRegimes}`;
+  /** A one-time line over a dock button (what it does), gone after a few seconds or a tap. */
+  private showDockTip(over: HTMLElement, text: string): void {
+    this.dock.querySelector('.dock-tip')?.remove();
+    const tip = h('div', { class: 'dock-tip', role: 'status' }, text);
+    this.dock.appendChild(tip);
+    const place = () => {
+      const d = this.dock.getBoundingClientRect();
+      const r = over.getBoundingClientRect();
+      // On a phone the dish's round tools (brush, eraser) sit just above the dock's right side: stay clear.
+      let right = d.width - 8;
+      for (const f of this.dish.querySelectorAll<HTMLElement>('.fab.round:not([hidden])')) {
+        const fr = f.getBoundingClientRect();
+        if (fr.width > 0 && fr.bottom > d.top - 160 && fr.left - d.left > d.width / 2) right = Math.min(right, fr.left - d.left - 8);
+      }
+      tip.style.maxWidth = `${Math.max(200, right - 8)}px`;
+      const w = tip.offsetWidth;
+      tip.style.left = `${Math.max(8, Math.min(right - w, r.left - d.left + r.width / 2 - w / 2))}px`;
+    };
+    place();
+    const close = () => {
+      tip.classList.add('out');
+      setTimeout(() => tip.remove(), 300);
+    };
+    tip.addEventListener('click', close);
+    setTimeout(close, 7000);
   }
 
-  private onTabClick(id: TabId): void {
-    // Tapping a tab always shows its panel (a locked tab shows how it unlocks); collapsing is the handle's job.
-    if (id !== this.active) this.sound('tab');
-    if (this.v && !this.v.tabs[id]) {
-      this.setCollapsed(false);
-      this.showLockedTab(id);
+  private onBoostTap(): void {
+    const b = this.v?.boost;
+    if (!b || !this.actions.buyBoost) return;
+    if (b.affordable && this.actions.buyBoost()) {
+      this.sound('buy');
+      this.vibrate(15);
+      this.fxBurst(this.boostBtn, 'var(--good)', `×${multText(b.nextMult, this.lang)}`);
+      this.boostKey = '';
+      this.dock.querySelector('.dock-tip')?.remove();
       return;
     }
-    this.switchTab(id, true);
+    // Not yet: say why where the finger is (still waiting for the clock, or Essence short).
+    this.sound('deny');
+    retriggerClass(this.boostBtn, 'shake');
+    const wait = Math.ceil(b.wait ?? 0);
+    const short = Math.max(1, Math.ceil(b.cost - (this.v?.essence ?? 0)));
+    this.toasts.push(
+      wait > 0 ? tx(SESSION_UI.boostIn(fmtClock(wait))) : b.needsLife ? tx(SESSION_UI.boostNeedsLifeWhy) : t('deniedShort', { n: fmt(short, this.lang) }),
+      'info',
+      'nutrient',
+    );
+    if (wait === 0) this.showDockTip(this.boostBtn, `${tx(SESSION_UI.boostDesc)} ${tx(SESSION_UI.boostPrice)}`);
   }
 
-  private switchTab(id: TabId, expand: boolean): void {
+  // ───────────────────────────── pause card ─────────────────────────────
+
+  /** Paused: a small card over the dish ("En pausa" · Seguir · Terminar ahora, with its confirmation). */
+  private renderPauseCard(): void {
     const v = this.v;
-    if (!v || !v.tabs[id]) return;
-    if (expand) this.setCollapsed(false);
-    const wasLocked = this.lockedTab !== null;
-    if (wasLocked) {
-      this.lockedTab = null;
-      this.lockedKey = '';
-      this.lockedPanel.hidden = true;
+    const running = !!v?.session && v.session.phase === 'running';
+    const on = this.paused && !!v && v.cycle === 'sessions';
+    show(this.pauseCard, on);
+    if (!on) {
+      this.pauseConfirm = false;
+      return;
     }
-    if (this.active === id && !wasLocked) return;
-    const from = this.active && !wasLocked ? TABS.indexOf(this.active) : -1;
-    this.active = id;
-    for (const tid of TABS) {
-      const on = tid === id;
-      toggle(this.tabBtns[tid].btn, 'active', on);
-      setAttr(this.tabBtns[tid].btn, 'aria-selected', on ? 'true' : 'false');
-      const p = this.panels[tid];
-      if (p) p.el.hidden = !on;
-    }
-    const p = this.panels[id]!;
-    if (from >= 0) {
-      p.el.classList.remove('slide-l', 'slide-r');
-      void p.el.offsetWidth;
-      p.el.classList.add(TABS.indexOf(id) > from ? 'slide-r' : 'slide-l');
-    }
-    p.update(v);
-    p.onShow?.();
-    this.deps.onTabOpen?.(id);
-    if (id === 'calibrate') {
-      this.prefs.calKey = this.calKey(v);
-      this.savePrefs();
-      show(this.tabBtns.calibrate.dot, false);
-    }
-  }
-
-  private setCollapsed(c: boolean): void {
-    if (this.prefs.collapsed === c && this.el.classList.contains('sheet-collapsed') === c) return;
-    this.prefs.collapsed = c;
-    toggle(this.el, 'sheet-collapsed', c);
-    this.savePrefs();
-  }
-
-  private bindHandle(handle: HTMLElement): void {
-    let y0 = 0;
-    let down = false;
-    handle.addEventListener('pointerdown', (e) => {
-      down = true;
-      y0 = e.clientY;
-      handle.setPointerCapture(e.pointerId);
+    this.pauseCard.textContent = '';
+    const resume = h('button', { type: 'button', class: 'btn primary' }, ic('play', 24), tx(SESSION_UI.keepPlaying));
+    resume.addEventListener('click', () => {
+      this.sound('toggle');
+      this.deps.onPauseToggle();
     });
-    handle.addEventListener('pointerup', (e) => {
-      if (!down) return;
-      down = false;
-      const dy = e.clientY - y0;
-      const collapsed = this.el.classList.contains('sheet-collapsed');
-      if (Math.abs(dy) < 8) this.setCollapsed(!collapsed);
-      else this.setCollapsed(dy > 0);
+    if (this.pauseConfirm) {
+      const datos = this.deps.endSessionDatos?.() ?? 0;
+      const yes = h('button', { type: 'button', class: 'btn danger-soft' }, ic('stop', 24), tx(SESSION_UI.endNowYes));
+      yes.addEventListener('click', () => {
+        this.sound('confirm');
+        this.pauseConfirm = false;
+        this.deps.onEndSession?.();
+      });
+      this.pauseCard.append(h('p', { class: 'pc-title' }, tx(SESSION_UI.endNowConfirm(fmt(datos, this.lang)))), h('div', { class: 'pc-row' }, resume, yes));
+      return;
+    }
+    const end = running && this.deps.onEndSession ? h('button', { type: 'button', class: 'btn' }, ic('stop', 24), tx(SESSION_UI.endNow)) : null;
+    end?.addEventListener('click', () => {
+      this.sound('tap');
+      this.pauseConfirm = true;
+      this.renderPauseCard();
     });
-    handle.addEventListener('pointercancel', () => (down = false));
-    handle.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        this.setCollapsed(!this.el.classList.contains('sheet-collapsed'));
-      }
-    });
+    this.pauseCard.append(
+      h('p', { class: 'pc-title' }, ic('pause', 24), tx(SESSION_UI.pausedTitle)),
+      h('p', { class: 'pc-body' }, tx(SESSION_UI.pausedBody)),
+      h('div', { class: 'pc-row' }, resume, end),
+    );
   }
 
   // ───────────────────────────── dish UI ─────────────────────────────
@@ -1271,8 +1221,11 @@ class BiolumaUI implements UI {
     const p = this.paused;
     this.fabPause.textContent = '';
     this.fabPause.appendChild(ic(p ? 'play' : 'pause', 24));
-    if (p) this.fabPause.appendChild(h('span', { class: 'fab-label' }, t('paused')));
-    toggle(this.fabPause, 'round', !p);
+    // In sessions the pause card over the dish says "En pausa"; a wide label here ran under the
+    // objective bar (the Encargo badge). The classic loop has no card: it keeps the label.
+    const label = p && this.v?.cycle !== 'sessions';
+    if (label) this.fabPause.appendChild(h('span', { class: 'fab-label' }, t('paused')));
+    toggle(this.fabPause, 'round', !label);
     toggle(this.fabPause, 'on', p);
     setAttr(this.fabPause, 'aria-label', p ? t('resume') : t('pause'));
     setAttr(this.fabPause, 'title', p ? t('resume') : t('pause'));
@@ -1357,7 +1310,6 @@ class BiolumaUI implements UI {
     const printSp = this.mode === 'print' ? v.species.find((s) => s.id === this.printId) : undefined;
     if (printSp) key = `print|${printSp.name}|${lang}`;
     else if (this.mode === 'erase') key = `erase|${lang}`;
-    else if (v.pipette.active) key = `pip|${Math.floor(v.pipette.progress * 100)}|${lang}`;
     else key = `seed|${v.canSeed}|${fmtShort(v.seedCost, lang)}|${v.seedsGrowing ? 1 : 0}|${lang}`;
     if (key !== this.modeKey) {
       this.modeKey = key;
@@ -1381,11 +1333,6 @@ class BiolumaUI implements UI {
       } else if (this.mode === 'erase') {
         pill.className = 'mode-pill erase interactive';
         pill.append(ic('eraser', 24), h('span', { class: 'mp-text' }, t('eraserMode')), xBtn());
-      } else if (v.pipette.active) {
-        pill.className = 'mode-pill pipette';
-        const ring = h('span', { class: 'ring' });
-        ring.style.setProperty('--p', v.pipette.progress.toFixed(3));
-        pill.append(ring, h('span', { class: 'mp-text' }, t('pipette')), h('span', { class: 'mono mp-dim' }, `${Math.floor(v.pipette.progress * 100)}%`));
       } else {
         const why = !!this.deps.onSeedPriceInfo;
         // Seeds still forming (QA2 H-05): a calm grey "Wait…" (stopwatch icon) instead of an alarming red price.
@@ -1440,12 +1387,9 @@ class BiolumaUI implements UI {
     for (const id of [...this.buffMax.keys()]) if (!v.buffs.some((b) => b.id === id)) this.buffMax.delete(id);
 
     // First-run hint: "¡Toca aquí!" until the first tap.
-    const wantHint =
-      !this.firstTapDone &&
-      v.stats.seeds === 0 &&
-      v.creatures.length === 0 &&
-      !this.overlay.ritualActive &&
-      !this.tutorial?.wantsDishTap;
+    // Also at the start of every later session: the clock waits for a tap on the dish.
+    const waiting = !!v.session && v.session.phase === 'ready' && v.session.n > 1 && !this.deps.isNarrating?.();
+    const wantHint = (!this.firstTapDone && v.stats.seeds === 0 && v.creatures.length === 0) || waiting;
     // Everything faded and no tap for a while: the finger comes back, "¡Toca aquí otra vez!" (CLARIDAD J-164).
     let anyone = false;
     for (const c of v.creatures) if (c.state !== 'dead') anyone = true;
@@ -1457,8 +1401,6 @@ class BiolumaUI implements UI {
       !v.seedsGrowing &&
       v.canSeed &&
       !this.card &&
-      !this.overlay.ritualActive &&
-      !this.tutorial?.wantsDishTap &&
       !this.deps.isNarrating?.();
     const want = wantHint || wantAgain;
     if (want && !this.hintEl) {
@@ -1467,13 +1409,13 @@ class BiolumaUI implements UI {
         { class: 'dish-hint' },
         h('div', { class: 'tap-rings' }, h('i'), h('i'), h('b')),
         h('div', { class: 'h1' }, t(wantHint ? 'tapDish' : 'tapAgain')),
-        wantHint ? h('div', { class: 'h2' }, t('tapDishSub')) : null,
+        wantHint ? h('div', { class: 'h2' }, waiting && this.firstTapDone ? tx(SESSION_UI.startHint) : t('tapDishSub')) : null,
       );
       this.dishUI.appendChild(this.hintEl);
     } else if (!want && this.hintEl) this.hideFirstHint();
 
     // Gesture hints the first time a gesture becomes available.
-    if (!this.hintEl && !this.gestureHint && !this.card && !this.tutorial?.active && !this.splash?.visible && !this.deps.isNarrating?.()) {
+    if (!this.hintEl && !this.gestureHint && !this.card && !this.splash?.visible && !this.deps.isNarrating?.()) {
       if (v.tools.longPress && !this.prefs.hints.includes('long')) {
         this.prefs.hints.push('long');
         this.savePrefs();
@@ -1521,7 +1463,7 @@ class BiolumaUI implements UI {
   }
 
   private onTap(px: number, py: number): void {
-    if (this.overlay.ritualActive || !this.v) return;
+    if (!this.v) return;
     if (this.hitGolden(px, py)) return;
     const cam = this.camera;
     if (!cam.isOnDish(px, py)) {
@@ -1568,7 +1510,7 @@ class BiolumaUI implements UI {
   }
 
   private onBigTap(px: number, py: number): void {
-    if (this.overlay.ritualActive || !this.v) return;
+    if (!this.v) return;
     if (this.hitGolden(px, py)) return;
     if (!this.camera.isOnDish(px, py)) return;
     const g = this.camera.screenToGrid(px, py);
@@ -1803,58 +1745,14 @@ class BiolumaUI implements UI {
 
   private relabelAll(): void {
     this.relabelStatic();
-    for (const id of TABS) this.panels[id]?.rebuild();
+    this.bestiary?.rebuild();
     for (const kind of ['settings', 'species', 'leaderboard']) this.modals.find(kind)?.relabel?.();
-    this.tutorial?.relabel();
     const j = this.modals.find('journal');
     if (j) {
       j.close();
       this.openJournal('journal');
     }
     this.objShown = null;
-  }
-
-  // ───────────────────────────── extinction ─────────────────────────────
-
-  private trackEra(v: GameView): void {
-    if (!this.eraSeen || this.eraSeen.era !== v.era) {
-      this.eraSeen = { era: v.era, at: performance.now(), exact: this.eraSeen !== null };
-    }
-  }
-
-  private onExtinctionStart(genome: number): void {
-    const v = this.v;
-    this.modals.closeAll();
-    this.closeCard();
-    this.exitMode();
-    if (v) {
-      const best = v.creatures
-        .filter((c) => c.state === 'stable' && c.eps > 0)
-        .sort((a, b) => b.eps - a.eps)[0];
-      const bestSp = best?.speciesId ? v.species.find((s) => s.id === best.speciesId) : undefined;
-      const eraTime = (v.stats as { eraTime?: number }).eraTime;
-      this.eraSummary = {
-        era: v.era,
-        genome,
-        duration:
-          typeof eraTime === 'number'
-            ? eraTime
-            : this.eraSeen?.exact
-              ? (performance.now() - this.eraSeen.at) / 1000
-              : null,
-        essence: v.stats.eraEssence,
-        newSpecies: v.species.filter((s) => s.era === v.era).length,
-        best: best ? { name: bestSp?.name ?? best.speciesName ?? t('unknownCreature'), eps: best.eps } : null,
-      };
-    }
-    this.overlay.startRitual(() => this.deps.onRitualWhite?.());
-    const delay = (v?.settings.reduceMotion ? 1 : 3) * 1000 + 650;
-    setTimeout(() => {
-      const sum = this.eraSummary;
-      if (!sum) return;
-      this.eraSummary = null;
-      openEraSummary(this.modals, sum, () => this.switchTab('genome', true));
-    }, delay);
   }
 
   // ───────────────────────────── bus ─────────────────────────────
@@ -1866,10 +1764,7 @@ class BiolumaUI implements UI {
       ov.ripple(e.x, e.y, e.manual ? (big ? 'big' : 'seed') : 'auto');
       // Moved to the nearest spot with room (spacing rule): show where it went.
       if (e.from) ov.seedMoved(e.from.x, e.from.y, e.x, e.y);
-      if (e.manual) {
-        this.hideFirstHint();
-        this.tutorial?.onSeed();
-      }
+      if (e.manual) this.hideFirstHint();
     });
     bus.on('seedDenied', (e) => {
       // Why, in Esencia the player can count (CLARIDAD J-161).
@@ -1930,12 +1825,11 @@ class BiolumaUI implements UI {
         (n) => (n === 1 ? `${t('newSpecies')} ${e.name}` : t('newSpeciesN', { n: String(n) })),
         'good',
         'sparkle',
-        () => this.ctx.switchTab('bestiary'),
+        () => this.openBestiary(true),
       );
     });
     // One thing per event: the label on the creature (and the Momento card); no toast (CLARIDAD J-58, §3.3).
     bus.on('behaviorNew', (e) => ov.behaviorLabel(e.x, e.y, e.behavior, t('newBehavior'), behaviorName(e.behavior)));
-    bus.on('genomeBought', (e) => (this.panels.genome as GenomePanel | undefined)?.flash(e.id));
     // A short, readable toast; the full note lives in the Journal (QA2 H-10).
     bus.on('journalNew', () => this.toasts.pushGroup('journal', (n) => (n === 1 ? t('journalNote') : t('journalNotes', { n: String(n) })), 'info', 'journal', () => this.openJournal('journal')));
     bus.on('achievement', (e) =>
@@ -1961,10 +1855,6 @@ class BiolumaUI implements UI {
       this.toasts.push(tx(e.text), e.kind as ToastKind);
     });
     bus.on('offlineReturn', (e) => this.showOfflineCard(e.seconds, e.essence));
-    bus.on('extinctionStart', (e) => this.onExtinctionStart(e.genome));
-    bus.on('extinctionDone', (e) => {
-      if (this.eraSummary && e.genome > 0) this.eraSummary.genome = e.genome;
-    });
   }
 
   // ───────────────────────────── input plumbing ─────────────────────────────
@@ -1984,6 +1874,7 @@ class BiolumaUI implements UI {
           return;
         }
         if (this.modals.closeTop()) return;
+        if (this.bestiaryOpen) return this.openBestiary(false);
         if (this.mode !== 'seed') return this.exitMode();
         if (this.card) return this.closeCard();
         return;
@@ -1992,9 +1883,8 @@ class BiolumaUI implements UI {
       if (this.modals.open) return;
       const v = this.v;
       if (!v) return;
-      if (e.key >= '1' && e.key <= '4') {
-        const id = TABS[Number(e.key) - 1];
-        if (v.tabs[id]) this.switchTab(id, true);
+      if (e.key === 'b' || e.key === 'B' || e.key === '1') {
+        this.openBestiary(!this.bestiaryOpen);
         e.preventDefault();
       } else if (e.key === ' ' || e.code === 'Space') {
         // Keyboard-focused buttons keep their native Space activation; after a

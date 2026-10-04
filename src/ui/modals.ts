@@ -13,10 +13,8 @@ import { behaviorName, getLang, rarityName, t, tx } from './i18n';
 import { icon, logo } from './icons';
 import { portraitURL } from './portrait';
 import { EXPORT_PREFIX } from '../game/balance';
-import { CATALOG_REFS } from '../detect/catalogRefs';
 import { WORLD_TEXT } from '../game/treeText';
-import { isWorldId, WORLDS, worldOfSpecies, type WorldId } from '../game/worlds';
-import { PRINT_SEEDS_PRICE } from '../game/cycleBalance';
+import { isWorldId } from '../game/worlds';
 import { base64ToUtf8, deserializeState } from '../game/state';
 import { BUILD_DATE, VERSION_LABEL } from '../version';
 
@@ -239,7 +237,6 @@ export function openJournal(host: ModalHost, ctx: Ctx, startTab: 'journal' | 'ac
           stat(t('statSeeds'), fmt(s.seeds, lang)),
           stat(t('statBorn'), fmt(s.creaturesBorn, lang)),
           stat(t('statSpecies'), String(v.species.length)),
-          stat(t('genome'), fmt(v.genome, lang)),
           // Where production comes from (QA3 F13), when the game exposes it.
           ...(v.multipliers
             ? [stat(t('multGlobal'), `×${fmtFixed(v.multipliers.global, 2, lang)}`), stat(t('multBuffs'), `×${fmtFixed(v.multipliers.buffs, 2, lang)}`)]
@@ -658,7 +655,7 @@ export function openSpecies(host: ModalHost, ctx: Ctx, id: string): ModalHandle 
       return;
     }
     const lang = getLang();
-    const k = JSON.stringify([s.name, s.catalogName, s.scientificName, s.hue, s.production ? fmtRate(s.production.eps, lang) : '', s.production?.members, s.boostedBy?.map((b) => b.id), s.timesSeen, s.behavior, s.mult, v.samples >= s.printCost, v.cycle === 'sessions' ? v.essence >= Math.round(PRINT_SEEDS_PRICE * v.seedCost) : null, v.seedCost, v.session?.world, v.session?.phase, v.upgrades.find((u) => u.id === 'print')?.level, lang, renaming]);
+    const k = JSON.stringify([s.name, s.catalogName, s.scientificName, s.hue, s.production ? fmtRate(s.production.eps, lang) : '', s.production?.members, s.boostedBy?.map((b) => b.id), s.timesSeen, s.behavior, s.mult, s.copyCost, s.copyBlocked, s.copyCost !== null && s.copyCost !== undefined ? v.essence >= s.copyCost : null, s.world, v.session?.world, lang, renaming]);
     if (k === key) return;
     // Do not rebuild under the player's fingers while they type the new name (only the input counts:
     // the pencil keeping focus must not block opening the field, QA1 #2).
@@ -687,19 +684,6 @@ export function openSpecies(host: ModalHost, ctx: Ctx, id: string): ModalHandle 
     render(ctx.view);
   };
   return m;
-}
-
-/**
- * The World a species lives in: the game's `world` when it sends one; else its catalog code's World;
- * else the World whose rules it was found under (its μ/σ range holds that World's preset).
- */
-function speciesWorld(s: SpeciesView): WorldId | null {
-  if (s.world !== undefined) return s.world && isWorldId(s.world) ? s.world : null;
-  const ref = s.catalogName ? CATALOG_REFS.find((r) => r.name === s.catalogName) : undefined;
-  if (ref) return worldOfSpecies(ref.code);
-  const eps = 1e-4;
-  const inside = (x: number, r: [number, number]) => x >= r[0] - eps && x <= r[1] + eps;
-  return WORLDS.find((w) => inside(w.params.mu, s.muRange) && inside(w.params.sigma, s.sigmaRange))?.id ?? null;
 }
 
 function speciesBody(
@@ -784,7 +768,7 @@ function speciesBody(
     ? h('div', { class: 'spc-boost' }, ic('bolt', 24), h('span', null, `${t('spcBoostedBy')} `, h('b', null, s.boostedBy.map((b) => tx(b.name)).join(' · '))))
     : null;
   // Where it lives, in words (CLARIDAD J-09): no μ/σ on screen.
-  const home = speciesWorld(s);
+  const home = s.world && isWorldId(s.world) ? s.world : null;
   const homeName = home ? tx(WORLD_TEXT[home]?.name) : '';
   if (homeName) grid.append(stat(t('livesIn'), homeName));
   // Only when this session plays in another World (J-10): a fact, not a threat.
@@ -793,23 +777,20 @@ function speciesBody(
     homeName && here && here !== home
       ? h('div', { class: 'warnline spc-warn' }, ic('info', 24), h('span', null, t('outOfRegime', { world: homeName })))
       : null;
-  // Sessions loop (CLARIDAD J-34): a copy costs Esencia (PRINT_SEEDS_PRICE normal seeds, game.ts
-  // printInSession), only with the Copiadora, while a session runs, for a species of this World.
-  const sessionsLoop = v.cycle === 'sessions';
-  const copier = (v.upgrades.find((u) => u.id === 'print')?.level ?? 0) > 0;
-  const running = !!v.session && v.session.phase !== 'over';
-  const showPrint = !sessionsLoop || (copier && running && (!home || home === here));
-  const cost = sessionsLoop ? Math.round(PRINT_SEEDS_PRICE * v.seedCost) : s.printCost;
-  const canPrint = sessionsLoop ? v.essence >= cost : v.samples >= s.printCost;
-  const printBtn = showPrint
-    ? h(
-        'button',
-        { type: 'button', class: 'btn block good' },
-        ic('print', 24),
-        `${t(sessionsLoop ? 'makeCopy' : 'plantAnother')} · `,
-        h('span', { class: 'mono', style: 'display:inline-flex;align-items:center;gap:3px', html: `${icon(sessionsLoop ? 'essence' : 'samples', 16)}${fmt(cost, lang)}` }),
-      )
-    : null;
+  // A copy (Copiadora, CLARIDAD J-34): the game says what it costs now in Esencia (0 = the Archivo's
+  // free copy), or why there is none; no button when there is nothing to say.
+  const cost = s.copyCost ?? null;
+  const canPrint = cost !== null && v.essence >= cost;
+  const printBtn =
+    cost !== null
+      ? h(
+          'button',
+          { type: 'button', class: 'btn block good' },
+          ic('print', 24),
+          `${t('makeCopy')} · `,
+          h('span', { class: 'mono', style: 'display:inline-flex;align-items:center;gap:3px', html: cost === 0 ? t('copyFree') : `${icon('essence', 16)}${fmt(cost, lang)}` }),
+        )
+      : null;
   if (printBtn) {
     printBtn.disabled = !canPrint;
     printBtn.addEventListener('click', print);
@@ -826,7 +807,7 @@ function speciesBody(
     boosted,
     warn,
     printBtn,
-    printBtn ? h('div', { class: 'print-hint' }, t(sessionsLoop ? 'copyHint' : 'printHint')) : null,
+    printBtn ? h('div', { class: 'print-hint' }, t('copyHint')) : null,
   );
   // The species' own colour (accent of its portrait ring, title and colour chip).
   if (s.hue !== undefined) root.style.setProperty('--sp', `hsl(${Math.round(s.hue)} 70% 60%)`);
@@ -862,48 +843,6 @@ export function openOffline(host: ModalHost, seconds: number, essence: number, r
     if (p < 1) requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
-  return m;
-}
-
-// ───────────────────────────── Era summary ─────────────────────────────
-
-export interface EraSummary {
-  era: number;
-  genome: number;
-  duration: number | null;
-  essence: number;
-  newSpecies: number;
-  best: { name: string; eps: number } | null;
-}
-
-export function openEraSummary(host: ModalHost, sum: EraSummary, onOpenTree: () => void): ModalHandle {
-  const m = host.show({ kind: 'era', center: true, dismissable: false });
-  const lang = getLang();
-  const row = (l: string, v: string) => h('div', { class: 'era-row' }, h('span', null, l), h('span', null, v));
-  const go = h('button', { type: 'button', class: 'btn violet block' }, ic('genome', 24), t('openGenome'));
-  go.addEventListener('click', () => {
-    m.close();
-    onOpenTree();
-  });
-  m.body.appendChild(
-    h(
-      'div',
-      { class: 'big-card' },
-      h('div', { class: 'bc-ic', style: 'color:var(--violet);background:radial-gradient(circle,rgba(184,146,255,.25),rgba(184,146,255,.04) 65%,transparent 70%)' }, ic('rebirth', 24)),
-      h('h2', null, t('eraEnd', { n: sum.era })),
-      h(
-        'div',
-        { class: 'era-rows' },
-        sum.duration !== null ? row(t('eraDuration'), fmtDuration(sum.duration, lang)) : null,
-        row(t('eraEssence'), fmt(sum.essence, lang)),
-        row(t('eraNewSpecies'), String(sum.newSpecies)),
-        sum.best ? row(t('eraBest'), `${sum.best.name} · +${fmtRate(sum.best.eps, lang)}/s`) : null,
-      ),
-      h('div', { class: 'era-gain-l' }, t('genomeGained')),
-      h('div', { class: 'era-gain' }, ic('genome', 24), `+${fmt(sum.genome, lang)}`),
-      go,
-    ),
-  );
   return m;
 }
 

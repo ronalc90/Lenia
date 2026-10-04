@@ -1,7 +1,6 @@
 /**
  * The 2D overlay canvas drawn on top of the WebGL dish: halos, ripples,
- * floating numbers, behaviour markers, the golden spark, bursts and the
- * extinction ritual. Everything is positioned through the shared Camera so it
+ * floating numbers, behaviour markers, the golden spark and bursts. Everything is positioned through the shared Camera so it
  * lines up with the GL render exactly.
  *
  * Draws in CSS pixels (the context is pre-scaled by devicePixelRatio).
@@ -39,7 +38,7 @@ function nonDefault<T>(data: T, slot: 'halo' | 'trail' | 'spark'): T | null {
 /**
  * Extra drawing layer (seam for Momentos / Secrets / Encargos): called every frame with the overlay's
  * 2D context in CSS pixels. 'creatures' layers run right after the creature halos, clipped to the dish;
- * 'top' layers run last, unclipped (above labels, golden indicator and ritual).
+ * 'top' layers run last, unclipped (above labels and the golden indicator).
  */
 export interface OverlayLayerFrame {
   ctx: CanvasRenderingContext2D;
@@ -182,7 +181,6 @@ const MERGE_RADIUS_PX = 34;
 const MAX_PARTICLES = 420;
 
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
-const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 const clamp01 = (t: number) => (t < 0 ? 0 : t > 1 ? 1 : t);
 
 /** Stable creatures up to which each one gets its name drawn (a crowded dish stays readable). */
@@ -236,7 +234,7 @@ export class Overlay {
    * Boxes already drawn this frame (x0, y0, x1, y1): floating numbers and event labels first, then the
    * creature names, which hide rather than overlap (docs/ARTE.md §10: one label at a time).
    */
-  private occ = new Float32Array(4 * 48);
+  private occ = new Float32Array(4 * 96);
   private occN = 0;
   /** Name / status lines asked for by drawCreatures this frame (drawn later, unclipped, without overlaps). */
   private nameQ: { x: number; y: number; s: Smoothed | null; text: string; color: string }[] = [];
@@ -245,8 +243,6 @@ export class Overlay {
   private arrows: SeedArrow[] = [];
   private lastBlockedLabel = -Infinity;
   private flashes: { x: number; y: number; t0: number; color: string; r: number }[] = [];
-  private ritual: { t0: number; whiteAt: number; endAt: number; fired: boolean; onWhite?: () => void } | null =
-    null;
   private charge: { x: number; y: number; t0: number } | null = null;
   /** Faint ambient motes drifting in the dish (normalized dish coords). */
   private motes = Array.from({ length: 34 }, () => ({
@@ -280,6 +276,16 @@ export class Overlay {
   private pillNowMs = 0;
   private readonly pillScratch = { x: 0, y: 0, r: 0 };
   private readonly pillView = { w: 1, h: 1 };
+  /** The status layer's options, reused every frame (no per-frame allocation). */
+  private readonly pillOpts: { lang: Lang; time: number; dt: number; reduceMotion: boolean; onAll: boolean; selectedId: number | null; view: { w: number; h: number } } = {
+    lang: 'es',
+    time: 0,
+    dt: 0,
+    reduceMotion: false,
+    onAll: true,
+    selectedId: null,
+    view: this.pillView,
+  };
   /** Screen position of a creature for its pill (same point as its name label), or null. */
   private readonly pillPos = (c: CreatureView): { x: number; y: number; r: number } | null => {
     const s = this.creatures.get(c.id);
@@ -473,7 +479,7 @@ export class Overlay {
   }
 
   private pillsShown(): boolean {
-    return this.statusOnAll && !this.statusHidden && !this.ritual;
+    return this.statusOnAll && !this.statusHidden;
   }
 
   /** Stable creature under a CSS-pixel point, or null. */
@@ -671,16 +677,6 @@ export class Overlay {
     this.charge = null;
   }
 
-  /** Extinction ritual: whiten from the edges to the center over 3 s, then fade out. */
-  startRitual(onWhite?: () => void): void {
-    const dur = this.reduceMotion ? 1 : 3;
-    this.ritual = { t0: this.now, whiteAt: this.now + dur, endAt: this.now + dur + 0.45 + 1.3, fired: false, onWhite };
-  }
-
-  get ritualActive(): boolean {
-    return this.ritual !== null;
-  }
-
   // ───────────────────────────── internals ─────────────────────────────
 
   private pushFloat(f: Float): void {
@@ -821,7 +817,6 @@ export class Overlay {
 
     if (g) this.drawGoldenIndicator(g);
     this.drawCharge(time);
-    this.drawRitual(time, rect);
     this.runLayers('top', time, dt, rect, scale);
   }
 
@@ -837,15 +832,17 @@ export class Overlay {
     this.pillNowMs = performance.now();
     this.pillView.w = this.w;
     this.pillView.h = this.h;
-    this.statusLayer.draw(this.ctx, this.cviewsPill, this.pillPos, {
-      lang: this.lang,
-      time,
-      dt,
-      reduceMotion: rm,
-      onAll: true,
-      selectedId: null,
-      view: this.pillView,
-    });
+    const o = this.pillOpts;
+    o.lang = this.lang;
+    o.time = time;
+    o.dt = dt;
+    o.reduceMotion = rm;
+    this.statusLayer.draw(this.ctx, this.cviewsPill, this.pillPos, o);
+    // A name under a creature at the dish's edge could land on a pill pushed inside: names keep clear.
+    for (let i = 0; i < this.statusLayer.placedCount; i++) {
+      const b = this.statusLayer.placedBox(i);
+      this.occupy(b.x, b.y, b.x + b.w, b.y + b.h);
+    }
   }
 
   private drawDishFrame(rect: { x: number; y: number; w: number; h: number }): void {
@@ -962,19 +959,28 @@ export class Overlay {
     let labelled = 0;
     for (const c of this.creatures.values()) if (c.state === 'stable' || c.state === 'born') labelled++;
     const showLabels = labelled > 0 && labelled <= MAX_NAMED_CREATURES;
+    // Where the dish is drawn (one tile of the torus, centred; taller than the view when zoomed):
+    // a creature's name belongs to the copy whose centre is in it.
+    const tw = this.camera.gridW * this.camera.scale;
+    const th = this.camera.gridH * this.camera.scale;
+    const tx0 = (this.w - tw) / 2;
+    const ty0 = (this.h - th) / 2;
     for (const [id, s] of this.creatures) {
       // Labels and markers follow the matter itself when its position is known exactly.
       const e = this.exactPos(s, nowMs);
       const p = this.camera.gridToScreen(e ? e.x : s.x, e ? e.y : s.y);
       const R = this.haloRadius(s);
       this.copies(p.x, p.y, R + 14, rect, (x, y) => {
+        // One name per creature: the toroidal copy whose centre is on the dish. A copy just past an edge
+        // (only its margin on the dish) put a second name on the far side, under nothing.
+        const home = x >= tx0 && x < tx0 + tw && y >= ty0 && y < ty0 + th;
         if (s.state === 'stable') {
           if (this.markers && s.behavior) this.drawMarker(x + R * 0.71, y - R * 0.71, s, time, rm);
           // A bare "Estable" under it would repeat its status pill: the name line waits for a species.
-          if (showLabels && (s.name || s.behavior || !this.pillsShown())) this.queueName(x, y + R + 4, id === this.selectedId ? s : null, this.nameText(s), s.hue !== undefined ? hueHex(s.hue, 78) : '#C9D6E2');
+          if (home && showLabels && (s.name || s.behavior || !this.pillsShown())) this.queueName(x, y + R + 4, id === this.selectedId ? s : null, this.nameText(s), s.hue !== undefined ? hueHex(s.hue, 78) : '#C9D6E2');
         } else if (s.state === 'born') {
           // The status pill already says "Naciendo 62 %" when pills are on.
-          if (showLabels && !this.pillsShown()) this.queueName(x, y + Math.min(R, 28) + 4, null, this.bornText, '#9FB8CC');
+          if (home && showLabels && !this.pillsShown()) this.queueName(x, y + Math.min(R, 28) + 4, null, this.bornText, '#9FB8CC');
         } else if (s.state === 'exploded') {
           // Orange tint pulsing from the center.
           const pulse = rm ? 0.6 : 0.55 + 0.45 * Math.sin(time * Math.PI * 2 * 1.1 + s.phase * 6);
@@ -1061,7 +1067,8 @@ export class Overlay {
     const key = `${base}|${beh}`;
     const c = this.nameCache.get(s);
     if (c && c.key === key) return c.text;
-    const text = beh ? `${base} · ${beh}` : base;
+    // "Nadadora celeste · Nadadora" says it twice: a name that already holds the behaviour stands alone.
+    const text = beh && !base.toLowerCase().includes(beh.toLowerCase()) ? `${base} · ${beh}` : base;
     this.nameCache.set(s, { key, text });
     return text;
   }
@@ -1703,49 +1710,6 @@ export class Overlay {
       }
       ctx.restore();
     }
-  }
-
-  private drawRitual(time: number, rect: { x: number; y: number; w: number; h: number }): void {
-    const r = this.ritual;
-    if (!r) return;
-    const ctx = this.ctx;
-    const white = '#F3FAFF';
-    if (time >= r.endAt) {
-      this.ritual = null;
-      return;
-    }
-    let alpha = 1;
-    let reach = 1; // 0 = nothing whitened, 1 = whole dish
-    if (time < r.whiteAt) {
-      const p = (time - r.t0) / (r.whiteAt - r.t0);
-      reach = this.reduceMotion ? 1 : easeInOut(p);
-      alpha = this.reduceMotion ? p : 1;
-    } else {
-      if (!r.fired) {
-        r.fired = true;
-        r.onWhite?.();
-      }
-      const holdEnd = r.whiteAt + 0.45;
-      if (time > holdEnd) alpha = 1 - (time - holdEnd) / (r.endAt - holdEnd);
-    }
-    ctx.save();
-    ctx.globalAlpha = clamp01(alpha);
-    const cx = rect.x + rect.w / 2;
-    const cy = rect.y + rect.h / 2;
-    const maxR = Math.hypot(rect.w, rect.h) / 2;
-    if (reach >= 0.999) {
-      ctx.fillStyle = white;
-      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-    } else {
-      const inner = maxR * (1 - reach);
-      const feather = Math.max(30, maxR * 0.35);
-      const grd = ctx.createRadialGradient(cx, cy, Math.max(0, inner - feather), cx, cy, inner + 1);
-      grd.addColorStop(0, 'rgba(243,250,255,0)');
-      grd.addColorStop(1, 'rgba(243,250,255,0.97)');
-      ctx.fillStyle = grd;
-      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-    }
-    ctx.restore();
   }
 }
 

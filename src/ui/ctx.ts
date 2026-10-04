@@ -4,8 +4,9 @@ import { h, ic } from './dom';
 import { t, type StrKey } from './i18n';
 import type { UIDeps, UISound } from './ui';
 
-export type TabId = 'lab' | 'bestiary' | 'calibrate' | 'genome';
-export const TABS: TabId[] = ['lab', 'bestiary', 'calibrate', 'genome'];
+/** The one panel left (the Bestiary drawer): the tree, the worlds and the night replaced the others. */
+export type TabId = 'bestiary';
+export const TABS: TabId[] = ['bestiary'];
 export type ToastKind = 'info' | 'good' | 'warn' | 'bad' | 'gold';
 export type ThemePref = 'auto' | 'dark' | 'light';
 export type TextSize = 'normal' | 'large';
@@ -54,10 +55,7 @@ export function currencyAmount(v: GameView, c: Currency): number {
 }
 
 const INTRO_KEY: Record<TabId, StrKey> = {
-  lab: 'introLab',
   bestiary: 'introBestiary',
-  calibrate: 'introCalibrate',
-  genome: 'introGenome',
 };
 
 /** One-line dismissible explanation shown the first time a tab opens. */

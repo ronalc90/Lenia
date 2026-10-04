@@ -389,9 +389,32 @@ export function createSpeciesCard(container: HTMLElement, input: SpeciesCardInpu
   container.appendChild(el);
   let disposed = false;
   let mini: { illus: Illustration; alive: () => boolean } | null = null;
+  /** What the card's structure depends on: an update that changes only the numbers patches them in place. */
+  let shapeKey = '';
+  let lastPortrait: unknown = null;
+
+  /** The yield equation's numbers changed, nothing else: rewrite those text nodes only (no HTML rebuild). */
+  function patchNumbers(s: SpeciesCardInput, L: Lang): boolean {
+    const b = speciesBreakdown(s, L);
+    const terms = el.querySelectorAll<HTMLElement>('.mo-spc-eq .mo-spc-t:not(.total)');
+    if (terms.length !== b.terms.length) return false;
+    b.terms.forEach((t, i) => {
+      const v = terms[i].querySelector('b');
+      if (v && v.textContent !== t.value) v.textContent = t.value;
+      const lbl = terms[i].querySelector('small');
+      if (lbl && lbl.textContent !== t.label) lbl.textContent = t.label;
+    });
+    const total = el.querySelector('.mo-spc-eq .total b');
+    if (total && total.textContent !== b.total) total.textContent = b.total;
+    return true;
+  }
 
   function render(s: SpeciesCardInput): void {
     const L = opts.lang();
+    const key = [L, s.name, s.catalogName, s.scientificName, s.subtitle, s.hue, s.behavior, s.shape?.es, s.boosters.map((x) => `${x.id}:${x.level}:${x.unlocked}:${x.maxed}`).join(',')].join('|');
+    if (key === shapeKey && s.portrait === lastPortrait && patchNumbers(s, L)) return;
+    shapeKey = key;
+    lastPortrait = s.portrait;
     const col = hueColor(s.hue);
     el.style.setProperty('--sp-c', col);
     const b = speciesBreakdown(s, L);

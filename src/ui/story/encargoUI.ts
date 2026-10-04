@@ -29,11 +29,6 @@ export interface EncargoUIOptions {
   /** A story dialogue / choice / ending is on screen: bubbles wait (pass storyUI.busy). */
   busy?(): boolean;
   onSound?(kind: 'offer' | 'done'): void;
-  /**
-   * Sessions cycle: what every Encargo adds besides its Esencia (Datos at the end of the session and
-   * seconds on the clock, docs/CICLO.md §6). Null in the classic loop (then Samples are shown).
-   */
-  sessionRewards?(): { datos: number; seconds: number } | null;
 }
 
 export interface EncargoBadge {
@@ -129,12 +124,9 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
     };
     const n = (x: number) => (L() === 'es' ? x.toLocaleString('es-ES') : x.toLocaleString('en-US'));
     if (r.essence > 0) chip('ess', `${icon('essence', 16)}<b>+${n(r.essence)}</b>`);
-    // Sessions: Datos and seconds instead of Samples (CLARIDAD J-37); classic: Samples.
-    const ses = opts.sessionRewards?.() ?? null;
-    if (ses) {
-      if (ses.datos > 0) chip('dat', `${icon('datos', 16)}<b>+${n(ses.datos)} ${L() === 'es' ? 'Datos' : 'Data'}</b>`);
-      if (ses.seconds > 0) chip('sec', `${icon('time', 16)}<b>+${n(ses.seconds)} s</b>`);
-    } else if (r.samples > 0) chip('smp', `${icon('samples', 16)}<b>+${n(r.samples)}</b>`);
+    // Sessions: Datos and seconds (the game's numbers, EncargoReward.datos/seconds); never Samples.
+    if (r.datos && r.datos > 0) chip('dat', `${icon('datos', 16)}<b>+${n(r.datos)} ${L() === 'es' ? 'Datos' : 'Data'}</b>`);
+    if (r.seconds && r.seconds > 0) chip('sec', `${icon('time', 16)}<b>+${n(r.seconds)} s</b>`);
     if (r.cosmetic) chip('cos', `<i class="enc-gift"></i><b></b>`);
     if (r.journal) chip('jrn', `${icon('journal', 16)}<b></b>`);
     const cos = row.querySelector('.cos b');
@@ -319,7 +311,10 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
     shownAt = clock;
     shownAtMs = performance.now();
     if (it.kind === 'offer') {
-      fillOffer(it.view);
+      // The offer may have waited (a card, VELA talking): show it as it reads now (e.g. "Al terminar: …"
+      // once the clock runs), like the badge does.
+      const now = enc.current();
+      fillOffer(now && now.id === it.view.id ? now : it.view);
       duration = 6.5;
       opts.onSound?.('offer');
     } else {
@@ -346,7 +341,8 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
         bubble.hidden = true;
         clearBottom();
       }
-      next();
+      // The next bubble waits like any other (a card, VELA, the Bestiary drawer): the frame loop shows it.
+      if (!showing && !(opts.busy?.() ?? false)) next();
       kick();
     }, 380);
   }

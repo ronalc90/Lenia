@@ -106,7 +106,6 @@ const ui = createUI(root, {
   onErase: (x, y) => game.erase(x, y),
   onBrush: (x, y) => void game.brushAt(x, y),
   onPrint: (id, x, y) => void game.printAt(id, x, y),
-  onExtinguish: () => void game.extinguish(),
   onPauseToggle: () => {
     paused = !paused;
     ui.setPaused(paused);
@@ -125,10 +124,8 @@ const ui = createUI(root, {
   resetSave: () => location.reload(),
   onUserGesture: () => {},
   onScreenshot: () => bus.emit('toast', { text: { es: 'Captura guardada', en: 'Screenshot saved' }, kind: 'good' }),
-  onRitualWhite: () => game.clearDish(),
   leaderboard: params.get('lb') === 'none' ? undefined : new MockLeaderboard(game, params.get('lb') === 'error' ? 'error' : 'ok'),
   splash: params.get('splash') !== '0',
-  tutorial: params.get('tutorial') === '1' || (scene === 'fresh' && params.get('tutorial') !== '0'),
 });
 
 if (params.get('unsupported') === '1') ui.showUnsupported('WebGL2 context creation failed (getContext returned null)');

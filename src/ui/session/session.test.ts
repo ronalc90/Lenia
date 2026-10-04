@@ -41,6 +41,18 @@ describe('the Datos equation on the end card', () => {
     expect(x.advice).toBe('Más tiempo: te faltan 4 Datos');
   });
 
+  it('calls the silent goals of session 1 "first goals", not requests nobody saw', () => {
+    const fx = treeEffects({});
+    const { session } = beginSession(freshResearch(), fx);
+    noteEssence(session, 3 * C.DATOS_ESSENCE_DIV);
+    noteEncargo(session, fx);
+    noteEncargo(session, fx);
+    const d = computeDatos(session, fx, 0);
+    const label = (first: boolean) => equationRows(d, 'es', 1, first).find((r) => r.kind === 'encargos')!.tiles[0].label;
+    expect(label(true)).toBe('primeras metas');
+    expect(label(false)).toBe('encargos');
+  });
+
   it('says "minimum" when a session earned almost nothing', () => {
     const fx = treeEffects({});
     const { session } = beginSession(freshResearch(), fx);

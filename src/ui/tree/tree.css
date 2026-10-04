@@ -1227,3 +1227,59 @@
     animation: none;
   }
 }
+
+/* The buy button stays in reach while the sheet scrolls (a phone sheet is short); the surface
+   around it hides what scrolls underneath. */
+.rt-sheet .rt-buy {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  box-shadow: var(--bl-shadow-glow), 0 12px 0 12px var(--bl-surface), 0 -12px 16px 2px var(--bl-surface);
+}
+.rt-sheet .rt-buy:disabled {
+  box-shadow: 0 12px 0 12px var(--bl-surface), 0 -12px 16px 2px var(--bl-surface);
+}
+/* "¿Por qué cuesta esto? ›": one quiet line. */
+.rt-pricebox.compact {
+  margin-top: 12px;
+  padding: 10px 12px;
+}
+.rt-pricebox.compact h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.95rem;
+  color: var(--bl-text2);
+}
+.rt-pricebox.compact h4 span:first-of-type {
+  flex: 1;
+}
+.rt-pricebox.compact .rt-tap {
+  float: none;
+  margin: 0;
+}
+/* "Gris es ahora. Verde es lo que tendrás." under the before → after boxes, until the first buy. */
+.rt-bahint {
+  margin: 6px 2px 0;
+  font: 700 0.86rem/1.3 var(--bl-font-ui);
+  color: var(--bl-good);
+}
+/* Right after the first purchase: "¡Es tuya para siempre!" (CLARIDAD J-120), a small celebration. */
+.rt-bahint.got {
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bl-good) 14%, transparent);
+  animation: rt-got-in 0.35s var(--bl-ease, ease-out);
+}
+@keyframes rt-got-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.rt.rm .rt-bahint.got {
+  animation: none;
+}

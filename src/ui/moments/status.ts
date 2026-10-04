@@ -23,6 +23,8 @@ const TAU = Math.PI * 2;
 const SANS = 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 /** Numbers in Inter (docs/ARTE.md §4: the mono is only for instruments). */
 const MONO = 'Inter, "Inter Fallback", system-ui, sans-serif';
+const FONT_LABEL = `700 12px ${SANS}`;
+const FONT_DETAIL = `600 12px ${MONO}`;
 const FORMING = '#9FD3F0';
 const GREY = '#9AA6B2';
 
@@ -117,19 +119,49 @@ export function placePill(
   taken: readonly Box[],
   view: { w: number; h: number },
 ): Box & { below: boolean; blocked?: boolean } {
-  const clampX = (bx: number) => Math.max(4, Math.min(view.w - w - 4, bx));
-  const cands: (Box & { below: boolean })[] = [
-    { x: clampX(x - w / 2), y: y - r - 8 - h, w, h, below: false },
-    { x: clampX(x - w / 2), y: y + r + 8, w, h, below: true },
-    { x: clampX(x - w / 2), y: y - r - 8 - 2 * h - 4, w, h, below: false },
-    { x: clampX(x - w / 2), y: y + r + 8 + h + 4, w, h, below: true },
-  ];
-  for (const c of cands) {
-    if (c.y < 4 || c.y + h > view.h - 4) continue;
-    if (!taken.some((t) => overlaps(c, t))) return c;
+  const out: PlacedBox = { x: 0, y: 0, w: 0, h: 0, below: false, blocked: false };
+  placePillInto(out, x, y, r, w, h, taken, taken.length, view);
+  return out.blocked ? out : { x: out.x, y: out.y, w: out.w, h: out.h, below: out.below };
+}
+
+interface PlacedBox extends Box {
+  below: boolean;
+  blocked: boolean;
+}
+
+/** placePill without allocating: writes into `out`; only the first `n` boxes of `taken` count. */
+function placePillInto(
+  out: PlacedBox,
+  x: number,
+  y: number,
+  r: number,
+  w: number,
+  h: number,
+  taken: readonly Box[],
+  n: number,
+  view: { w: number; h: number },
+): void {
+  const bx = Math.max(4, Math.min(view.w - w - 4, x - w / 2));
+  out.x = bx;
+  out.w = w;
+  out.h = h;
+  for (let k = 0; k < 4; k++) {
+    const below = k % 2 === 1;
+    const cy = k === 0 ? y - r - 8 - h : k === 1 ? y + r + 8 : k === 2 ? y - r - 8 - 2 * h - 4 : y + r + 8 + h + 4;
+    if (cy < 4 || cy + h > view.h - 4) continue;
+    out.y = cy;
+    out.below = below;
+    let free = true;
+    for (let i = 0; i < n && free; i++) if (overlaps(out, taken[i])) free = false;
+    if (free) {
+      out.blocked = false;
+      return;
+    }
   }
-  const first = cands[0].y >= 4 ? cands[0] : cands[1];
-  return taken.length ? { ...first, blocked: true } : first;
+  const up = y - r - 8 - h;
+  out.below = !(up >= 4);
+  out.y = up >= 4 ? up : y + r + 8;
+  out.blocked = n > 0;
 }
 
 // ───────────────────────────── drawing ─────────────────────────────
@@ -150,9 +182,9 @@ export interface DrawStatusOpts {
 const PILL_H = 24;
 
 function measure(ctx: CanvasRenderingContext2D, info: StatusInfo): { w: number; wl: number; wd: number } {
-  ctx.font = `700 12px ${SANS}`;
+  ctx.font = FONT_LABEL;
   const wl = ctx.measureText(info.label).width;
-  ctx.font = `600 12px ${MONO}`;
+  ctx.font = FONT_DETAIL;
   const wd = info.detail ? ctx.measureText(info.detail).width : 0;
   const glyph = info.behavior ? 16 : 0;
   return { w: 8 + 14 + 5 + wl + (wd ? 5 + wd : 0) + glyph + 9, wl, wd };
@@ -291,12 +323,27 @@ export function drawCreatureStatus(
   // No free spot: this pill waits (the selected one always shows).
   if (box.blocked && !o.selected) return box;
   o.taken?.push(box);
-  const a = o.alpha ?? 1;
-  if (a <= 0.01) return box;
+  drawPill(ctx, info, m, box, pos.x, o.alpha ?? 1, !!o.selected, o.time, rm);
+  return box;
+}
+
+/** Draw a placed pill (no allocation: the caller owns `info`, `m` and `box`). */
+function drawPill(
+  ctx: CanvasRenderingContext2D,
+  info: StatusInfo,
+  m: { wl: number; wd: number },
+  box: Box & { below: boolean },
+  posX: number,
+  a: number,
+  selected: boolean,
+  time: number,
+  rm: boolean,
+): void {
+  if (a <= 0.01) return;
   ctx.save();
   ctx.globalAlpha *= a;
   // Tail towards the creature.
-  const tx = Math.max(box.x + 10, Math.min(box.x + box.w - 10, pos.x));
+  const tx = Math.max(box.x + 10, Math.min(box.x + box.w - 10, posX));
   ctx.fillStyle = 'rgba(8,11,15,0.88)';
   ctx.beginPath();
   if (box.below) {
@@ -313,59 +360,105 @@ export function drawCreatureStatus(
   ctx.beginPath();
   ctx.roundRect(box.x, box.y, box.w, box.h, box.h / 2);
   ctx.fill();
-  ctx.lineWidth = o.selected ? 2 : 1.4;
+  ctx.lineWidth = selected ? 2 : 1.4;
   ctx.strokeStyle = info.color;
-  ctx.globalAlpha *= o.selected ? 1 : 0.85;
+  ctx.globalAlpha *= selected ? 1 : 0.85;
   ctx.stroke();
   ctx.globalAlpha = a;
   const cy = box.y + box.h / 2;
   let x = box.x + 8;
-  stateIcon(ctx, info, x + 7, cy, o.time, rm);
+  stateIcon(ctx, info, x + 7, cy, time, rm);
   x += 14 + 5;
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
-  ctx.font = `700 12px ${SANS}`;
+  ctx.font = FONT_LABEL;
   ctx.fillStyle = info.kind === 'dead' ? '#C9D1D9' : info.color;
   ctx.fillText(info.label, x, cy + 0.5);
   x += m.wl;
   if (info.detail) {
     x += 5;
-    ctx.font = `600 12px ${MONO}`;
+    ctx.font = FONT_DETAIL;
     ctx.fillStyle = '#E6EDF3';
     ctx.fillText(info.detail, x, cy + 0.5);
     x += m.wd;
   }
-  if (info.behavior) drawBehaviorGlyph(ctx, info.behavior, x + 10, cy, o.time, rm);
+  if (info.behavior) drawBehaviorGlyph(ctx, info.behavior, x + 10, cy, time, rm);
   ctx.restore();
-  return box;
 }
 
 /**
  * Stateful helper for the overlay: picks which creatures get a pill, fades
  * pills in/out, avoids overlaps and draws them. One call per overlay frame.
  */
+/** A creature's pill text, measured once and rebuilt only when what it says changes (never per frame). */
+interface PillCache {
+  state: CreatureState;
+  pct: number;
+  eps: number;
+  behavior: Behavior | null;
+  lang: Lang;
+  info: StatusInfo;
+  wl: number;
+  wd: number;
+  w: number;
+}
+
+interface PillHit {
+  box: PlacedBox;
+  id: number;
+  behavior: Behavior | null;
+  state: CreatureState;
+}
+
 export class StatusLayer {
+  /** Pills drawn by the last draw() (the overlay keeps creature names clear of them). */
+  get placedCount(): number {
+    return this.nBoxes;
+  }
+  /** The i-th pill box of the last draw() (left, top, width, height in CSS px). Reused: read it now. */
+  placedBox(i: number): Readonly<Box> {
+    return this.boxes[i];
+  }
+
   private alpha = new Map<number, number>();
   /** Per-view work (which creatures get a pill, draw order), redone only when the list changes: no per-frame maps or sorts. */
   private key: { list: readonly CreatureView[] | null; onAll: boolean; sel: number | null } = { list: null, onAll: false, sel: null };
   private picked = new Map<number, number>();
   private order: CreatureView[] = [];
-  private taken: Box[] = [];
-  /** Pills drawn last frame (for taps): box in overlay CSS px. */
-  private hits: { box: Box; id: number; behavior: Behavior | null; state: CreatureState }[] = [];
+  private cache = new Map<number, PillCache>();
+  /** Pills placed this frame (overlap avoidance) and the ones drawn (for taps): pooled, reused every frame. */
+  private boxes: PlacedBox[] = [];
+  private nBoxes = 0;
+  private hits: PillHit[] = [];
+  private nHits = 0;
 
   /**
    * Which pill is under a tap (overlay CSS px), with a ≥ 44 px tall hit area.
    * Tapping a pill with a behaviour → open the Behaviour Guide at it.
    */
   hitTest(px: number, py: number): { id: number; behavior: Behavior | null; state: CreatureState } | null {
-    for (let i = this.hits.length - 1; i >= 0; i--) {
+    for (let i = this.nHits - 1; i >= 0; i--) {
       const h = this.hits[i];
       const pad = Math.max(0, (44 - h.box.h) / 2);
       if (px >= h.box.x - 4 && px <= h.box.x + h.box.w + 4 && py >= h.box.y - pad && py <= h.box.y + h.box.h + pad)
         return { id: h.id, behavior: h.behavior, state: h.state };
     }
     return null;
+  }
+
+  private infoOf(ctx: CanvasRenderingContext2D, c: CreatureView, lang: Lang): PillCache {
+    const pct = c.state === 'born' ? Math.floor(Math.max(0, Math.min(0.99, c.age / Math.max(1, STABLE_AGE_STEPS))) * 100) : -1;
+    const eps = c.state === 'stable' ? c.eps : 0;
+    const behavior = c.state === 'stable' ? c.behavior : null;
+    let e = this.cache.get(c.id);
+    if (e && e.state === c.state && e.pct === pct && e.eps === eps && e.behavior === behavior && e.lang === lang) return e;
+    const info = statusInfo(c, lang);
+    const m = measure(ctx, info);
+    if (!e) {
+      e = { state: c.state, pct, eps, behavior, lang, info, wl: m.wl, wd: m.wd, w: m.w };
+      this.cache.set(c.id, e);
+    } else Object.assign(e, { state: c.state, pct, eps, behavior, lang, info, wl: m.wl, wd: m.wd, w: m.w });
+    return e;
   }
 
   draw(
@@ -388,12 +481,12 @@ export class StatusLayer {
       this.order.sort((a, b) => (b.id === o.selectedId ? 1 : 0) - (a.id === o.selectedId ? 1 : 0));
       // Forget creatures that are gone.
       for (const id of this.alpha.keys()) if (!creatures.some((c) => c.id === id)) this.alpha.delete(id);
+      for (const id of this.cache.keys()) if (!creatures.some((c) => c.id === id)) this.cache.delete(id);
     }
     const picked = this.picked;
     const k = o.reduceMotion ? 1 : Math.min(1, o.dt * 6);
-    const taken = this.taken;
-    taken.length = 0;
-    this.hits.length = 0;
+    this.nBoxes = 0;
+    this.nHits = 0;
     for (const c of this.order) {
       const target = picked.get(c.id) ?? 0;
       const cur = this.alpha.get(c.id) ?? 0;
@@ -405,16 +498,23 @@ export class StatusLayer {
       this.alpha.set(c.id, a);
       const p = toScreen(c);
       if (!p || p.x < -p.r || p.y < -p.r || p.x > o.view.w + p.r || p.y > o.view.h + p.r) continue;
-      const box = drawCreatureStatus(ctx, c, p, {
-        lang: o.lang,
-        time: o.time,
-        reduceMotion: o.reduceMotion,
-        alpha: a,
-        selected: c.id === o.selectedId,
-        taken,
-        view: o.view,
-      });
-      if (a > 0.5 && !(box.blocked && c.id !== o.selectedId)) this.hits.push({ box, id: c.id, behavior: c.state === 'stable' ? c.behavior : null, state: c.state });
+      const pc = this.infoOf(ctx, c, o.lang);
+      if (this.nBoxes === this.boxes.length) this.boxes.push({ x: 0, y: 0, w: 0, h: 0, below: false, blocked: false });
+      const box = this.boxes[this.nBoxes];
+      placePillInto(box, p.x, p.y, p.r, pc.w, PILL_H, this.boxes, this.nBoxes, o.view);
+      const selected = c.id === o.selectedId;
+      // No free spot: this pill waits (the selected one always shows).
+      if (box.blocked && !selected) continue;
+      this.nBoxes++;
+      drawPill(ctx, pc.info, pc, box, p.x, a, selected, o.time, o.reduceMotion);
+      if (a > 0.5) {
+        if (this.nHits === this.hits.length) this.hits.push({ box, id: 0, behavior: null, state: 'born' });
+        const h = this.hits[this.nHits++];
+        h.box = box;
+        h.id = c.id;
+        h.behavior = c.state === 'stable' ? c.behavior : null;
+        h.state = c.state;
+      }
     }
   }
 }

@@ -94,10 +94,14 @@
   display: grid;
   place-items: center;
 }
+/* The two labels share one cell (the wider one sets the width): the pill keeps its size when the
+   clock starts, so nothing beside it moves (layout-shift.mjs, CLS 0). */
 .ss-time {
+  display: grid;
   line-height: 1;
 }
 .ss-time b {
+  grid-area: 1 / 1;
   display: block;
   font: 800 1.9rem/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
@@ -105,6 +109,7 @@
   font-variant-numeric: tabular-nums;
 }
 .ss-time small {
+  grid-area: 2 / 1;
   display: block;
   margin-top: 3px;
   font: 700 0.66rem/1 var(--bl-font-ui);
@@ -115,6 +120,13 @@
 }
 .ss-hud[data-state='wait'] .ss-time b {
   color: var(--bl-text2);
+}
+.ss-time small.w,
+.ss-hud[data-state='wait'] .ss-time small.s {
+  visibility: hidden;
+}
+.ss-hud[data-state='wait'] .ss-time small.w {
+  visibility: visible;
 }
 .ss-hud[data-state='warn'],
 .ss-hud[data-state='count'] {
@@ -1047,4 +1059,36 @@
 .ss-hudwrap .ss-hud {
   position: relative;
   z-index: 2;
+}
+
+/* "guardada en el Bestiario" under a new species; "Los Datos no se pierden nunca." under the total
+   (CLARIDAD J-165, J-166: the dish empties, nothing earned is lost). */
+.ss-sp {
+  width: 84px;
+}
+.ss-sp .kept {
+  display: block;
+  margin-top: 2px;
+  font: 600 0.62rem/1.2 var(--bl-font-ui);
+  color: var(--bl-good);
+}
+.ss-kept {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  font: 600 0.82rem/1.3 var(--bl-font-ui);
+  color: var(--bl-text2);
+}
+.ss-whint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -2px 0 8px;
+  font: 700 0.9rem/1.3 var(--bl-font-ui);
+  color: var(--bl-accent);
+}
+.ss-plus.long {
+  animation-duration: 3.1s;
 }

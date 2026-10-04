@@ -84,6 +84,8 @@ export interface MomentsUI {
   timeScale(): number;
   /** A card, label or replay is on screen. */
   readonly busy: boolean;
+  /** A paused card is on screen (not a brief label): the rest of the screen waits under its scrim. */
+  readonly cardOpen: boolean;
   /** Mount the "¿Qué pasó?" sheet (Settings / Bitácora). */
   mountHelp(container: HTMLElement): HelpSheet;
   /** The Behaviour Guide sheet, optionally scrolled to one behaviour (Bestiary header, status pill, species card). */
@@ -1070,6 +1072,9 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
     },
     get busy() {
       return anyOn();
+    },
+    get cardOpen() {
+      return !!act && act.phase !== 'exit';
     },
     openBehaviorGuide(focus) {
       openGuide(focus ?? null);

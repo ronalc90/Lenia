@@ -1,6 +1,6 @@
 /**
- * Bestiario tab: sample upgrades on top, then the 3-per-row portrait grid with
- * behaviour/rarity filter chips and a "Descubiertas N / total" counter (total = species the Worlds grow).
+ * Bestiario drawer: the 3-per-row portrait grid with behaviour/rarity filter chips and a
+ * "Descubiertas N / total" counter (total = species the Worlds grow).
  */
 import type { Behavior, GameView, Rarity, SpeciesView } from '../core/types';
 import { BEHAVIOR_COLOR } from '../core/palette';
@@ -10,7 +10,6 @@ import { fmtFixed } from './format';
 import { BEHAVIORS, behaviorName, getLang, RARITIES, rarityName, t } from './i18n';
 import { icon } from './icons';
 import { portraitURL } from './portrait';
-import { QtySelector, UpgradeList } from './upgrades';
 import { TOTAL_WORLD_SPECIES } from '../game/worlds';
 
 /** Species cards per page in the grid. */
@@ -33,10 +32,6 @@ type GridItem = { kind: 'sp'; s: SpeciesView } | { kind: 'unknown'; i: number };
 export class BestiaryPanel implements Panel {
   readonly el = h('section', { class: 'panel', role: 'tabpanel' });
   private scroll = h('div', { class: 'panel-scroll' });
-  private qty: QtySelector;
-  private ups: UpgradeList;
-  private upsHead = h('div', { class: 'sec-h' });
-  private upsWrap = h('div');
   private count = h('span', { class: 'count' });
   private chips = h('div', { class: 'chips', role: 'toolbar' });
   private grid = h('div', { class: 'sp-grid' });
@@ -54,8 +49,6 @@ export class BestiaryPanel implements Panel {
       this.limit += PAGE;
       this.update(this.ctx.view);
     });
-    this.qty = new QtySelector(ctx);
-    this.ups = new UpgradeList(ctx, 'bestiary');
     this.el.appendChild(this.scroll);
     this.build();
   }
@@ -63,9 +56,6 @@ export class BestiaryPanel implements Panel {
   private build(): void {
     this.scroll.textContent = '';
     const intro = introEl(this.ctx, 'bestiary');
-    this.upsHead = h('div', { class: 'sec-h' }, ic('samples', 24), h('span', { class: 'grow' }, t('bestiaryUpgrades')), this.qty.el);
-    this.upsWrap = h('div', null, this.upsHead, this.ups.el);
-    // The player's creatures first (QA2 H-14: "look at your specimen"), the Samples upgrades after.
     // "Comportamientos": what swimming, spinning… mean and what each one earns (Behaviour Guide).
     let guide: HTMLElement | null = null;
     if (this.ctx.deps.onBehaviorInfo) {
@@ -79,24 +69,17 @@ export class BestiaryPanel implements Panel {
       this.grid,
       this.more,
       this.empty,
-      this.upsWrap,
     );
     this.chipKey = '';
   }
 
   rebuild(): void {
-    this.qty.rebuild();
-    this.ups.rebuild();
     this.cards.clear();
     this.grid.textContent = '';
     this.build();
   }
 
   update(v: GameView): void {
-    this.qty.update();
-    const hasUps = this.ups.count(v) > 0;
-    show(this.upsWrap, hasUps);
-    if (hasUps) this.ups.update(v);
 
     // Out of every species some World grows (CLARIDAD J-79); a stray beyond them just counts up.
     const found = v.species.length;
