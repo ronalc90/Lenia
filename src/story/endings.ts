@@ -8,7 +8,7 @@
  * language" (secret ending) and the second is the top leaning.
  */
 import type { Behavior, GameView, Text } from '../core/types';
-import { SEED_SPECIES } from './script';
+import { REACHABLE_BEHAVIORS, SEED_SPECIES, alborSpeciesFound } from './script';
 import type { CounterKey, EndingDef, EndingId, Leaning, Leanings } from './types';
 import { LEANINGS } from './types';
 
@@ -40,7 +40,7 @@ export const ENDINGS: Record<EndingId, EndingDef> = {
     title: t('Final: Ley perfecta', 'Ending: Perfect Law'),
     option: t('Un mundo que ordenar.', 'A world to put in order.'),
     cards: [
-      t('Ajusté las reglas hasta el último decimal.', 'I tuned the rules to the last decimal.'),
+      t('Ordené las reglas hasta el último detalle.', 'I put the rules in order, down to the last detail.'),
       t('Cada criatura encontró su órbita exacta. Nada nace por error.', 'Every creature found its exact orbit. Nothing is born by mistake.'),
       t('Albor volvió al amanecer. Miró mucho rato. «Es precioso. ¿Aún te sorprende?»', 'Albor came back at dawn. She looked for a long time. "It\'s beautiful. Does it still surprise you?"'),
     ],
@@ -66,7 +66,7 @@ export const ENDINGS: Record<EndingId, EndingDef> = {
     title: t('Final: Marea', 'Ending: Tide'),
     option: t('Algo que debo dejar ir.', 'Something I must let go.'),
     cards: [
-      t('Dejé de calibrar. Dejé de elegir. Solo miré.', 'I stopped calibrating. I stopped choosing. I just watched.'),
+      t('Dejé de ordenar. Dejé de elegir. Solo miré.', 'I stopped arranging. I stopped choosing. I just watched.'),
       t('Cambiaron, se juntaron y cruzaron el borde como una marea de luz.', 'They changed, gathered, and crossed the rim like a tide of light.'),
       t('Al amanecer apagamos el microscopio. Albor llegó a tiempo de verlo.', 'At dawn we switched off the microscope. Albor arrived in time to see it.'),
     ],
@@ -142,14 +142,22 @@ export function rankLeanings(l: Leanings): Leaning[] {
 }
 
 /**
- * Secret ending ("First Light"): every seed species registered, all six
- * behaviours seen, and the player answered the Choir.
+ * The ways of moving the secret ending asks for: all six in the classic loop; in the sessions cycle
+ * only those some world grows (game/worlds.ts WORLD_BEHAVIORS, measured), so it is never impossible
+ * (CLARIDAD F-09).
+ */
+function behaviorsWanted(v: GameView): readonly Behavior[] {
+  return v.cycle === 'sessions' ? REACHABLE_BEHAVIORS : ALL_BEHAVIORS;
+}
+
+/**
+ * Secret ending ("First Light"): Albor's seven species in the Bestiary, every way of moving there
+ * is seen, and the player answered the Choir.
  */
 export function secretUnlocked(choices: Readonly<Record<string, string>>, v: GameView): boolean {
   if (choices.rhythm !== 'answer') return false;
-  const names = v.species.map((s) => s.catalogName ?? '').filter(Boolean);
-  const allSpecies = SEED_SPECIES.every((n) => names.some((x) => x === n || x.startsWith(n)));
-  const allBehaviors = ALL_BEHAVIORS.every((b) => v.behaviorsSeen.includes(b));
+  const allSpecies = alborSpeciesFound(v.species.map((s) => s.catalogName)) >= SEED_SPECIES.length;
+  const allBehaviors = behaviorsWanted(v).every((b) => v.behaviorsSeen.includes(b));
   return allSpecies && allBehaviors;
 }
 
@@ -161,12 +169,12 @@ export function finalOptions(l: Leanings, secret: boolean): [EndingId, EndingId]
 
 /** Missing pieces of the secret ending (for a gentle hint in the archive). */
 export function secretProgress(choices: Readonly<Record<string, string>>, v: GameView): { species: number; speciesTotal: number; behaviors: number; behaviorsTotal: number; answered: boolean } {
-  const names = v.species.map((s) => s.catalogName ?? '').filter(Boolean);
+  const want = behaviorsWanted(v);
   return {
-    species: SEED_SPECIES.filter((n) => names.some((x) => x === n || x.startsWith(n))).length,
+    species: alborSpeciesFound(v.species.map((s) => s.catalogName)),
     speciesTotal: SEED_SPECIES.length,
-    behaviors: ALL_BEHAVIORS.filter((b) => v.behaviorsSeen.includes(b)).length,
-    behaviorsTotal: ALL_BEHAVIORS.length,
+    behaviors: want.filter((b) => v.behaviorsSeen.includes(b)).length,
+    behaviorsTotal: want.length,
     answered: choices.rhythm === 'answer',
   };
 }

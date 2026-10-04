@@ -10,16 +10,20 @@ const t = (es: string, en: string): Text => ({ es, en });
 
 // ───────────────────────────── Behaviours ──────────────────────────
 
+/** The six ways of moving, one word each (CLARIDAD J-147, glossary §2.1). */
 export const BEHAVIOR_NAMES: Record<Behavior, Text> = {
   still: t('quieta', 'still'),
-  pulsing: t('pulsante', 'pulsing'),
+  pulsing: t('late', 'pulses'),
   swimmer: t('nadadora', 'swimmer'),
-  spinner: t('giratoria', 'spinner'),
-  divider: t('divisora', 'divider'),
+  spinner: t('gira', 'spins'),
+  divider: t('se divide', 'splits'),
   colony: t('colonia', 'colony'),
 };
 
 // ───────────────────────────── Upgrades ────────────────────────────
+// PHASE-2B-REMOVE (classic loop): UPGRADE_TEXT, the *_LEVEL_TEXT tables, effectText and GENOME_TEXT
+// are the Laboratorio, Calibrar and Genoma of the classic loop (CLARIDAD B-09, B-10). The sessions
+// cycle words its upgrades in treeText.ts; these go with the classic panels in Phase 2B.
 
 export interface UpgradeText {
   name: Text;
@@ -222,18 +226,23 @@ export const GENOME_TEXT: Record<string, { name: Text; desc: Text }> = {
 
 /** Journal entries in unlock order. [doc §3] */
 export const JOURNAL: { id: string; text: Text }[] = [
-  { id: 'firstSeed', text: t('Materia inerte. La dejo reposar. Nada debería pasar.', 'Inert matter. I let it rest. Nothing should happen.') },
-  { id: 'firstDeath', text: t('Se disolvió en segundos. Demasiado poco, demasiado disperso.', 'It dissolved in seconds. Too little, too scattered.') },
+  { id: 'firstSeed', text: t('Una semilla de luz. La dejo reposar. Nada debería pasar.', 'A seed of light. I let it rest. Nothing should happen.') },
+  { id: 'firstDeath', text: t('Se apagó en segundos. Demasiado poco, demasiado disperso.', 'It faded in seconds. Too little, too scattered.') },
   { id: 'firstExplosion', text: t('Lo contrario: lo llenó todo y dejó de ser nada. La estructura es lo que cuenta.', 'The opposite: it filled everything and stopped being anything. Structure is what counts.') },
-  { id: 'firstStable', text: t('Algo se quedó. Tiene borde, tiene forma. La llamo espécimen 1.', 'Something stayed. It has an edge, it has a shape. I call it specimen 1.') },
+  { id: 'firstStable', text: t('Algo se quedó. Tiene borde, tiene forma. Le pongo nombre.', 'Something stayed. It has an edge, it has a shape. I give it a name.') },
   { id: 'firstSwimmer', text: t('Se mueve en línea recta y no se deshace. Hoy no voy a dormir.', 'It moves in a straight line and does not fall apart. I will not sleep tonight.') },
   { id: 'firstSpinner', text: t('Esta gira. No sé qué busca, pero lo busca en círculos.', 'This one turns. I do not know what it looks for, but it looks in circles.') },
   { id: 'firstGolden', text: t('Un destello cruzó la placa. No sé qué era, pero dejó algo.', 'A spark crossed the dish. I do not know what it was, but it left something.') },
   { id: 'firstDivision', text: t('Una se volvió dos. Ya no sé si las descubro o si me descubren.', 'One became two. I no longer know if I discover them or they discover me.') },
-  { id: 'calibrator', text: t('Si muevo μ un poco, el mundo cambia de reglas. Tengo que anotar todo.', 'If I nudge μ a little, the world changes its rules. I must write everything down.') },
-  { id: 'species10', text: t('Diez. Empiezan a parecerse a una fauna, no a accidentes.', 'Ten. They start to look like a fauna, not accidents.') },
+  // Classic loop (Calibrador); the sessions loop writes `firstWorld` instead.
+  { id: 'calibrator', text: t('Si cambio las reglas un poco, el mundo cambia. Tengo que anotarlo todo.', 'If I change the rules a little, the world changes. I must write it all down.') },
+  { id: 'firstWorld', text: t('Abrí otro mundo. Otras reglas, otras criaturas. Tengo que anotarlo todo.', 'I opened another world. Other rules, other creatures. I must write it all down.') },
+  { id: 'species10', text: t('Diez. Empiezan a parecerse a una familia, no a accidentes.', 'Ten. They start to look like a family, not accidents.') },
   { id: 'extinctionNear', text: t('La placa está madura. Quizá sea hora de empezar de cero con lo aprendido.', 'The dish is ripe. Maybe it is time to start over with what I learned.') },
-  { id: 'firstExtinction', text: t('Esterilizo la placa. Me duele. Pero sé qué funcionó, y eso se queda conmigo.', 'I sterilise the dish. It hurts. But I know what worked, and that stays with me.') },
+  { id: 'firstExtinction', text: t('Lavo la placa. Me cuesta. Pero sé qué funcionó, y eso se queda conmigo.', 'I wash the dish. It is hard. But I know what worked, and that stays with me.') },
+  // Sessions loop: the night replaces the Extinction (CLARIDAD J-47).
+  { id: 'nightReady', text: t('La placa está madura. La noche puede avanzar.', 'The dish is ripe. The night can move on.') },
+  { id: 'firstNight', text: t('Empieza otra noche. La placa se lava; lo aprendido se queda conmigo.', 'Another night begins. The dish is washed; what I learned stays with me.') },
   { id: 'era2', text: t('Nueva placa, mismos ojos. Esta vez siembro con intención.', 'New dish, same eyes. This time I sow with intent.') },
   { id: 'species50', text: t('Dejé de contar accidentes. Ahora cuento vidas.', 'I stopped counting accidents. Now I count lives.') },
 ];
@@ -241,45 +250,58 @@ export const JOURNAL: { id: string; text: Text }[] = [
 // ───────────────────────────── Achievements ────────────────────────
 
 export const ACHIEVEMENT_TEXT: Record<string, { name: Text; desc: Text }> = {
-  firstSeed: { name: t('Primera gota', 'First drop'), desc: t('Siembra por primera vez.', 'Sow for the first time.') },
-  firstLife: { name: t('Algo se quedó', 'Something stayed'), desc: t('Consigue una criatura estable.', 'Get a stable creature.') },
+  firstSeed: { name: t('Primera semilla', 'First seed'), desc: t('Siembra por primera vez.', 'Sow for the first time.') },
+  firstLife: { name: t('Algo se quedó', 'Something stayed'), desc: t('Consigue una criatura viva.', 'Get a living creature.') },
   seeds100: { name: t('Mano firme', 'Steady hand'), desc: t('Siembra 100 veces.', 'Sow 100 times.') },
   seeds1000: { name: t('Lluvia constante', 'Steady rain'), desc: t('Siembra 1 000 veces.', 'Sow 1,000 times.') },
-  species3: { name: t('Naturalista', 'Naturalist'), desc: t('Registra 3 especies.', 'Register 3 species.') },
-  species10: { name: t('Taxónoma', 'Taxonomist'), desc: t('Registra 10 especies.', 'Register 10 species.') },
-  species20: { name: t('Fauna propia', 'A fauna of my own'), desc: t('Registra 20 especies.', 'Register 20 species.') },
-  swimmer: { name: t('Nadadora', 'Swimmer'), desc: t('Observa una criatura nadadora.', 'Observe a swimming creature.') },
-  spinner: { name: t('Remolino', 'Whirl'), desc: t('Observa una criatura giratoria.', 'Observe a spinning creature.') },
-  pulsing: { name: t('Latido', 'Heartbeat'), desc: t('Observa una criatura pulsante.', 'Observe a pulsing creature.') },
-  divider: { name: t('Mitosis', 'Mitosis'), desc: t('Observa una criatura divisora.', 'Observe a dividing creature.') },
-  colony: { name: t('Colonia', 'Colony'), desc: t('Forma una colonia.', 'Form a colony.') },
-  allBehaviors: { name: t('Etóloga', 'Ethologist'), desc: t('Observa los 6 comportamientos.', 'Observe all 6 behaviours.') },
-  eps10: { name: t('Productiva', 'Productive'), desc: t('Alcanza 10 Esencia/s.', 'Reach 10 Essence/s.') },
-  eps100: { name: t('Floreciente', 'Flourishing'), desc: t('Alcanza 100 Esencia/s.', 'Reach 100 Essence/s.') },
-  eps1000: { name: t('Ecosistema', 'Ecosystem'), desc: t('Alcanza 1 000 Esencia/s.', 'Reach 1,000 Essence/s.') },
+  species3: { name: t('Naturalista', 'Naturalist'), desc: t('Descubre 3 especies.', 'Discover 3 species.') },
+  species10: { name: t('Coleccionista', 'Collector'), desc: t('Descubre 10 especies.', 'Discover 10 species.') },
+  species20: { name: t('Mi propia familia', 'A family of my own'), desc: t('Descubre 20 especies.', 'Discover 20 species.') },
+  swimmer: { name: t('Nadadora', 'Swimmer'), desc: t('Mira una criatura que nada.', 'See a creature that swims.') },
+  spinner: { name: t('Remolino', 'Whirl'), desc: t('Mira una criatura que gira.', 'See a creature that spins.') },
+  pulsing: { name: t('Latido', 'Heartbeat'), desc: t('Mira una criatura que late.', 'See a creature that pulses.') },
+  divider: { name: t('Una se hace dos', 'One becomes two'), desc: t('Mira una criatura que se divide.', 'See a creature that splits.') },
+  colony: { name: t('Colonia', 'Colony'), desc: t('Junta tres iguales: una colonia.', 'Gather three alike: a colony.') },
+  allBehaviors: { name: t('Observadora', 'Watcher'), desc: t('Mira todas las maneras de moverse.', 'See every way of moving.') },
+  eps10: { name: t('Productiva', 'Productive'), desc: t('Gana 10 Esencia por segundo.', 'Earn 10 Essence per second.') },
+  eps100: { name: t('Floreciente', 'Flourishing'), desc: t('Gana 100 Esencia por segundo.', 'Earn 100 Essence per second.') },
+  eps1000: { name: t('Jardín de luz', 'Garden of light'), desc: t('Gana 1 000 Esencia por segundo.', 'Earn 1,000 Essence per second.') },
   essence1e4: { name: t('Diez mil', 'Ten thousand'), desc: t('Gana 10 000 Esencia en total.', 'Earn 10,000 Essence in total.') },
   essence1e6: { name: t('Millonaria', 'Millionaire'), desc: t('Gana 1 000 000 de Esencia en total.', 'Earn 1,000,000 Essence in total.') },
   golden1: { name: t('Destello', 'Spark'), desc: t('Atrapa un Destello.', 'Catch a Spark.') },
   golden10: { name: t('Cazadora de luz', 'Light catcher'), desc: t('Atrapa 10 Destellos.', 'Catch 10 Sparks.') },
   golden50: { name: t('Polilla', 'Moth'), desc: t('Atrapa 50 Destellos.', 'Catch 50 Sparks.') },
-  rare: { name: t('Rareza', 'Rarity'), desc: t('Registra una especie rara.', 'Register a rare species.') },
-  veryRare: { name: t('Joya', 'Jewel'), desc: t('Registra una especie muy rara.', 'Register a very rare species.') },
-  crowd5: { name: t('Placa viva', 'Living dish'), desc: t('Ten 5 criaturas estables a la vez.', 'Have 5 stable creatures at once.') },
-  crowd10: { name: t('Bullicio', 'Bustle'), desc: t('Ten 10 criaturas estables a la vez.', 'Have 10 stable creatures at once.') },
+  rare: { name: t('Rareza', 'Rarity'), desc: t('Descubre una especie rara.', 'Discover a rare species.') },
+  veryRare: { name: t('Joya', 'Jewel'), desc: t('Descubre una especie muy rara.', 'Discover a very rare species.') },
+  crowd5: { name: t('Placa viva', 'Living dish'), desc: t('Ten 5 criaturas vivas a la vez.', 'Have 5 living creatures at once.') },
+  crowd10: { name: t('Bullicio', 'Bustle'), desc: t('Ten 10 criaturas vivas a la vez.', 'Have 10 living creatures at once.') },
+  printer: { name: t('Copiona', 'Copycat'), desc: t('Haz una copia con la Copiadora.', 'Make a copy with the Copier.') },
+  tinkerer: { name: t('Viajera', 'Traveller'), desc: t('Visita 3 mundos.', 'Visit 3 worlds.') },
+  regime: { name: t('Archivista', 'Archivist'), desc: t('Encuentra todas las especies de un mundo.', 'Find every species of one world.') },
+  extinction: { name: t('Primera noche', 'First night'), desc: t('Empieza una noche nueva.', 'Start a new night.') },
+  heritage: { name: t('Jardinera', 'Gardener'), desc: t('Compra 10 mejoras del Árbol.', 'Buy 10 upgrades in the Tree.') },
+  variant: { name: t('Variación', 'Variation'), desc: t('Encuentra una copia que salió distinta.', 'Find a copy that came out different.') },
+  symbiosis: { name: t('Amistad', 'Friendship'), desc: t('Junta dos especies amigas.', 'Put two friend species together.') },
+  returned: { name: t('De vuelta', 'Back again'), desc: t('Vuelve a jugar otro día.', 'Come back to play another day.') },
+  hour: { name: t('Paciencia', 'Patience'), desc: t('Juega una hora.', 'Play for an hour.') },
+};
+
+/**
+ * PHASE-2B-REMOVE: the classic loop's wording of the achievements whose goal differs there
+ * (Impresión, Calibrador, regímenes, Genoma). Deleted with the classic loop.
+ */
+export const CLASSIC_ACHIEVEMENT_TEXT: Record<string, { name: Text; desc: Text }> = {
   printer: { name: t('Impresora', 'Printer'), desc: t('Imprime una especie.', 'Print a species.') },
   tinkerer: { name: t('Ajuste fino', 'Fine tuning'), desc: t('Cambia la calibración.', 'Change the calibration.') },
   regime: { name: t('Archivista', 'Archivist'), desc: t('Guarda un régimen.', 'Save a regime.') },
-  extinction: { name: t('Tabula rasa', 'Tabula rasa'), desc: t('Provoca una Extinción.', 'Trigger an Extinction.') },
   heritage: { name: t('Herencia', 'Heritage'), desc: t('Compra un nodo del Genoma.', 'Buy a Genome node.') },
-  variant: { name: t('Variación', 'Variation'), desc: t('Registra una variante mutada.', 'Register a mutated variant.') },
-  symbiosis: { name: t('Simbiosis', 'Symbiosis'), desc: t('Forma una pareja simbiótica.', 'Form a symbiotic pair.') },
-  returned: { name: t('De vuelta', 'Back again'), desc: t('Vuelve tras una ausencia.', 'Return after being away.') },
-  hour: { name: t('Paciencia', 'Patience'), desc: t('Juega una hora.', 'Play for an hour.') },
 };
 
 export const achievementReward = (bonus: number): Text => t(`+${pct(bonus)} Esencia`, `+${pct(bonus)} Essence`);
 
 // ───────────────────────────── Objectives ──────────────────────────
+// The objective line is replaced by the Encargos (main.ts); OBJECTIVE_TEXT is the classic wording
+// (CLARIDAD B-11, PHASE-2B-REMOVE), SESSION_OBJECTIVE_TEXT the sessions cycle's.
 
 /** Objective copy, kid-simple (QA2 §5.1). Ids are stable (balance.OBJECTIVES, saves). */
 const OBJECTIVE_TEXT: Record<string, Text> = {
@@ -305,8 +327,22 @@ const OBJECTIVE_TEXT: Record<string, Text> = {
   extinct: t('Empieza una noche nueva (Extinción)', 'Start a new night (Extinction)'),
 };
 
-export function objectiveText(id: string, current: number, target: number): Text {
-  const base = OBJECTIVE_TEXT[id] ?? t(id, id);
+/** The same steps in the sessions cycle (docs/CICLO.md): worlds instead of Calibrar, nights instead of Extinción. */
+export const SESSION_OBJECTIVE_TEXT: Record<string, Text> = {
+  calib: t('Abre el Mundo 2 en el Árbol', 'Open World 2 in the Tree'),
+  move: t('Juega una sesión en el Mundo 2', 'Play a session in World 2'),
+  seeder: t('Compra Más tiempo en el Árbol', 'Buy More time in the Tree'),
+  culture: t('Compra Cultivo en el Árbol', 'Buy Culture in the Tree'),
+  dropper: t('Compra el Gotero en el Árbol', 'Buy the Dropper in the Tree'),
+  dish: t('Compra «Placa más grande» en el Árbol', 'Buy “Bigger dish” in the Tree'),
+  print: t('Haz una copia desde el Bestiario', 'Make a copy from the Bestiary'),
+  // The same step as the Encargo `era100k` (J-40), which the player sees; both count the session's Esencia.
+  era100k: t('Gana 2 000 Esencia en una sesión', 'Earn 2,000 Essence in one session'),
+  extinct: t('Empieza una noche nueva en el Árbol', 'Start a new night in the Tree'),
+};
+
+export function objectiveText(id: string, current: number, target: number, sessions = false): Text {
+  const base = (sessions ? SESSION_OBJECTIVE_TEXT[id] : undefined) ?? OBJECTIVE_TEXT[id] ?? t(id, id);
   if (target <= 1) return base;
   const c = Math.min(current, target);
   return t(`${base.es} (${f(Math.floor(c))}/${f(target)})`, `${base.en} (${f(Math.floor(c))}/${f(target)})`);
@@ -314,28 +350,43 @@ export function objectiveText(id: string, current: number, target: number): Text
 
 // ───────────────────────────── Golden rewards & misc ───────────────
 
+/**
+ * TEXT keys of the classic loop only (Extinción, Genoma, pestañas, Pipeta, ausencia): never shown in
+ * the sessions cycle, deleted with it in Phase 2B (CLARIDAD B-11). The jargon guard skips them.
+ */
+export const CLASSIC_ONLY_TEXT: readonly string[] = [
+  'bloom',
+  'bloomReward',
+  'lumpReward',
+  'upgradeUnlocked',
+  'tabUnlocked',
+  'extinctionReady',
+  'pipetteReady',
+  'extinctionRequirement',
+  'extinctionGain',
+  'multGenome',
+  'offline',
+];
+
 export const TEXT = {
   bloom: t('Floración', 'Bloom'),
   bloomReward: (mult: number, secs: number) => t(`¡Floración! ×${mult} producción durante ${secs} s`, `Bloom! ×${mult} production for ${secs} s`),
   lumpReward: (amount: number) => t(`¡+${f(amount)} Esencia!`, `+${f(amount)} Essence!`),
-  sporeReward: (n: number) => t(`¡Lluvia de esporas! ${n} siembras gratis`, `Spore rain! ${n} free seeds`),
-  mutagenReward: (n: number) => t(`¡Mutágeno! Las próximas ${n} siembras prenderán seguro`, `Mutagen! Your next ${n} seeds will surely take`),
+  sporeReward: (n: number) => t(`¡Lluvia de semillas! ${n} gratis`, `Seed shower! ${n} free`),
+  mutagenReward: (n: number) => t(`¡Semillas mágicas! Las próximas ${n} siempre viven`, `Magic seeds! Your next ${n} always live`),
   objectiveDone: (reward: number) =>
     reward > 0 ? t(`Objetivo cumplido: +${f(reward)} Esencia`, `Objective complete: +${f(reward)} Essence`) : t('Objetivo cumplido', 'Objective complete'),
   upgradeUnlocked: (name: Text) => t(`Nueva mejora: ${name.es}`, `New upgrade: ${name.en}`),
   tabUnlocked: (es: string, en: string) => t(`Nueva pestaña: ${es}`, `New tab: ${en}`),
   extinctionReady: t('La placa está madura: la Extinción está disponible', 'The dish is ripe: Extinction is available'),
-  dishSaturated: t('La placa está saturada: el Sembrador no encuentra hueco', 'The dish is saturated: the Auto-seeder finds no room'),
-  newBehavior: (b: Behavior) => t(`Comportamiento nuevo: ${BEHAVIOR_NAMES[b].es}`, `New behaviour: ${BEHAVIOR_NAMES[b].en}`),
+  dishSaturated: t('Placa llena: el Sembrador espera a que haya sitio.', 'Dish full: the Auto-seeder waits for room.'),
+  newBehavior: (b: Behavior) => t(`¡Nueva manera de moverse: ${BEHAVIOR_NAMES[b].es}!`, `New way of moving: ${BEHAVIOR_NAMES[b].en}!`),
   pipetteReady: t('Pipeta de emergencia lista: siembra gratis', 'Emergency pipette ready: free seed'),
-  freePrintReady: t('Archivo: Impresión gratis lista', 'Archive: free Print ready'),
+  freePrintReady: t('Archivo: ¡copia gratis lista!', 'Archive: free copy ready!'),
   invalidImport: t('Partida no válida', 'Invalid save'),
-  seedTooClose: t('Muy cerca: se fundirían. Siembra en un sitio libre.', 'Too close: they would fuse. Seed in a free spot.'),
+  seedTooClose: t('Muy cerca: se fundirían. ¡Más lejos!', 'Too close: they would melt. Further away!'),
   seedGrowing: t('Espera: ya hay semillas naciendo. Mira cómo crecen.', 'Wait: some seeds are still hatching. Watch them grow.'),
-  dishAutoCleaned: t(
-    'La placa se desbordó y se limpió sola. Siembra con calma: si chocan muchas criaturas, se forma un laberinto.',
-    'The dish overflowed and cleaned itself. Seed calmly: when many creatures collide, they form a maze.',
-  ),
+  dishAutoCleaned: t('La placa se desbordó y la limpié. ¡Siembra separado!', 'The dish overflowed and I cleaned it. Sow apart!'),
   extinctionRequirement: (need: number, have: number) =>
     t(`Gana ${f(need)} Esencia en esta Era (llevas ${f(have)})`, `Earn ${f(need)} Essence this Era (you have ${f(have)})`),
   extinctionGain: (g: number) => t(`Extinguir ahora da ${f(g)} Genoma`, `Extinguishing now gives ${f(g)} Genome`),
@@ -345,6 +396,31 @@ export const TEXT = {
   multCollection: t('Colección', 'Collection'),
   multBehaviors: t('Comportamientos vistos', 'Behaviours seen'),
   multAchievements: t('Logros', 'Achievements'),
-  variantSuffix: t(' var.', ' var.'),
+  variantSuffix: t(' (sorpresa)', ' (surprise)'),
   offline: (amount: number) => t(`Mientras no estabas: +${f(amount)} Esencia`, `While you were away: +${f(amount)} Essence`),
+  // ── Sessions cycle (docs/CICLO.md) ──
+  /** Coordinator: the proportional Spark gift says what it is ("30 s de tu Esencia"). */
+  sparkGift: (secs: number, amount: number) =>
+    t(`El Destello te regala ${secs} s de tu Esencia: +${f(amount)}`, `The Spark gives you ${secs} s of your Essence: +${f(amount)}`),
+  sparkSure: (n: number) =>
+    n === 1 ? t('…y tu próxima semilla vivirá seguro', '…and your next seed will surely live') : t(`…y tus próximas ${n} semillas vivirán seguro`, `…and your next ${n} seeds will surely live`),
+  /**
+   * A tap on a full dish (refused for free). Owner: room is the limit, never a higher price. Names
+   * the first upgrade of the Placa route, which exists from session 1 (CLARIDAD J-160/J-175, P0-7).
+   */
+  dishFull: (n: number) =>
+    t(`¡Placa llena! Caben ${n}. Compra «Placa más grande» en el Árbol.`, `Dish full! Room for ${n}. Buy “Bigger dish” in the Tree.`),
+  /** Abono: the in-session production boost. */
+  boost: t('Abono', 'Fertiliser'),
+  boostBought: (mult: string, multEn = mult) =>
+    t(`¡Abono! Tus criaturas dan Esencia ${mult} hasta el final de la sesión.`, `Fertiliser! Your creatures give Essence ${multEn} until the session ends.`),
+  multTree: t('Árbol (Vida)', 'Tree (Life)'),
+  multWorld: t('Mundo', 'World'),
+  multEcosystem: t('Placa variada', 'Mixed dish'),
+  multSprint: t('Recta final', 'Final stretch'),
+  nightRequirement: (night: number, sessions: number, species: number) =>
+    t(`Noche ${night}: ${sessions} sesiones y ${species} especies`, `Night ${night}: ${sessions} sessions and ${species} species`),
+  /** A copy of a species that does not live in this session's world would melt at once. */
+  printOtherWorld: (n: number) => t(`Esta especie vive en el Mundo ${n}: cópiala allí.`, `This species lives in World ${n}: copy it there.`),
+  nightReady: (night: number) => t(`¡La Noche ${night} está lista! Ábrela en el centro del Árbol.`, `Night ${night} is ready! Open it at the centre of the Tree.`),
 };

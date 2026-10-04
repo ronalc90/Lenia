@@ -10,8 +10,8 @@
 import { Bus, type GameEvents } from '../core/bus';
 import type { GameView, Text } from '../core/types';
 import { OBJECTIVES } from '../game/balance';
-import { CHAIN, ENCARGO_BY_ID, SIDE, type Cosmetic, type EncargoDef, type GoalDef, COSMETICS } from './encargoScript';
-import { SEED_SPECIES, SPEAKER_NAMES } from './script';
+import { CHAIN, ENCARGO_BY_ID, SIDE, SIDE_REWARD, resolveEncargo, type Cosmetic, type EncargoDef, type GoalDef, COSMETICS } from './encargoScript';
+import { SPEAKER_NAMES, alborSpeciesFound } from './script';
 import type { Story } from './story';
 import type { LineDef, Mood, Speaker, StorageLike } from './types';
 
@@ -276,14 +276,23 @@ export function createEncargos(deps: EncargosDeps): Encargos {
         return Math.max(st.counters.extDone, v.era - 1);
       case 'genomeNodes':
         return v.genomeNodes.filter((n) => n.owned).length;
+      case 'treeNodes':
+        return v.research ? Object.entries(v.research.levels).filter(([id, l]) => id !== 'lab' && l > 0).length : 0;
+      case 'world':
+        return v.session?.world === g.arg && v.session?.phase === 'running' ? 1 : 0;
+      case 'sessionEssence':
+        return v.session && v.session.phase !== 'over' ? v.session.essence : 0;
+      case 'sameSpecies': {
+        const n = new Map<string, number>();
+        for (const c of v.creatures) if (c.state === 'stable' && c.speciesId) n.set(c.speciesId, (n.get(c.speciesId) ?? 0) + 1);
+        return Math.max(0, ...n.values());
+      }
       case 'node':
         return v.genomeNodes.some((n) => n.id === g.arg && n.owned) ? 1 : 0;
       case 'keepAlive':
         return keepAliveSeconds(v, g.arg ?? 'swimmer');
-      case 'seedSpecies': {
-        const names = v.species.map((s) => s.catalogName ?? '');
-        return SEED_SPECIES.filter((n) => names.some((x) => x === n || x.startsWith(n))).length;
-      }
+      case 'seedSpecies':
+        return alborSpeciesFound(v.species.map((s) => s.catalogName));
     }
   }
 
@@ -301,7 +310,10 @@ export function createEncargos(deps: EncargosDeps): Encargos {
     const r = def.reward;
     let essence = 0;
     if (r.objective) essence += OBJECTIVES.find((o) => o.id === r.objective)?.reward ?? 0;
-    if (r.essenceSec) essence += Math.max(r.essenceMin ?? 0, Math.round(v.essencePerSec * r.essenceSec));
+    if (r.essenceSec) {
+      const sec = v.cycle === 'sessions' ? Math.min(r.essenceSec, SIDE_REWARD.sessionMaxSec) : r.essenceSec;
+      essence += Math.max(r.essenceMin ?? 0, Math.round(v.essencePerSec * sec));
+    }
     return { essence, samples: r.samples ?? 0, cosmetic: r.cosmetic ?? null, journal: r.journal ?? null };
   }
 
@@ -317,12 +329,13 @@ export function createEncargos(deps: EncargosDeps): Encargos {
       switch (unit) {
         case 'flag':
           return '';
+        // CLARIDAD J-136: every number says what it is ("2,4 de 3 Esencia/s", "1:20 de 2:00").
         case 'eps':
-          return `${fmt(current, l, current < 100 ? 1 : 0)}/${fmt(target, l)}`;
+          return `${fmt(current, l, current < 100 ? 1 : 0)} ${l === 'es' ? 'de' : 'of'} ${fmt(target, l)} ${l === 'es' ? 'Esencia/s' : 'Essence/s'}`;
         case 'seconds':
-          return `${clock(current)}/${clock(target)}`;
+          return `${clock(current)} ${l === 'es' ? 'de' : 'of'} ${clock(target)}`;
         case 'count':
-          return `${fmt(Math.floor(current), l)}/${fmt(target, l)}`;
+          return `${fmt(Math.floor(current), l)} ${l === 'es' ? 'de' : 'of'} ${fmt(target, l)}`;
       }
     };
     const suffix = (l: 'es' | 'en') => (unit === 'flag' ? '' : ` (${count(l)})`);
@@ -344,8 +357,14 @@ export function createEncargos(deps: EncargosDeps): Encargos {
   function chainDef(v: GameView): EncargoDef | null {
     const def = CHAIN[st.chain];
     if (!def || (def.minEra ?? 1) > v.era) return null;
-    return def;
+    return resolveEncargo(def, v);
   }
+
+  /** An Encargo by id, worded and aimed for the running loop. */
+  const byId = (id: string, v: GameView): EncargoDef | undefined => {
+    const def = ENCARGO_BY_ID.get(id);
+    return def ? resolveEncargo(def, v) : undefined;
+  };
 
   function mainView(v: GameView): EncargoView | null {
     const def = chainDef(v);
@@ -355,7 +374,7 @@ export function createEncargos(deps: EncargosDeps): Encargos {
 
   function sideView(v: GameView): EncargoView | null {
     if (!st.side) return null;
-    const def = ENCARGO_BY_ID.get(st.side.id);
+    const def = byId(st.side.id, v);
     return def ? makeView(def, 'side', v, st.side.target, st.side.base) : null;
   }
 
@@ -393,7 +412,7 @@ export function createEncargos(deps: EncargosDeps): Encargos {
   }
 
   function pickSide(v: GameView): EncargoDef | null {
-    const pool = SIDE.filter((d) => {
+    const pool = SIDE.map((d) => resolveEncargo(d, v)).filter((d) => {
       if (d.once && st.sideDone[d.id]) return false;
       if (d.id === st.lastSide && SIDE.length > 1) return false;
       if (d.available && !d.available(v)) return false;
@@ -434,6 +453,23 @@ export function createEncargos(deps: EncargosDeps): Encargos {
       return;
     }
     const t = now();
+    // Sessions cycle, session 1 (CLARIDAD §3.3): no Encargo on screen. The steps it finishes pass
+    // in silence (the game pays the objective ones itself); the first one shown comes in session 2.
+    if (v.cycle === 'sessions' && v.session?.first) {
+      let moved = false;
+      for (let d = chainDef(v); d && !d.goal.delta && met(d, v, targetOf(d.goal, v), null); d = chainDef(v)) {
+        if (!st.completed.includes(d.id)) st.completed.push(d.id);
+        st.chain++;
+        st.chainOfferedAt = null;
+        st.chainBase = null;
+        moved = true;
+      }
+      if (moved) {
+        persist();
+        events.emit('change', {});
+      }
+      return;
+    }
     // Main chain.
     const def = chainDef(v);
     if (def) {
@@ -455,7 +491,7 @@ export function createEncargos(deps: EncargosDeps): Encargos {
     }
     // Side requests.
     if (st.side) {
-      const sdef = ENCARGO_BY_ID.get(st.side.id);
+      const sdef = byId(st.side.id, v);
       if (!sdef) st.side = null;
       else if (met(sdef, v, st.side.target, st.side.base)) {
         const view = sideView(v)!;
@@ -555,7 +591,7 @@ export function createEncargos(deps: EncargosDeps): Encargos {
     why(id) {
       const v = viewNow();
       const view = id ? [mainView(v), sideView(v)].find((x) => x?.id === id) ?? null : (mainView(v) ?? sideView(v));
-      const def = view ? ENCARGO_BY_ID.get(view.id) : id ? ENCARGO_BY_ID.get(id) : undefined;
+      const def = view ? byId(view.id, v) : id ? byId(id, v) : undefined;
       if (!def || !deps.story) return false;
       const ask = view?.ask ?? def.ask;
       const lines: LineDef[] = [
@@ -619,7 +655,7 @@ export function createEncargos(deps: EncargosDeps): Encargos {
           offerMain(v);
           return;
         }
-        const sd = ENCARGO_BY_ID.get(id);
+        const sd = byId(id, v);
         if (sd) offerSide(sd, v);
       },
       complete() {
@@ -633,7 +669,7 @@ export function createEncargos(deps: EncargosDeps): Encargos {
           st.chainBase = null;
           nextOfferAt = now() + NEXT_OFFER_DELAY;
         } else if (st.side) {
-          const sd = ENCARGO_BY_ID.get(st.side.id)!;
+          const sd = byId(st.side.id, v)!;
           complete(sd, sideView(v)!, v);
           st.side = null;
           st.sideNextAt = now() + SIDE_GAP;

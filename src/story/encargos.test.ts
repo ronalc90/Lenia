@@ -111,7 +111,7 @@ describe('encargos: the chain', () => {
     t.set({ creatures: [creature(1)] });
     let cur = t.enc.current()!;
     expect(cur.progress).toMatchObject({ current: 1, target: 3, unit: 'count' });
-    expect(cur.label.es).toContain('(1/3)');
+    expect(cur.label.es).toContain('(1 de 3)');
     expect(cur.why.es).toContain('calefacción');
     const progress: number[] = [];
     t.enc.on('progress', (p) => progress.push(p.encargo.progress.current));
@@ -156,7 +156,7 @@ describe('encargos: the chain', () => {
     t.wait(1);
     t.wait(60);
     expect(t.enc.current()!.progress.current).toBeGreaterThanOrEqual(60);
-    expect(t.enc.current()!.label.en).toContain('(1:00/2:00)');
+    expect(t.enc.current()!.label.en).toContain('(1:00 of 2:00)');
     // It died: the clock starts over with the next one.
     t.set({ creatures: [] });
     t.wait(1);
@@ -212,7 +212,7 @@ describe('encargos: side requests', () => {
     t.enc.debug.offer('s_rate');
     const s = t.enc.side()!;
     expect(s.progress.target).toBe(20);
-    expect(s.ask.es).toContain('20/S');
+    expect(s.ask.es).toContain('20 POR SEGUNDO');
     t.set({ essencePerSec: 30 });
     expect(t.enc.side()!.progress.target).toBe(20);
     t.enc.tick();

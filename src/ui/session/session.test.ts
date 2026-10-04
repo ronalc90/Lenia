@@ -38,7 +38,7 @@ describe('the Datos equation on the end card', () => {
     expect(x.rows!.map((r) => r.label)).toEqual(['+5', '=']);
     expect(x.rows![1].text).toBe(`${d.total} Datos al terminar`);
     expect(d.fromEssence + 5).toBe(d.total);
-    expect(x.advice).toBe('Más tiempo: faltan 4');
+    expect(x.advice).toBe('Más tiempo: te faltan 4 Datos');
   });
 
   it('says "minimum" when a session earned almost nothing', () => {
@@ -64,11 +64,11 @@ describe('the HUD clock', () => {
 describe('tree price for the shared "¿Por qué cuesta esto?" sheet', () => {
   it('is start × growth^level with the rule in words, the next levels and what is missing', () => {
     const x = nodePriceExplain('clock', 2, 'es', { datos: 5, recentDatos: [4, 4, 4], levels: { clock: 2 } })!;
-    expect(x.terms.map((t) => t.value)).toEqual(['3', '×4']);
-    expect(x.total).toBe('12');
-    expect(x.rule).toContain('×2');
-    expect(x.rows!.map((r) => r.text)).toEqual(['12 Datos → Sesión 4:30']);
-    expect(x.advice).toBe('Te faltan 7 Datos — unas 2 sesiones');
+    expect(x.terms.map((t) => t.value)).toEqual(['2', '×4']);
+    expect(x.total).toBe('8');
+    expect(x.rule).toContain('cada nivel cuesta el doble');
+    expect(x.rows!.map((r) => r.text)).toEqual(['8 Datos → Sesión 2:45']);
+    expect(x.advice).toBe('Te faltan 3 Datos — una sesión más');
     expect(nodePriceExplain('clock', 3, 'es')).toBeNull(); // maxed
     expect(nodePriceExplain('lab', 1, 'es')).toBeNull();
   });
