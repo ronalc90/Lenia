@@ -1,11 +1,10 @@
 name: Deploy to GitHub Pages
 
-# Publishes the web build on every push to main.
-# One-time setup by the repo owner: Settings → Pages → Source: "GitHub Actions".
+# Optional mirror of the web build on GitHub Pages. Production is hosted on Vercel
+# (bioluma-xi.vercel.app), so this only runs by hand. To use it: Settings → Pages →
+# Source: "GitHub Actions", then run the workflow from the Actions tab.
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
