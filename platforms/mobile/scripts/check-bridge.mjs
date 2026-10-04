@@ -1,4 +1,4 @@
-// Guards the assumption of platforms/shared/platform.ts: the web build calls Capacitor plugins
+// Guards the assumption of src/platform/platform.ts: the web build calls Capacitor plugins
 // through the `window.Capacitor` global injected by the native shell (nativePromise/nativeCallback),
 // without bundling @capacitor/core. This fails loudly if a Capacitor upgrade removes any of it.
 //   node scripts/check-bridge.mjs
@@ -42,7 +42,7 @@ for (const ev of ['"backButton"', '"pause"', '"resume"']) {
   }
 }
 if (failed) {
-  console.error(`check-bridge: ${failed} problem(s); update platforms/shared/platform.ts for this Capacitor version.`);
+  console.error(`check-bridge: ${failed} problem(s); update src/platform/platform.ts for this Capacitor version.`);
   process.exit(1);
 }
 console.log('check-bridge: Capacitor globals and plugin methods used by platform.ts are present');

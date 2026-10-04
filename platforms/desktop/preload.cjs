@@ -3,7 +3,7 @@
 /**
  * Preload (sandboxed, context-isolated). Exposes a tiny, explicit API to the page as
  * `window.bioluma_platform`; the page never gets ipcRenderer or Node. The contract is the
- * `DesktopBridge` interface in platforms/shared/platform.ts; keep both in sync.
+ * `DesktopBridge` interface in src/platform/platform.ts; keep both in sync.
  */
 const { contextBridge, ipcRenderer } = require('electron');
 

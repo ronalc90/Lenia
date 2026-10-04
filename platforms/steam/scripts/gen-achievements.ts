@@ -13,7 +13,7 @@
  * integrator: until the game emits them they simply never unlock (hidden ones stay invisible).
  *
  * Game ids for the bridge: ending<Id> ("endingHarvest") and secret<Id> ("secretFullMoon"); see
- * endingAchievementId() / secretAchievementId() in platforms/shared/platform.ts.
+ * endingAchievementId() / secretAchievementId() in src/platform/platform.ts.
  *
  * Steam API names come from steamApiName() in platforms/desktop/steam.cjs (one rule, one place).
  */

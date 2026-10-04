@@ -4,7 +4,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
  * Bioluma native shells (Android + iOS) with Capacitor 8.
  * The web game is the root Vite build (`npm run build` -> ../../dist); `npx cap sync` copies it into
  * the native projects, so the app works fully offline and needs no domain (unlike the TWA path).
- * Native look and feel is handled by platforms/shared/platform.ts through the `window.Capacitor`
+ * Native look and feel is handled by src/platform/platform.ts through the `window.Capacitor`
  * global (back button, pause/resume, system bars, haptics); the web build has no Capacitor npm deps.
  */
 const config: CapacitorConfig = {

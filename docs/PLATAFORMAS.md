@@ -42,7 +42,7 @@ ejecución y `npm ci` en la raíz no instala nada de esto.
 
 | Ruta | Contenido |
 |---|---|
-| `platforms/shared/platform.ts` | Capa de plataforma (sin dependencias): detecta el entorno; botón atrás, barras del sistema, háptica, logros y stats de Steam, guardado en la nube (galaxy.click y Steam), aviso de instalación de la PWA |
+| `src/platform/platform.ts` | Capa de plataforma (sin dependencias): detecta el entorno; botón atrás, barras del sistema, háptica, logros y stats de Steam, guardado en la nube (galaxy.click y Steam), aviso de instalación de la PWA |
 | `platforms/shared/platform.selftest.ts` | 28 comprobaciones de `platform.ts` contra entornos simulados (`node --experimental-strip-types …`) |
 | `platforms/shared/make-icons.mjs` | Genera los iconos de escritorio (`.png`, `.ico`, `.icns`) y los de móvil a partir de `public/icon.svg` |
 | `platforms/desktop/` | Electron: `main.cjs`, `preload.cjs`, `steam.cjs`, configuraciones de electron-builder (normal y Steam), `build/` con iconos |
@@ -55,7 +55,7 @@ ejecución y `npm ci` en la raíz no instala nada de esto.
 
 Este trabajo no modifica `src/`. Hay que conectar esto:
 
-1. **Mover `platforms/shared/platform.ts` a `src/platform/platform.ts`**, para que lo revise el `tsconfig` de la raíz.
+1. **Mover `src/platform/platform.ts` a `src/platform/platform.ts`**, para que lo revise el `tsconfig` de la raíz.
    La autoprueba también se puede pasar a vitest. En `src/main.ts`:
    ```ts
    const platform = initPlatform({ onBack: () => ui.handleBack(), onPause: save });

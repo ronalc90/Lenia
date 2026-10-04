@@ -5,7 +5,7 @@
  * When platform.ts moves to src/platform/, port these cases to a vitest file next to it.
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { detectPlatform, initPlatform } from './platform.ts';
+import { detectPlatform, initPlatform } from '../../src/platform/platform.ts';
 let fails = 0;
 const ok = (c: unknown, m: string) => { if (!c) { fails++; console.log('FAIL', m); } else console.log('ok  ', m); };
 function fakeWindow(opts: { ua?: string; host?: string; referrer?: string; framed?: boolean; ancestor?: string; extra?: Record<string, unknown>; standalone?: boolean } = {}) {
