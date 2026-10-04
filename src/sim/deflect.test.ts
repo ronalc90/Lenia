@@ -1,0 +1,145 @@
+import { describe, expect, it } from 'vitest';
+import { dishForGrid } from '../core/dish';
+import { CATALOG, catalogPattern, paramsOf } from './catalog';
+import { CpuLenia } from './cpu';
+import { angleDelta, type Body, Deflector, reflect, rotateDiscCpu, turnWeight } from './deflect';
+
+const dish = { cx: 64, cy: 64, radius: 48 };
+
+/** Mass-weighted centroid and mass of a field (no wrap: the dish never touches the grid edge). */
+function centroid(A: Float32Array, n: number): { x: number; y: number; m: number } {
+  let m = 0;
+  let sx = 0;
+  let sy = 0;
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++) {
+      const v = A[y * n + x];
+      m += v;
+      sx += v * (x + 0.5);
+      sy += v * (y + 0.5);
+    }
+  return { x: sx / m, y: sy / m, m };
+}
+
+describe('glass deflection', () => {
+  it('reflects velocities specularly and measures signed angles', () => {
+    expect(reflect(1, 0, 1, 0)).toEqual({ vx: -1, vy: 0 });
+    const r = reflect(1, 1, 1, 0);
+    expect(r.vx).toBeCloseTo(-1, 12);
+    expect(r.vy).toBeCloseTo(1, 12);
+    expect(reflect(-1, 0, 1, 0)).toEqual({ vx: -1, vy: 0 }); // moving away: untouched
+    expect(angleDelta(Math.PI - 0.1, -Math.PI + 0.1)).toBeCloseTo(0.2, 12);
+  });
+
+  it('turns a swimmer heading for the rim to the mirror direction, a bounded step per update', () => {
+    const d = new Deflector();
+    // 30° incidence, close to the rim on the right.
+    const a = Math.PI / 6;
+    const h0 = a;
+    const body: Body = { id: 1, x: 64 + 30, y: 64, vx: 0.6 * Math.cos(a), vy: 0.6 * Math.sin(a), radius: 5.5 };
+    let total = 0;
+    let step = 0;
+    for (let k = 0; k < 6; k++) {
+      const turns = d.update([body], dish, step, 10);
+      for (const t of turns) {
+        expect(Math.abs(t.angle)).toBeLessThanOrEqual(d.opts.maxTurn + 1e-12);
+        total += t.angle;
+      }
+      // The creature's heading follows its rotated body.
+      body.vx = 0.6 * Math.cos(h0 + total);
+      body.vy = 0.6 * Math.sin(h0 + total);
+      step += 10;
+    }
+    // Specular reflection of a 30° incidence turns the heading by 180° − 2·30° = 120°, once.
+    expect(Math.abs(total)).toBeCloseTo((2 * Math.PI) / 3, 6);
+    // Heading after the turn points back into the dish.
+    expect(Math.cos(h0 + total)).toBeLessThan(0);
+  });
+
+  it('leaves slow, sessile or far-away bodies alone', () => {
+    const bodies: Body[] = [
+      { id: 1, x: 64 + 40, y: 64, vx: 0.01, vy: 0, radius: 5 },
+      { id: 2, x: 64, y: 64, vx: 0.6, vy: 0, radius: 5 },
+      { id: 3, x: 64 + 40, y: 30, vx: 0.6, vy: 0, radius: 5, steerable: false },
+      { id: 4, x: 64 + 40, y: 90, vx: -0.6, vy: 0, radius: 5 },
+    ];
+    expect(new Deflector({ bodies: false }).update(bodies, dish, 0, 10)).toEqual([]);
+    const k = new Deflector({ bodies: false });
+    k.update(bodies, dish, 0, 10);
+    expect(k.update(bodies, dish, 10, 10)).toEqual([]);
+  });
+
+  it('bounces two swimmers on a collision course off each other', () => {
+    const d = new Deflector();
+    const bodies: Body[] = [
+      { id: 1, x: 40, y: 64, vx: 0.6, vy: 0.05, radius: 5.5 },
+      { id: 2, x: 80, y: 64, vx: -0.6, vy: 0.05, radius: 5.5 },
+    ];
+    const open = { cx: 64, cy: 64, radius: 1000 };
+    expect(d.update(bodies, open, 0, 10)).toEqual([]); // first sight: heading not known yet
+    const turns = d.update(bodies, open, 10, 10);
+    expect(turns.map((t) => t.id).sort()).toEqual([1, 2]);
+    const off = new Deflector({ bodies: false });
+    off.update(bodies, open, 0, 10);
+    expect(off.update(bodies, open, 10, 10)).toEqual([]);
+  });
+
+  it('never steers a body that curls or spins (Gyrorbium circles in place)', () => {
+    const d = new Deflector();
+    const b: Body = { id: 1, x: 64 + 34, y: 64, vx: 0.3, vy: 0, radius: 5.5 };
+    for (let k = 0; k < 6; k++) {
+      const h = k * 0.6; // 34° per update
+      b.vx = 0.3 * Math.cos(h);
+      b.vy = 0.3 * Math.sin(h);
+      expect(d.update([b], dish, k * 10, 10)).toEqual([]);
+    }
+  });
+
+  it('rotates matter rigidly: mass and centroid are kept, outside the dish stays empty', () => {
+    const n = 128;
+    const A = new Float32Array(n * n);
+    const sim = new CpuLenia(n, n, paramsOf(CATALOG.find((c) => c.code === 'O2u')!));
+    sim.A.set(A);
+    sim.placeCentered(catalogPattern('O2u'), 64, 64);
+    const before = centroid(sim.A, n);
+    const tmp = new Float32Array(n * n);
+    rotateDiscCpu(sim.A, n, n, { id: 1, x: before.x, y: before.y, radius: 14, angle: Math.PI / 3 }, dish, tmp);
+    const after = centroid(sim.A, n);
+    expect(after.m / before.m).toBeGreaterThan(0.97);
+    expect(after.m / before.m).toBeLessThan(1.03);
+    expect(Math.hypot(after.x - before.x, after.y - before.y)).toBeLessThan(0.5);
+    expect(turnWeight(0, 10)).toBe(1);
+    expect(turnWeight(14, 10)).toBe(0);
+    expect(turnWeight(11.5, 10)).toBeGreaterThan(0);
+  });
+
+  it('Orbium survives a run of rim impacts in the smallest dish when deflected (CPU reference)', () => {
+    const e = CATALOG.find((c) => c.code === 'O2u')!;
+    const n = 128;
+    const sim = new CpuLenia(n, n, paramsOf(e));
+    const d0 = dishForGrid(n, n, 96);
+    sim.setDish(d0);
+    sim.placeCentered(catalogPattern('O2u'), 64, 64);
+    sim.step(10); // first velocity estimate after one detector interval
+    const deflector = new Deflector();
+    const m0 = centroid(sim.A, n).m;
+    let prev = centroid(sim.A, n);
+    let turns = 0;
+    let closest = Infinity;
+    for (let k = 0; k < 120; k++) {
+      sim.step(10);
+      const c = centroid(sim.A, n);
+      if (c.m < 0.3 * m0) break;
+      closest = Math.min(closest, d0.radius - Math.hypot(c.x - d0.cx, c.y - d0.cy));
+      const t = deflector.update([{ id: 1, x: c.x, y: c.y, vx: (c.x - prev.x) / 10, vy: (c.y - prev.y) / 10, radius: 5.6 }], d0, sim.stepCount, 10);
+      turns += t.length;
+      sim.applyTurns(t);
+      prev = centroid(sim.A, n);
+    }
+    const end = centroid(sim.A, n);
+    expect(end.m / m0).toBeGreaterThan(0.8);
+    expect(end.m / m0).toBeLessThan(1.25);
+    expect(turns).toBeGreaterThan(5); // it really met the glass several times
+    expect(closest).toBeLessThan(20); // its outline (≈ 10.6 cells) came within a few cells of the glass
+  });
+});

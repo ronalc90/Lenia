@@ -1,16 +1,28 @@
+import { cellInDish, type DishShape } from '../core/dish';
 import type { LeniaParams, Pattern } from '../core/types';
+import { rotateDiscCpu, type Turn } from './deflect';
 
 /**
- * Reference Lenia on the CPU (FFT convolution, toroidal). Used by unit tests,
- * the detector calibration and the balance bot. Grid sides must be powers of 2.
+ * Reference Lenia on the CPU (FFT convolution). Used by unit tests, the detector
+ * calibration and the balance bot. Grid sides must be powers of 2.
  *
  * Exactly Chan's kn=1 / gn=1 formulation:
  *   kernel core  K(r) = (4 r (1 - r))^4 per ring, rings = b peaks
  *   growth       G(u) = 2 * max(0, 1 - (u - mu)^2 / (9 sigma^2))^4 - 1
  *   update       A <- clip(A + dt * G(K * A), 0, 1)
+ *
+ * Topology: toroidal by default (legacy, catalog tests). With `setDish` the world is the round
+ * petri dish of ADR-022: cells whose centre lies outside the disc are always 0 (the glass is
+ * absorbing), so the FFT's wrap-around only ever reads zeros as long as the grid keeps more than
+ * R empty cells across the wrap (checked by `setDish`). Creatures are kept off the glass by
+ * `deflect.ts` turns (`applyTurns`), exactly as the GPU does.
  */
 export class CpuLenia {
   readonly A: Float32Array;
+  private _dish: DishShape | null = null;
+  /** 1 for cells inside the dish (null = toroidal, every cell is inside). */
+  private mask: Uint8Array | null = null;
+  private scratch: Float32Array | null = null;
   private kre: Float64Array;
   private kim: Float64Array;
   private re: Float64Array;
@@ -37,6 +49,53 @@ export class CpuLenia {
     const kernelChanged = p.R !== undefined || p.rings !== undefined;
     this.params = { ...this.params, ...p, rings: [...(p.rings ?? this.params.rings)] };
     if (kernelChanged) this.buildKernel();
+    if (this._dish) this.checkDishMargin(this._dish);
+  }
+
+  /** The round dish (null = toroidal grid). */
+  get dish(): DishShape | null {
+    return this._dish;
+  }
+
+  /**
+   * Switch to the round, walled dish (or back to the torus with null). Matter outside the new rim
+   * is removed; growing the rim keeps everything (nothing is resampled).
+   */
+  setDish(shape: DishShape | null): void {
+    if (!shape) {
+      this._dish = null;
+      this.mask = null;
+      return;
+    }
+    this.checkDishMargin(shape);
+    this._dish = { ...shape };
+    const m = this.mask ?? new Uint8Array(this.w * this.h);
+    for (let y = 0; y < this.h; y++) for (let x = 0; x < this.w; x++) m[y * this.w + x] = cellInDish(shape, x, y) ? 1 : 0;
+    this.mask = m;
+    this.applyMask();
+  }
+
+  /** Rigid rotations from the glass deflector (deflect.ts), applied in order. */
+  applyTurns(turns: readonly Turn[]): void {
+    if (!turns.length) return;
+    this.scratch ??= new Float32Array(this.A.length);
+    for (const t of turns) rotateDiscCpu(this.A, this.w, this.h, t, this._dish, this.scratch);
+  }
+
+  private checkDishMargin(d: DishShape): void {
+    const R = Math.ceil(this.params.R);
+    const gapX = this.w - 2 * d.radius;
+    const gapY = this.h - 2 * d.radius;
+    const off = Math.max(Math.abs(d.cx - this.w / 2), Math.abs(d.cy - this.h / 2));
+    if (gapX - 2 * off <= R || gapY - 2 * off <= R) {
+      throw new Error(`CpuLenia: dish radius ${d.radius} leaves no zero padding for R=${this.params.R} on a ${this.w}x${this.h} grid`);
+    }
+  }
+
+  private applyMask(): void {
+    const m = this.mask;
+    if (!m) return;
+    for (let i = 0; i < this.A.length; i++) if (!m[i]) this.A[i] = 0;
   }
 
   /** Place a pattern with its top-left at (x, y), wrapping; values are max-blended. */
@@ -49,6 +108,7 @@ export class CpuLenia {
         const gx = (((x + i) % this.w) + this.w) % this.w;
         const gy = (((y + j) % this.h) + this.h) % this.h;
         const k = gy * this.w + gx;
+        if (this.mask && !this.mask[k]) continue;
         this.A[k] = Math.max(this.A[k], v);
       }
     }
@@ -76,7 +136,12 @@ export class CpuLenia {
         this.im[i] = a * this.kim[i] + b * this.kre[i];
       }
       fft2(this.re, this.im, this.w, this.h, true);
+      const mask = this.mask;
       for (let i = 0; i < N; i++) {
+        if (mask && !mask[i]) {
+          this.A[i] = 0; // outside the glass: always empty (seeds written past the rim vanish)
+          continue;
+        }
         const u = this.re[i];
         const d = u - mu;
         const q = Math.max(0, 1 - d * d * inv9s2);
