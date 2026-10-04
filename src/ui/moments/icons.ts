@@ -5,7 +5,7 @@
 import type { Behavior } from '../../core/types';
 import type { ChipIcon, MomentIcon } from '../../moments/types';
 
-const P: Record<MomentIcon | NonNullable<ChipIcon> | 'creatures' | 'info' | 'big' | 'close' | 'pause' | Behavior, string> = {
+const P: Record<MomentIcon | NonNullable<ChipIcon> | 'creatures' | 'info' | 'big' | 'close' | 'pause' | 'eye' | 'warn' | 'lock' | Behavior, string> = {
   drop: '<path d="M12 3c3.5 4.6 6 7.9 6 11a6 6 0 0 1-12 0c0-3.1 2.5-6.4 6-11z"/>',
   fade: '<circle cx="12" cy="12" r="7" stroke-dasharray="2.5 3"/><path d="M9 12h6" />',
   burst:
@@ -35,6 +35,9 @@ const P: Record<MomentIcon | NonNullable<ChipIcon> | 'creatures' | 'info' | 'big
   big: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4" />',
   close: '<path d="M6 6l12 12M18 6 6 18"/>',
   pause: '<path d="M8 5v14M16 5v14"/>',
+  eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
+  warn: '<path d="M12 3.5 22 20H2z"/><path d="M12 10v4.5M12 17.2v.1"/>',
+  lock: '<rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>',
   still: '<circle cx="12" cy="12" r="4.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>',
   pulsing: '<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7.5" stroke-dasharray="3 2"/>',
   swimmer: '<path d="M4 12h11m-4-5 5 5-5 5"/><circle cx="18.5" cy="12" r="2"/>',

@@ -334,6 +334,22 @@ export function drawCreatureStatus(
  */
 export class StatusLayer {
   private alpha = new Map<number, number>();
+  /** Pills drawn last frame (for taps): box in overlay CSS px. */
+  private hits: { box: Box; id: number; behavior: Behavior | null; state: CreatureState }[] = [];
+
+  /**
+   * Which pill is under a tap (overlay CSS px), with a ≥ 44 px tall hit area.
+   * Tapping a pill with a behaviour → open the Behaviour Guide at it.
+   */
+  hitTest(px: number, py: number): { id: number; behavior: Behavior | null; state: CreatureState } | null {
+    for (let i = this.hits.length - 1; i >= 0; i--) {
+      const h = this.hits[i];
+      const pad = Math.max(0, (44 - h.box.h) / 2);
+      if (px >= h.box.x - 4 && px <= h.box.x + h.box.w + 4 && py >= h.box.y - pad && py <= h.box.y + h.box.h + pad)
+        return { id: h.id, behavior: h.behavior, state: h.state };
+    }
+    return null;
+  }
 
   draw(
     ctx: CanvasRenderingContext2D,
@@ -345,6 +361,7 @@ export class StatusLayer {
     const picked = new Map(pickStatusIds(creatures, { onAll: o.onAll, selectedId: o.selectedId }).map((p) => [p.id, p.alpha]));
     const k = o.reduceMotion ? 1 : Math.min(1, o.dt * 6);
     const taken: Box[] = [];
+    this.hits = [];
     // Selected first so it always gets the best spot.
     const order = [...creatures].sort((a, b) => (b.id === o.selectedId ? 1 : 0) - (a.id === o.selectedId ? 1 : 0));
     for (const c of order) {
@@ -358,7 +375,7 @@ export class StatusLayer {
       this.alpha.set(c.id, a);
       const p = toScreen(c);
       if (!p || p.x < -p.r || p.y < -p.r || p.x > o.view.w + p.r || p.y > o.view.h + p.r) continue;
-      drawCreatureStatus(ctx, c, p, {
+      const box = drawCreatureStatus(ctx, c, p, {
         lang: o.lang,
         time: o.time,
         reduceMotion: o.reduceMotion,
@@ -367,6 +384,7 @@ export class StatusLayer {
         taken,
         view: o.view,
       });
+      if (a > 0.5) this.hits.push({ box, id: c.id, behavior: c.state === 'stable' ? c.behavior : null, state: c.state });
     }
     const alive = new Set(creatures.map((c) => c.id));
     for (const id of [...this.alpha.keys()]) if (!alive.has(id)) this.alpha.delete(id);

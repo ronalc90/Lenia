@@ -15,7 +15,11 @@ export interface HelpSheet {
   dispose(): void;
 }
 
-export function createHelp(container: HTMLElement, moments: Moments, opts: { lang(): Lang; reduceMotion?(): boolean }): HelpSheet {
+export function createHelp(
+  container: HTMLElement,
+  moments: Moments,
+  opts: { lang(): Lang; reduceMotion?(): boolean; onOpenGuide?(): void },
+): HelpSheet {
   const el = document.createElement('section');
   el.className = 'mo-help';
   container.appendChild(el);
@@ -39,6 +43,7 @@ export function createHelp(container: HTMLElement, moments: Moments, opts: { lan
         <div><h3>${tr(MS.helpTitle, L)}</h3><p>${tr(MS.helpIntro, L)}</p></div>
         <span class="mo-help-n">${tr(MS.helpCount, L, { n: seen, total: list.length })}</span>
       </header>
+      ${opts.onOpenGuide ? `<button type="button" class="mo-btn secondary mo-help-guide">${moIcon('behavior', 18)} ${tr(MS.bhOpen, L)}</button>` : ''}
       <ul class="mo-help-list">
         ${list
           .map((e) => {
@@ -68,6 +73,10 @@ export function createHelp(container: HTMLElement, moments: Moments, opts: { lan
 
   el.addEventListener('click', (e) => {
     const target = e.target as HTMLElement;
+    if (target.closest('.mo-help-guide')) {
+      opts.onOpenGuide?.();
+      return;
+    }
     const play = target.closest('.mo-help-play') as HTMLElement | null;
     if (play?.dataset.id) {
       moments.replay(play.dataset.id as Parameters<Moments['replay']>[0]);

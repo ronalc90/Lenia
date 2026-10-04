@@ -17,11 +17,12 @@
  */
 import './moments.css';
 import { wrapDelta, type Camera } from '../../core/camera';
-import type { Lang, Pattern } from '../../core/types';
+import type { Behavior, Lang, Pattern, UpgradeView } from '../../core/types';
 import { BRIEF_MS } from '../../moments/config';
 import type { Moments } from '../../moments/moments';
 import type { Chip, MomentAction, MomentId, MomentView, UiTarget } from '../../moments/types';
 import { Portrait } from '../story/portraits';
+import { behaviorRowsHtml, createBehaviorGuideSheet, type BehaviorGuideSheet, type ExtraBooster } from './behavior-guide';
 import { createHelp, type HelpSheet } from './help';
 import { moIcon } from './icons';
 import { Illustration, type CompareSide } from './illustrations';
@@ -64,8 +65,14 @@ export interface MomentsUIOptions {
   theme?(): 'dark' | 'light';
   /** Species card data (speciesInputFromView(view, id)): the "two species" moment compares them side by side. */
   speciesInfo?(speciesId: string): SpeciesCardInput | null;
-  /** "Ver" on a species card booster (opens the Lab on that upgrade). */
+  /** "Ver" on a species card / behaviour booster (opens the Lab on that upgrade). */
   onShowUpgrade?(upgradeId: string): void;
+  /** Upgrades (view.upgrades): behaviour cards show the level of its Afinidad. */
+  upgrades?(): readonly UpgradeView[];
+  /** Behaviours seen (view.behaviorsSeen): the Behaviour Guide shows the others as silhouettes. */
+  seenBehaviors?(): readonly Behavior[];
+  /** More ways to boost a behaviour (research-tree nodes, later). */
+  extraBoosters?(b: Behavior): readonly ExtraBooster[];
 }
 
 export interface MomentsUI {
@@ -75,6 +82,8 @@ export interface MomentsUI {
   readonly busy: boolean;
   /** Mount the "¿Qué pasó?" sheet (Settings / Bitácora). */
   mountHelp(container: HTMLElement): HelpSheet;
+  /** The Behaviour Guide sheet, optionally scrolled to one behaviour (Bestiary header, status pill, species card). */
+  openBehaviorGuide(focus?: Behavior | null): void;
   /** Re-render texts after a language change. */
   relabel(): void;
   readonly debug: {
@@ -197,7 +206,16 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
   const linesEl = document.createElement('div');
   linesEl.className = 'mo-lines';
   linesEl.setAttribute('aria-live', 'polite');
-  talk.append(velaWrap, linesEl);
+  const talkCol = document.createElement('div');
+  const talkLabel = document.createElement('small');
+  talkLabel.className = 'mo-talk-label';
+  talkLabel.hidden = true;
+  talkCol.append(talkLabel, linesEl);
+  talk.append(velaWrap, talkCol);
+  // Behaviour Momentos: what changes, how to get more, how to boost it (+ the guide).
+  const bhBox = document.createElement('div');
+  bhBox.className = 'mo-bhbox';
+  bhBox.hidden = true;
   const chipsEl = document.createElement('div');
   chipsEl.className = 'mo-chips';
   const actions = document.createElement('div');
@@ -212,7 +230,7 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
   neverBtn.type = 'button';
   neverBtn.className = 'mo-never';
   actions.append(primary, okBtn, neverBtn);
-  card.append(head, illusBox, cmpBox, talk, chipsEl, actions);
+  card.append(head, illusBox, cmpBox, talk, bhBox, chipsEl, actions);
   const briefEl = document.createElement('div');
   briefEl.className = 'mo-brief';
   briefEl.hidden = true;
@@ -426,8 +444,26 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
     title.textContent = m.title[lang];
     pausedTag.innerHTML = m.replay ? '' : `${moIcon('pause', 12)}<span>${escapeHtml(tr(MS.paused, lang))}</span>`;
     pausedTag.hidden = m.replay;
-    chipsEl.innerHTML = m.chips.map((c) => chipHtml(c, lang)).join('');
-    chipsEl.hidden = !m.chips.length;
+    const b = behaviorOf(m);
+    // A behaviour card's first chip is its bonus: the "Qué cambia" row shows it, big.
+    const chips = b ? m.chips.slice(1) : m.chips;
+    chipsEl.innerHTML = chips.map((c) => chipHtml(c, lang)).join('');
+    chipsEl.hidden = !chips.length;
+    card.classList.toggle('rich', !!b);
+    talkLabel.hidden = !b;
+    talkLabel.textContent = b ? tr(MS.bhWhat, lang) : '';
+    bhBox.hidden = !b;
+    bhBox.innerHTML = b
+      ? behaviorRowsHtml(b, { lang, upgrades: opts.upgrades?.() ?? [], canJump: !!opts.onShowUpgrade && !m.replay, extra: opts.extraBoosters?.(b) })
+      : '';
+    if (b) {
+      // "+1 Muestra" and the way to the full guide share one line.
+      chipsEl.hidden = false;
+      chipsEl.insertAdjacentHTML(
+        'beforeend',
+        `<button type="button" class="mo-bh-open" data-b="${b}" aria-label="${escapeHtml(tr(MS.bhOpen, lang))}">${moIcon('behavior', 16)}${escapeHtml(tr(MS.bhOpenShort, lang))}</button>`,
+      );
+    }
     if (m.action) {
       primary.hidden = false;
       primary.textContent = m.action.label[lang];
@@ -447,6 +483,29 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
     portrait.state.reduceMotion = rm();
   }
 
+  /** The behaviour a card is about (behaviour Momentos only). */
+  function behaviorOf(m: MomentView): Behavior | null {
+    return m.id.startsWith('behavior.') ? (m.id.slice(9) as Behavior) : null;
+  }
+
+  let guideSheet: BehaviorGuideSheet | null = null;
+  function openGuide(focus?: Behavior | null): void {
+    guideSheet ??= createBehaviorGuideSheet(root, {
+      lang: L,
+      reduceMotion: rm,
+      seen: opts.seenBehaviors,
+      upgrades: opts.upgrades,
+      onShowUpgrade: opts.onShowUpgrade
+        ? (id) => {
+            guideSheet?.close();
+            opts.onShowUpgrade?.(id);
+          }
+        : undefined,
+      extraBoosters: opts.extraBoosters,
+    });
+    guideSheet.open(focus ?? null);
+  }
+
   /** Two real species cards side by side, with the one-sentence reason (false → use the canvas). */
   function mountCompare(m: MomentView): boolean {
     cmp?.dispose();
@@ -459,7 +518,7 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
     if (!sa || !sb) return false;
     illusBox.hidden = true;
     cmpBox.hidden = false;
-    cmp = createSpeciesCompare(cmpBox, sa, sb, { lang: L, reduceMotion: rm, compact: true, title: false, dense: true, onShowUpgrade: opts.onShowUpgrade });
+    cmp = createSpeciesCompare(cmpBox, sa, sb, { lang: L, reduceMotion: rm, compact: true, title: false, dense: true, onShowUpgrade: opts.onShowUpgrade, onBehavior: (b) => openGuide(b) });
     return true;
   }
 
@@ -632,6 +691,21 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
   });
   neverBtn.addEventListener('click', () => close('never'));
   linesEl.addEventListener('click', finishTyping);
+  const onBhClick = (e: MouseEvent) => {
+    const t = e.target as HTMLElement;
+    const go = t.closest('.mo-bh-go') as HTMLElement | null;
+    if (go?.dataset.up) {
+      // Jumping to the upgrade ends the explanation (the Lab opens underneath).
+      const id = go.dataset.up;
+      close('dismiss');
+      opts.onShowUpgrade?.(id);
+      return;
+    }
+    const open = t.closest('.mo-bh-open') as HTMLElement | null;
+    if (open?.dataset.b) openGuide(open.dataset.b as Behavior);
+  };
+  bhBox.addEventListener('click', onBhClick);
+  chipsEl.addEventListener('click', onBhClick);
   // Taps outside the card do nothing (the game is paused); nudge the button.
   catcher.addEventListener('pointerdown', (e) => {
     e.preventDefault();
@@ -640,7 +714,7 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
     okBtn.classList.add('nudge');
   });
   const onKey = (e: KeyboardEvent) => {
-    if (!act || act.phase === 'exit') return;
+    if (!act || act.phase === 'exit' || guideSheet?.isOpen) return;
     if (e.key === 'Escape' || ((e.key === 'Enter' || e.key === ' ') && document.activeElement === document.body)) {
       e.preventDefault();
       close('dismiss');
@@ -991,8 +1065,11 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
     get busy() {
       return anyOn();
     },
+    openBehaviorGuide(focus) {
+      openGuide(focus ?? null);
+    },
     mountHelp(container) {
-      return createHelp(container, moments, { lang: L, reduceMotion: rm });
+      return createHelp(container, moments, { lang: L, reduceMotion: rm, onOpenGuide: () => openGuide() });
     },
     relabel() {
       if (act) {
@@ -1021,6 +1098,7 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
       for (const off of offs) off();
       window.removeEventListener('keydown', onKey);
       if (raf) cancelAnimationFrame(raf);
+      guideSheet?.dispose();
       layer.remove();
     },
   };

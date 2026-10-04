@@ -20,6 +20,7 @@ import { BEHAVIOR_COLOR } from '../../core/palette';
 import type { Behavior, GameView, Lang, Pattern, Rarity, Text, UpgradeView } from '../../core/types';
 import { AFFINITY_BONUS, BEHAVIOR_MULT, UNCLASSIFIED_MULT } from '../../game/balance';
 import { fmtFixed, fmtRate } from '../format';
+import { AFFINITY_OF } from '../../moments/behaviors';
 import { moIcon } from './icons';
 import { Illustration } from './illustrations';
 import { MS, tr } from './strings';
@@ -58,16 +59,6 @@ export interface SpeciesCardInput {
   eps: number | null;
   boosters: Booster[];
 }
-
-const AFFINITY_OF: Record<string, 'swimAffinity' | 'sessileAffinity' | 'colonyAffinity'> = {
-  swimmer: 'swimAffinity',
-  spinner: 'swimAffinity',
-  divider: 'colonyAffinity',
-  colony: 'colonyAffinity',
-  still: 'sessileAffinity',
-  pulsing: 'sessileAffinity',
-  none: 'sessileAffinity',
-};
 
 /** Upgrades that make this species earn more (present in the view). */
 export function boostersFor(behavior: Behavior | null, upgrades: readonly UpgradeView[]): Booster[] {
@@ -133,7 +124,7 @@ export function speciesInputFromView(v: GameView, speciesId: string): SpeciesCar
 const BEHAVIOR_NAME: Record<Behavior | 'none', [Text, Text]> = {
   // [singular, plural]
   still: [{ es: 'quieta', en: 'still' }, { es: 'quietas', en: 'still ones' }],
-  pulsing: [{ es: 'late', en: 'pulsing' }, { es: 'que laten', en: 'pulsing ones' }],
+  pulsing: [{ es: 'pulsante', en: 'pulsing' }, { es: 'pulsantes', en: 'pulsing ones' }],
   swimmer: [{ es: 'nadadora', en: 'swimmer' }, { es: 'nadadoras', en: 'swimmers' }],
   spinner: [{ es: 'giratoria', en: 'spinner' }, { es: 'giratorias', en: 'spinners' }],
   divider: [{ es: 'divisora', en: 'divider' }, { es: 'divisoras', en: 'dividers' }],
@@ -340,6 +331,8 @@ export interface SpeciesCardOpts {
   onShowUpgrade?(upgradeId: string): void;
   /** Smaller layout (comparison columns, the Momento card). */
   compact?: boolean;
+  /** Tap on the behaviour tag: open the Behaviour Guide at it. */
+  onBehavior?(b: Behavior): void;
 }
 
 export interface SpeciesCard {
@@ -390,7 +383,11 @@ export function createSpeciesCard(container: HTMLElement, input: SpeciesCardInpu
           ${s.subtitle || s.catalogName ? `<small>${esc(s.subtitle ?? s.name)}</small>` : ''}
           <span class="mo-spc-tags">
             <span class="mo-spc-tag">${moIcon('drop', 14)}${esc(shapeLabel(s, L))}</span>
-            <span class="mo-spc-tag beh" style="--b-c:${bcol}">${moIcon(s.behavior ?? 'still', 14)}${esc(behaviorName(s.behavior, L))}</span>
+            ${
+              opts.onBehavior && s.behavior
+                ? `<button type="button" class="mo-spc-tag beh" data-beh="${s.behavior}" style="--b-c:${bcol}" aria-label="${esc(tr(MS.bhOpen, L))}: ${esc(behaviorName(s.behavior, L))}">${moIcon(s.behavior, 14)}${esc(behaviorName(s.behavior, L))} ${moIcon('info', 12)}</button>`
+                : `<span class="mo-spc-tag beh" style="--b-c:${bcol}">${moIcon(s.behavior ?? 'still', 14)}${esc(behaviorName(s.behavior, L))}</span>`
+            }
           </span>
         </div>
       </header>
@@ -429,8 +426,11 @@ export function createSpeciesCard(container: HTMLElement, input: SpeciesCardInpu
   }
 
   el.addEventListener('click', (e) => {
-    const go = (e.target as HTMLElement).closest('.mo-spc-go') as HTMLElement | null;
+    const t = e.target as HTMLElement;
+    const go = t.closest('.mo-spc-go') as HTMLElement | null;
     if (go?.dataset.up) opts.onShowUpgrade?.(go.dataset.up);
+    const beh = t.closest('[data-beh]') as HTMLElement | null;
+    if (beh?.dataset.beh) opts.onBehavior?.(beh.dataset.beh as Behavior);
   });
 
   render(input);
