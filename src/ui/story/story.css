@@ -1,0 +1,707 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   Bioluma — story layer (dialogue, portraits, spotlight, choices, endings,
+   archive). Night-lab style: #0B0E12, cyan/indigo glow. Mobile first.
+   Everything is scoped under .sty / .sty-archive.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.sty {
+  --sty-bg: #0b0e12;
+  --sty-panel: rgba(14, 19, 27, 0.94);
+  --sty-line: rgba(91, 192, 235, 0.28);
+  --sty-text: #e6edf3;
+  --sty-dim: #8b98a5;
+  --sty-accent: #5bc0eb;
+  --sty-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --sty-font: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --sty-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  --sty-mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  pointer-events: none;
+  font-family: var(--sty-font);
+  color: var(--sty-text);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.sty *,
+.sty *::before,
+.sty *::after {
+  box-sizing: border-box;
+}
+.sty canvas.sty-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Soft scrim behind choices: the decision gets the whole stage. */
+.sty-scrim {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% 100%, rgba(3, 5, 9, 0.82), rgba(3, 5, 9, 0.55));
+  opacity: 0;
+  transition: opacity 320ms ease;
+  pointer-events: none;
+}
+.sty-scrim.show {
+  opacity: 1;
+}
+
+/* ───────────── dialogue box ───────────── */
+
+.sty-box {
+  position: absolute;
+  left: 50%;
+  width: min(560px, calc(100% - 20px));
+  min-height: 92px;
+  padding: 12px 14px 14px 112px;
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 140% at 0% 100%, rgba(64, 72, 210, 0.18), transparent 60%),
+    linear-gradient(180deg, #19212a, #0e131a);
+  border: 1px solid var(--sty-line);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 10px 40px rgba(0, 0, 0, 0.55),
+    0 0 26px rgba(91, 192, 235, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  pointer-events: auto;
+  cursor: pointer;
+  transform: translate(-50%, 0);
+  transition:
+    opacity 220ms var(--sty-ease),
+    transform 260ms var(--sty-ease),
+    top 260ms var(--sty-ease),
+    bottom 260ms var(--sty-ease),
+    border-color 300ms;
+  touch-action: manipulation;
+}
+.sty-box[hidden] {
+  display: none;
+}
+.sty-box.enter {
+  opacity: 0;
+  transform: translate(-50%, 14px) scale(0.98);
+}
+.sty-box.at-top.enter {
+  transform: translate(-50%, -14px) scale(0.98);
+}
+.sty-box.who-albor {
+  --sty-line: rgba(242, 194, 123, 0.35);
+}
+.sty-box.who-committee {
+  --sty-line: rgba(228, 87, 46, 0.32);
+}
+.sty-box.who-coro {
+  --sty-line: rgba(184, 146, 255, 0.4);
+}
+.sty-box.who-you {
+  --sty-line: rgba(139, 152, 165, 0.3);
+}
+.sty-portrait-wrap {
+  position: absolute;
+  left: 0;
+  bottom: 2px;
+  width: 116px;
+  height: 116px;
+  pointer-events: none;
+}
+.sty-box .sty-portrait {
+  width: 116px;
+  height: 116px;
+  display: block;
+}
+.sty-box.pop .sty-portrait-wrap {
+  animation: sty-pop 420ms var(--sty-ease);
+}
+@keyframes sty-pop {
+  0% {
+    transform: translateY(10px) scale(0.82);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(-3px) scale(1.04);
+    opacity: 1;
+  }
+  100% {
+    transform: none;
+  }
+}
+.sty-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  margin-right: 70px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sty-accent);
+  text-shadow: 0 0 10px currentColor;
+}
+.sty-name .rec {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ffb45e;
+  box-shadow: 0 0 8px #ffb45e;
+  animation: sty-blink 1.1s steps(2, start) infinite;
+}
+@keyframes sty-blink {
+  to {
+    visibility: hidden;
+  }
+}
+.sty-box.who-albor .sty-name {
+  color: #f2c27b;
+}
+.sty-box.who-committee .sty-name {
+  color: #ff8a6e;
+}
+.sty-box.who-coro .sty-name {
+  color: #c9b3ff;
+}
+.sty-box.who-you .sty-name {
+  color: var(--sty-dim);
+}
+.sty-text {
+  margin: 4px 0 0;
+  font-size: 17px;
+  line-height: 1.42;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  color: var(--sty-text);
+  text-wrap: pretty;
+  min-height: 2.84em;
+}
+.sty-text .rest {
+  color: transparent;
+}
+.sty-box.who-albor .sty-text {
+  color: #ffe2b8;
+  font-family: var(--sty-serif);
+  font-style: italic;
+  font-size: 17.5px;
+}
+.sty-box.who-committee .sty-text {
+  font-family: var(--sty-mono);
+  font-size: 13.5px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  color: #e6e0d2;
+}
+.sty-box.who-coro .sty-text {
+  font-size: 21px;
+  letter-spacing: 0.04em;
+  white-space: pre-wrap;
+  color: #e9dcff;
+  text-shadow: 0 0 14px rgba(184, 146, 255, 0.85);
+}
+.sty-box.who-you .sty-text {
+  font-family: var(--sty-serif);
+  font-style: italic;
+  color: #c9d1d9;
+}
+.sty-next {
+  position: absolute;
+  right: 14px;
+  bottom: 10px;
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 9px solid var(--sty-accent);
+  filter: drop-shadow(0 0 6px var(--sty-accent));
+  opacity: 0;
+  transition: opacity 160ms;
+}
+.sty-box.done .sty-next {
+  opacity: 1;
+  animation: sty-bob 0.9s ease-in-out infinite;
+}
+@keyframes sty-bob {
+  50% {
+    transform: translateY(4px);
+  }
+}
+.sty-skip {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 48px;
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--sty-dim);
+  font: 600 12px/1 var(--sty-font);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.sty-skip:hover,
+.sty-skip:focus-visible {
+  color: var(--sty-text);
+  background: rgba(255, 255, 255, 0.06);
+  outline: none;
+}
+
+/* ───────────── task pill (tutorial step waiting for an action) ───────────── */
+
+.sty-task {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(340px, calc(100% - 24px));
+  padding: 6px 6px 6px 4px;
+  border-radius: 999px;
+  background: #121821;
+  border: 1px solid rgba(91, 192, 235, 0.5);
+  box-shadow:
+    0 6px 24px rgba(0, 0, 0, 0.5),
+    0 0 18px rgba(91, 192, 235, 0.25);
+  pointer-events: auto;
+  will-change: transform;
+  animation: sty-glow 1.8s ease-in-out infinite;
+}
+.sty-task[hidden] {
+  display: none;
+}
+@keyframes sty-glow {
+  50% {
+    box-shadow:
+      0 6px 24px rgba(0, 0, 0, 0.5),
+      0 0 28px rgba(91, 192, 235, 0.5);
+  }
+}
+.sty-task canvas {
+  width: 40px;
+  height: 40px;
+  flex: none;
+}
+.sty-task-text {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+  padding-right: 2px;
+}
+.sty-task-x {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--sty-dim);
+  font: 600 16px/1 var(--sty-font);
+  cursor: pointer;
+}
+
+/* ───────────── choice ───────────── */
+
+.sty-choice {
+  position: absolute;
+  left: 50%;
+  width: min(520px, calc(100% - 24px));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: auto;
+}
+.sty-choice[hidden] {
+  display: none;
+}
+.sty-opt {
+  --c: var(--sty-accent);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 60px;
+  padding: 12px 18px 12px 14px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--c) 55%, transparent);
+  background:
+    radial-gradient(120% 160% at 0% 50%, color-mix(in srgb, var(--c) 22%, transparent), transparent 60%),
+    #10161d;
+  color: var(--sty-text);
+  font: 600 16.5px/1.3 var(--sty-font);
+  text-align: left;
+  cursor: pointer;
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.5),
+    0 0 18px color-mix(in srgb, var(--c) 18%, transparent);
+  opacity: 0;
+  transform: translateY(10px);
+  animation: sty-opt-in 360ms var(--sty-ease) forwards;
+  transition:
+    transform 140ms,
+    box-shadow 200ms;
+}
+.sty-opt:nth-child(2) {
+  animation-delay: 90ms;
+}
+.sty-opt:active {
+  transform: scale(0.98);
+}
+.sty-opt:hover,
+.sty-opt:focus-visible {
+  outline: none;
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.5),
+    0 0 26px color-mix(in srgb, var(--c) 45%, transparent);
+}
+@keyframes sty-opt-in {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.sty-orb {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff, var(--c) 55%, transparent 72%);
+  box-shadow: 0 0 14px var(--c);
+}
+.sty-later {
+  align-self: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  background: transparent;
+  color: var(--sty-dim);
+  font: 500 13px/1 var(--sty-font);
+  cursor: pointer;
+  opacity: 0;
+  animation: sty-opt-in 360ms var(--sty-ease) 220ms forwards;
+}
+
+/* ───────────── ending cinematic ───────────── */
+
+.sty-end {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: #04060a;
+  pointer-events: auto;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 900ms ease;
+}
+.sty-end.show {
+  opacity: 1;
+}
+.sty-end canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.sty-end-title {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: max(64px, 9%);
+  text-align: center;
+  font: 600 12px/1 var(--sty-font);
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: rgba(230, 237, 243, 0.75);
+  opacity: 0;
+}
+.sty-end-card {
+  position: absolute;
+  left: 50%;
+  bottom: 17%;
+  width: min(560px, calc(100% - 48px));
+  transform: translateX(-50%);
+  text-align: center;
+  font-family: var(--sty-serif);
+  font-style: italic;
+  font-size: clamp(19px, 5.2vw, 25px);
+  line-height: 1.45;
+  color: #f1ede6;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+}
+.sty-end-card.closing {
+  bottom: 22%;
+  font-size: clamp(23px, 6.6vw, 34px);
+  color: #fff8ec;
+}
+/* Credits roll inside a masked window that ends above the button. */
+.sty-end-credits {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 12%;
+  bottom: 128px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 80%, transparent);
+  mask-image: linear-gradient(transparent, #000 14%, #000 80%, transparent);
+  pointer-events: none;
+}
+.sty-end-credits .inner {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: min(460px, calc(100% - 48px));
+  text-align: center;
+  font: 400 14.5px/1.7 var(--sty-font);
+  color: rgba(230, 237, 243, 0.78);
+}
+.sty-end-credits b {
+  display: block;
+  margin-bottom: 18px;
+  font: 600 13px/1 var(--sty-font);
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: #fff;
+}
+.sty-end-credits p {
+  margin: 0 0 14px;
+}
+.sty-end-skip {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(10px, env(safe-area-inset-right));
+  min-width: 56px;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(230, 237, 243, 0.8);
+  font: 600 12px/1 var(--sty-font);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+.sty-end-go {
+  position: absolute;
+  left: 50%;
+  bottom: max(36px, calc(env(safe-area-inset-bottom) + 24px));
+  transform: translateX(-50%);
+  min-height: 56px;
+  padding: 0 28px;
+  border: 1px solid rgba(255, 233, 199, 0.6);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 233, 199, 0.18), rgba(255, 190, 110, 0.08));
+  color: #fff4e2;
+  font: 600 16px/1 var(--sty-font);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 0 30px rgba(255, 200, 120, 0.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 900ms ease;
+  white-space: nowrap;
+}
+.sty-end-go.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ───────────── archive panel ───────────── */
+
+.sty-archive {
+  --c-text: #e6edf3;
+  --c-dim: #8b98a5;
+  font-family: Inter, system-ui, sans-serif;
+  color: var(--c-text);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 4px 2px 12px;
+}
+.sty-archive h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--c-dim);
+}
+.sty-archive .sa-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sty-archive .sa-head canvas {
+  width: 56px;
+  height: 56px;
+  flex: none;
+}
+.sty-archive .sa-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+.sty-archive .sa-sub {
+  font-size: 13px;
+  color: var(--c-dim);
+}
+.sty-archive .sa-endings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.sty-archive .sa-end {
+  --c: #5bc0eb;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-height: 112px;
+  padding: 14px 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #141a21;
+  font: 600 13px/1.25 Inter, system-ui, sans-serif;
+  color: var(--c-text);
+  text-align: center;
+  cursor: default;
+}
+.sty-archive .sa-end.found {
+  border-color: color-mix(in srgb, var(--c) 50%, transparent);
+  background: radial-gradient(120% 100% at 50% 0%, color-mix(in srgb, var(--c) 18%, transparent), transparent 70%), #141a21;
+  cursor: pointer;
+}
+.sty-archive .sa-end.secret {
+  grid-column: 1 / -1;
+  min-height: 92px;
+}
+.sty-archive .sa-glyph {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font: 700 18px/1 Inter, system-ui, sans-serif;
+  color: #3a4552;
+  background: radial-gradient(circle at 40% 35%, #222c37, #0e1318 70%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.sty-archive .sa-end.found .sa-glyph {
+  color: transparent;
+  background: radial-gradient(circle at 38% 34%, #fff, var(--c) 45%, transparent 72%);
+  box-shadow: 0 0 22px var(--c);
+}
+.sty-archive .sa-end small {
+  font-weight: 500;
+  font-size: 11.5px;
+  color: var(--c-dim);
+}
+.sty-archive .sa-lean {
+  display: grid;
+  grid-template-columns: 16px 76px 1fr;
+  align-items: center;
+  gap: 8px 10px;
+  font-size: 13px;
+}
+.sty-archive .sa-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+}
+.sty-archive .sa-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: #222c37;
+  overflow: hidden;
+}
+.sty-archive .sa-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+.sty-archive .sa-act {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sty-archive .sa-act h4 {
+  margin: 6px 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-dim);
+}
+.sty-archive .sa-scenes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sty-archive .sa-scene {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(91, 192, 235, 0.3);
+  background: rgba(91, 192, 235, 0.08);
+  color: var(--c-text);
+  font: 500 13px/1 Inter, system-ui, sans-serif;
+  cursor: pointer;
+}
+.sty-archive .sa-scene[disabled] {
+  border-color: rgba(255, 255, 255, 0.06);
+  background: transparent;
+  color: #4a5562;
+  cursor: default;
+}
+
+@media (min-width: 720px) {
+  .sty-box {
+    padding-left: 146px;
+    min-height: 116px;
+  }
+  .sty-portrait-wrap,
+  .sty-box .sty-portrait {
+    width: 140px;
+    height: 140px;
+  }
+  .sty-text {
+    font-size: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sty-box,
+  .sty-opt,
+  .sty-later,
+  .sty-task {
+    animation: none !important;
+    transition: opacity 200ms !important;
+  }
+  .sty-opt,
+  .sty-later {
+    opacity: 1;
+    transform: none;
+  }
+}
+.sty.rm .sty-box,
+.sty.rm .sty-task {
+  animation: none !important;
+  transition: opacity 200ms !important;
+}
+.sty.rm .sty-box.pop .sty-portrait-wrap,
+.sty.rm .sty-box.done .sty-next {
+  animation: none !important;
+}
+.sty.rm .sty-opt,
+.sty.rm .sty-later {
+  animation: none !important;
+  opacity: 1;
+  transform: none;
+}
