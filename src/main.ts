@@ -56,6 +56,13 @@ function boot(): void {
 
   let sim: ReturnType<typeof createSimulation> | null = null;
   let paused = false;
+  /**
+   * Extinction ritual: the game resets at once, but the dish is wiped only when the
+   * UI's white-out covers it. Until then the old dish is frozen (no steps, no
+   * detection) so old creatures can't pay into the new era.
+   */
+  let ritual = false;
+  let ritualClearTimer: ReturnType<typeof setTimeout> | null = null;
   let lastInteraction = performance.now();
   let idle = false;
 
@@ -85,7 +92,15 @@ function boot(): void {
       if (spec) sim?.seed(spec);
     },
     onExtinguish() {
+      ritual = true;
       if (game.actions.extinguish()) save();
+      else ritual = false;
+    },
+    onRitualWhite() {
+      finishRitual();
+    },
+    onUISound(kind) {
+      audio.playUI?.(kind);
     },
     onPauseToggle() {
       paused = !paused;
@@ -154,11 +169,29 @@ function boot(): void {
 
   // Dish requests from the game (auto-seeder, rewards, extinction).
   bus.on('dishSeed', ({ specs }) => specs.forEach((s) => sim!.seed(s)));
-  bus.on('dishClear', () => {
+  function clearDish(): void {
     sim!.clear();
     detector.reset();
     epoch++; // drop snapshots requested before the clear
     reports.length = 0;
+  }
+  function finishRitual(): void {
+    if (ritualClearTimer) clearTimeout(ritualClearTimer);
+    ritualClearTimer = null;
+    if (ritual) {
+      ritual = false;
+      clearDish();
+    }
+  }
+  bus.on('dishClear', () => {
+    if (ritual) {
+      // Wipe when the white-out lands; fall back in case the UI never reports it.
+      epoch++;
+      reports.length = 0;
+      ritualClearTimer ??= setTimeout(finishRitual, 5000);
+    } else {
+      clearDish();
+    }
   });
   // Capture a portrait of every newly registered species.
   bus.on('speciesNew', ({ speciesId, x, y }) => {
@@ -244,7 +277,7 @@ function boot(): void {
     const s = sim!;
     syncParams(now);
 
-    if (!paused && !document.hidden) {
+    if (!paused && !ritual && !document.hidden) {
       acc += dt * STEPS_PER_SEC * game.speed;
       // Never fall into a spiral of death: cap work per frame.
       const whole = Math.floor(acc);
@@ -263,7 +296,7 @@ function boot(): void {
     game.tick(dt, n ? reports[n - 1] : null);
     reports.length = 0;
 
-    const rate = paused ? 0 : STEPS_PER_SEC * game.speed;
+    const rate = paused || ritual ? 0 : STEPS_PER_SEC * game.speed;
     if (rate !== lastRate) {
       lastRate = rate;
       (ui as { setSimRate?: (r: number) => void }).setSimRate?.(rate);
