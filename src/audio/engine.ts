@@ -11,10 +11,11 @@
  * disconnected from `onended` callbacks, so it is safe with any clock.
  */
 import type { GameEvents } from '../core/bus';
-import { DEL_RETURN, REV_RETURN, buildGraph, glide, makeNoise, type MixGraph } from './fx';
+import { DEFAULT_AMBIENCE, DEFAULT_HARMONY, isDefaultAmbience, sameAmbience, sanitizeAmbience, scoreStyleOf, harmonyFor, type Ambience, type Harmony } from './ambience';
+import { DEFAULT_REVERB, DEL_RETURN, REV_RETURN, buildGraph, glide, makeNoise, type MixGraph } from './fx';
 import { LAYERS, PAD_CUTOFF, WIDTH, layerGain, targetLevel, type Layer, type MusicState } from './intensity';
 import { hash32 } from './motifs';
-import { SECONDS_PER_BAR, SECONDS_PER_BEAT, barInfo } from './progression';
+import { SECONDS_PER_BAR, SECONDS_PER_BEAT } from './progression';
 import { Composer, signatureFor, type NoteEvent, type Signature } from './score';
 import { EXTINCTION_NOTE_AT, EXTINCTION_SWEEP, SfxPlayer, SliderTone, type SfxName } from './sfx';
 
@@ -103,6 +104,12 @@ export class AudioCore {
   /** Extinction ritual state; `done` = the new era was announced during the sweep. */
   private ext: { phase: ExtPhase; cutAt: number; reenterAt: number; done: boolean } = { phase: 'none', cutAt: 0, reenterAt: 0, done: false };
   private disposed = false;
+  /** Music ambience (cosmetic preset): tempo, harmony, timbres, room. Applied on a bar line. */
+  private amb: Ambience = DEFAULT_AMBIENCE;
+  private pendingAmb: Ambience | null = null;
+  private harmony: Harmony = DEFAULT_HARMONY;
+  private spb = SECONDS_PER_BEAT;
+  private spBar = SECONDS_PER_BAR;
 
   constructor(ctx: BaseAudioContext, opts: CoreOptions = {}) {
     this.ctx = ctx;
@@ -148,19 +155,19 @@ export class AudioCore {
 
   /** Bar index sounding at time t (may be negative before the start). */
   barAt(t: number): number {
-    return this.refBar + Math.floor((t - this.refTime) / SECONDS_PER_BAR + 1e-9);
+    return this.refBar + Math.floor((t - this.refTime) / this.spBar + 1e-9);
   }
 
   chordAt(t: number): Chord {
-    return barInfo(Math.max(0, this.barAt(t))).chord;
+    return this.harmony.barInfo(Math.max(0, this.barAt(t))).chord;
   }
 
   /** Next grid point at or after t, `div` in beats (0.25 = sixteenth). */
   grid(t: number, div: number): number {
     if (!this.started || this.ext.phase !== 'none') return t;
-    const beats = (t - this.refTime) / SECONDS_PER_BEAT;
+    const beats = (t - this.refTime) / this.spb;
     const q = Math.ceil(beats / div - 1e-6) * div;
-    return this.refTime + q * SECONDS_PER_BEAT;
+    return this.refTime + q * this.spb;
   }
 
   /** Schedule everything up to now + lookahead. Call every ~50 ms. */
@@ -171,15 +178,15 @@ export class AudioCore {
     const horizon = now + this.lookahead;
     // Fell behind (throttled timers, suspended context): skip to the future.
     if (this.nextBarTime < now - 0.05) {
-      const missed = Math.ceil((now - this.nextBarTime) / SECONDS_PER_BAR);
+      const missed = Math.ceil((now - this.nextBarTime) / this.spBar);
       this.nextBar += missed;
-      this.nextBarTime += missed * SECONDS_PER_BAR;
+      this.nextBarTime += missed * this.spBar;
       this.queue = this.queue.filter((q) => q.time >= now);
     }
     while (this.nextBarTime < horizon) {
       this.planBar(this.nextBarTime);
       this.nextBar++;
-      this.nextBarTime += SECONDS_PER_BAR;
+      this.nextBarTime += this.spBar; // after planBar: a tempo change starts on this bar line
     }
     let i = 0;
     while (i < this.queue.length && this.queue[i].time < horizon) {
@@ -203,12 +210,17 @@ export class AudioCore {
       this.applyFilters(tb);
       this.applyMusicVol(tb, 1.8);
     }
+    if (this.pendingAmb) {
+      const a = this.pendingAmb;
+      this.pendingAmb = null;
+      this.applyAmbience(a, tb, true);
+    }
     this.refBar = this.nextBar;
     this.refTime = tb;
     if (this.ext.phase === 'silent' || this.ext.phase === 'reenter' || (this.ext.phase === 'sweep' && tb >= this.ext.cutAt - 0.01)) {
       return; // music is cut
     }
-    if (this.pendingReseed && barInfo(this.nextBar).barInSection === 0) {
+    if (this.pendingReseed && this.harmony.barInfo(this.nextBar).barInSection === 0) {
       this.composer.reset(eraSeed(this.era));
       this.pendingReseed = false;
     }
@@ -238,7 +250,7 @@ export class AudioCore {
     if (this.vol.muted || this.vol.music <= 0) this.pad.releaseAll(tb, 0.2);
     else if (!sweeping) this.pad.set(plan.pad, tb);
     for (const e of plan.events) {
-      const time = tb + e.beat * SECONDS_PER_BEAT;
+      const time = tb + e.beat * this.spb;
       if (!sweeping || time < this.ext.cutAt) this.queue.push({ time, e });
     }
     this.queue.sort((a, b) => a.time - b.time);
@@ -256,19 +268,19 @@ export class AudioCore {
     if (this.vol.muted || this.vol.music <= 0) return;
     const inst = this.inst;
     const L = this.graph.layerIn;
-    const durS = e.dur * SECONDS_PER_BEAT;
+    const durS = e.dur * this.spb;
     switch (e.inst) {
       case 'pluck':
-        if (this.canStart('arp', t, t + (e.dur < 0.6 ? 0.9 : 1.4))) inst.pluck(inst.pan(L.arp, e.pan), t, e.midi, e.vel, e.dur < 0.6);
+        if (this.canStart('arp', t, t + (e.dur < 0.6 ? 0.9 : 1.4))) inst.arpNote(inst.pan(L.arp, e.pan), t, e.midi, e.vel, e.dur < 0.6);
         break;
       case 'bell':
-        if (this.canStart('mel', t, t + 2.5)) inst.bell(inst.pan(L.mel, e.pan), t, e.midi, e.vel);
+        if (this.canStart('mel', t, t + 2.5)) inst.leadNote(inst.pan(L.mel, e.pan), t, e.midi, e.vel, false, durS);
         break;
       case 'echo':
-        if (this.canStart('mel', t, t + 2)) inst.bell(inst.pan(L.mel, e.pan), t, e.midi, e.vel, true);
+        if (this.canStart('mel', t, t + 2)) inst.leadNote(inst.pan(L.mel, e.pan), t, e.midi, e.vel, true, durS);
         break;
       case 'bass':
-        if (this.canStart('bass', t, t + durS + 0.3)) inst.bass(L.bass, t, e.midi, e.vel, durS);
+        if (this.canStart('bass', t, t + durS + 0.3)) inst.bassNote(L.bass, t, e.midi, e.vel, durS);
         break;
       case 'kick':
         if (this.canStart('perc', t, t + 0.47)) inst.kick(L.perc, t, e.vel);
@@ -292,6 +304,57 @@ export class AudioCore {
   }
 
   // ───────────────────────────── controls ─────────────────────────────
+
+  /**
+   * Music ambience (src/store MUSICS presets). Before the score starts it applies at once;
+   * afterwards on the next bar line, so tempo, harmony and timbres change smoothly. SFX are
+   * unaffected (they keep following the sounding chord, as always).
+   */
+  setAmbience(preset: Ambience, now: number): void {
+    const a = sanitizeAmbience(preset);
+    if (sameAmbience(a, this.pendingAmb ?? this.amb)) return;
+    if (!this.started) {
+      this.pendingAmb = null;
+      this.applyAmbience(a, now, false);
+    } else {
+      this.pendingAmb = a;
+    }
+  }
+
+  get ambience(): Readonly<Ambience> {
+    return this.amb;
+  }
+
+  private applyAmbience(a: Ambience, t: number, crossfade: boolean): void {
+    const prev = this.amb;
+    this.amb = a;
+    const def = isDefaultAmbience(a);
+    if (a.bpm !== prev.bpm) {
+      this.spb = def ? SECONDS_PER_BEAT : 60 / a.bpm;
+      this.spBar = def ? SECONDS_PER_BAR : this.spb * 4;
+      this.graph.delayTime.glide(this.spb * 0.75, t, 0.25);
+    }
+    this.harmony = def ? DEFAULT_HARMONY : harmonyFor(a.mode, a.tonic);
+    this.composer.setHarmony(this.harmony);
+    this.composer.setStyle(scoreStyleOf(a));
+    const padChanged = a.pad !== prev.pad || a.detune !== prev.detune;
+    this.inst.setTimbres({ pad: a.pad, arp: a.arp, lead: a.lead, bass: a.bass }, a.detune);
+    // Restart the pad voices with the new wave; planBar sets the voicing right after (cross-fade).
+    if (padChanged && crossfade) this.pad.releaseAll(t, 0.6);
+    const sameRoom =
+      a.reverb.rt60 === DEFAULT_AMBIENCE.reverb.rt60 &&
+      a.reverb.brightHz === DEFAULT_AMBIENCE.reverb.brightHz &&
+      a.reverb.darkHz === DEFAULT_AMBIENCE.reverb.darkHz;
+    this.graph.setMusicRoom(
+      {
+        reverb: sameRoom ? null : { ...DEFAULT_REVERB, ...a.reverb, seconds: Math.min(5, Math.max(2.4, a.reverb.rt60 + 0.4)) },
+        revScale: a.reverbMix / DEFAULT_AMBIENCE.reverbMix,
+        delScale: a.delayMix / DEFAULT_AMBIENCE.delayMix,
+      },
+      t,
+      crossfade ? 1.2 : 0.01,
+    );
+  }
 
   setState(s: MusicState, now: number): void {
     const prev = this.state;

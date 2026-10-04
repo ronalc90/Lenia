@@ -7,6 +7,7 @@
  */
 import type { GameEvents } from '../core/bus';
 import { analyze, encodeWav16, type Analysis, type Section } from './analysis';
+import type { Ambience } from './ambience';
 import { AudioCore } from './engine';
 import type { MusicState } from './intensity';
 import { SECONDS_PER_BAR } from './progression';
@@ -32,6 +33,8 @@ export interface RenderScript {
   idle?: { t: number; idle: boolean }[];
   /** Test hook: adjust the engine before scheduling (e.g. solo a layer). */
   setup?: (core: AudioCore) => void;
+  /** Timed engine calls during the render (e.g. switch the music ambience mid-way). */
+  hooks?: { t: number; run: (core: AudioCore, now: number) => void }[];
 }
 
 export interface RenderResult {
@@ -186,7 +189,9 @@ export async function renderScript(script: RenderScript): Promise<RenderResult> 
   let si = 0;
   let ei = 0;
   let ii = 0;
+  let hi = 0;
   const idle = script.idle ?? [];
+  const hooks = script.hooks ?? [];
   // Emulate realtime operation: the render pauses every 50 ms (suspend), the
   // engine receives due events/state at the current time and schedules its
   // lookahead, then rendering resumes. Nodes are thus created just in time
@@ -196,6 +201,7 @@ export async function renderScript(script: RenderScript): Promise<RenderResult> 
   const advance = (now: number) => {
     while (si < script.states.length && script.states[si].t <= now + 1e-9) core.setState(script.states[si++].state, now);
     while (ii < idle.length && idle[ii].t <= now + 1e-9) core.setIdle(idle[ii++].idle, now);
+    while (hi < hooks.length && hooks[hi].t <= now + 1e-9) hooks[hi++].run(core, now);
     while (ei < script.events.length && script.events[ei].t <= now + 1e-9) {
       const e = script.events[ei++];
       core.handle(e.type, e.payload as never, now);
@@ -232,6 +238,24 @@ function toBase64(bytes: Uint8Array): string {
   const chunk = 0x8000;
   for (let i = 0; i < bytes.length; i += chunk) s += String.fromCharCode(...bytes.subarray(i, i + chunk));
   return btoa(s);
+}
+
+/**
+ * A music ambience (src/store MUSICS preset) through the preview script. `switchAt` (s): start with
+ * the default score and switch then (applied on the next bar line), to check the transition too.
+ */
+export async function runAmbienceForTest(name: string, preset: Ambience, switchAt: number | null, withWav: boolean) {
+  const script = previewScript();
+  script.name = `ambience ${name}${switchAt !== null ? ' (switch)' : ''}`;
+  if (switchAt === null) script.setup = (core) => core.setAmbience(preset, 0);
+  else script.hooks = [{ t: switchAt, run: (core, now) => core.setAmbience(preset, now) }];
+  // Other tempi/keys shift the bar grid: keep only the global checks and the loud/continuous sections.
+  script.sections = [
+    { name: 'build-up', start: barStart(2), end: barStart(10), expectSound: true, rmsRange: [-44, -12] },
+    { name: 'full + SFX', start: barStart(11), end: script.duration - 1, expectSound: true, rmsRange: [-36, -10] },
+  ];
+  const r = await renderScript(script);
+  return { name: r.name, analysis: r.analysis, sfxStats: r.sfxStats, levels: r.levels, renderMs: r.renderMs, wav: withWav ? toBase64(encodeWav16(r.channels, r.sampleRate)) : null };
 }
 
 /** Entry point for the browser test page. */

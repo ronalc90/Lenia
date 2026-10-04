@@ -187,6 +187,11 @@ export interface MixGraph {
   /** Reverb and delay return gains (ducked for the extinction cut). */
   revReturn: GainNode;
   delReturn: GainNode;
+  /**
+   * Music room of an ambience: send scales (1 = default) and, when the reverb differs from the
+   * default, a music-only convolver (SFX keep the shared room). Cross-fades over ~tau seconds.
+   */
+  setMusicRoom(o: { reverb: ReverbOptions | null; revScale: number; delScale: number }, t: number, tau?: number): void;
   /** Disconnect everything. */
   dispose(): void;
 }
@@ -283,8 +288,16 @@ export function buildGraph(ctx: BaseAudioContext, o: GraphOptions): MixGraph {
   const out = gain(0);
   master.connect(limiter).connect(trim).connect(out).connect(ctx.destination);
 
+  // Music sends pass through their own buses so an ambience can scale them (unity by default)
+  // and move the music's reverb to a separate convolver without touching the SFX.
+  const musicRevBus = gain(1);
+  const musicRevShared = gain(1);
+  musicRevBus.connect(musicRevShared).connect(revBus);
+  const musicDelBus = gain(1);
+  musicDelBus.connect(delBus);
+
   // Strips.
-  const makeStrip = (filtered: boolean): Strip & { lp: AudioParam[]; hp: AudioParam[] } => {
+  const makeStrip = (filtered: boolean, revTarget: AudioNode = revBus, delTarget: AudioNode = delBus): Strip & { lp: AudioParam[]; hp: AudioParam[] } => {
     const lp: AudioParam[] = [];
     const hp: AudioParam[] = [];
     const vols: AudioParam[] = [];
@@ -309,9 +322,11 @@ export function buildGraph(ctx: BaseAudioContext, o: GraphOptions): MixGraph {
       node.connect(v).connect(target);
       return input;
     };
-    return { dry: mk(dryBus), rev: mk(revBus), del: mk(delBus), vol: new ParamGroup(vols), lp, hp };
+    return { dry: mk(dryBus), rev: mk(revTarget), del: mk(delTarget), vol: new ParamGroup(vols), lp, hp };
   };
-  const music = makeStrip(true);
+  const music = makeStrip(true, musicRevBus, musicDelBus);
+  let alt: { send: GainNode; nodes: AudioNode[] } | null = null;
+  let altKey = '';
   const sfx = makeStrip(false);
 
   const layerIn = {} as Record<Layer, GainNode>;
@@ -349,6 +364,52 @@ export function buildGraph(ctx: BaseAudioContext, o: GraphOptions): MixGraph {
     limiter,
     revReturn,
     delReturn,
+    setMusicRoom(room, t, tau = 0.8) {
+      glide(musicRevBus.gain, Math.max(0, room.revScale), t, tau);
+      glide(musicDelBus.gain, Math.max(0, room.delScale), t, tau);
+      const want = room.reverb ? JSON.stringify(room.reverb) : '';
+      if (want === altKey) return;
+      // Fade the previous alternative room out (it stops mattering once silent).
+      if (alt) {
+        glide(alt.send.gain, 0, t, tau);
+        const old = alt;
+        setTimeout(
+          () => {
+            try {
+              musicRevBus.disconnect(old.send);
+            } catch {
+              /* already gone */
+            }
+            old.nodes.forEach((n) => n.disconnect());
+          },
+          Math.max(0, t - ctx.currentTime + tau * 8) * 1000,
+        );
+        alt = null;
+      }
+      altKey = want;
+      if (!room.reverb) {
+        glide(musicRevShared.gain, 1, t, tau);
+        return;
+      }
+      const conv2 = ctx.createConvolver();
+      conv2.normalize = false;
+      const [l2, r2] = makeReverbIR(ctx.sampleRate, room.reverb);
+      const ir2 = ctx.createBuffer(2, l2.length, ctx.sampleRate);
+      ir2.getChannelData(0).set(l2);
+      ir2.getChannelData(1).set(r2);
+      conv2.buffer = ir2;
+      const hp2 = ctx.createBiquadFilter();
+      hp2.type = 'highpass';
+      hp2.frequency.value = 160;
+      hp2.Q.value = 0.5;
+      const send = ctx.createGain();
+      send.gain.value = 0;
+      musicRevBus.connect(send).connect(hp2).connect(conv2).connect(revReturn);
+      glide(send.gain, 1, t, tau);
+      glide(musicRevShared.gain, 0, t, tau);
+      alt = { send, nodes: [send, hp2, conv2] };
+      nodes.push(send, hp2, conv2);
+    },
     dispose() {
       for (const n of nodes) {
         try {

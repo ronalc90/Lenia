@@ -11,8 +11,11 @@
  * The AudioContext is created lazily on the first unlock() (autoplay policy).
  */
 import type { Bus, GameEvents } from '../core/bus';
+import { DEFAULT_AMBIENCE, sanitizeAmbience, type Ambience } from './ambience';
 import { AudioCore, type UISound } from './engine';
 import type { MusicState } from './intensity';
+
+export type { Ambience } from './ambience';
 
 export type { MusicState } from './intensity';
 export type { UISound } from './engine';
@@ -35,6 +38,15 @@ export interface AudioEngine {
   readonly running?: boolean;
   /** Optional: interface sound for a UI interaction. */
   playUI?(kind: UISound): void;
+  /**
+   * Optional: music ambience (cosmetic preset, src/store/catalog.ts MUSICS). Applied on the next bar
+   * line; the default preset is the original score. SFX never change.
+   */
+  setAmbience?(preset: Ambience): void;
+  /** Optional: audition a preset with the real engine (store preview); null = back to the equipped one. */
+  previewAmbience?(preset: Ambience | null): void;
+  /** Optional: true when the music is audible (running, not muted, music volume > 0). */
+  readonly musicAudible?: boolean;
 }
 
 /** Game events the audio reacts to. */
@@ -74,6 +86,11 @@ export function createAudio(bus: Bus<GameEvents>): AudioEngine {
   let vol = { sfx: 0.8, music: 0.6, muted: false };
   let idle = false;
   let state: MusicState | null = null;
+  let ambience: Ambience = DEFAULT_AMBIENCE;
+  let preview: Ambience | null = null;
+  const pushAmbience = () => {
+    if (core && ctx) core.setAmbience(preview ?? ambience, ctx.currentTime);
+  };
 
   const now = () => (ctx ? ctx.currentTime : 0);
   const shouldRun = () => !!ctx && !hidden && !vol.muted && !disposed;
@@ -114,6 +131,20 @@ export function createAudio(bus: Bus<GameEvents>): AudioEngine {
       return !!ctx && ctx.state === 'running';
     },
 
+    get musicAudible() {
+      return !!ctx && !hidden && !vol.muted && vol.music > 0;
+    },
+
+    setAmbience(p) {
+      ambience = sanitizeAmbience(p);
+      pushAmbience();
+    },
+
+    previewAmbience(p) {
+      preview = p ? sanitizeAmbience(p) : null;
+      pushAmbience();
+    },
+
     unlock() {
       if (disposed) return;
       if (!ctx) {
@@ -130,6 +161,7 @@ export function createAudio(bus: Bus<GameEvents>): AudioEngine {
         core.setVolumes(vol.sfx, vol.music, vol.muted, ctx.currentTime);
         core.setIdle(idle, ctx.currentTime);
         if (state) core.setState(state, ctx.currentTime);
+        core.setAmbience(preview ?? ambience, ctx.currentTime); // before start: applies at once
         core.start(ctx.currentTime + 0.12);
         if (vol.muted) {
           vol = { ...vol, muted: false };

@@ -11,6 +11,7 @@
 import { midiToFreq } from './theory';
 import { glide, warmWaveCoefficients, type MixGraph } from './fx';
 import type { Layer } from './intensity';
+import type { Timbre } from './ambience';
 
 export interface NoiseBank {
   white: AudioBuffer;
@@ -81,6 +82,11 @@ export class Instruments {
   /** Persistent filters for the noise percussion. */
   private hatOut: BiquadFilterNode;
   private shakerOut: BiquadFilterNode;
+  /** Music ambience timbres (defaults = the original instruments). */
+  private timbre: { pad: Timbre; arp: Timbre; lead: Timbre; bass: Timbre } = { pad: 'warm', arp: 'pluck', lead: 'glass', bass: 'sine' };
+  private padWaveCur: PeriodicWave;
+  private padCents: readonly number[] = PAD_DETUNE;
+  private waves = new Map<string, PeriodicWave>();
 
   constructor(g: MixGraph, readonly noise: NoiseBank) {
     const ctx = g.ctx;
@@ -102,10 +108,120 @@ export class Instruments {
     this.shakerOut.Q.value = 0.9;
     this.hatOut.connect(this.pan(g.layerIn.perc, -0.25));
     this.shakerOut.connect(this.pan(g.layerIn.perc, 0.3));
+    this.padWaveCur = this.warm;
   }
 
   get warmWave(): PeriodicWave {
     return this.warm;
+  }
+
+  /** Wave the pad starts new voices with (warm by default; ambiences may change it). */
+  get padWave(): PeriodicWave {
+    return this.padWaveCur;
+  }
+
+  /** Detune (cents) of the pad's two oscillators per voice. */
+  get padDetune(): readonly number[] {
+    return this.padCents;
+  }
+
+  /**
+   * Ambience timbres. Only new notes are affected; `pad` changes apply to voices started after
+   * the call (the engine cross-fades the pad on the bar line). `detune` 6 = the original chorus.
+   */
+  setTimbres(t: { pad: Timbre; arp: Timbre; lead: Timbre; bass: Timbre }, detune = 6): void {
+    this.timbre = { ...t };
+    this.padWaveCur = t.pad === 'warm' ? this.warm : this.namedWave(`pad:${t.pad}`);
+    const k = detune / 6;
+    this.padCents = k === 1 ? PAD_DETUNE : PAD_DETUNE.map((c) => c * k);
+  }
+
+  /** Cached extra waves for ambience timbres. */
+  private namedWave(name: string): PeriodicWave {
+    let w = this.waves.get(name);
+    if (w) return w;
+    const ctx = this.ctx;
+    switch (name) {
+      case 'pad:choir': {
+        // Brighter, vowel-ish: slower tilt with a lifted 3rd-5th harmonic region.
+        const amps = Array.from({ length: 20 }, (_, i) => (1 / Math.pow(i + 1, 1.05)) * (i >= 2 && i <= 4 ? 1.5 : 1));
+        w = wave(ctx, amps.map((a) => a * 0.6));
+        break;
+      }
+      case 'pad:glass':
+      case 'pad:bell':
+      case 'pad:pluck':
+        w = wave(ctx, [1, 0, 0.22, 0, 0.08]);
+        break;
+      case 'pad:reed':
+      case 'lead:reed':
+        w = wave(ctx, [1, 0.04, 0.42, 0.03, 0.22, 0.02, 0.12, 0, 0.06]);
+        break;
+      case 'pad:sine':
+        w = wave(ctx, [1, 0.06]);
+        break;
+      case 'bass:warm':
+        w = wave(ctx, [1, 0.5, 0.26, 0.13, 0.06]);
+        break;
+      case 'soft':
+      default:
+        w = wave(ctx, [1, 0.12, 0.04]);
+        break;
+    }
+    this.waves.set(name, w);
+    return w;
+  }
+
+  /** Arpeggio note with the ambience timbre (default: the FM pluck). */
+  arpNote(dest: AudioNode, t: number, midi: number, vel: number, short: boolean): number {
+    switch (this.timbre.arp) {
+      case 'pluck':
+        return this.pluck(dest, t, midi, vel, short);
+      case 'bell':
+      case 'glass':
+        return this.bell(dest, t, midi, vel * 0.8);
+      default:
+        return this.ping(dest, t, midi, LEVELS.pluck * 0.75 * vel, this.namedWave('soft'), 0.006, short ? 0.55 : 0.9);
+    }
+  }
+
+  /** Lead melody note ('bell' and 'echo' events) with the ambience timbre (default: glass bell). */
+  leadNote(dest: AudioNode, t: number, midi: number, vel: number, echo: boolean, durS: number): number {
+    switch (this.timbre.lead) {
+      case 'glass':
+      case 'bell':
+        return this.bell(dest, t, midi, vel, echo);
+      case 'pluck':
+        return this.pluck(dest, t, midi, vel * (echo ? 0.5 : 0.8));
+      case 'reed':
+        return this.sustained(dest, t, midi, (echo ? LEVELS.echo : LEVELS.bell) * 0.55 * vel, this.namedWave('lead:reed'), 0.045, Math.max(0.3, durS));
+      case 'warm':
+      case 'choir':
+        return this.sustained(dest, t, midi, (echo ? LEVELS.echo : LEVELS.bell) * 0.5 * vel, this.warm, 0.08, Math.max(0.4, durS));
+      default:
+        return this.ping(dest, t, midi, (echo ? LEVELS.echo : LEVELS.bell) * vel, this.namedWave('soft'), echo ? 0.012 : 0.004, echo ? 1.4 : 1.9);
+    }
+  }
+
+  /** Bass note with the ambience timbre (default: the soft sub). */
+  bassNote(dest: AudioNode, t: number, midi: number, vel: number, dur: number): number {
+    return this.bass(dest, t, midi, vel, dur, this.timbre.bass === 'sine' ? this.bassWave : this.namedWave('bass:warm'));
+  }
+
+  /** Held note: attack, sustain for `dur`, gentle release (reed / warm leads). */
+  private sustained(dest: AudioNode, t: number, midi: number, peak: number, w: PeriodicWave, attack: number, dur: number): number {
+    const o = this.osc(w, midiToFreq(midi), t);
+    const amp = vca(this.ctx);
+    amp.gain.setValueAtTime(0, t);
+    amp.gain.linearRampToValueAtTime(peak, t + attack);
+    amp.gain.setTargetAtTime(peak * 0.7, t + attack, 0.3);
+    amp.gain.setTargetAtTime(0, t + dur, 0.12);
+    o.connect(amp).connect(dest);
+    const stop = t + dur + 0.7;
+    o.start(t);
+    o.stop(stop);
+    autoDisconnect(o, [o, amp]);
+    return stop;
   }
 
   /** A cached StereoPanner (pan quantised to 0.1) feeding `dest`. */
@@ -221,9 +337,9 @@ export class Instruments {
   }
 
   /** Warm sub bass: one oscillator with soft 2nd/3rd harmonics (audible on phones). */
-  bass(dest: AudioNode, t: number, midi: number, vel: number, dur: number): number {
+  bass(dest: AudioNode, t: number, midi: number, vel: number, dur: number, w: PeriodicWave = this.bassWave): number {
     const ctx = this.ctx;
-    const o = this.osc(this.bassWave, midiToFreq(midi), t);
+    const o = this.osc(w, midiToFreq(midi), t);
     const amp = vca(ctx);
     const peak = LEVELS.bass * vel;
     const tEnd = t + Math.max(0.15, dur);
@@ -349,6 +465,8 @@ interface PadVoice {
 
 /** Spread of the four pad voices across the stereo field (scaled by width). */
 const PAD_SPREAD = [-0.8, -0.27, 0.27, 0.8];
+/** Detune (cents) of each pad voice's two oscillators: ≈1 Hz beating at A3. */
+const PAD_DETUNE: readonly number[] = [-3, 4];
 
 /**
  * Persistent pad: four voices that hold common tones across chord changes
@@ -432,9 +550,9 @@ export class Pad {
     const second = vca(ctx);
     second.gain.value = 0.55;
     second.connect(amp);
-    const oscs = [-3, 4].map((cents, k) => {
+    const oscs = this.inst.padDetune.map((cents, k) => {
       const o = ctx.createOscillator();
-      o.setPeriodicWave(this.inst.warmWave);
+      o.setPeriodicWave(this.inst.padWave);
       o.frequency.value = f;
       o.detune.value = cents;
       o.connect(k === 0 ? amp : second);

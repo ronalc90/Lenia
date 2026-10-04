@@ -9,11 +9,17 @@
   <body>
     <p id="status">loading…</p>
     <script type="module">
-      import { runForTest } from '/src/audio/offlineRender.ts';
+      import { runForTest, runAmbienceForTest } from '/src/audio/offlineRender.ts';
+      import { MUSICS } from '/src/store/catalog.ts';
       import { createAudio } from '/src/audio/audio.ts';
       import { Bus } from '/src/core/bus.ts';
 
       window.biolumaAudioTest = runForTest;
+      window.biolumaAmbienceTest = (id, switchAt, wav) => {
+        const m = MUSICS.find((x) => x.id === id);
+        return runAmbienceForTest(id, m.data, switchAt, wav);
+      };
+      window.biolumaAmbienceIds = MUSICS.map((m) => m.id);
 
       /** Realtime smoke test of the public API (needs autoplay allowed). */
       window.biolumaRealtimeSmoke = async () => {

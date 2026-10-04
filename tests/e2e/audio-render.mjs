@@ -12,8 +12,10 @@
  * no silence gaps where music should play, levels rise with intensity,
  * floods rate-limited. Writes the preview to a 16-bit stereo WAV.
  *
- * Usage: node tests/e2e/audio-render.mjs [--out path.wav] [--full]
+ * Usage: node tests/e2e/audio-render.mjs [--out path.wav] [--full] [--ambiences]
  *   --full also renders one whole A A B A form (≈ 107 s) to <out>-full-form.wav
+ *   --ambiences renders every music ambience of the cosmetic catalog (as equipped, and switched
+ *               mid-way on a bar line) with the same NaN / peak / clipping / click checks, WAVs per preset
  */
 import { existsSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -117,6 +119,17 @@ try {
   const hi = (s) => s.bands.find((b) => b.name.startsWith('high')).relDb;
   check(hi(paused) < hi(playing) - 15, `controls: pause low-passes the music (3-8 kHz band ${hi(playing)} → ${hi(paused)} dB rel)`);
   check(Math.abs(resumed.rmsDb - playing.rmsDb) < 4, 'controls: music recovers after unpause');
+
+  if (args.includes('--ambiences')) {
+    const ids = await page.evaluate(() => window.biolumaAmbienceIds);
+    for (const id of ids) {
+      for (const switchAt of [null, 6.1]) {
+        const r = await page.evaluate(([i, s]) => window.biolumaAmbienceTest(i, s, s === null), [id, switchAt]);
+        report(r);
+        if (r.wav) writeFileSync(outPath.replace(/\.wav$/, '') + `-${id}.wav`, Buffer.from(r.wav, 'base64'));
+      }
+    }
+  }
 
   if (args.includes('--full')) {
     // Optional: one whole A A B A form at a busy dish, for listening.

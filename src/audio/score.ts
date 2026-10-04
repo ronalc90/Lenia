@@ -3,7 +3,8 @@
  * events for that bar. Pure and deterministic for a given seed, so the
  * engine, the offline renderer and the unit tests all hear the same piece.
  */
-import { BEATS_PER_BAR, barInfo, sectionChords, type BarInfo } from './progression';
+import { DEFAULT_HARMONY, DEFAULT_SCORE_STYLE, type Harmony, type ScoreStyle } from './ambience';
+import { BEATS_PER_BAR, type BarInfo } from './progression';
 import { LAYER_MIX, SPARKLE_PROB, WIDTH, type Layer } from './intensity';
 import { MOTIF_BANK, composeSectionMelody, hash32, mulberry32, varyMotif, type MelodyNote, type Motif } from './motifs';
 import {
@@ -74,9 +75,27 @@ export class Composer {
   private prevPad: number[] | null = null;
   private prevBass: number | undefined;
   private melodyCache = new Map<number, MelodyNote[]>();
+  private harmony: Harmony = DEFAULT_HARMONY;
+  private style: ScoreStyle = DEFAULT_SCORE_STYLE;
 
   constructor(seed = 1) {
     this.seed = seed >>> 0;
+  }
+
+  /** Chords come from here (music ambiences); the default is progression.ts. */
+  setHarmony(h: Harmony): void {
+    if (h === this.harmony) return;
+    this.harmony = h;
+    this.melodyCache.clear();
+  }
+
+  getHarmony(): Harmony {
+    return this.harmony;
+  }
+
+  /** Ornament density, swing and percussion style of the current ambience. */
+  setStyle(s: ScoreStyle): void {
+    this.style = { ...s };
   }
 
   /** Restart the score (new era): forget voice-leading history, optionally new seed. */
@@ -105,16 +124,17 @@ export class Composer {
 
   /** Melody of the 8-bar section `sectionIndex` (cached). */
   sectionMelody(bar: number): MelodyNote[] {
-    const info = barInfo(bar);
+    const info = this.harmony.barInfo(bar);
     const key = info.sectionIndex;
     let mel = this.melodyCache.get(key);
     if (!mel) {
       mel = composeSectionMelody({
         section: info.section,
-        chords: sectionChords(bar),
+        chords: this.harmony.sectionChords(bar),
         theme: this.themeFor(info.formIndex),
         rng: mulberry32(hash32(this.seed, 'mel', key)),
         variant: info.sectionInForm + info.formIndex,
+        ...(this.harmony === DEFAULT_HARMONY ? {} : { tonic: this.harmony.tonic, open: this.harmony.open }),
       });
       this.melodyCache.set(key, mel);
       if (this.melodyCache.size > 4) this.melodyCache.delete(this.melodyCache.keys().next().value as number);
@@ -124,7 +144,8 @@ export class Composer {
 
   /** Plan one bar. Bars must be planned in increasing order for smooth voice leading. */
   plan(bar: number, level: number, extras: PlanExtras = {}): BarPlan {
-    const info = barInfo(bar);
+    const info = this.harmony.barInfo(bar);
+    const st = this.style;
     const c = info.chord;
     const events: NoteEvent[] = [];
     const rng = mulberry32(hash32(this.seed, 'bar', bar));
@@ -175,7 +196,7 @@ export class Composer {
           events.push({
             layer: 'arp',
             inst: 'pluck',
-            beat: i / 2,
+            beat: i / 2 + (i % 2 ? st.swing * 0.5 : 0),
             dur: 0.75,
             midi: pool[idx],
             vel: accent * (0.92 + rng() * 0.12),
@@ -203,8 +224,10 @@ export class Composer {
       }
     }
 
-    // Soft percussion.
-    if (on('perc')) {
+    // Soft percussion (ambiences: brushes, vinyl clicks or none).
+    if (on('perc') && st.percussion !== 'soft') {
+      this.percussionVariant(events, info, level, width, rng);
+    } else if (on('perc')) {
       const swing = (step: number) => (step + (step % 2 ? SWING : 0)) / 4;
       for (const h of SHAKER) {
         events.push({ layer: 'perc', inst: 'shaker', beat: swing(h.step), dur: 0.25, midi: 0, vel: h.vel * (level >= 5 ? 1 : 0.8) * (0.9 + rng() * 0.2), pan: 0.35 * width });
@@ -241,7 +264,7 @@ export class Composer {
       };
       if (extras.fresh) addSig(extras.fresh, 0, 0.75);
       if (sigs.length > 0 && bar % 2 === 1) addSig(sigs[(bar >> 1) % sigs.length], 2.5, 0.42);
-      if (rng() < SPARKLE_PROB[Math.min(5, level)]) {
+      if (rng() < SPARKLE_PROB[Math.min(5, level)] * st.sparkle) {
         const step = [2, 6, 11, 13][Math.floor(rng() * 4)];
         const pool = pitchesInRange(c.stable, 86, 98);
         const start = Math.floor(rng() * Math.max(1, pool.length - 3));
@@ -255,5 +278,27 @@ export class Composer {
 
     events.sort((a, b) => a.beat - b.beat);
     return { bar, info, level, pad, events };
+  }
+
+  /** Percussion of the non-default ambiences ('none' adds nothing). */
+  private percussionVariant(events: NoteEvent[], info: BarInfo, level: number, width: number, rng: () => number): void {
+    const st = this.style;
+    // 16th grid with the score's swing plus the ambience's off-beat-eighth swing.
+    const at = (step: number) => (step + (step % 2 ? SWING : 0)) / 4 + (step % 4 === 2 ? st.swing * 0.5 : 0);
+    if (st.percussion === 'brushes') {
+      for (const h of SHAKER) events.push({ layer: 'perc', inst: 'shaker', beat: at(h.step), dur: 0.25, midi: 0, vel: h.vel * 1.1 * (0.9 + rng() * 0.2), pan: 0.3 * width });
+      for (const h of HAT) events.push({ layer: 'perc', inst: 'hat', beat: at(h.step), dur: 0.25, midi: 0, vel: h.vel * 0.75 * (0.9 + rng() * 0.15), pan: -0.3 * width });
+      if (level >= 4) for (const step of [4, 12]) events.push({ layer: 'perc', inst: 'rim', beat: at(step), dur: 0.5, midi: 0, vel: 0.32, pan: 0.1 });
+    } else if (st.percussion === 'clicks') {
+      for (const h of HAT) events.push({ layer: 'perc', inst: 'hat', beat: at(h.step), dur: 0.25, midi: 0, vel: h.vel * 0.55 * (0.9 + rng() * 0.2), pan: -0.25 * width });
+      // Vinyl-like clicks: two quiet rim ticks on random 16ths.
+      for (let k = 0; k < 2; k++) {
+        events.push({ layer: 'perc', inst: 'rim', beat: at(Math.floor(rng() * 16)), dur: 0.25, midi: 0, vel: 0.12 + rng() * 0.1, pan: (rng() * 2 - 1) * 0.5 });
+      }
+      if (level >= 4) {
+        const kicks = info.barInSection === 7 ? [...KICK, ...KICK_FILL] : KICK;
+        for (const h of kicks) events.push({ layer: 'perc', inst: 'kick', beat: at(h.step), dur: 1, midi: 0, vel: h.vel * 0.8, pan: 0 });
+      }
+    }
   }
 }

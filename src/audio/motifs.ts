@@ -234,11 +234,11 @@ function forceEnding(notes: MelodyNote[], pcs: readonly number[], range: MelodyR
  * tail that walks onto the tonic. Tail steps are relative to the final D
  * (nearest to where the head ended), so the line lands by step, not leap.
  */
-function cadence(headM: Motif, tail: Motif, ch: readonly Chord[], anchor: number, range: MelodyRange): MelodyNote[] {
+function cadence(headM: Motif, tail: Motif, ch: readonly Chord[], anchor: number, range: MelodyRange, tonic = TONIC_PC): MelodyNote[] {
   const offset = 24;
   const headNotes = realizeMotif(headM, offset, ch, anchor, range);
   const from = headNotes[headNotes.length - 1]?.midi ?? anchor;
-  let final = nearestPitchWithPc(from, [TONIC_PC]);
+  let final = nearestPitchWithPc(from, [tonic]);
   if (final > range.hi) final -= 12;
   if (final < range.lo) final += 12;
   const tailNotes = tail.map((x, i): MelodyNote => {
@@ -275,6 +275,10 @@ export interface SectionMelodyOptions {
   /** Small variation index (which A of the form) for tail choice. */
   variant?: number;
   range?: MelodyRange;
+  /** Tonic pitch class the cadences land on (default D; music ambiences may move it). */
+  tonic?: number;
+  /** Pitch classes for open (non-final) phrase endings (default A, E, G, C). */
+  open?: readonly number[];
 }
 
 /** Compose the melody of one 8-bar section. */
@@ -283,7 +287,8 @@ export function composeSectionMelody(o: SectionMelodyOptions): MelodyNote[] {
   const ch = o.chords;
   const rng = o.rng;
   const out: MelodyNote[] = [];
-  const open = [9, 4, 7, 0].filter((p) => p !== TONIC_PC); // A, E, G, C
+  const tonic = o.tonic ?? TONIC_PC;
+  const open = (o.open ?? [9, 4, 7, 0]).filter((p) => p !== tonic); // default A, E, G, C
   const tail = CADENCE_TAILS[(o.variant ?? 0) % CADENCE_TAILS.length];
   const head = (m: Motif) => m.filter((x) => x.t < 4);
 
@@ -299,7 +304,7 @@ export function composeSectionMelody(o: SectionMelodyOptions): MelodyNote[] {
     const y = realizeMotif(Y, 8, ch, anchorNear(lastX, ch[2]), range, (lastX + range.center) / 2);
     forceEnding(y, ch[3].stable.filter((p) => open.includes(p)), range);
     const x2 = realizeMotif(X, 16, ch, ax, range);
-    const z = cadence(head(X), tail, ch, ax, range);
+    const z = cadence(head(X), tail, ch, ax, range, tonic);
     shape(x1, 0.7);
     shape(y, 0.72);
     shape(x2, 0.74);
@@ -318,7 +323,7 @@ export function composeSectionMelody(o: SectionMelodyOptions): MelodyNote[] {
     const lastW = w1[w1.length - 1]?.midi ?? aw;
     const w2 = realizeMotif(W2, 16, ch, anchorNear(lastW, ch[4]), range, (lastW + range.center) / 2);
     const lastW2 = w2[w2.length - 1]?.midi ?? lastW;
-    const z = cadence(head(W2), tail, ch, anchorNear(lastW2, ch[6]), range);
+    const z = cadence(head(W2), tail, ch, anchorNear(lastW2, ch[6]), range, tonic);
     shape(w1, 0.7);
     shape(e, 0.5);
     shape(w2, 0.72);
