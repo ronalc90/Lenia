@@ -8,6 +8,7 @@
  * secret: a player record holds a PUBLIC key (ECDSA P-256), so even a leaked store lets nobody sign
  * submissions for someone else.
  */
+import type { RankCosmetics } from './cosmetics.js';
 import { BOARD_NAMES, BOARD_STORED, type BoardName } from './protocol.js';
 import type { Baseline } from './validate.js';
 
@@ -29,6 +30,8 @@ export interface PlayerRecord {
   accepted: number;
   /** Server ms of the last change (merge key across serverless instances). */
   updatedAt: number;
+  /** Ranking cosmetics resolved at the last submission (non-default only; server/cosmetics.ts). */
+  cosmetics?: RankCosmetics;
 }
 
 export interface BoardEntry {
@@ -42,6 +45,8 @@ export interface BoardEntry {
   era: number;
   /** Server ms when this score was reached (earlier wins ties). */
   at: number;
+  /** Ranking cosmetics of the player (badge, frame, name colour), when not the defaults. */
+  cosmetics?: RankCosmetics;
 }
 
 export interface LeaderboardStore {
@@ -71,6 +76,7 @@ export function entryFor(board: BoardName, rec: PlayerRecord): BoardEntry {
     species: rec.best.species,
     era: rec.best.era,
     at: rec.last.at,
+    ...(rec.cosmetics ? { cosmetics: rec.cosmetics } : {}),
   };
 }
 

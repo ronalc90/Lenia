@@ -26,24 +26,17 @@ import {
   POW_BITS,
   SUBMIT_MIN_INTERVAL_MS,
   finalizeSubmission,
-  generateKeyPair,
-  importPrivateKey,
   randomHex,
-  SIGN_PREFIX,
-  signBytes,
-  utf8,
   type IntegrityReport,
-  type KeyPairJson,
 } from '../../server/protocol.js';
 import { LIMITS } from '../../server/validate.js';
+import { createKeyLoader, ensurePlayerId, identityFrom, type PlayerIdentity } from './identity';
 import type { Integrity } from './integrity';
 import { runStatsOf } from './integrity';
 import { readJson, safeStorage } from './storage';
 
 export type { LeaderboardBoard, LeaderboardClient, LeaderboardEntry, LeaderboardResult };
 
-const K_ID = 'bioluma.lb.id';
-const K_KEY = 'bioluma.lb.key';
 const K_NAME = 'bioluma.lb.name';
 const K_REG = 'bioluma.lb.registered';
 const K_FIRST = 'bioluma.lb.firstSeen';
@@ -92,6 +85,11 @@ export interface LeaderboardClientOptions {
   /** Auto-submit period (default 5 min, ±10 % jitter). */
   autoSubmitMs?: number;
   timeoutMs?: number;
+  /**
+   * Ranking cosmetics the player has equipped (catalog ids; omit defaults). Sent signed with each
+   * submission; the server decides what is shown (server/cosmetics.ts).
+   */
+  profileCosmetics?: () => { badge?: string; frame?: string; nameColor?: string } | null;
 }
 
 /**
@@ -99,13 +97,7 @@ export interface LeaderboardClientOptions {
  * entitlements; same shape as src/store/providers/types.ts PlayerIdentity). Domain separation: it never
  * signs a message that could be mistaken for a ranking submission.
  */
-export interface LeaderboardIdentity {
-  playerId(): Promise<string>;
-  /** base64url raw P-256 public key (server/protocol.ts format). */
-  publicKey(): Promise<string>;
-  /** base64url IEEE-P1363 ECDSA signature of the UTF-8 bytes of `message`. */
-  sign(message: string): Promise<string>;
-}
+export type LeaderboardIdentity = PlayerIdentity;
 
 export interface BiolumaLeaderboardClient extends LeaderboardClient {
   /** Submit every ~5 min while the page is visible, and shortly after every extinction. */
@@ -119,16 +111,6 @@ export interface BiolumaLeaderboardClient extends LeaderboardClient {
 type SubmitResult = { ok: boolean; error?: string };
 /** Internal result: `code` is a key of LEADERBOARD_ERRORS. */
 type CodeResult = { ok: true } | { ok: false; code: string };
-
-function uuid(): string {
-  try {
-    if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
-  } catch {
-    /* insecure context */
-  }
-  const h = randomHex(16);
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
-}
 
 function num(x: unknown, fallback = 0): number {
   return typeof x === 'number' && Number.isFinite(x) ? x : fallback;
@@ -148,7 +130,21 @@ function toEntry(x: unknown): LeaderboardEntry | null {
     isMe: o.isMe === true,
   };
   if (o.flagged === true) e.flagged = true;
+  const cos = toCosmetics(o.cosmetics);
+  if (cos) e.cosmetics = cos;
   return e;
+}
+
+/** Ranking cosmetics of a row: catalog-shaped ids only (the UI looks them up and ignores unknown ones). */
+function toCosmetics(x: unknown): LeaderboardEntry['cosmetics'] | undefined {
+  if (typeof x !== 'object' || x === null) return undefined;
+  const o = x as Record<string, unknown>;
+  const out: NonNullable<LeaderboardEntry['cosmetics']> = {};
+  for (const k of ['badge', 'frame', 'nameColor'] as const) {
+    const v = o[k];
+    if (typeof v === 'string' && /^[a-z0-9.]{3,48}$/.test(v)) out[k] = v;
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 export function createLeaderboardClient(opts: LeaderboardClientOptions): BiolumaLeaderboardClient {
@@ -162,14 +158,10 @@ export function createLeaderboardClient(opts: LeaderboardClientOptions): Bioluma
   const period = opts.autoSubmitMs ?? 5 * 60_000;
   const timeoutMs = opts.timeoutMs ?? 10_000;
 
-  let playerId = store.getItem(K_ID) ?? '';
-  if (!/^[0-9a-fA-F-]{16,64}$/.test(playerId)) {
-    playerId = uuid();
-    store.setItem(K_ID, playerId);
-  }
+  const playerId = ensurePlayerId(store);
   if (!store.getItem(K_FIRST)) store.setItem(K_FIRST, String(now()));
+  const keys = createKeyLoader(store);
 
-  let keyPromise: Promise<{ pub: string; priv: CryptoKey }> | null = null;
   let inflight: Promise<CodeResult> | null = null;
   let lastSubmitAt = -Infinity;
   let lastClientTime = 0;
@@ -190,26 +182,6 @@ export function createLeaderboardClient(opts: LeaderboardClientOptions): Bioluma
   const err = (code: string): SubmitResult => ({ ok: false, error: leaderboardErrorText(code, lang()) });
   const fail = (code: string): CodeResult => ({ ok: false, code });
   const toPublic = (r: CodeResult): SubmitResult => (r.ok ? { ok: true } : err(r.code));
-
-  function keys(): Promise<{ pub: string; priv: CryptoKey }> {
-    if (!keyPromise) {
-      keyPromise = (async () => {
-        const saved = readJson<KeyPairJson>(store, K_KEY);
-        if (saved?.pub && saved.priv) {
-          try {
-            return { pub: saved.pub, priv: await importPrivateKey(saved.priv) };
-          } catch {
-            /* corrupted: make a new one (new identity on the server) */
-          }
-        }
-        const kp = await generateKeyPair();
-        store.setItem(K_KEY, JSON.stringify(kp));
-        return { pub: kp.pub, priv: await importPrivateKey(kp.priv) };
-      })();
-      keyPromise.catch(() => (keyPromise = null));
-    }
-    return keyPromise;
-  }
 
   async function request(path: string, init: RequestInit = {}): Promise<{ status: number; body: Record<string, unknown> } | null> {
     const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
@@ -265,8 +237,10 @@ export function createLeaderboardClient(opts: LeaderboardClientOptions): Bioluma
         const integrity: IntegrityReport = opts.integrity?.report() ?? { speedHack: false, clockRollback: false, tampered: false };
         // Strictly after the last ACCEPTED submission (server anti-replay rule).
         clientTime = Math.max(Math.round(now() + offset), lastClientTime + 1);
+        const cosmetics = wantedCosmetics();
         const sub = await finalizeSubmission(
           {
+            ...(cosmetics ? { cosmetics } : {}),
             version: LB_PROTOCOL_VERSION,
             playerId,
             publicKey: pub,
@@ -408,14 +382,23 @@ export function createLeaderboardClient(opts: LeaderboardClientOptions): Bioluma
     }, delayMs);
   }
 
-  const identity: LeaderboardIdentity = {
-    playerId: async () => playerId,
-    publicKey: async () => (await keys()).pub,
-    async sign(message: string) {
-      if (message.startsWith(SIGN_PREFIX)) throw new Error('identity: ranking messages are signed by the ranking client only');
-      return signBytes((await keys()).priv, utf8(message));
-    },
-  };
+  const identity: LeaderboardIdentity = identityFrom(() => playerId, keys);
+
+  /** Equipped ranking cosmetics (non-default ids), or null. */
+  function wantedCosmetics(): { badge?: string; frame?: string; nameColor?: string } | null {
+    try {
+      const c = opts.profileCosmetics?.();
+      if (!c) return null;
+      const out: { badge?: string; frame?: string; nameColor?: string } = {};
+      for (const k of ['badge', 'frame', 'nameColor'] as const) {
+        const v = c[k];
+        if (typeof v === 'string' && /^[a-z0-9.]{3,48}$/.test(v)) out[k] = v;
+      }
+      return Object.keys(out).length ? out : null;
+    } catch {
+      return null;
+    }
+  }
 
   return {
     identity,

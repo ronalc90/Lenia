@@ -10,6 +10,47 @@ import { getLang, t, type StrKey } from './i18n';
 import { icon } from './icons';
 import { validateNickname, type LeaderboardBoard, type LeaderboardClient, type LeaderboardEntry, type LeaderboardResult } from './leaderboard-types';
 import type { ModalHandle, ModalHost } from './modals';
+import { cosmeticById, type BadgeData, type FrameData, type NameColorData } from '../store/catalog';
+
+/** Catalog data of a ranking cosmetic id, only when it belongs to `slot`. */
+function profileItem<S extends 'badge' | 'frame' | 'nameColor'>(slot: S, id: string | undefined) {
+  const it = id ? cosmeticById(id) : undefined;
+  return it && it.slot === slot ? (it.data as S extends 'badge' ? BadgeData : S extends 'frame' ? FrameData : NameColorData) : null;
+}
+
+/**
+ * Name with the ranking cosmetics the server decided (badge, frame, name colour). Purely visual:
+ * the same row, rank and score for everyone.
+ */
+function namePlate(name: string, c: LeaderboardEntry['cosmetics']): HTMLElement {
+  const plate = h('span', { class: 'lb-plate' });
+  const badge = profileItem('badge', c?.badge);
+  const frame = profileItem('frame', c?.frame);
+  const color = profileItem('nameColor', c?.nameColor);
+  if (frame && frame.style !== 'none') {
+    plate.classList.add('framed', `fr-${frame.style}`);
+    const cols = frame.colors.length ? frame.colors : ['#5BC0EB'];
+    plate.style.setProperty('--fr', frame.style === 'gradient' ? `linear-gradient(120deg, ${cols.join(', ')})` : cols[0]);
+    plate.style.setProperty('--fr2', cols[1] ?? cols[0]);
+    if (frame.glow) plate.style.setProperty('--fr-glow', frame.glow);
+  }
+  if (badge?.svg) {
+    const b = h('span', {
+      class: 'lb-badge',
+      html: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${badge.svg}</svg>`,
+    });
+    b.style.color = badge.color;
+    if (badge.bg && badge.bg !== 'transparent') b.style.background = badge.bg;
+    plate.appendChild(b);
+  }
+  const n = h('span', { class: 'lb-n' }, name);
+  if (color?.gradient) {
+    n.classList.add('grad');
+    n.style.backgroundImage = `linear-gradient(90deg, ${color.gradient[0]}, ${color.gradient[1]})`;
+  } else if (color) n.style.color = color.color;
+  plate.appendChild(n);
+  return plate;
+}
 
 const BOARDS: { id: LeaderboardBoard; label: StrKey }[] = [
   { id: 'essence', label: 'boardEssence' },
@@ -170,7 +211,7 @@ export function openLeaderboard(host: ModalHost, ctx: Ctx, client: LeaderboardCl
       e.rank <= 3
         ? h('span', { class: `medal m${e.rank}`, 'aria-label': `#${e.rank}` }, String(e.rank))
         : h('span', { class: 'lb-rank mono' }, `#${e.rank}`);
-    const name = h('div', { class: 'lb-name' }, h('span', { class: 'lb-n' }, e.name));
+    const name = h('div', { class: 'lb-name' }, e.cosmetics ? namePlate(e.name, e.cosmetics) : h('span', { class: 'lb-n' }, e.name));
     if (e.isMe) name.appendChild(h('span', { class: 'lb-you' }, t('lbYou')));
     if (e.flagged) name.appendChild(h('span', { class: 'lb-flag', title: t('lbFlagged'), html: icon('warning', 14) }));
     const meta =

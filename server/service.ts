@@ -6,7 +6,9 @@
  *   method/origin/content-type/size → per-IP bucket → JSON shape → clock window → proof of work →
  *   per-player 60 s gate → player record → key match + ECDSA signature → replay → name → plausibility.
  */
+import { resolveRankCosmetics, visibleCosmetics, type RankCosmetics, type WantedCosmetics } from './cosmetics.js';
 import { validateName } from './names.js';
+import type { EntRecord } from './store/entitlements.js';
 import {
   BOARD_NAMES,
   BOARD_SERVED,
@@ -38,6 +40,11 @@ export interface ServiceOptions {
   submitLimiter?: RateLimiter;
   readLimiter?: RateLimiter;
   log?: (msg: string, data?: unknown) => void;
+  /**
+   * Store entitlement record of a player key (the store's KV), so paid/supporter ranking cosmetics
+   * can show. Without it only free cosmetics (defaults, achievement unlocks) are shown.
+   */
+  entitlements?: (key: string) => Promise<EntRecord | null>;
 }
 
 export interface LeaderboardService {
@@ -54,6 +61,8 @@ export interface EntryView {
   era: number;
   isMe: boolean;
   flagged?: boolean;
+  /** Badge / frame / name colour catalog ids, decided by the server (absent = defaults). */
+  cosmetics?: WantedCosmetics;
 }
 
 const PLAYER_ID = /^[0-9a-fA-F-]{16,64}$/;
@@ -132,6 +141,8 @@ export function createLeaderboardService(opts: ServiceOptions): LeaderboardServi
   function view(e: BoardEntry, rank: number, meKey: string | null, flagged = false): EntryView {
     const v: EntryView = { rank, name: `${e.name}#${e.tag}`, score: e.score, species: e.species, era: e.era, isMe: e.key === meKey };
     if (flagged) v.flagged = true;
+    const cos = visibleCosmetics(e.cosmetics, now());
+    if (cos) v.cosmetics = cos;
     return v;
   }
 
@@ -212,6 +223,16 @@ export function createLeaderboardService(opts: ServiceOptions): LeaderboardServi
       }
 
       const baseline: Baseline = { ...stats, at: t, clientTime: sub.clientTime };
+      let cosmetics: RankCosmetics | undefined;
+      if (sub.cosmetics && Object.keys(sub.cosmetics).length) {
+        let ent: EntRecord | null = null;
+        try {
+          ent = (await opts.entitlements?.(key)) ?? null;
+        } catch (e) {
+          log('entitlements read failed', String(e)); // free cosmetics still show
+        }
+        cosmetics = resolveRankCosmetics(ent, key, sub.cosmetics, t);
+      }
       const flags = [...new Set([...(rec?.flags ?? []), ...result.soft])].slice(0, 16);
       const next: PlayerRecord = {
         key,
@@ -229,6 +250,7 @@ export function createLeaderboardService(opts: ServiceOptions): LeaderboardServi
         flags,
         accepted: (rec?.accepted ?? 0) + 1,
         updatedAt: t,
+        ...(cosmetics ? { cosmetics } : {}),
       };
       const ranks = {} as Record<BoardName, number>;
       try {

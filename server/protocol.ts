@@ -69,6 +69,12 @@ export interface SubmissionPayload {
   nonce: string;
   integrity: IntegrityReport;
   powSolution: number;
+  /**
+   * Optional ranking cosmetics the player wants shown (catalog ids: badge, frame, nameColor). Only
+   * sent when something other than the defaults is equipped; the server shows only what the
+   * player's store record allows (server/cosmetics.ts).
+   */
+  cosmetics?: { badge?: string; frame?: string; nameColor?: string };
 }
 
 export interface Submission extends SubmissionPayload {
@@ -301,6 +307,7 @@ const ALL_KEYS = new Set<string>([
   'nonce',
   'integrity',
   'sig',
+  'cosmetics',
   ...NUM_FIELDS,
 ]);
 
@@ -331,5 +338,12 @@ export function parseSubmission(x: unknown): ParseResult {
     return bad('integrity');
   }
   if (ir.debug !== undefined && typeof ir.debug !== 'boolean') return bad('integrity');
+  if (o.cosmetics !== undefined) {
+    const c = o.cosmetics;
+    if (typeof c !== 'object' || c === null || Array.isArray(c)) return bad('cosmetics');
+    for (const [k, v] of Object.entries(c as Record<string, unknown>)) {
+      if (!['badge', 'frame', 'nameColor'].includes(k) || typeof v !== 'string' || !/^[a-z0-9.]{3,48}$/.test(v)) return bad('cosmetics');
+    }
+  }
   return { ok: true, sub: o as unknown as Submission };
 }

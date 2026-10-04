@@ -4,6 +4,7 @@ import {
   generateKeyPair,
   importPrivateKey,
   powChallenge,
+  powValid,
   randomHex,
   solvePow,
   type Submission,
@@ -168,7 +169,12 @@ describe('ranking API (memory store)', () => {
   it('rejects a forged payload: bad signature, or proof of work that does not match', async () => {
     const p = await newPlayer();
     const sub = await signed(p);
-    const forged = { ...sub, lifetimeEssence: sub.lifetimeEssence * 2 };
+    // With BITS = 4 one forgery in 16 still meets the difficulty by luck: pick one that does not, so the
+    // test is deterministic (the point is that the work is bound to the payload).
+    let forged = { ...sub, lifetimeEssence: sub.lifetimeEssence * 2 };
+    for (let k = 3; await powValid(await powChallenge(forged), forged.powSolution, BITS); k++) {
+      forged = { ...sub, lifetimeEssence: sub.lifetimeEssence * k };
+    }
     expect((await submit(forged)).body.error).toBe('pow'); // the work is bound to the payload
     // Redo the work for the forged numbers but keep the old signature.
     const reworked = { ...forged, powSolution: await solvePow(await powChallenge(forged), BITS) };

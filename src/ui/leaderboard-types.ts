@@ -13,6 +13,8 @@ export interface LeaderboardEntry {
   era: number;
   isMe: boolean;
   flagged?: boolean;
+  /** Ranking cosmetics decided by the server (catalog ids of src/store/catalog.ts); absent = defaults. */
+  cosmetics?: { badge?: string; frame?: string; nameColor?: string };
 }
 
 export type LeaderboardResult = { entries: LeaderboardEntry[]; me: LeaderboardEntry | null } | { error: string };

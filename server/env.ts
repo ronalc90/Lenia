@@ -15,6 +15,8 @@
 import { BlobClient, BlobStore, blobAuthFromEnv, type BlobAuth, type Env } from './blob.js';
 import { createLeaderboardService, type LeaderboardService } from './service.js';
 import { MemoryStore, type LeaderboardStore } from './store.js';
+import { loadRecord } from './store/entitlements.js';
+import type { KV } from './store/kv.js';
 
 export function processEnv(): Env {
   try {
@@ -34,8 +36,14 @@ export function serviceFor(req: Request, env: Env = processEnv()): LeaderboardSe
   if (header) oidcFromRequest = header;
   if (cached) return cached.service;
   const store = createStore(env);
+  // Ranking cosmetics read the store's entitlement records when the store KV is bound here too
+  // (Cloudflare Pages: STORE_KV); otherwise only free cosmetics show next to names.
+  const kv = (env as Record<string, unknown>).STORE_KV as Partial<KV> | undefined;
+  const entitlements =
+    kv && typeof kv.get === 'function' && typeof kv.put === 'function' ? (key: string) => loadRecord(kv as KV, key) : undefined;
   const service = createLeaderboardService({
     store,
+    entitlements,
     allowedOrigins: (env.LEADERBOARD_ALLOWED_ORIGINS ?? '')
       .split(',')
       .map((s) => s.trim())
