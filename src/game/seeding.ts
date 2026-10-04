@@ -4,6 +4,7 @@
  * so the dish can stamp them 1 cell = 1 cell.
  */
 import type { LeniaParams, Pattern } from '../core/types';
+import { CATALOG_REFS } from '../detect/catalogRefs';
 import { CATALOG, catalogPattern, type CatalogEntry } from '../sim/catalog';
 import * as B from './balance';
 import { base64ToBytes, bytesToBase64, type PortraitData } from './state';
@@ -21,7 +22,16 @@ export function paramDistance(mu1: number, s1: number, mu2: number, s2: number):
  * Catalog species whose (μ, σ) is nearest to the calibration, among those with the same ring
  * profile (falls back to the same ring count, then to everything).
  */
-export function nearestCatalog(p: Pick<LeniaParams, 'mu' | 'sigma' | 'rings'>, entries: readonly CatalogEntry[] = CATALOG): CatalogEntry {
+/**
+ * Species that do not survive in our simulation (the detector's calibration marks them: OG2r
+ * explodes, SN+ grows until it wraps the dish). Using them as spores floods the dish.
+ */
+const NON_VIABLE = new Set(CATALOG_REFS.filter((r) => !r.viable).map((r) => r.code));
+
+/** Catalog entries that are safe to use as spore templates. */
+export const SPORE_CATALOG: readonly CatalogEntry[] = CATALOG.filter((e) => !NON_VIABLE.has(e.code));
+
+export function nearestCatalog(p: Pick<LeniaParams, 'mu' | 'sigma' | 'rings'>, entries: readonly CatalogEntry[] = SPORE_CATALOG): CatalogEntry {
   let pool = entries.filter((e) => ringsEqual(e.b, p.rings));
   if (!pool.length) pool = entries.filter((e) => e.b.length === p.rings.length);
   if (!pool.length) pool = [...entries];
