@@ -1,0 +1,31 @@
+{
+  "name": "bioluma-desktop",
+  "productName": "Bioluma",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bioluma desktop wrapper (Electron) for Windows, macOS, Linux and Steam.",
+  "author": "Bioluma contributors",
+  "license": "MIT",
+  "homepage": "https://github.com/ronalc90/Lenia",
+  "main": "main.cjs",
+  "scripts": {
+    "web": "node scripts/copy-web.mjs",
+    "web:build": "npm --prefix ../.. run build && node scripts/copy-web.mjs",
+    "start": "node scripts/copy-web.mjs && electron .",
+    "dev": "node scripts/copy-web.mjs && electron . --dev",
+    "icons": "node ../shared/make-icons.mjs",
+    "smoke": "node scripts/copy-web.mjs && electron . --self-test",
+    "dist": "node scripts/copy-web.mjs && electron-builder --config electron-builder.config.cjs --publish never",
+    "dist:win": "node scripts/copy-web.mjs && electron-builder --config electron-builder.config.cjs --win --publish never",
+    "dist:mac": "node scripts/copy-web.mjs && electron-builder --config electron-builder.config.cjs --mac --publish never",
+    "dist:linux": "node scripts/copy-web.mjs && electron-builder --config electron-builder.config.cjs --linux --publish never",
+    "dist:steam": "node scripts/copy-web.mjs && electron-builder --config electron-builder.steam.cjs --publish never"
+  },
+  "devDependencies": {
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3"
+  },
+  "optionalDependencies": {
+    "steamworks.js": "^0.4.0"
+  }
+}
