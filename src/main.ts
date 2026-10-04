@@ -71,6 +71,8 @@ function boot(): void {
 
   let sim: ReturnType<typeof createSimulation> | null = null;
   let paused = false;
+  /** Declared before anything can call save() (the boot-time offline grant does). */
+  let saveWarned = false;
   /**
    * Extinction ritual: the game resets at once, but the dish is wiped only when the
    * UI's white-out covers it. Until then the old dish is frozen (no steps, no
@@ -239,7 +241,6 @@ function boot(): void {
     game.setSpeciesPortrait(speciesId, sim!.capture(x, y, size));
   });
 
-  let saveWarned = false;
   function save(): void {
     if (!sim) return;
     let ok = false;
