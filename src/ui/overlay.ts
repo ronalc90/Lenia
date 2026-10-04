@@ -1,0 +1,1164 @@
+/**
+ * The 2D overlay canvas drawn on top of the WebGL dish: halos, ripples,
+ * floating numbers, behaviour markers, the golden spark, bursts and the
+ * extinction ritual. Everything is positioned through the shared Camera so it
+ * lines up with the GL render exactly.
+ *
+ * Draws in CSS pixels (the context is pre-scaled by devicePixelRatio).
+ */
+import { mod, wrapDelta, type Camera } from '../core/camera';
+import { BEHAVIOR_COLOR, UI as C } from '../core/palette';
+import type { Behavior, CreatureView, GameView } from '../core/types';
+
+const MONO = '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace';
+const SANS = 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+
+interface Smoothed {
+  x: number;
+  y: number;
+  tx: number;
+  ty: number;
+  r: number;
+  hx: number; // heading (unit vector) from recent motion
+  hy: number;
+  state: CreatureView['state'];
+  behavior: Behavior | null;
+  seenAt: number;
+  phase: number;
+  /** Velocity in cells per simulation step (0 if the view has none). */
+  vx: number;
+  vy: number;
+  /** performance.now() (ms) when tx/ty were received. */
+  at: number;
+}
+
+interface Ripple {
+  x: number;
+  y: number;
+  t0: number;
+  dur: number;
+  color: string;
+  maxR: number;
+  rings: number;
+  width: number;
+}
+
+interface Float {
+  x: number;
+  y: number;
+  t0: number;
+  dur: number;
+  text: string;
+  color: string;
+  size: number;
+  rise: number;
+  drop: boolean; // draw an essence droplet before the text
+  jitter: number;
+  /** Creature id + running amount, so rapid incomes merge into one number. */
+  cid?: number;
+  amount?: number;
+}
+
+interface Particle {
+  ax: number; // grid anchor
+  ay: number;
+  ox: number; // px offset from anchor
+  oy: number;
+  vx: number;
+  vy: number;
+  t0: number;
+  life: number;
+  size: number;
+  color: string;
+  drag: number;
+  grav: number;
+  star: boolean;
+}
+
+interface Label {
+  x: number;
+  y: number;
+  t0: number;
+  dur: number;
+  text: string;
+  sub: string;
+  color: string;
+  glyph: Behavior | null;
+}
+
+interface Spot {
+  x: number;
+  y: number;
+  t0: number;
+  dur: number;
+}
+
+const MAX_FLOATS = 40;
+const MAX_PARTICLES = 420;
+
+const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+const clamp01 = (t: number) => (t < 0 ? 0 : t > 1 ? 1 : t);
+
+function rgba(hex: string, a: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a.toFixed(3)})`;
+}
+
+export class Overlay {
+  readonly canvas: HTMLCanvasElement;
+  private ctx: CanvasRenderingContext2D;
+  private w = 1;
+  private h = 1;
+  private dpr = 1;
+  private now = 0;
+
+  private creatures = new Map<number, Smoothed>();
+  private golden: { x: number; y: number; tx: number; ty: number; life: number; born: number } | null = null;
+  private goldenTrail: { x: number; y: number; t: number }[] = [];
+  private lastSparkEmit = 0;
+  private ripples: Ripple[] = [];
+  private floats: Float[] = [];
+  private particles: Particle[] = [];
+  private labels: Label[] = [];
+  private spots: Spot[] = [];
+  private flashes: { x: number; y: number; t0: number; color: string; r: number }[] = [];
+  private ritual: { t0: number; whiteAt: number; endAt: number; fired: boolean; onWhite?: () => void } | null =
+    null;
+  private charge: { x: number; y: number; t0: number } | null = null;
+  /** Faint ambient motes drifting in the dish (normalized dish coords). */
+  private motes = Array.from({ length: 34 }, () => ({
+    x: Math.random(),
+    y: Math.random(),
+    r: 0.5 + Math.random() * 1.1,
+    vy: 0.006 + Math.random() * 0.014,
+    ph: Math.random() * Math.PI * 2,
+    violet: Math.random() < 0.3,
+  }));
+  /** Creature currently selected (info card) for a highlight ring. */
+  selectedId: number | null = null;
+  reduceMotion = false;
+  markers = false;
+  /** Simulation steps per second (0 = paused / unknown → no extrapolation). */
+  simRate = 0;
+  paused = false;
+
+  constructor(private camera: Camera) {
+    this.canvas = document.createElement('canvas');
+    this.canvas.className = 'bl-overlay';
+    const ctx = this.canvas.getContext('2d');
+    if (!ctx) throw new Error('2D canvas unavailable');
+    this.ctx = ctx;
+  }
+
+  resize(w: number, h: number, dpr: number): void {
+    this.w = w;
+    this.h = h;
+    this.dpr = Math.min(dpr, 2);
+    this.canvas.width = Math.max(1, Math.round(w * this.dpr));
+    this.canvas.height = Math.max(1, Math.round(h * this.dpr));
+  }
+
+  setView(view: GameView): void {
+    this.reduceMotion = view.settings.reduceMotion;
+    this.markers = !!(view.tools as { markers?: boolean }).markers;
+    const gw = this.camera.gridW;
+    const gh = this.camera.gridH;
+    const alive = new Set<number>();
+    for (const c of view.creatures) {
+      alive.add(c.id);
+      let s = this.creatures.get(c.id);
+      if (!s) {
+        s = {
+          x: c.x,
+          y: c.y,
+          tx: c.x,
+          ty: c.y,
+          r: c.r,
+          hx: 1,
+          hy: 0,
+          state: c.state,
+          behavior: c.behavior,
+          seenAt: this.now,
+          phase: (c.id * 0.6180339) % 1,
+          vx: c.vx ?? 0,
+          vy: c.vy ?? 0,
+          at: performance.now(),
+        };
+        this.creatures.set(c.id, s);
+      } else {
+        const dx = wrapDelta(c.x - s.tx, gw);
+        const dy = wrapDelta(c.y - s.ty, gh);
+        const d = Math.hypot(dx, dy);
+        if (d > 0.05) {
+          // Low-pass the heading so arrows don't flicker.
+          s.hx = s.hx * 0.6 + (dx / d) * 0.4;
+          s.hy = s.hy * 0.6 + (dy / d) * 0.4;
+          const n = Math.hypot(s.hx, s.hy) || 1;
+          s.hx /= n;
+          s.hy /= n;
+        }
+        // Teleport if the jump is large (e.g. after load).
+        if (d > 25) {
+          s.x = c.x;
+          s.y = c.y;
+        }
+        s.tx = c.x;
+        s.ty = c.y;
+        s.vx = c.vx ?? 0;
+        s.vy = c.vy ?? 0;
+        s.at = performance.now();
+        if (s.vx || s.vy) {
+          const n = Math.hypot(s.vx, s.vy);
+          s.hx = s.vx / n;
+          s.hy = s.vy / n;
+        }
+        s.r = c.r;
+        s.state = c.state;
+        s.behavior = c.behavior;
+      }
+    }
+    for (const id of [...this.creatures.keys()]) if (!alive.has(id)) this.creatures.delete(id);
+
+    if (view.golden) {
+      if (!this.golden) {
+        this.golden = { x: view.golden.x, y: view.golden.y, tx: view.golden.x, ty: view.golden.y, life: 1, born: this.now };
+        this.goldenTrail = [];
+      }
+      this.golden.tx = view.golden.x;
+      this.golden.ty = view.golden.y;
+      this.golden.life = view.golden.life;
+    } else {
+      this.golden = null;
+      this.goldenTrail = [];
+    }
+  }
+
+  // ───────────────────────────── queries (hit testing) ─────────────────────────────
+
+  screenOf(x: number, y: number): { x: number; y: number } {
+    return this.camera.gridToScreen(x, y);
+  }
+
+  goldenScreen(): { x: number; y: number } | null {
+    return this.golden ? this.camera.gridToScreen(this.golden.x, this.golden.y) : null;
+  }
+
+  creatureScreen(id: number): { x: number; y: number; r: number } | null {
+    const s = this.creatures.get(id);
+    if (!s) return null;
+    const p = this.camera.gridToScreen(s.x, s.y);
+    return { x: p.x, y: p.y, r: this.haloRadius(s) };
+  }
+
+  creaturePos(id: number): { x: number; y: number } | null {
+    const s = this.creatures.get(id);
+    return s ? { x: s.x, y: s.y } : null;
+  }
+
+  /** Stable creature under a CSS-pixel point, or null. */
+  creatureAt(px: number, py: number): number | null {
+    let best: number | null = null;
+    let bestD = Infinity;
+    for (const [id, s] of this.creatures) {
+      if (s.state !== 'stable') continue;
+      const p = this.camera.gridToScreen(s.x, s.y);
+      const d = Math.hypot(p.x - px, p.y - py);
+      const hit = Math.max(18, this.haloRadius(s) * 0.95);
+      if (d <= hit && d < bestD) {
+        bestD = d;
+        best = id;
+      }
+    }
+    return best;
+  }
+
+  // ───────────────────────────── effects API ─────────────────────────────
+
+  ripple(x: number, y: number, kind: 'seed' | 'big' | 'auto' | 'denied' | 'erase' | 'print'): void {
+    const s = this.camera.scale;
+    const base = Math.max(22, 13 * s * 1.25);
+    const spec: Record<typeof kind, Omit<Ripple, 'x' | 'y' | 't0'>> = {
+      seed: { dur: 0.3, color: C.accent, maxR: base, rings: 2, width: 2 },
+      big: { dur: 0.42, color: C.accent, maxR: base * 1.6, rings: 3, width: 2.4 },
+      auto: { dur: 0.36, color: '#7FA8C0', maxR: base * 0.8, rings: 1, width: 1.2 },
+      denied: { dur: 0.22, color: C.danger, maxR: base * 0.7, rings: 1, width: 2.2 },
+      erase: { dur: 0.3, color: C.warn, maxR: base * 0.9, rings: 1, width: 1.6 },
+      print: { dur: 0.5, color: C.good, maxR: base * 1.4, rings: 3, width: 2 },
+    };
+    this.ripples.push({ x, y, t0: this.now, ...spec[kind] });
+    if (this.ripples.length > 24) this.ripples.shift();
+    if ((kind === 'seed' || kind === 'big') && !this.reduceMotion) {
+      this.burst(x, y, kind === 'big' ? 10 : 6, C.accent, { speed: 60, life: 0.45, size: 1.6, grav: 0 });
+    }
+  }
+
+  /** Seed refused: red ripple + cost in red near the finger for 1 s. */
+  denied(x: number, y: number, costText: string): void {
+    this.ripple(x, y, 'denied');
+    this.pushFloat({ x, y, t0: this.now, dur: 1, text: costText, color: '#FF7A5C', size: 14, rise: 10, drop: true, jitter: 0 });
+  }
+
+  income(id: number, x: number, y: number, amount: number, format: (n: number) => string, gold: boolean): void {
+    const p = this.camera.gridToScreen(x, y);
+    if (p.x < -20 || p.y < -20 || p.x > this.w + 20 || p.y > this.h + 20) return;
+    // Merge with a fresh float from the same creature instead of stacking.
+    for (let i = this.floats.length - 1; i >= 0; i--) {
+      const f = this.floats[i];
+      if (f.cid === id && this.now - f.t0 < 0.8) {
+        f.amount = (f.amount ?? 0) + amount;
+        f.text = '+' + format(f.amount);
+        f.t0 = this.now - 0.02;
+        f.x = x;
+        f.y = y;
+        return;
+      }
+    }
+    this.pushFloat({
+      x,
+      y,
+      t0: this.now,
+      dur: 1.15,
+      text: '+' + format(amount),
+      color: gold ? C.gold : '#A6E8FF',
+      size: 12,
+      rise: this.reduceMotion ? 6 : 30,
+      drop: false,
+      jitter: (Math.random() - 0.5) * 14,
+      cid: id,
+      amount,
+    });
+  }
+
+  speciesBurst(x: number, y: number, title: string, name: string): void {
+    this.flash(x, y, C.good, 1.5);
+    if (!this.reduceMotion) {
+      this.burst(x, y, 36, C.good, { speed: 150, life: 1.1, size: 2.2, grav: 20, star: true });
+      this.burst(x, y, 14, '#FFFFFF', { speed: 90, life: 0.8, size: 1.4, grav: 0 });
+      this.spots.push({ x, y, t0: this.now, dur: 1.1 });
+    }
+    this.labels.push({ x, y, t0: this.now, dur: 2.6, text: title, sub: name, color: C.good, glyph: null });
+  }
+
+  behaviorLabel(x: number, y: number, b: Behavior, title: string, name: string): void {
+    const col = BEHAVIOR_COLOR[b] ?? C.accent;
+    this.flash(x, y, col, 1.2);
+    if (!this.reduceMotion) this.burst(x, y, 18, col, { speed: 110, life: 0.9, size: 1.8, grav: 0, star: true });
+    this.labels.push({ x, y, t0: this.now, dur: 2.2, text: title, sub: name, color: col, glyph: b });
+  }
+
+  stableDing(x: number, y: number): void {
+    this.flash(x, y, C.accent, 1);
+    if (!this.reduceMotion) this.burst(x, y, 10, C.accent, { speed: 70, life: 0.6, size: 1.4, grav: 0 });
+  }
+
+  explodedPulse(x: number, y: number): void {
+    this.flash(x, y, C.warn, 1.8);
+  }
+
+  dividedPulse(x: number, y: number): void {
+    this.ripples.push({ x, y, t0: this.now, dur: 0.6, color: BEHAVIOR_COLOR.divider, maxR: 40, rings: 2, width: 1.6 });
+  }
+
+  bornRing(x: number, y: number): void {
+    this.ripples.push({ x, y, t0: this.now, dur: 0.5, color: '#6F8FA8', maxR: 26, rings: 1, width: 1 });
+  }
+
+  puff(x: number, y: number): void {
+    if (this.reduceMotion) {
+      this.ripples.push({ x, y, t0: this.now, dur: 0.6, color: '#7D8790', maxR: 24, rings: 1, width: 1 });
+      return;
+    }
+    this.burst(x, y, 12, '#8E99A4', { speed: 28, life: 1.2, size: 2.6, grav: -14, drag: 1.5 });
+  }
+
+  goldenCollected(x: number, y: number, reward: string): void {
+    this.flash(x, y, C.gold, 2.2);
+    if (!this.reduceMotion) {
+      this.burst(x, y, 44, C.gold, { speed: 190, life: 1.2, size: 2.4, grav: 40, star: true });
+      this.burst(x, y, 16, '#FFFFFF', { speed: 120, life: 0.7, size: 1.5, grav: 0 });
+    }
+    this.labels.push({ x, y, t0: this.now, dur: 2.4, text: reward, sub: '', color: C.gold, glyph: null });
+    this.golden = null;
+    this.goldenTrail = [];
+  }
+
+  goldenSpawned(x: number, y: number): void {
+    if (!this.reduceMotion) this.burst(x, y, 16, C.gold, { speed: 80, life: 0.8, size: 1.6, grav: 0, star: true });
+  }
+
+  /** Long-press charge ring at a CSS-pixel point (cleared on release/fire). */
+  chargeStart(px: number, py: number): void {
+    this.charge = { x: px, y: py, t0: this.now };
+  }
+
+  chargeEnd(): void {
+    this.charge = null;
+  }
+
+  /** Extinction ritual: whiten from the edges to the center over 3 s, then fade out. */
+  startRitual(onWhite?: () => void): void {
+    const dur = this.reduceMotion ? 1 : 3;
+    this.ritual = { t0: this.now, whiteAt: this.now + dur, endAt: this.now + dur + 0.45 + 1.3, fired: false, onWhite };
+  }
+
+  get ritualActive(): boolean {
+    return this.ritual !== null;
+  }
+
+  // ───────────────────────────── internals ─────────────────────────────
+
+  private pushFloat(f: Float): void {
+    if (this.floats.length >= MAX_FLOATS) this.floats.shift();
+    this.floats.push(f);
+  }
+
+  private flash(x: number, y: number, color: string, r: number): void {
+    this.flashes.push({ x, y, t0: this.now, color, r });
+    if (this.flashes.length > 16) this.flashes.shift();
+  }
+
+  private burst(
+    x: number,
+    y: number,
+    n: number,
+    color: string,
+    o: { speed: number; life: number; size: number; grav: number; drag?: number; star?: boolean },
+  ): void {
+    for (let i = 0; i < n; i++) {
+      if (this.particles.length >= MAX_PARTICLES) this.particles.shift();
+      const a = Math.random() * Math.PI * 2;
+      const sp = o.speed * (0.35 + Math.random() * 0.65);
+      this.particles.push({
+        ax: x,
+        ay: y,
+        ox: 0,
+        oy: 0,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp,
+        t0: this.now,
+        life: o.life * (0.6 + Math.random() * 0.4),
+        size: o.size * (0.6 + Math.random() * 0.7),
+        color,
+        drag: o.drag ?? 2.4,
+        grav: o.grav,
+        star: !!o.star && Math.random() < 0.35,
+      });
+    }
+  }
+
+  private haloRadius(s: Smoothed): number {
+    return Math.max(7, s.r * 1.9) * this.camera.scale + 3;
+  }
+
+  /** Clip rect for dish-attached drawing (the dish at zoom 1, the whole view when zoomed). */
+  private dishRect(): { x: number; y: number; w: number; h: number } {
+    const cam = this.camera;
+    if (cam.zoom > 1.001) return { x: 0, y: 0, w: this.w, h: this.h };
+    const s = cam.scale;
+    const dw = cam.gridW * s;
+    const dh = cam.gridH * s;
+    return { x: (this.w - dw) / 2, y: (this.h - dh) / 2, w: dw, h: dh };
+  }
+
+  /** Call fn at every toroidal copy of a screen point whose disc touches the rect. */
+  private copies(px: number, py: number, rad: number, rect: { x: number; y: number; w: number; h: number }, fn: (x: number, y: number) => void): void {
+    const W = this.camera.gridW * this.camera.scale;
+    const H = this.camera.gridH * this.camera.scale;
+    for (const ox of [0, -W, W]) {
+      const x = px + ox;
+      if (x + rad < rect.x || x - rad > rect.x + rect.w) continue;
+      for (const oy of [0, -H, H]) {
+        const y = py + oy;
+        if (y + rad < rect.y || y - rad > rect.y + rect.h) continue;
+        fn(x, y);
+      }
+    }
+  }
+
+  // ───────────────────────────── frame ─────────────────────────────
+
+  draw(time: number, dt: number): void {
+    this.now = time;
+    const ctx = this.ctx;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.clearRect(0, 0, this.w, this.h);
+    const cam = this.camera;
+    const gw = cam.gridW;
+    const gh = cam.gridH;
+    const scale = cam.scale;
+    const rm = this.reduceMotion;
+
+    // Creatures: extrapolate the latest (≈10 Hz) report with its velocity
+    // (≤ 0.5 s ahead), then glide toward that prediction (~0.25 per 60 Hz frame)
+    // so halos follow fast swimmers without lag or snapping.
+    const k = 1 - Math.exp(-Math.min(dt, 0.1) * 10);
+    const kGlide = 1 - Math.pow(0.75, Math.min(dt, 0.1) * 60);
+    const nowMs = performance.now();
+    const rate = this.paused ? 0 : this.simRate;
+    for (const s of this.creatures.values()) {
+      let px = s.tx;
+      let py = s.ty;
+      if (rate > 0 && (s.vx || s.vy)) {
+        const ahead = Math.min(0.5, Math.max(0, (nowMs - s.at) / 1000)) * rate;
+        px = mod(s.tx + s.vx * ahead, gw);
+        py = mod(s.ty + s.vy * ahead, gh);
+        s.x = mod(s.x + wrapDelta(px - s.x, gw) * kGlide, gw);
+        s.y = mod(s.y + wrapDelta(py - s.y, gh) * kGlide, gh);
+      } else {
+        s.x = mod(s.x + wrapDelta(px - s.x, gw) * k, gw);
+        s.y = mod(s.y + wrapDelta(py - s.y, gh) * k, gh);
+      }
+    }
+    const g = this.golden;
+    if (g) {
+      g.x = mod(g.x + wrapDelta(g.tx - g.x, gw) * k, gw);
+      g.y = mod(g.y + wrapDelta(g.ty - g.y, gh) * k, gh);
+    }
+
+    const rect = this.dishRect();
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(rect.x, rect.y, rect.w, rect.h);
+    ctx.clip();
+
+    this.drawDishFrame(rect);
+    if (!rm) this.drawMotes(time, dt, rect);
+    this.drawSpots(time);
+    this.drawCreatures(time, rect, scale, rm);
+    this.drawFlashes(time);
+    this.drawRipples(time);
+    this.drawParticles(time, dt);
+    if (g) this.drawGolden(time, g, rm);
+    this.drawFloats(time);
+    this.drawLabels(time);
+    ctx.restore();
+
+    if (g) this.drawGoldenIndicator(g);
+    this.drawCharge(time);
+    this.drawRitual(time, rect);
+  }
+
+  private drawDishFrame(rect: { x: number; y: number; w: number; h: number }): void {
+    // Instrument corner brackets + edge ticks, fading out as you zoom in.
+    const z = this.camera.zoom;
+    const a = clamp01(1 - (z - 1) * 4);
+    if (a <= 0) return;
+    const ctx = this.ctx;
+    const L = 14;
+    const x0 = rect.x + 0.75;
+    const y0 = rect.y + 0.75;
+    const x1 = rect.x + rect.w - 0.75;
+    const y1 = rect.y + rect.h - 0.75;
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = rgba(C.accent, 0.32 * a);
+    ctx.beginPath();
+    ctx.moveTo(x0, y0 + L);
+    ctx.lineTo(x0, y0);
+    ctx.lineTo(x0 + L, y0);
+    ctx.moveTo(x1 - L, y0);
+    ctx.lineTo(x1, y0);
+    ctx.lineTo(x1, y0 + L);
+    ctx.moveTo(x1, y1 - L);
+    ctx.lineTo(x1, y1);
+    ctx.lineTo(x1 - L, y1);
+    ctx.moveTo(x0 + L, y1);
+    ctx.lineTo(x0, y1);
+    ctx.lineTo(x0, y1 - L);
+    ctx.stroke();
+    // Ticks every 16 cells, longer every 64.
+    const s = this.camera.scale;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = rgba(C.accent, 0.13 * a);
+    ctx.beginPath();
+    for (let gx = 16; gx < this.camera.gridW; gx += 16) {
+      const x = Math.round(rect.x + gx * s) + 0.5;
+      const len = gx % 64 === 0 ? 6 : 3;
+      ctx.moveTo(x, y0);
+      ctx.lineTo(x, y0 + len);
+      ctx.moveTo(x, y1);
+      ctx.lineTo(x, y1 - len);
+    }
+    for (let gy = 16; gy < this.camera.gridH; gy += 16) {
+      const y = Math.round(rect.y + gy * s) + 0.5;
+      const len = gy % 64 === 0 ? 6 : 3;
+      ctx.moveTo(x0, y);
+      ctx.lineTo(x0 + len, y);
+      ctx.moveTo(x1, y);
+      ctx.lineTo(x1 - len, y);
+    }
+    ctx.stroke();
+  }
+
+  private drawMotes(time: number, dt: number, rect: { x: number; y: number; w: number; h: number }): void {
+    const ctx = this.ctx;
+    const d = Math.min(dt, 0.05);
+    for (const m of this.motes) {
+      m.y -= m.vy * d;
+      if (m.y < 0) {
+        m.y += 1;
+        m.x = Math.random();
+      }
+      const tw = 0.5 + 0.5 * Math.sin(time * 1.3 + m.ph);
+      const x = rect.x + m.x * rect.w + Math.sin(time * 0.5 + m.ph) * 6;
+      const y = rect.y + m.y * rect.h;
+      ctx.fillStyle = m.violet ? `rgba(184,146,255,${(0.05 + 0.13 * tw).toFixed(3)})` : `rgba(140,215,255,${(0.05 + 0.15 * tw).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(x, y, m.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  private drawSpots(time: number): void {
+    const ctx = this.ctx;
+    for (let i = this.spots.length - 1; i >= 0; i--) {
+      const sp = this.spots[i];
+      const t = (time - sp.t0) / sp.dur;
+      if (t >= 1) {
+        this.spots.splice(i, 1);
+        continue;
+      }
+      const env = t < 0.15 ? t / 0.15 : t > 0.7 ? (1 - t) / 0.3 : 1;
+      const p = this.camera.gridToScreen(sp.x, sp.y);
+      const r0 = 34 + 10 * easeOutCubic(clamp01(t * 2));
+      const grd = ctx.createRadialGradient(p.x, p.y, r0, p.x, p.y, r0 * 2.6);
+      grd.addColorStop(0, 'rgba(4,6,9,0)');
+      grd.addColorStop(1, `rgba(4,6,9,${(0.6 * env).toFixed(3)})`);
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, this.w, this.h);
+    }
+  }
+
+  private drawCreatures(time: number, rect: { x: number; y: number; w: number; h: number }, scale: number, rm: boolean): void {
+    const ctx = this.ctx;
+    for (const [id, s] of this.creatures) {
+      const p = this.camera.gridToScreen(s.x, s.y);
+      const R = this.haloRadius(s);
+      const selected = id === this.selectedId;
+      this.copies(p.x, p.y, R + 14, rect, (x, y) => {
+        if (s.state === 'stable') {
+          // Halo pulsing at 0.5 Hz (static with reduce motion).
+          const pulse = rm ? 0.5 : 0.5 + 0.5 * Math.sin((time * 0.5 + s.phase) * Math.PI * 2);
+          ctx.lineWidth = 6;
+          ctx.strokeStyle = rgba(C.accent, 0.05 + 0.06 * pulse);
+          ctx.beginPath();
+          ctx.arc(x, y, R + 1, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = rgba(C.accent, 0.22 + 0.3 * pulse);
+          ctx.beginPath();
+          ctx.arc(x, y, R + (rm ? 0 : pulse * 1.5), 0, Math.PI * 2);
+          ctx.stroke();
+          if (!rm) {
+            // A bright shimmer travelling around the halo: "this is alive and producing".
+            const a0 = time * 1.4 + s.phase * 6.283;
+            ctx.lineCap = 'round';
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = rgba('#D8F4FF', 0.35 + 0.25 * pulse);
+            ctx.beginPath();
+            ctx.arc(x, y, R + pulse * 1.5, a0, a0 + 0.55);
+            ctx.stroke();
+            ctx.lineCap = 'butt';
+          }
+          if (this.markers && s.behavior) this.drawMarker(x + R * 0.71, y - R * 0.71, s, time, rm);
+        } else if (s.state === 'born') {
+          // Dashed rotating ring: "forming".
+          ctx.save();
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 5]);
+          ctx.lineDashOffset = rm ? 0 : -time * 18;
+          ctx.strokeStyle = rgba('#9FB8CC', 0.55);
+          ctx.beginPath();
+          ctx.arc(x, y, R, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        } else if (s.state === 'exploded') {
+          // Orange tint pulsing from the center.
+          const pulse = rm ? 0.6 : 0.55 + 0.45 * Math.sin(time * Math.PI * 2 * 1.1 + s.phase * 6);
+          const rr = Math.max(R * 1.3, 20);
+          const grd = ctx.createRadialGradient(x, y, 0, x, y, rr);
+          grd.addColorStop(0, rgba(C.warn, 0.34 * pulse));
+          grd.addColorStop(0.6, rgba(C.danger, 0.12 * pulse));
+          grd.addColorStop(1, rgba(C.danger, 0));
+          ctx.fillStyle = grd;
+          ctx.beginPath();
+          ctx.arc(x, y, rr, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        if (selected) {
+          ctx.save();
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = rgba('#FFFFFF', 0.8);
+          ctx.setLineDash([2, 4]);
+          ctx.lineDashOffset = rm ? 0 : time * 10;
+          ctx.beginPath();
+          ctx.arc(x, y, R + 7, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+      });
+    }
+    void scale;
+  }
+
+  /** Behaviour marker: shape + colour (never colour alone). */
+  private drawMarker(x: number, y: number, s: Smoothed, time: number, rm: boolean): void {
+    const ctx = this.ctx;
+    const b = s.behavior!;
+    const col = BEHAVIOR_COLOR[b] ?? C.accent;
+    ctx.save();
+    ctx.translate(x, y);
+    // Dark backing disc for contrast over bright matter.
+    ctx.fillStyle = 'rgba(11,14,18,0.78)';
+    ctx.beginPath();
+    ctx.arc(0, 0, 7.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = col;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 1.5;
+    switch (b) {
+      case 'still':
+        ctx.beginPath();
+        ctx.arc(0, 0, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      case 'pulsing': {
+        const pr = rm ? 4.8 : 4 + Math.sin(time * Math.PI * 2) * 1;
+        ctx.beginPath();
+        ctx.arc(0, 0, 1.9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(0, 0, pr, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      }
+      case 'swimmer': {
+        const a = Math.atan2(s.hy, s.hx);
+        ctx.rotate(a);
+        ctx.beginPath();
+        ctx.moveTo(4.6, 0);
+        ctx.lineTo(-3, -3.6);
+        ctx.lineTo(-1.4, 0);
+        ctx.lineTo(-3, 3.6);
+        ctx.closePath();
+        ctx.fill();
+        break;
+      }
+      case 'spinner': {
+        ctx.rotate(rm ? 0 : time * 2.2);
+        ctx.beginPath();
+        for (let i = 0; i <= 24; i++) {
+          const tt = i / 24;
+          const a = tt * Math.PI * 3;
+          const r = 0.6 + tt * 4.2;
+          const px = Math.cos(a) * r;
+          const py = Math.sin(a) * r;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        break;
+      }
+      case 'divider':
+        ctx.beginPath();
+        ctx.arc(-2.6, 0, 2.1, 0, Math.PI * 2);
+        ctx.arc(2.6, 0, 2.1, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      case 'colony':
+        ctx.beginPath();
+        ctx.arc(0, -2.4, 1.8, 0, Math.PI * 2);
+        ctx.arc(-2.4, 1.8, 1.8, 0, Math.PI * 2);
+        ctx.arc(2.4, 1.8, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+    }
+    ctx.restore();
+  }
+
+  private drawFlashes(time: number): void {
+    const ctx = this.ctx;
+    for (let i = this.flashes.length - 1; i >= 0; i--) {
+      const f = this.flashes[i];
+      const dur = 0.7;
+      const t = (time - f.t0) / dur;
+      if (t >= 1) {
+        this.flashes.splice(i, 1);
+        continue;
+      }
+      const p = this.camera.gridToScreen(f.x, f.y);
+      const r = (18 + 30 * easeOutCubic(t)) * f.r * 0.7;
+      const grd = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+      grd.addColorStop(0, rgba(f.color, 0.45 * (1 - t)));
+      grd.addColorStop(1, rgba(f.color, 0));
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineWidth = 2 * (1 - t) + 0.5;
+      ctx.strokeStyle = rgba(f.color, 0.7 * (1 - t));
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r * 0.8, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  private drawRipples(time: number): void {
+    const ctx = this.ctx;
+    for (let i = this.ripples.length - 1; i >= 0; i--) {
+      const rp = this.ripples[i];
+      const total = rp.dur + (rp.rings - 1) * 0.07;
+      if (time - rp.t0 > total) {
+        this.ripples.splice(i, 1);
+        continue;
+      }
+      const p = this.camera.gridToScreen(rp.x, rp.y);
+      for (let r = 0; r < rp.rings; r++) {
+        const t = (time - rp.t0 - r * 0.07) / rp.dur;
+        if (t < 0 || t > 1) continue;
+        const rad = 3 + (rp.maxR - 3) * easeOutCubic(t) * (1 - r * 0.18);
+        ctx.lineWidth = rp.width * (1 - t) + 0.4;
+        ctx.strokeStyle = rgba(rp.color, 0.9 * Math.pow(1 - t, 1.4));
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // Inner flash for the first 120 ms.
+      const t0 = (time - rp.t0) / 0.12;
+      if (t0 < 1) {
+        ctx.fillStyle = rgba(rp.color, 0.28 * (1 - t0));
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, rp.maxR * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  private drawParticles(time: number, dt: number): void {
+    const ctx = this.ctx;
+    const d = Math.min(dt, 0.05);
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const pt = this.particles[i];
+      const t = (time - pt.t0) / pt.life;
+      if (t >= 1) {
+        this.particles.splice(i, 1);
+        continue;
+      }
+      const damp = Math.exp(-pt.drag * d);
+      pt.vx *= damp;
+      pt.vy = pt.vy * damp + pt.grav * d;
+      pt.ox += pt.vx * d;
+      pt.oy += pt.vy * d;
+      const p = this.camera.gridToScreen(pt.ax, pt.ay);
+      const x = p.x + pt.ox;
+      const y = p.y + pt.oy;
+      const a = t < 0.1 ? t / 0.1 : 1 - (t - 0.1) / 0.9;
+      ctx.fillStyle = rgba(pt.color, a);
+      if (pt.star) {
+        const s = pt.size * 2.2 * (1 - t * 0.5);
+        ctx.beginPath();
+        ctx.moveTo(x, y - s);
+        ctx.quadraticCurveTo(x, y, x + s, y);
+        ctx.quadraticCurveTo(x, y, x, y + s);
+        ctx.quadraticCurveTo(x, y, x - s, y);
+        ctx.quadraticCurveTo(x, y, x, y - s);
+        ctx.fill();
+      } else {
+        ctx.beginPath();
+        ctx.arc(x, y, pt.size * (1 - t * 0.4), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  private drawGolden(time: number, g: NonNullable<Overlay['golden']>, rm: boolean): void {
+    const ctx = this.ctx;
+    const p = this.camera.gridToScreen(g.x, g.y);
+    // Trail (grid positions so it survives zoom), sampled every 35 ms.
+    const last = this.goldenTrail[this.goldenTrail.length - 1];
+    if (!last || time - last.t > 0.035) {
+      this.goldenTrail.push({ x: g.x, y: g.y, t: time });
+      if (this.goldenTrail.length > 22) this.goldenTrail.shift();
+    }
+    const appear = clamp01((time - g.born) / 0.5);
+    const blink = g.life < 0.18 ? 0.55 + 0.45 * Math.sin(time * 18) : 1;
+    const A = appear * blink;
+    if (!rm) {
+      const n = this.goldenTrail.length;
+      for (let i = 0; i < n; i++) {
+        const tp = this.goldenTrail[i];
+        const q = this.camera.gridToScreen(tp.x, tp.y);
+        if (Math.abs(q.x - p.x) > 80 || Math.abs(q.y - p.y) > 80) continue; // wrapped
+        const f = i / n;
+        ctx.fillStyle = rgba(C.gold, 0.35 * f * A);
+        ctx.beginPath();
+        ctx.arc(q.x, q.y, 1 + 3.5 * f, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (time - this.lastSparkEmit > 0.09) {
+        this.lastSparkEmit = time;
+        if (this.particles.length < MAX_PARTICLES) {
+          const a = Math.random() * Math.PI * 2;
+          this.particles.push({
+            ax: g.x,
+            ay: g.y,
+            ox: Math.cos(a) * 6,
+            oy: Math.sin(a) * 6,
+            vx: Math.cos(a) * 22,
+            vy: Math.sin(a) * 22 - 8,
+            t0: time,
+            life: 0.7 + Math.random() * 0.4,
+            size: 1 + Math.random() * 1.2,
+            color: Math.random() < 0.3 ? '#FFFFFF' : C.gold,
+            drag: 1.2,
+            grav: 10,
+            star: Math.random() < 0.4,
+          });
+        }
+      }
+    }
+    const pulse = rm ? 0.5 : 0.5 + 0.5 * Math.sin(time * 4.2);
+    const glowR = 26 + 6 * pulse;
+    const grd = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowR);
+    grd.addColorStop(0, rgba('#FFF3C4', 0.85 * A));
+    grd.addColorStop(0.25, rgba(C.gold, 0.5 * A));
+    grd.addColorStop(1, rgba(C.gold, 0));
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, glowR, 0, Math.PI * 2);
+    ctx.fill();
+    // 4-point star, slowly rotating, plus a fainter 45° one.
+    const rot = rm ? 0 : time * 0.9;
+    for (const [sz, extra, alpha] of [
+      [13 + 2 * pulse, 0, 1],
+      [8, Math.PI / 4, 0.6],
+    ] as const) {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(rot + extra);
+      ctx.fillStyle = rgba('#FFF8E1', alpha * A);
+      ctx.beginPath();
+      ctx.moveTo(0, -sz);
+      ctx.quadraticCurveTo(1.6, -1.6, sz, 0);
+      ctx.quadraticCurveTo(1.6, 1.6, 0, sz);
+      ctx.quadraticCurveTo(-1.6, 1.6, -sz, 0);
+      ctx.quadraticCurveTo(-1.6, -1.6, 0, -sz);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.fillStyle = rgba('#FFFFFF', A);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  /** When zoomed in and the spark is off-screen, a gold chevron points at it from the edge. */
+  private drawGoldenIndicator(g: NonNullable<Overlay['golden']>): void {
+    const p = this.camera.gridToScreen(g.x, g.y);
+    const m = 22;
+    if (p.x >= 0 && p.y >= 0 && p.x <= this.w && p.y <= this.h) return;
+    const cx = this.w / 2;
+    const cy = this.h / 2;
+    const a = Math.atan2(p.y - cy, p.x - cx);
+    const ex = Math.min(this.w - m, Math.max(m, p.x));
+    const ey = Math.min(this.h - m, Math.max(m, p.y));
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(ex, ey);
+    ctx.fillStyle = 'rgba(11,14,18,0.7)';
+    ctx.beginPath();
+    ctx.arc(0, 0, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.rotate(a);
+    ctx.fillStyle = C.gold;
+    ctx.beginPath();
+    ctx.moveTo(8, 0);
+    ctx.lineTo(-4, -6);
+    ctx.lineTo(-1, 0);
+    ctx.lineTo(-4, 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  private drawCharge(time: number): void {
+    const c = this.charge;
+    if (!c) return;
+    // Hidden for the first 120 ms so quick taps never flash it.
+    const t = (time - c.t0 - 0.12) / 0.28;
+    if (t <= 0) return;
+    const p = Math.min(1, t);
+    const ctx = this.ctx;
+    const r = 30;
+    ctx.save();
+    ctx.fillStyle = rgba(C.accent, 0.1 * p);
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, r * (0.6 + 0.4 * p), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = rgba('#FFFFFF', 0.12);
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = rgba(C.accent, 0.95);
+    ctx.shadowColor = C.accent;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, r, -Math.PI / 2, -Math.PI / 2 + p * Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawFloats(time: number): void {
+    const ctx = this.ctx;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    for (let i = this.floats.length - 1; i >= 0; i--) {
+      const f = this.floats[i];
+      const t = (time - f.t0) / f.dur;
+      if (t >= 1) {
+        this.floats.splice(i, 1);
+        continue;
+      }
+      const p = this.camera.gridToScreen(f.x, f.y);
+      const y = p.y - 10 - f.rise * easeOutCubic(t);
+      const x = p.x + f.jitter;
+      const a = t < 0.08 ? t / 0.08 : t > 0.6 ? 1 - (t - 0.6) / 0.4 : 1;
+      const pop = this.reduceMotion ? 1 : 1 + 0.3 * Math.max(0, 1 - t / 0.12);
+      const size = Math.round(f.size * pop);
+      ctx.font = `700 ${size}px ${MONO}`;
+      const tw = ctx.measureText(f.text).width;
+      const dropW = f.drop ? size * 0.75 : 0;
+      const tx = x + dropW / 2;
+      ctx.globalAlpha = a;
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = 'rgba(8,10,14,0.85)';
+      ctx.strokeText(f.text, tx, y);
+      ctx.fillStyle = f.color;
+      ctx.fillText(f.text, tx, y);
+      if (f.drop) this.drawDroplet(tx - tw / 2 - dropW * 0.6, y, size * 0.42, f.color);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  private drawDroplet(x: number, y: number, r: number, color: string): void {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.moveTo(x, y - r * 1.5);
+    ctx.bezierCurveTo(x + r * 0.9, y - r * 0.4, x + r, y + 0.1 * r, x + r, y + 0.35 * r);
+    ctx.arc(x, y + 0.35 * r, r, 0, Math.PI);
+    ctx.bezierCurveTo(x - r, y + 0.1 * r, x - r * 0.9, y - r * 0.4, x, y - r * 1.5);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(8,10,14,0.85)';
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  private drawLabels(time: number): void {
+    const ctx = this.ctx;
+    for (let i = this.labels.length - 1; i >= 0; i--) {
+      const L = this.labels[i];
+      const t = (time - L.t0) / L.dur;
+      if (t >= 1) {
+        this.labels.splice(i, 1);
+        continue;
+      }
+      const p = this.camera.gridToScreen(L.x, L.y);
+      const a = t < 0.1 ? t / 0.1 : t > 0.75 ? 1 - (t - 0.75) / 0.25 : 1;
+      const lift = this.reduceMotion ? 0 : 14 * easeOutCubic(clamp01(t * 3)) + t * 8;
+      const pop = this.reduceMotion ? 1 : 1 + 0.18 * Math.max(0, 1 - t / 0.1);
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.font = `700 ${Math.round(14 * pop)}px ${SANS}`;
+      const w1 = ctx.measureText(L.text).width;
+      ctx.font = `italic 500 12px ${SANS}`;
+      const w2 = L.sub ? ctx.measureText(L.sub).width : 0;
+      const glyphW = L.glyph ? 18 : 0;
+      const W = Math.max(w1 + glyphW, w2) + 24;
+      const H = L.sub ? 44 : 28;
+      // Keep the pill on screen.
+      let x = p.x;
+      let y = p.y - 40 - lift - H / 2;
+      x = Math.min(this.w - W / 2 - 6, Math.max(W / 2 + 6, x));
+      if (y - H / 2 < 6) y = p.y + 40 + H / 2;
+      ctx.fillStyle = 'rgba(11,14,18,0.86)';
+      ctx.strokeStyle = rgba(L.color, 0.75);
+      ctx.lineWidth = 1.5;
+      roundRect(ctx, x - W / 2, y - H / 2, W, H, H / 2 > 14 ? 14 : H / 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `700 ${Math.round(14 * pop)}px ${SANS}`;
+      ctx.fillStyle = L.color;
+      const ty = L.sub ? y - 8 : y + 0.5;
+      ctx.fillText(L.text, x + glyphW / 2, ty);
+      if (L.glyph) {
+        const fake: Smoothed = { x: 0, y: 0, tx: 0, ty: 0, r: 0, hx: 1, hy: 0, state: 'stable', behavior: L.glyph, seenAt: 0, phase: 0, vx: 0, vy: 0, at: 0 };
+        this.drawMarker(x - w1 / 2 - 4 + glyphW / 2 - 6, ty, fake, time, this.reduceMotion);
+      }
+      if (L.sub) {
+        ctx.font = `italic 500 12px ${SANS}`;
+        ctx.fillStyle = C.text;
+        ctx.fillText(L.sub, x, y + 10);
+      }
+      ctx.restore();
+    }
+  }
+
+  private drawRitual(time: number, rect: { x: number; y: number; w: number; h: number }): void {
+    const r = this.ritual;
+    if (!r) return;
+    const ctx = this.ctx;
+    const white = '#F3FAFF';
+    if (time >= r.endAt) {
+      this.ritual = null;
+      return;
+    }
+    let alpha = 1;
+    let reach = 1; // 0 = nothing whitened, 1 = whole dish
+    if (time < r.whiteAt) {
+      const p = (time - r.t0) / (r.whiteAt - r.t0);
+      reach = this.reduceMotion ? 1 : easeInOut(p);
+      alpha = this.reduceMotion ? p : 1;
+    } else {
+      if (!r.fired) {
+        r.fired = true;
+        r.onWhite?.();
+      }
+      const holdEnd = r.whiteAt + 0.45;
+      if (time > holdEnd) alpha = 1 - (time - holdEnd) / (r.endAt - holdEnd);
+    }
+    ctx.save();
+    ctx.globalAlpha = clamp01(alpha);
+    const cx = rect.x + rect.w / 2;
+    const cy = rect.y + rect.h / 2;
+    const maxR = Math.hypot(rect.w, rect.h) / 2;
+    if (reach >= 0.999) {
+      ctx.fillStyle = white;
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+    } else {
+      const inner = maxR * (1 - reach);
+      const feather = Math.max(30, maxR * 0.35);
+      const grd = ctx.createRadialGradient(cx, cy, Math.max(0, inner - feather), cx, cy, inner + 1);
+      grd.addColorStop(0, 'rgba(243,250,255,0)');
+      grd.addColorStop(1, 'rgba(243,250,255,0.97)');
+      ctx.fillStyle = grd;
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+    }
+    ctx.restore();
+  }
+}
+
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
