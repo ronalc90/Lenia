@@ -1,0 +1,75 @@
+import { describe, expect, it } from 'vitest';
+import * as C from '../../game/cycleBalance';
+import { beginSession, computeDatos, freshResearch, noteEncargo, noteEssence, noteSpecies } from '../../game/session';
+import { treeEffects } from '../../game/tree';
+import { nodePriceExplain } from '../tree/treeView';
+import { fmt } from '../format';
+import { hudState } from './hud';
+import { datosExplain, equationRows } from './summary';
+
+describe('the Datos equation on the end card', () => {
+  it('shows every step with numbers that add up to the total', () => {
+    const fx = treeEffects({ lab: 3, encyclopedia: 1 });
+    const { session } = beginSession(freshResearch(), fx);
+    noteEssence(session, 12.4 * C.DATOS_ESSENCE_DIV);
+    noteSpecies(session, fx, 'a', true);
+    noteEncargo(session, fx);
+    const d = computeDatos(session, fx, 0);
+    const rows = equationRows(d, 'es', 3);
+    expect(rows.map((r) => r.kind)).toEqual(['essence', 'mult', 'species', 'encargos', 'book']);
+    expect(rows[0].tiles[0].value).toBe(fmt(12.4 * C.DATOS_ESSENCE_DIV, 'es'));
+    expect(rows[0].ops).toEqual(['÷']);
+    expect(rows[0].result).toBe('12');
+    expect(rows[1].result).toBe(String(d.fromEssence));
+    const added = rows.slice(2).reduce((a, r) => a + Number(r.result.replace('+', '')), 0);
+    expect(d.fromEssence + added).toBe(d.total);
+  });
+
+  it('opens as the shared price sheet from the HUD preview, adding up to the same total', () => {
+    const fx = treeEffects({ lab: 2 });
+    const { session } = beginSession(freshResearch(), fx);
+    noteEssence(session, 9.5 * C.DATOS_ESSENCE_DIV);
+    noteSpecies(session, fx, 'a', true);
+    const d = computeDatos(session, fx, 0);
+    const x = datosExplain(d, 'es', 2, { name: { es: 'Más tiempo', en: 'More time' }, missing: 4 });
+    expect(x.terms.map((t) => t.value)).toEqual(['9', '×1,1']);
+    expect(x.total).toBe(String(d.fromEssence)); // 9 × 1,1 → 9: the equation adds up by itself
+    expect(x.rule).toMatch(new RegExp(`^Por cada ${C.DATOS_ESSENCE_DIV} de Esencia, 1 Dato`));
+    expect(x.rows!.map((r) => r.label)).toEqual(['+5', '=']);
+    expect(x.rows![1].text).toBe(`${d.total} Datos al terminar`);
+    expect(d.fromEssence + 5).toBe(d.total);
+    expect(x.advice).toBe('Más tiempo: faltan 4');
+  });
+
+  it('says "minimum" when a session earned almost nothing', () => {
+    const fx = treeEffects({});
+    const { session } = beginSession(freshResearch(), fx);
+    const rows = equationRows(computeDatos(session, fx, 0), 'en', 1);
+    expect(rows[rows.length - 1].kind).toBe('minimum');
+    expect(rows[rows.length - 1].result).toBe(`+${C.DATOS_MIN}`);
+  });
+});
+
+describe('the HUD clock', () => {
+  const v = (remaining: number, phase: 'ready' | 'running' | 'over' = 'running') => ({ phase, remaining, total: 180, n: 1, sprint: null });
+  it('waits, runs, turns amber at 30 s, counts the last 10 and ends', () => {
+    expect(hudState(v(180, 'ready'))).toBe('wait');
+    expect(hudState(v(120))).toBe('run');
+    expect(hudState(v(C.SESSION_WARN_SECONDS))).toBe('warn');
+    expect(hudState(v(C.SESSION_COUNTDOWN))).toBe('count');
+    expect(hudState(v(0))).toBe('over');
+  });
+});
+
+describe('tree price for the shared "¿Por qué cuesta esto?" sheet', () => {
+  it('is start × growth^level with the rule in words, the next levels and what is missing', () => {
+    const x = nodePriceExplain('clock', 2, 'es', { datos: 5, recentDatos: [4, 4, 4], levels: { clock: 2 } })!;
+    expect(x.terms.map((t) => t.value)).toEqual(['3', '×4']);
+    expect(x.total).toBe('12');
+    expect(x.rule).toContain('×2');
+    expect(x.rows!.map((r) => r.text)).toEqual(['12 Datos → Sesión 4:30']);
+    expect(x.advice).toBe('Te faltan 7 Datos — unas 2 sesiones');
+    expect(nodePriceExplain('clock', 3, 'es')).toBeNull(); // maxed
+    expect(nodePriceExplain('lab', 1, 'es')).toBeNull();
+  });
+});
