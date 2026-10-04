@@ -13,6 +13,15 @@ import { clearSave, loadSave, offlineSeconds, writeSave } from './game/save';
 import { createUI } from './ui/ui';
 import { createAudio } from './audio/audio';
 import { initPlatform, type Platform } from './platform/platform';
+import { createIntegrity } from './net/integrity';
+import { createLeaderboardClient } from './net/leaderboard';
+
+/**
+ * Ranking API origin. Set VITE_LEADERBOARD_URL at build time ('' = same origin);
+ * deployments on Vercel (which host api/) enable it automatically.
+ */
+const LEADERBOARD_URL: string | undefined =
+  import.meta.env.VITE_LEADERBOARD_URL ?? (location.hostname.endsWith('.vercel.app') ? '' : undefined);
 
 /**
  * Base simulation rate (steps per second) at speed ×1. Orbium swims ~0.24
@@ -39,7 +48,12 @@ function boot(): void {
   const root = document.getElementById('app')!;
   document.getElementById('boot')?.remove();
 
+  // Anti-cheat signals must look at the save before the game rewrites it.
+  const integrity = createIntegrity();
+  integrity.checkSave();
   const saved = loadSave();
+  if (saved.savedAt) integrity.noteSavedAt(saved.savedAt);
+  integrity.start();
   const game = createGame({ bus }, saved.game ?? undefined);
   const settings = game.view().settings;
   if (!saved.game) {
@@ -68,11 +82,14 @@ function boot(): void {
   let idle = false;
 
   const audio = createAudio(bus);
+  const leaderboard =
+    LEADERBOARD_URL === undefined ? undefined : createLeaderboardClient({ game, integrity, bus, baseUrl: LEADERBOARD_URL });
 
   const ui = createUI(root, {
     actions: game.actions,
     camera,
     glCanvas,
+    leaderboard,
     onDishResize(cssW, cssH, dpr) {
       camera.setView(cssW, cssH);
       const r = Math.min(dpr, maxDpr);
@@ -110,6 +127,7 @@ function boot(): void {
     },
     exportSave: () => game.exportString(),
     importSave(s) {
+      integrity.noteImport(s);
       const ok = game.importString(s);
       if (ok) save();
       return ok;
@@ -380,8 +398,9 @@ function boot(): void {
 
   // Debug handle for development and e2e builds only.
   if (import.meta.env.DEV || import.meta.env.VITE_E2E === '1') {
-    (window as unknown as { bioluma: unknown }).bioluma = { game, sim, detector, camera, bus };
+    integrity.guardDebugHandle(window, 'bioluma', { game, sim, detector, camera, bus });
   }
+  leaderboard?.startAutoSubmit();
 
   if (platform.shouldRegisterServiceWorker()) registerServiceWorker();
 }
