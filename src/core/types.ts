@@ -318,6 +318,8 @@ export interface Settings {
   oneTouch: boolean;
   quality: 'auto' | Quality;
   analytics: boolean;
+  /** UI theme (optional; the UI mirrors it in localStorage 'bioluma.theme'). */
+  theme?: 'auto' | 'dark' | 'light';
 }
 
 export interface GameView {
