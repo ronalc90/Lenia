@@ -1,6 +1,9 @@
 import { Camera } from '../core/camera';
+import { cellInDish, DISH_GRID_MARGIN, type DishShape } from '../core/dish';
 import { matterLUT } from '../core/palette';
 import type { FieldSnapshot, LeniaParams, Pattern, Quality, RenderView, SeedSpec, Simulation } from '../core/types';
+import { DEFLECT, LYSIS, type LysisDisc, type Turn } from './deflect';
+import { MAX_TINTS } from './dishgl';
 import { buildPackedKernel, lanesFor } from './kernel';
 import { resolveSeed, type SeedSpecExt } from './seed';
 import {
@@ -10,7 +13,9 @@ import {
   fieldSource,
   GLOW_BLUR,
   GLOW_DOWN,
+  MAX_LYSIS,
   RENDER,
+  rotateSource,
   seedSource,
   snapshotSource,
   stepSource,
@@ -43,6 +48,16 @@ import { DEFAULT_RENDER_STYLE, RIM_HALO, normalizeRenderStyle, type SimRenderSty
  * prewarmKernel (compile a kernel ahead of setParams), finish, info,
  * contextLost, SeedSpec.patternScale (see seed.ts), setMatterLUT / setRenderStyle (cosmetic
  * palettes and dish themes; purely visual, see style.ts).
+ *
+ * Round petri dish (ADR-022, docs/DISH.md), all opt-in; without `setDish` everything is the
+ * torus exactly as before:
+ *  - setDish(shape | null): absorbing glass (cells outside are always 0), clamp-to-edge reads
+ *    (zero padding), no wrap in seeds/erase, step scissored to the dish and early-out outside.
+ *    Call it every frame with DishAnimator.rim while the dish grows; shrinking clears what falls
+ *    outside.
+ *  - applyTurns(turns): glass deflection (deflect.ts Deflector), rigid rotations of matter.
+ *  - setLysis(discs): growth penalty discs (deflect.ts LysisPlanner).
+ *  - setDishFx({ grow }), setCreatureTints(list): purely visual.
  */
 
 export type StateFormat = 'auto' | 'half' | 'float' | 'u8';
@@ -150,7 +165,20 @@ export class WebGLSimulation implements Simulation {
   private stepProg!: Prog;
   private stepKey = '';
   private stepCache = new Map<string, Prog>();
-  private progs!: Record<'seed' | 'erase' | 'snapshot' | 'extract' | 'field' | 'glowDown' | 'glowBlur' | 'render', Prog>;
+  private progs!: Record<
+    'seed' | 'erase' | 'snapshot' | 'extract' | 'field' | 'glowDown' | 'glowBlur' | 'render' | 'rotate',
+    Prog
+  >;
+  /** Round dish (null = torus). */
+  private dishShape: DishShape | null = null;
+  /** True while tryFormat probes the storage: passes then run in torus mode. */
+  private probing = false;
+  private growFx = 0;
+  private tintData = new Float32Array(MAX_TINTS * 4);
+  private tintCount = 0;
+  private tintAmt = 0.7;
+  private lysisData = new Float32Array(MAX_LYSIS * 4);
+  private lysisCount = 0;
   private floatField = false;
   private offMin = -8;
   private offMax = 7;
@@ -256,6 +284,21 @@ export class WebGLSimulation implements Simulation {
     gl.uniform1f(p.u('uDt'), dt);
     gl.viewport(0, 0, this.state[0].w, this.state[0].h);
     gl.activeTexture(gl.TEXTURE0);
+    const d = this.dishShape;
+    if (d) {
+      gl.uniform3f(p.u('uDish'), d.cx, d.cy, d.radius);
+      gl.uniform1i(p.u('uLysisCount'), this.lysisCount);
+      if (this.lysisCount) gl.uniform4fv(p.u('uLysis[0]'), this.lysisData);
+      // Only texels that can hold dish cells are drawn; outside the box both buffers stay 0.
+      const L = this.fm.lanes;
+      const Wt = this.state[0].w;
+      const x0 = Math.max(0, Math.floor((d.cx - d.radius) / L) - 1);
+      const x1 = Math.min(Wt, Math.ceil((d.cx + d.radius) / L) + 1);
+      const y0 = Math.max(0, Math.floor(d.cy - d.radius) - 1);
+      const y1 = Math.min(this.gridH, Math.ceil(d.cy + d.radius) + 1);
+      gl.enable(gl.SCISSOR_TEST);
+      gl.scissor(x0, y0, Math.max(0, x1 - x0), Math.max(0, y1 - y0));
+    }
     for (let i = 0; i < n; i++) {
       const src = this.state[this.cur];
       const dst = this.state[1 - this.cur];
@@ -264,6 +307,7 @@ export class WebGLSimulation implements Simulation {
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       this.cur = 1 - this.cur;
     }
+    if (d) gl.disable(gl.SCISSOR_TEST);
     this._step += n;
     this.fieldDirty = true;
   }
@@ -313,6 +357,135 @@ export class WebGLSimulation implements Simulation {
       gl.clearBufferfv(gl.COLOR, 0, [0, 0, 0, 0]);
     }
     this.fieldDirty = true;
+  }
+
+  // ───────────────────────────── Round dish (ADR-022) ─────────────────────────────
+
+  /** The round dish, or null on the torus. */
+  get dish(): DishShape | null {
+    return this.dishShape;
+  }
+
+  /**
+   * Switch to the round walled dish (or back to the torus with null). Cheap when only the radius
+   * grows (call it every frame during the growth animation); a smaller rim or a topology change
+   * clears every cell left outside.
+   */
+  setDish(shape: DishShape | null): void {
+    const prev = this.dishShape;
+    if (shape) {
+      const m = DISH_GRID_MARGIN;
+      if (
+        !(shape.radius > 0) ||
+        shape.cx - shape.radius < m ||
+        shape.cy - shape.radius < m ||
+        shape.cx + shape.radius > this.gridW - m ||
+        shape.cy + shape.radius > this.gridH - m
+      ) {
+        throw new Error(`setDish: the dish must stay ${m} cells inside the ${this.gridW}×${this.gridH} grid`);
+      }
+    }
+    this.dishShape = shape ? { cx: shape.cx, cy: shape.cy, radius: shape.radius } : null;
+    const modeChanged = !prev !== !shape;
+    const shrank =
+      !!prev && !!shape && (shape.radius < prev.radius - 1e-6 || shape.cx !== prev.cx || shape.cy !== prev.cy);
+    if (this.lost || this.disposed) return;
+    if (modeChanged) {
+      this.applyStateWrap();
+      this.ensureStepProgram();
+    }
+    if ((modeChanged && shape) || shrank) {
+      // Two masking passes so both ping-pong buffers are clean outside the new rim.
+      this.maskPass();
+      this.maskPass();
+    }
+    this.fieldDirty = true;
+  }
+
+  /** Glass deflection: rigid rotations of matter around creatures (deflect.ts), in order. */
+  applyTurns(turns: readonly Turn[]): void {
+    if (this.lost || this.disposed || !turns.length) return;
+    const gl = this.gl;
+    const p = this.progs.rotate;
+    for (const t of turns) {
+      if (!(Math.abs(t.angle) > 0) || !(t.radius > 0)) continue;
+      this.beginStatePass(p);
+      gl.uniform3f(p.u('uTurn'), t.x, t.y, t.radius);
+      gl.uniform1f(p.u('uAngle'), t.angle);
+      gl.uniform1f(p.u('uFeather'), DEFLECT.feather);
+      this.endStatePass();
+    }
+  }
+
+  /** Lysis discs (growth penalty, deflect.ts LysisPlanner) for the next steps; [] clears them. Dish mode only. */
+  setLysis(discs: readonly LysisDisc[]): void {
+    const n = Math.min(MAX_LYSIS, LYSIS.maxDiscs, discs.length);
+    this.lysisData.fill(0);
+    for (let i = 0; i < n; i++) {
+      const d = discs[i];
+      this.lysisData.set([d.x, d.y, Math.max(0.5, d.radius), d.strength], i * 4);
+    }
+    this.lysisCount = n;
+  }
+
+  /** Purely visual dish effects: `grow` 0..1 = rim glow while the dish grows (DishAnimator.glow). */
+  setDishFx(fx: { grow?: number }): void {
+    this.growFx = Math.min(1, Math.max(0, fx.grow ?? 0));
+  }
+
+  /**
+   * Species tints (purely visual): matter near each creature leans towards its species hue.
+   * At most MAX_TINTS (32) entries; x, y, r in grid cells, `hue` in degrees like SpeciesView.hue
+   * (the UI's `hsl(hue …)`). `amount` 0..1 (default 0.7).
+   */
+  setCreatureTints(list: readonly { x: number; y: number; r: number; hue: number }[], amount?: number): void {
+    const n = Math.min(MAX_TINTS, list.length);
+    for (let i = 0; i < n; i++) {
+      const t = list[i];
+      const h = (((t.hue / 360) % 1) + 1) % 1;
+      this.tintData.set([t.x, t.y, Math.max(1, t.r), h], i * 4);
+    }
+    this.tintCount = n;
+    if (amount !== undefined) this.tintAmt = Math.min(1, Math.max(0, amount));
+  }
+
+  /** Clears every cell outside the rim (a zero-density seed: max(cur, 0) × inside). */
+  private maskPass(): void {
+    const p = this.progs.seed;
+    const gl = this.gl;
+    this.beginStatePass(p);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.emptyTmpl);
+    gl.uniform1i(p.u('uTmpl'), 1);
+    gl.uniform2i(p.u('uTmplSize'), 0, 0);
+    gl.uniform2f(p.u('uCenter'), 0, 0);
+    gl.uniform1f(p.u('uRadius'), 1);
+    gl.uniform1f(p.u('uDensity'), 0);
+    gl.uniform1f(p.u('uNoise'), 0);
+    gl.uniform1f(p.u('uBound'), 0);
+    gl.uniform1i(p.u('uShape'), 0);
+    gl.uniform1i(p.u('uHasTmpl'), 0);
+    this.endStatePass();
+  }
+
+  /** Clamp-to-edge state reads in the dish (zero padding), REPEAT on the torus. */
+  private applyStateWrap(): void {
+    const gl = this.gl;
+    const wrap = this.dishShape ? gl.CLAMP_TO_EDGE : gl.REPEAT;
+    for (const t of this.state) {
+      gl.bindTexture(gl.TEXTURE_2D, t.tex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
+    }
+  }
+
+  /** Mask a CPU field to the dish (uploads and imports). */
+  private maskData(data: Float32Array): Float32Array {
+    const d = this.dishShape;
+    if (!d) return data;
+    const out = data.slice(0, this.gridW * this.gridH);
+    for (let y = 0; y < this.gridH; y++) for (let x = 0; x < this.gridW; x++) if (!cellInDish(d, x, y)) out[y * this.gridW + x] = 0;
+    return out;
   }
 
   snapshot(): FieldSnapshot {
@@ -475,6 +648,10 @@ export class WebGLSimulation implements Simulation {
     const W = this.canvas.width;
     const H = this.canvas.height;
     const cam = this.camera;
+    const d = this.dishShape;
+    // Round dish: fit what the caller's camera fits (core/camera.ts; it lags the rim while growing).
+    const vc = view.camera as Partial<Camera>;
+    cam.setDish(d, d && vc.dish && typeof vc.fitRadius === 'number' && vc.fitRadius > 0 ? vc.fitRadius : d?.radius);
     cam.setView(W, H);
     cam.zoom = view.camera.zoom;
     cam.cx = view.camera.cx;
@@ -504,6 +681,14 @@ export class WebGLSimulation implements Simulation {
     gl.uniform1f(p.u('uGlowAmt'), q.amount);
     gl.uniform1i(p.u('uCubic'), q.cubic ? 1 : 0);
     gl.uniform1f(p.u('uGradBias'), this.floatField ? 0 : 0.5);
+    gl.uniform1i(p.u('uDishMode'), d ? 1 : 0);
+    if (d) gl.uniform3f(p.u('uDish'), d.cx, d.cy, d.radius);
+    gl.uniform1f(p.u('uGrowFx'), d ? this.growFx : 0);
+    gl.uniform1i(p.u('uTintCount'), this.tintCount);
+    if (this.tintCount) {
+      gl.uniform4fv(p.u('uTint[0]'), this.tintData);
+      gl.uniform1f(p.u('uTintAmt'), this.tintAmt);
+    }
     if (this.styleDirty) this.uploadStyle(p);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
@@ -578,6 +763,7 @@ export class WebGLSimulation implements Simulation {
   writeState(data: Float32Array): void {
     const n = this.gridW * this.gridH;
     if (data.length < n) throw new Error('writeState: wrong size');
+    data = this.maskData(data);
     this.backup = { data: data.slice(0, n), step: this._step };
     if (this.lost || this.disposed) return;
     this.uploadState(data);
@@ -590,7 +776,7 @@ export class WebGLSimulation implements Simulation {
    */
   prewarmKernel(R: number, rings: number[] = this._params.rings): void {
     if (this.lost || this.disposed) return;
-    const key = `${this.fm.lanes}|${this.fm.enc}|${R}|${rings.join(',')}`;
+    const key = `${this.fm.lanes}|${this.fm.enc}|${R}|${rings.join(',')}${this.dishShape ? '|dish' : ''}`;
     if (this.stepCache.has(key)) return;
     const saved = this._params;
     const savedKey = this.stepKey;
@@ -675,6 +861,7 @@ export class WebGLSimulation implements Simulation {
       }
     }
     if (!ok) throw new SimUnsupportedError('No renderable texture format for the simulation');
+    if (this.dishShape) this.applyStateWrap(); // context restored in dish mode
 
     // Display field: half float if renderable (always filterable), else RGBA8.
     this.floatField = false;
@@ -740,6 +927,7 @@ export class WebGLSimulation implements Simulation {
         erase: this.program(eraseSource(L, fmt.enc)),
         snapshot: this.program(snapshotSource(L, fmt.enc, GRAD_ENCODE_MAX)),
         extract: this.program(extractSource(L, fmt.enc)),
+        rotate: this.program(rotateSource(L, fmt.enc)),
       } as WebGLSimulation['progs'];
       // Round trip: upload a ramp, render it through an identity state→state
       // pass (a zero-density seed) into the other target, read it back.
@@ -747,7 +935,12 @@ export class WebGLSimulation implements Simulation {
       const probe = new Float32Array(n);
       for (let i = 0; i < n; i++) probe[i] = ((i * 37) % 101) / 100;
       this.uploadState(probe);
-      this.seed({ x: 0, y: 0, radius: 1, density: 0, noise: 0, shape: 'blob', rngSeed: 0 });
+      this.probing = true; // the probe covers the whole grid: no dish mask
+      try {
+        this.seed({ x: 0, y: 0, radius: 1, density: 0, noise: 0, shape: 'blob', rngSeed: 0 });
+      } finally {
+        this.probing = false;
+      }
       const back = this.readCells(0, 0, this.gridW, this.gridH);
       let err = 0;
       for (let i = 0; i < n; i++) err = Math.max(err, Math.abs(back[i] - probe[i]));
@@ -767,12 +960,13 @@ export class WebGLSimulation implements Simulation {
 
   private ensureStepProgram(): void {
     const { R, rings } = this._params;
-    const key = `${this.fm.lanes}|${this.fm.enc}|${R}|${rings.join(',')}`;
+    const dish = !!this.dishShape;
+    const key = `${this.fm.lanes}|${this.fm.enc}|${R}|${rings.join(',')}${dish ? '|dish' : ''}`;
     if (key === this.stepKey) return;
     let prog = this.stepCache.get(key);
     const pk = buildPackedKernel(R, rings, this.fm.lanes);
     if (!prog) {
-      prog = this.program(stepSource(pk, this.fm.enc, this.offMin, this.offMax));
+      prog = this.program(stepSource(pk, this.fm.enc, this.offMin, this.offMax, dish));
       // LRU: calibrating R sweeps through kernels; keep plenty compiled (QA3 F11: 6 evicted R = 13).
       if (this.stepCache.size >= STEP_CACHE_MAX) {
         const [oldKey, old] = this.stepCache.entries().next().value as [string, Prog];
@@ -808,6 +1002,15 @@ export class WebGLSimulation implements Simulation {
     gl.uniform2i(p.u('uGrid'), this.gridW, this.gridH);
     const gf = p.u('uGridF');
     if (gf) gl.uniform2f(gf, this.gridW, this.gridH);
+    // Topology of seed / erase / rotate: torus = wrapped offsets and no mask.
+    const d = this.probing ? null : this.dishShape;
+    const wr = p.u('uWrap');
+    if (wr) gl.uniform1f(wr, d ? 0 : 1);
+    const ud = p.u('uDish');
+    if (ud) {
+      if (d) gl.uniform3f(ud, d.cx, d.cy, d.radius);
+      else gl.uniform3f(ud, this.gridW / 2, this.gridH / 2, 1e6);
+    }
   }
 
   /** Start a state → state pass (seed, erase): reads current, writes the other buffer. */

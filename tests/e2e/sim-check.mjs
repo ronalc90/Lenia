@@ -8,7 +8,9 @@
 //  - lane / storage-format consistency, seeds/erase/capture/import/export vs CPU mirrors,
 //    R=18 multi-ring and R=27 kernels vs CPU, context loss + restore
 //  - steps/s at 192×240, R=13 and render cost
-//  - screenshot of several species after 300 steps
+//  - round walled dish (ADR-022): GPU vs CPU at the glass, seeds/erase without wrap, deflection
+//    turns, lysis, rim growth/shrink, a swimmer bouncing off the glass in the real GPU dish
+//  - screenshot of several species after 300 steps, and of round dishes (--dish-shot <png>)
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,6 +25,9 @@ const visualOnly = args.includes('--visual-only');
 const looks = args.includes('--looks')
   ? args[args.indexOf('--looks') + 1].split(',').filter(Boolean).map((x) => x.split(':'))
   : [];
+const dishShot = args.includes('--dish-shot')
+  ? resolve(args[args.indexOf('--dish-shot') + 1])
+  : '/tmp/claude-0/-home-user-Lenia/a5114f5a-39a4-539d-9a6a-14e769759a92/scratchpad/sim-dish.png';
 const shot = args.includes('--shot')
   ? resolve(args[args.indexOf('--shot') + 1])
   : '/tmp/claude-0/-home-user-Lenia/a5114f5a-39a4-539d-9a6a-14e769759a92/scratchpad/sim-render.png';
@@ -120,6 +125,42 @@ try {
     check('export/import 8-bit round trip', seeds.ioDiff <= 0.5 / 255 + 1e-3, `max|Δ| ${fmt(seeds.ioDiff)}`);
     check('import of another size is centred/cropped', Math.abs(seeds.bigImportMass - seeds.expectedBigMass) < 1, `${fmt(seeds.bigImportMass)}`);
 
+    // ── round walled dish (ADR-022) ──
+    for (const cfg of quick ? [{}] : [{}, { format: 'u8' }, { format: 'float' }]) {
+      const d = await run('dishChecks', cfg);
+      const tag = cfg.format ? ` [${cfg.format}]` : '';
+      check(
+        `dish${tag}: Orbium into the glass, GPU vs CPU after 60 steps`,
+        d.initDiff < 1e-3 && d.wallDiff60 < 0.02 && Math.abs(d.wallMassRatio60 - 1) < 0.01 && d.wallOutside60 === 0 && d.wallCpuMass60 > 20 && d.wallContact60 < 2,
+        `max|Δ| ${fmt(d.wallDiff60)} mass ${fmt(d.wallMassRatio60)} cpu mass ${fmt(d.wallCpuMass60)} gap to glass ${fmt(d.wallContact60, 3)} outside ${d.wallOutside60}`,
+      );
+      check(
+        `dish${tag}: seeds/erase without wrap match CPU, nothing outside`,
+        d.seedDiff < 2e-3 && d.eraseDiff < 2e-3 && d.seedOutside === 0 && d.wrapLeak === 0,
+        `seed ${fmt(d.seedDiff)} erase ${fmt(d.eraseDiff)} outside ${d.seedOutside} wrap ${fmt(d.wrapLeak)}`,
+      );
+      check(`dish${tag}: deflection turn matches rotateDiscCpu`, d.turnDiff < 2e-3 && Math.abs(d.turnMassRatio - 1) < 0.03, `max|Δ| ${fmt(d.turnDiff)} mass ${fmt(d.turnMassRatio)}`);
+      check(`dish${tag}: lysis matches CPU and dissolves`, d.lysisDiff < 0.02 && d.lysisMassDrop < 0.95 && d.lysisMassDrop > 0.05, `max|Δ| ${fmt(d.lysisDiff)} mass ×${fmt(d.lysisMassDrop)}`);
+      check(
+        `dish${tag}: rim growth keeps matter, shrink clears, torus restored`,
+        d.growDiff === 0 && d.shrinkOutside === 0 && d.torusWrapsAgain === 1,
+        `grow ${fmt(d.growDiff)} shrink ${d.shrinkOutside} torus ${d.torusWrapsAgain}`,
+      );
+    }
+    const b = await run('bounce', {}, quick ? 1200 : 2000, true);
+    check(
+      'dish: Orbium bounces off the glass in the GPU dish (Ø96, deflection from snapshots)',
+      b.turns >= 4 && b.nearRim >= 4 && b.massRatio > 0.75 && b.massRatio < 1.3,
+      JSON.stringify(Object.fromEntries(Object.entries(b).map(([k, v]) => [k, fmt(v, 3)]))),
+    );
+    if (!quick) {
+      const nb = await run('bounce', {}, 1200, false);
+      check('dish: without deflection the bare glass kills Orbium (control)', nb.massRatio < 0.2, `mass ×${fmt(nb.massRatio, 3)}`);
+      const dp = await run('dishPerf', 1500, 224);
+      const dp96 = await run('dishPerf', 1500, 96);
+      console.log(`PERF  round dish ${dp.grid}² Ø${dp.diameter}: ${fmt(dp.stepsPerSec, 4)} steps/s; Ø96: ${fmt(dp96.stepsPerSec, 4)} steps/s`);
+    }
+
     if (!quick) {
       const big = await run('bigKernels');
       check(
@@ -183,6 +224,15 @@ try {
     await page.screenshot({ path: out, fullPage: true });
     console.log(`screenshot → ${out}`);
   }
+  // Round dishes rendered by the GPU path.
+  await page.evaluate(() => {
+    document.getElementById('panels').innerHTML = '';
+  });
+  const dv = await run('dishVisual', visQuality);
+  for (const v of dv) check(`dish visual: ${v.label} (alive, nothing outside the glass)`, v.mass > 20 && v.outside === 0, `mass ${fmt(v.mass, 4)}`);
+  mkdirSync(dirname(dishShot), { recursive: true });
+  await page.screenshot({ path: dishShot, fullPage: true });
+  console.log(`screenshot → ${dishShot}`);
   check('no console errors', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
 } catch (err) {
   console.error(err);

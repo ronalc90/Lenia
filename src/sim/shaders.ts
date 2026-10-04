@@ -1,3 +1,4 @@
+import { DISH_GLSL, ROTATE_BODY, TINT_GLSL, texelOutsideGlsl } from './dishgl';
 import type { PackedKernel } from './kernel';
 
 /**
@@ -76,12 +77,20 @@ function fmt(w: number): string {
   return s.includes('.') || s.includes('e') ? s : `${s}.0`;
 }
 
+/** Lysis discs in the dish step (deflect.ts LYSIS.maxDiscs). */
+export const MAX_LYSIS = 8;
+
 /**
  * The Lenia step, fully unrolled with the kernel weights as constants
  * (regenerated only when R or rings change). Fetches use the hardware REPEAT
  * wrap for the torus, with constant texel offsets where the range allows.
+ *
+ * `dish` (ADR-022): round walled dish. The state textures are then read clamp-to-edge (the grid
+ * keeps ≥ 4 empty cells around the dish, so that is exact zero padding); texels wholly outside
+ * the glass write 0 without convolving; cells outside the glass are forced to 0; lysis discs
+ * (deflect.ts) subtract from the growth. Same maths as CpuLenia with setDish/setLysis.
  */
-export function stepSource(pk: PackedKernel, enc: Encoding, minOff: number, maxOff: number): string {
+export function stepSource(pk: PackedKernel, enc: Encoding, minOff: number, maxOff: number, dish = false): string {
   const L = pk.lanes;
   const vt = L === 1 ? 'float' : `vec${L}`;
   const lane = (v: string, i: number) => (L === 1 ? (enc === 'u8' ? v : `${v}.x`) : `${v}.${LANES[i]}`);
@@ -122,16 +131,53 @@ export function stepSource(pk: PackedKernel, enc: Encoding, minOff: number, maxO
       if (terms.length) body.push(`  a${L === 1 ? '' : '.' + LANES[o]} += ${terms.join(' + ')};`);
     }
   }
-  const out =
+  const outOf = (v: string) =>
     enc === 'float'
       ? L === 4
-        ? 'nv'
+        ? v
         : L === 2
-          ? 'vec4(nv, 0.0, 1.0)'
-          : 'vec4(nv, 0.0, 0.0, 1.0)'
+          ? `vec4(${v}, 0.0, 1.0)`
+          : `vec4(${v}, 0.0, 0.0, 1.0)`
       : L === 2
-        ? 'vec4(enc16(nv.x), enc16(nv.y))'
-        : 'vec4(enc16(nv), 0.0, 1.0)';
+        ? `vec4(enc16(${v}.x), enc16(${v}.y))`
+        : `vec4(enc16(${v}), 0.0, 1.0)`;
+  const out = outOf('nv');
+  // Per-lane cell centres of this texel, for the dish mask and lysis.
+  const laneLoop = (body: (pc: string, k: string) => string) =>
+    L === 1
+      ? `  { vec2 pc = vec2(float(tc.x) + 0.5, float(tc.y) + 0.5); ${body('pc', '')} }`
+      : `  for (int k = 0; k < ${L}; k++) { vec2 pc = vec2(float(tc.x * ${L} + k) + 0.5, float(tc.y) + 0.5); ${body('pc', '[k]')} }`;
+  const dishHead = dish
+    ? `${DISH_GLSL}${texelOutsideGlsl(L)}
+uniform vec4 uLysis[${MAX_LYSIS}];  // x, y, radius, strength
+uniform int uLysisCount;
+float lysisAt(vec2 pc) {
+  float p = 0.0;
+  for (int i = 0; i < ${MAX_LYSIS}; i++) {
+    if (i >= uLysisCount) break;
+    vec4 l = uLysis[i];
+    float q = length(pc - l.xy) / l.z;
+    if (q < 1.0) p = max(p, l.w * (1.0 - q * q));
+  }
+  return p;
+}
+`
+    : '';
+  const dishEarly = dish
+    ? `  ivec2 tc = ivec2(gl_FragCoord.xy);
+  if (texelOutside(tc)) {
+    ${vt} z = ${vt}(0.0);
+    o = ${outOf('z')};
+    return;
+  }
+`
+    : '';
+  const dishPen = dish
+    ? `  ${vt} pen = ${vt}(0.0);
+  ${vt} ins = ${vt}(0.0);
+${laneLoop((pc, k) => `ins${k} = dishInside(${pc}); if (uLysisCount > 0) pen${k} = lysisAt(${pc});`)}
+`
+    : '';
   return `${HEADER}
 uniform sampler2D uS;
 uniform vec2 uInv;     // 1 / state texture size
@@ -145,8 +191,9 @@ vec2 enc16(float v) {
   float hi = floor(q * (1.0 / 256.0));
   return vec2(hi, q - hi * 256.0) * (1.0 / 255.0);
 }
+${dishHead}
 void main() {
-  vec2 b = gl_FragCoord.xy * uInv;
+${dishEarly}  vec2 b = gl_FragCoord.xy * uInv;
   vec4 c0 = texture(uS, b);
   ${vt} a = ${vt}(0.0);
   vec4 t;
@@ -159,7 +206,7 @@ ${body.join('\n')}
   ${vt} g = max(${vt}(0.0), 1.0 - d * d * uK);
   g *= g;
   g *= g;
-  ${vt} nv = clamp(A0 + uDt * (2.0 * g - 1.0), 0.0, 1.0);
+${dishPen}  ${vt} nv = clamp(A0 + uDt * (2.0 * g - 1.0${dish ? ' - pen' : ''}), 0.0, 1.0);${dish ? '\n  nv *= ins;' : ''}
   o = ${out};
 }
 `;
@@ -188,12 +235,13 @@ float vnoise(vec2 p, uint s) {
   float bot = c + (d - c) * u.x;
   return top + (bot - top) * u.y;
 }
-float wrapD(float d, float n) { return d - n * floor(d / n + 0.5); }
+uniform float uWrap;   // 1 = torus offsets, 0 = round dish (plain offsets)
+float wrapD(float d, float n) { return uWrap > 0.5 ? d - n * floor(d / n + 0.5) : d; }
 `;
 
-/** Seed pass: mirrors seed.ts seedValueAt exactly. */
+/** Seed pass: mirrors seed.ts seedValueAt exactly (and applySeedCpu's dish mask). */
 export function seedSource(L: number, enc: Encoding): string {
-  return `${HEADER}${stateLib(L, enc)}${NOISE_LIB}
+  return `${HEADER}${stateLib(L, enc)}${NOISE_LIB}${DISH_GLSL}
 uniform sampler2D uTmpl;   // R32F template, sampled with manual bilinear
 uniform ivec2 uTmplSize;
 uniform vec2 uGridF;
@@ -271,7 +319,8 @@ void main() {
   vec4 cur = decodeTexel(texelFetch(uS, tc, 0));
   vec4 nv = cur;
   for (int k = 0; k < L; k++) {
-    nv[k] = max(cur[k], seedValue(vec2(float(tc.x * L + k) + 0.5, float(tc.y) + 0.5)));
+    vec2 pc = vec2(float(tc.x * L + k) + 0.5, float(tc.y) + 0.5);
+    nv[k] = max(cur[k], seedValue(pc)) * dishInside(pc);
   }
   o = encodeTexel(nv);
 }
@@ -283,8 +332,9 @@ export function eraseSource(L: number, enc: Encoding): string {
 uniform vec2 uGridF;
 uniform vec2 uCenter;
 uniform float uRadius;
+uniform float uWrap;   // 1 = torus offsets, 0 = round dish
 out vec4 o;
-float wrapD(float d, float n) { return d - n * floor(d / n + 0.5); }
+float wrapD(float d, float n) { return uWrap > 0.5 ? d - n * floor(d / n + 0.5) : d; }
 void main() {
   ivec2 tc = ivec2(gl_FragCoord.xy);
   vec4 cur = decodeTexel(texelFetch(uS, tc, 0));
@@ -297,6 +347,11 @@ void main() {
   o = encodeTexel(nv);
 }
 `;
+}
+
+/** Glass deflection turn (rigid rotation of a disc of matter): mirrors deflect.ts rotateDiscCpu. */
+export function rotateSource(L: number, enc: Encoding): string {
+  return `${HEADER}${stateLib(L, enc)}${DISH_GLSL}${ROTATE_BODY}`;
 }
 
 /** Snapshot: block mean of A and of |∇A| (central differences), 16-bit packed. */
@@ -385,7 +440,10 @@ void main() {
 
 /**
  * Screen pass. Mapping identical to core/camera.ts (contain fit × zoom, centred
- * on (cx, cy), toroidal content inside the dish rectangle).
+ * on (cx, cy)). Torus (uDishMode 0): toroidal content inside the dish rectangle. Round dish
+ * (uDishMode 1, ADR-022): agar inside the glass, a thick glass wall with a highlight arc and a
+ * soft shadow on a lab-table background, a glow ring while the dish grows, and optional species
+ * tints of the matter (dishgl.ts TINT_GLSL).
  */
 export const RENDER = `${HEADER}
 uniform sampler2D uField;   // grid res, REPEAT + LINEAR: (A, ∇A + bias, glow source)
@@ -415,6 +473,10 @@ uniform float uRimAmt;      // 0.22
 uniform float uRimHalo;     // 0.025 ('glow' rims: 0.06)
 uniform float uRimDouble;   // 1 = second rim line 3 px inside
 uniform vec4 uLabGrid;      // rgba of a faint grid every 16 cells; a = 0 disables it
+uniform int uDishMode;      // 0 = toroidal rectangle (legacy), 1 = round walled dish
+uniform vec3 uDish;         // round dish: centre (grid cells) and radius
+uniform float uGrowFx;      // 0..1 glow of the rim while the dish grows
+${TINT_GLSL}
 out vec4 o;
 
 const vec3 LIGHT = vec3(-0.45, -0.55, 0.70);   // from the top-left, towards the viewer
@@ -445,22 +507,75 @@ float hash12(vec2 p) {
   return fract((p3.x + p3.y) * p3.z);
 }
 
+/** Lab table, the dish's shadow and the glass wall around a round dish (inside = px to the rim). */
+vec3 glassDish(vec3 agar, float inside, vec2 g, vec2 px) {
+  float s = uScale;
+  // Glass wall thickness on screen (≈ 2 cells, never thinner than 6 px).
+  float wall = max(6.0 * uDpr, 2.0 * s);
+  vec2 dg = g - uDish.xy;
+  float r = length(dg);
+  vec2 nrm = r > 1e-4 ? dg / r : vec2(0.0, -1.0);
+  // Table: the style background, lit from the top-left, with a faint static grain.
+  vec2 sp = px / uView;
+  float light = 1.0 - 0.55 * clamp(length(sp - vec2(0.28, 0.18)), 0.0, 1.0);
+  vec3 table = uBg * (0.8 + 0.6 * light) + uRim * 0.012 * light;
+  table *= 0.985 + 0.03 * hash12(floor(px / (2.0 * uDpr)));
+  // Soft shadow of the dish, cast towards the bottom-right.
+  vec2 so = vec2(0.6, 0.9) * (6.0 * uDpr + 0.9 * wall);
+  float sd = (uDish.z - length(g - so / s - uDish.xy)) * s + wall;
+  table *= 1.0 - 0.45 * smoothstep(-22.0 * uDpr, 4.0 * uDpr, sd);
+  // Glass wall: a little lighter than the table, tinted by the rim colour, thicker-looking at the
+  // outer edge, with a specular arc where it faces the light and a fainter refraction opposite.
+  float t = clamp(-inside / wall, 0.0, 1.0);
+  // Thick glass: brighter towards its middle, tinted by the rim colour.
+  vec3 glass = table * 1.3 + uRim * (0.09 + 0.07 * sin(3.14159 * t));
+  float spec = pow(max(dot(nrm, normalize(vec2(-0.62, -0.78))), 0.0), 4.0);
+  float refr = pow(max(dot(nrm, normalize(vec2(0.62, 0.78))), 0.0), 8.0);
+  glass += vec3(0.85, 0.95, 1.0) * (spec * 0.30 * smoothstep(0.05, 0.45, t) * (1.0 - 0.6 * t) + refr * 0.07 * (1.0 - t));
+  float aIn = clamp(inside + 0.5, 0.0, 1.0);
+  float aOut = clamp(inside + wall + 0.5, 0.0, 1.0);
+  vec3 c = mix(table, glass, aOut);
+  c = mix(c, agar, aIn);
+  // Inner rim line (the meniscus), a glint inside the glass and a thinner outer edge.
+  c += uRim * uRimAmt * exp(-pow(inside / (0.9 * uDpr), 2.0));
+  c += vec3(0.9, 0.97, 1.0) * (0.06 + 0.22 * spec) * exp(-pow((inside + 0.4 * wall) / (0.7 * uDpr), 2.0));
+  c += uRim * uRimAmt * 0.7 * exp(-pow((inside + wall) / (0.8 * uDpr), 2.0));
+  if (uRimDouble > 0.0) {
+    float rim2 = exp(-pow((inside - 3.0 * uDpr) / (0.7 * uDpr), 2.0));
+    c += uRim * rim2 * uRimAmt * 0.6 * uRimDouble;
+  }
+  c += uRim * uRimHalo * exp(-max(-inside - wall, 0.0) / (10.0 * uDpr)) * (1.0 - aOut);
+  // Growth: the meniscus glows and a soft ring breathes on the glass.
+  if (uGrowFx > 0.0) {
+    c += uRim * uGrowFx * (0.9 * exp(-pow(inside / (2.5 * uDpr), 2.0)) + 0.25 * aOut * (1.0 - aIn));
+  }
+  return c;
+}
+
 void main() {
   vec2 px = vec2(gl_FragCoord.x, uView.y - gl_FragCoord.y);
   vec2 rel = px - 0.5 * uView;
   vec2 halfSize = 0.5 * uGrid * uScale;
-  vec2 dEdge = halfSize - abs(rel);
-  float inside = min(dEdge.x, dEdge.y);   // px to the dish edge, > 0 inside
+  vec2 g = uCenter + rel / uScale;
+  float inside;   // px to the dish edge, > 0 inside
+  vec2 e;         // position relative to the dish, ~1 at the edge (vignette)
+  if (uDishMode == 1) {
+    vec2 dg = g - uDish.xy;
+    inside = (uDish.z - length(dg)) * uScale;
+    e = dg / uDish.z;
+  } else {
+    vec2 dEdge = halfSize - abs(rel);
+    inside = min(dEdge.x, dEdge.y);
+    e = rel / halfSize;
+  }
 
   // Matter (computed everywhere so derivatives stay well defined).
-  vec2 g = uCenter + rel / uScale;
   vec4 f = uCubic == 1 ? fieldCubic(g) : texture(uField, g / uGrid);
   float v = clamp(f.r, 0.0, 1.0);
   vec2 grad = f.gb - uGradBias;
   float gm = length(grad);
 
   // Agar: slightly lighter than the background, with a very faint vignette.
-  vec2 e = rel / halfSize;
   float vig = smoothstep(1.6, 0.2, length(e));
   vec3 col = mix(uAgarOut, uAgarIn, vig);
   // Optional lab grid (graph paper), toroidal like the dish; drawn under the matter.
@@ -474,6 +589,8 @@ void main() {
 
   vec4 lut = texture(uLut, vec2((v * 255.0 + 0.5) / 256.0, 0.5));
   vec3 mat = lut.rgb;
+  // Species tint (round dish): matter near a creature leans towards its species hue.
+  if (uTintCount > 0 && lut.a > 0.0) mat = tintMatter(mat, g);
   // Soft relief: the field as a gel surface lit from the top-left, so bodies
   // read as volumes and saturated cores do not go flat.
   vec3 n = normalize(vec3(-grad * 5.0, 1.0));
@@ -501,17 +618,22 @@ void main() {
     col += (uGlowWide * gl + uGlowCore * gl * gl * 1.4) * uGlowAmt;
   }
 
-  // Dish edge: antialiased cut to the background plus a subtle rim line.
-  float aa = clamp(inside + 0.5, 0.0, 1.0);
-  vec3 outCol = mix(uBg, col, aa);
-  float rim = exp(-pow(inside / (0.9 * uDpr), 2.0));
-  outCol += uRim * rim * uRimAmt;
-  if (uRimDouble > 0.0) {
-    float rim2 = exp(-pow((inside - 3.0 * uDpr) / (0.7 * uDpr), 2.0));
-    outCol += uRim * rim2 * uRimAmt * 0.6 * uRimDouble;
+  vec3 outCol;
+  if (uDishMode == 1) {
+    outCol = glassDish(col, inside, g, px);
+  } else {
+    // Dish edge: antialiased cut to the background plus a subtle rim line.
+    float aa = clamp(inside + 0.5, 0.0, 1.0);
+    outCol = mix(uBg, col, aa);
+    float rim = exp(-pow(inside / (0.9 * uDpr), 2.0));
+    outCol += uRim * rim * uRimAmt;
+    if (uRimDouble > 0.0) {
+      float rim2 = exp(-pow((inside - 3.0 * uDpr) / (0.7 * uDpr), 2.0));
+      outCol += uRim * rim2 * uRimAmt * 0.6 * uRimDouble;
+    }
+    float halo = exp(-max(-inside, 0.0) / (10.0 * uDpr)) * (1.0 - aa);
+    outCol += uRim * halo * uRimHalo;
   }
-  float halo = exp(-max(-inside, 0.0) / (10.0 * uDpr)) * (1.0 - aa);
-  outCol += uRim * halo * uRimHalo;
 
   // Dither to kill banding in the dark gradients.
   outCol += (hash12(gl_FragCoord.xy + fract(uTime) * 61.0) - 0.5) / 255.0;

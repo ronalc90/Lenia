@@ -3,10 +3,13 @@
  * with functions that build WebGL simulations, compare them against the CPU
  * reference (cpu.ts, seed.ts, snapshot.ts) and return plain JSON results.
  */
+import { Camera } from '../../src/core/camera';
+import { DishAnimator, dishForGrid, type DishShape } from '../../src/core/dish';
 import type { LeniaParams, Quality, SeedSpec } from '../../src/core/types';
 import { catalogByCode, catalogPattern, paramsOf } from '../../src/sim/catalog';
 import { CpuLenia } from '../../src/sim/cpu';
-import { measureStepsPerSecond, recommendQuality } from '../../src/sim/perf';
+import { Deflector, rotateDiscCpu, type Turn } from '../../src/sim/deflect';
+import { measureStepsPerSecond, QUALITY_DISH, recommendQuality } from '../../src/sim/perf';
 import { applyEraseCpu, applySeedCpu } from '../../src/sim/seed';
 import { snapshotFromCpu } from '../../src/sim/snapshot';
 import { createSimulation, type StateFormat, type WebGLSimulation } from '../../src/sim/webgl';
@@ -465,7 +468,369 @@ function rerender(quality?: Quality) {
   return live.length;
 }
 
+
+// ───────────────────────────── Round dish (ADR-022) ─────────────────────────────
+
+/** Max |value| of cells outside the dish (must be exactly 0). */
+function outsideMax(A: Float32Array, w: number, h: number, d: DishShape): number {
+  let m = 0;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const dx = x + 0.5 - d.cx;
+      const dy = y + 0.5 - d.cy;
+      if (dx * dx + dy * dy >= d.radius * d.radius) m = Math.max(m, A[y * w + x]);
+    }
+  return m;
+}
+
+/** Mass-weighted centroid (no wrap: the dish never touches the grid edge). */
+function centroidPlain(A: ArrayLike<number>, w: number, h: number, scale = 1): { x: number; y: number; m: number } {
+  let m = 0;
+  let sx = 0;
+  let sy = 0;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const v = A[y * w + x];
+      m += v;
+      sx += v * (x + 0.5) * scale;
+      sy += v * (y + 0.5) * scale;
+    }
+  return { x: sx / Math.max(1e-9, m), y: sy / Math.max(1e-9, m), m };
+}
+
+/**
+ * GPU vs CPU in the round walled dish: Orbium launched into the glass (absorbing rim, zero
+ * padding, mask), seeds/erase without wrap, a deflection turn and lysis, all against the CPU mirrors.
+ */
+function dishChecks(cfg: SimCfg = {}) {
+  const P = species('O2u');
+  const N = 128;
+  const dish = { cx: 64, cy: 64, radius: 48 };
+  const out: Record<string, number> = {};
+
+  // 1. Orbium swimming into the glass: GPU vs CPU, outside stays 0.
+  {
+    const sim = createSimulation(makeCanvas(), { gridW: N, gridH: N, params: P, ...cfg });
+    sim.setDish(dish);
+    const cpu = new CpuLenia(N, N, P);
+    cpu.setDish(dish);
+    const pat = catalogPattern('O2u');
+    // O2u heads ~68° (down-right): start below-right of the centre so it meets the rim at ~40 steps.
+    const spec: SeedSpec = { x: 72, y: 76, radius: 20, density: 1, noise: 0, shape: 'pattern', pattern: pat };
+    sim.seed(spec);
+    applySeedCpu(cpu.A, N, N, spec, 1, { dish });
+    out.initDiff = maxDiff(sim.readState(), cpu.A);
+    sim.advance(60);
+    cpu.step(60);
+    const g = sim.readState();
+    out.wallDiff60 = maxDiff(g, cpu.A);
+    out.wallMassRatio60 = sum(g) / Math.max(1e-9, cpu.mass());
+    out.wallCpuMass60 = cpu.mass();
+    out.wallOutside60 = outsideMax(g, N, N, dish);
+    let rimMin = Infinity;
+    for (let y = 0; y < N; y++)
+      for (let x = 0; x < N; x++) if (g[y * N + x] > 0.1) rimMin = Math.min(rimMin, dish.radius - Math.hypot(x + 0.5 - 64, y + 0.5 - 64));
+    out.wallContact60 = rimMin; // < 2: the creature is pressed against the glass
+    sim.dispose();
+  }
+
+  // 2. Seeds across the rim / near the grid edge and erase: no wrap, masked.
+  {
+    const sim = createSimulation(makeCanvas(), { gridW: N, gridH: N, params: P, ...cfg });
+    sim.setDish(dish);
+    const A = new Float32Array(N * N);
+    const pat = catalogPattern('O2u');
+    const specs: SeedSpec[] = [
+      { x: 64 + 46, y: 64, radius: 13, density: 0.8, noise: 0.5, shape: 'blob', rngSeed: 21 },
+      { x: 64, y: 64 - 44, radius: 12, density: 0.8, noise: 0.3, shape: 'ring', rngSeed: 22 },
+      { x: 40, y: 80, radius: 14, density: 0.7, noise: 0.4, shape: 'blob', pattern: pat, bias: 0.6, rotation: 1.1, rngSeed: 23 },
+      { x: 20, y: 30, radius: 13, density: 1, noise: 0.2, shape: 'pattern', pattern: pat, rotation: 2.5, rngSeed: 24 },
+    ];
+    for (const sp of specs) {
+      sim.seed(sp);
+      applySeedCpu(A, N, N, sp, 1, { dish });
+    }
+    out.seedDiff = maxDiff(sim.readState(), A);
+    sim.erase(64 + 44, 64, 9);
+    applyEraseCpu(A, N, N, 64 + 44, 64, 9, { dish });
+    const g = sim.readState();
+    out.eraseDiff = maxDiff(g, A);
+    out.seedOutside = outsideMax(g, N, N, dish);
+    // A seed placed on the far side of the grid must not wrap into the dish.
+    sim.clear();
+    sim.seed({ x: 2, y: 64, radius: 13, density: 1, noise: 0, shape: 'blob', rngSeed: 3 });
+    out.wrapLeak = sum(sim.readState());
+    sim.dispose();
+  }
+
+  // 3. Deflection turn (rotate pass) vs rotateDiscCpu, and lysis vs CpuLenia.setLysis.
+  {
+    const sim = createSimulation(makeCanvas(), { gridW: N, gridH: N, params: P, ...cfg });
+    sim.setDish(dish);
+    sim.seed({ x: 70, y: 60, radius: 20, density: 1, noise: 0, shape: 'pattern', pattern: catalogPattern('O2u') });
+    sim.advance(20);
+    const before = sim.readState();
+    const c = centroidPlain(before, N, N);
+    const turn: Turn = { id: 1, x: c.x, y: c.y, radius: 12, angle: 1.05 };
+    sim.applyTurns([turn]);
+    const cpuA = before.slice();
+    rotateDiscCpu(cpuA, N, N, turn, dish, new Float32Array(N * N));
+    const g = sim.readState();
+    out.turnDiff = maxDiff(g, cpuA);
+    out.turnMassRatio = sum(g) / sum(before);
+
+    const cpu = new CpuLenia(N, N, P);
+    cpu.setDish(dish);
+    cpu.A.set(g);
+    const discs = [{ x: c.x, y: c.y, radius: 12, strength: 0.5 }];
+    sim.setLysis(discs);
+    cpu.setLysis(discs);
+    sim.advance(4);
+    cpu.step(4);
+    out.lysisDiff = maxDiff(sim.readState(), cpu.A);
+    out.lysisMassDrop = cpu.mass() / sum(g);
+    sim.setLysis([]);
+    sim.dispose();
+  }
+
+  // 4. Growing the rim keeps the matter; shrinking clears outside; back to the torus works.
+  {
+    const sim = createSimulation(makeCanvas(), { gridW: N, gridH: N, params: P, ...cfg });
+    sim.setDish({ cx: 64, cy: 64, radius: 30 });
+    sim.seed({ x: 64, y: 64, radius: 20, density: 1, noise: 0, shape: 'pattern', pattern: catalogPattern('O2u') });
+    sim.advance(10);
+    const a = sim.readState();
+    sim.setDish({ cx: 64, cy: 64, radius: 50 });
+    out.growDiff = maxDiff(sim.readState(), a);
+    sim.setDish({ cx: 64, cy: 64, radius: 6 });
+    out.shrinkOutside = outsideMax(sim.readState(), N, N, { cx: 64, cy: 64, radius: 6 });
+    sim.setDish(null);
+    sim.seed({ x: 2, y: 64, radius: 13, density: 1, noise: 0, shape: 'blob', rngSeed: 3 });
+    const t = sim.readState();
+    out.torusWrapsAgain = t[64 * N + (N - 2)] > 0 ? 1 : 0; // the blob wraps to the far edge again
+    sim.dispose();
+  }
+  return out;
+}
+
+/**
+ * The real GPU dish with glass deflection driven from GPU snapshots (as the game will): Orbium in
+ * the smallest dish must bounce off the glass many times and survive.
+ */
+function bounce(cfg: SimCfg = {}, steps = 2000, deflect = true) {
+  const P = species('O2u');
+  const N = QUALITY_DISH.low.grid;
+  const dish = dishForGrid(N, N, 96);
+  const sim = createSimulation(makeCanvas(), { gridW: N, gridH: N, params: P, ...cfg });
+  sim.setDish(dish);
+  sim.seed({ x: dish.cx, y: dish.cy, radius: 20, density: 1, noise: 0, shape: 'pattern', pattern: catalogPattern('O2u') });
+  const m0 = sum(sim.readState());
+  const def = new Deflector();
+  let prev: { x: number; y: number } | null = null;
+  let turns = 0;
+  let nearRim = 0;
+  let minMass = Infinity;
+  const path: [number, number][] = [];
+  for (let s = 0; s < steps; s += 10) {
+    sim.advance(10);
+    const snap = sim.snapshot();
+    const c = centroidPlain(snap.value, snap.w, snap.h, snap.scale);
+    const mass = c.m * snap.scale * snap.scale;
+    minMass = Math.min(minMass, mass);
+    if (mass < 0.2 * m0) break;
+    path.push([c.x, c.y]);
+    if (dish.radius - Math.hypot(c.x - dish.cx, c.y - dish.cy) < 18) nearRim++;
+    if (deflect && prev) {
+      const t = def.update([{ id: 1, x: c.x, y: c.y, vx: (c.x - prev.x) / 10, vy: (c.y - prev.y) / 10, radius: 5.6 }], dish, sim.stepCount, 10);
+      turns += t.length;
+      sim.applyTurns(t);
+      if (t.length) {
+        const s2 = sim.snapshot();
+        const c2 = centroidPlain(s2.value, s2.w, s2.h, s2.scale);
+        prev = { x: c2.x, y: c2.y };
+        continue;
+      }
+    }
+    prev = { x: c.x, y: c.y };
+  }
+  const end = sum(sim.readState());
+  sim.dispose();
+  return { steps, turns, nearRim, massRatio: end / m0, minMassRatio: minMass / m0, pathLen: path.length, deflect };
+}
+
+/**
+ * Bodies from a GPU snapshot: 8-connected components (value ≥ 0.1, scale-2 blocks), centroid,
+ * radius of gyration and mass in grid cells. Tracking by nearest previous centroid (enough for the
+ * harness; the game uses the detector).
+ */
+function snapshotBodies(sim: WebGLSimulation, R: number): { x: number; y: number; radius: number; mass: number }[] {
+  const snap = sim.snapshot();
+  const { w, h, scale, value } = snap;
+  const lbl = new Int32Array(w * h);
+  const out: { x: number; y: number; radius: number; mass: number }[] = [];
+  const q: number[] = [];
+  let id = 0;
+  for (let i = 0; i < w * h; i++) {
+    if (value[i] < 0.1 || lbl[i]) continue;
+    id++;
+    q.length = 0;
+    q.push(i);
+    lbl[i] = id;
+    let m = 0, sx = 0, sy = 0, sxx = 0;
+    for (let k = 0; k < q.length; k++) {
+      const j = q[k];
+      const x = j % w;
+      const y = (j - x) / w;
+      const v = value[j] * scale * scale;
+      const gx = (x + 0.5) * scale;
+      const gy = (y + 0.5) * scale;
+      m += v;
+      sx += v * gx;
+      sy += v * gy;
+      sxx += v * (gx * gx + gy * gy);
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx;
+          const yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+          const jj = yy * w + xx;
+          if (value[jj] >= 0.1 && !lbl[jj]) {
+            lbl[jj] = id;
+            q.push(jj);
+          }
+        }
+    }
+    if (m < 0.04 * R * R) continue;
+    const cx = sx / m;
+    const cy = sy / m;
+    out.push({ x: cx, y: cy, mass: m, radius: Math.sqrt(Math.max(1, sxx / m - cx * cx - cy * cy)) });
+  }
+  return out;
+}
+
+/** Advance with glass deflection driven from snapshots every 10 steps (rim + creature encounters). */
+function deflectRun(sim: WebGLSimulation, dish: DishShape, steps: number) {
+  const def = new Deflector();
+  let prev: { id: number; x: number; y: number }[] = [];
+  let next = 1;
+  const R = sim.params.R;
+  let bodies: { id: number; x: number; y: number; vx: number; vy: number; radius: number }[] = [];
+  for (let s = 0; s < steps; s += 10) {
+    sim.advance(10);
+    const used = new Set<number>();
+    bodies = snapshotBodies(sim, R).map((b) => {
+      let best: { id: number; x: number; y: number } | null = null;
+      let bd = Infinity;
+      for (const p of prev) {
+        const d = Math.hypot(p.x - b.x, p.y - b.y);
+        if (!used.has(p.id) && d < bd && d < b.radius * 2 + 10) {
+          bd = d;
+          best = p;
+        }
+      }
+      if (best) used.add(best.id);
+      return best
+        ? { id: best.id, x: b.x, y: b.y, vx: (b.x - best.x) / 10, vy: (b.y - best.y) / 10, radius: b.radius }
+        : { id: next++, x: b.x, y: b.y, vx: 0, vy: 0, radius: b.radius };
+    });
+    const turns = def.update(bodies, dish, sim.stepCount, 10);
+    sim.applyTurns(turns);
+    // After a rigid turn the centroid stays put; the next velocity estimate starts here.
+    prev = bodies.map((b) => ({ id: b.id, x: b.x, y: b.y }));
+  }
+  return bodies;
+}
+
+/** Steps/s of the round dish at its largest rim on the medium grid vs the old 4:5 torus. */
+function dishPerf(ms = 1500, diameter = 224) {
+  const P = species('O2u');
+  const N = QUALITY_DISH.medium.grid;
+  const sim = createSimulation(makeCanvas(), { gridW: N, gridH: N, params: P });
+  sim.setDish(dishForGrid(N, N, diameter));
+  sim.seed({ x: N / 2, y: N / 2, radius: 13, density: 0.8, noise: 0.5, shape: 'blob', rngSeed: 3 });
+  const sps = measureStepsPerSecond(sim, ms);
+  sim.dispose();
+  return { grid: N, diameter, stepsPerSec: sps };
+}
+
+/** Round dishes rendered by the GPU path (screenshots): sizes, species, tints, growth glow, zoom. */
+function dishVisual(quality: Quality = 'medium', cssW = 300, cssH = 375) {
+  const panels: {
+    label: string;
+    code: string;
+    grid: number;
+    diameter: number;
+    seeds: { x: number; y: number; rot: number; hue?: number }[];
+    steps?: number;
+    zoom?: number;
+    growTo?: number;
+    growAt?: number;
+    style?: [string, string];
+  }[] = [
+    { label: 'Ø96 dish, 2 Orbium (start size)', code: 'O2u', grid: 168, diameter: 96, seeds: [{ x: 64, y: 70, rot: 0.3 }, { x: 104, y: 100, rot: 3.4 }] },
+    {
+      label: 'Ø224, mixed species, species tints',
+      code: 'O2u',
+      grid: 232,
+      diameter: 224,
+      seeds: [
+        { x: 80, y: 80, rot: 0.3, hue: 330 },
+        { x: 150, y: 90, rot: 2.2, hue: 130 },
+        { x: 100, y: 160, rot: 4.0, hue: 215 },
+        { x: 160, y: 150, rot: 5.1, hue: 280 },
+        { x: 116, y: 116, rot: 1.0, hue: 170 },
+      ],
+    },
+    { label: 'Scutium in Ø160', code: 'S1s', grid: 168, diameter: 160, seeds: [{ x: 60, y: 70, rot: 0 }, { x: 110, y: 100, rot: 2 }] },
+    { label: 'growing Ø128 → Ø160 (mid tween, glow)', code: 'O2u', grid: 232, diameter: 128, growTo: 160, growAt: 0.45, seeds: [{ x: 116, y: 100, rot: 1.2 }] },
+    { label: 'Ø96, zoom ×2.5: Orbium turning off the glass', code: 'O2u', grid: 168, diameter: 96, zoom: 2.5, seeds: [{ x: 84, y: 100, rot: 1.4 }], steps: 60 },
+    { label: 'Hydrogeminium in Ø224', code: '3GH2n', grid: 232, diameter: 224, seeds: [{ x: 116, y: 100, rot: 0 }] },
+  ];
+  const out: { label: string; mass: number; outside: number }[] = [];
+  for (const p of panels) {
+    const P = species(p.code);
+    const c = makeCanvas(cssW, cssH, true, p.label);
+    const sim = createSimulation(c, { gridW: p.grid, gridH: p.grid, params: P });
+    const d0 = dishForGrid(p.grid, p.grid, p.diameter);
+    const anim = new DishAnimator(d0);
+    sim.setDish(d0);
+    const pat = catalogPattern(p.code);
+    for (const s of p.seeds) sim.seed({ x: s.x, y: s.y, radius: P.R * 2, density: 1, noise: 0, shape: 'pattern', pattern: pat, rotation: s.rot });
+    const bodies = deflectRun(sim, d0, p.steps ?? 300);
+    if (p.growTo) {
+      anim.setTarget(dishForGrid(p.grid, p.grid, p.growTo));
+      anim.update((p.growAt ?? 0.5) * 1.5);
+      sim.setDish(anim.rim);
+      sim.setDishFx({ grow: anim.glow });
+    }
+    const A = sim.readState();
+    const cam = new Camera(p.grid, p.grid, cssW, cssH);
+    cam.setDish(anim.rim, anim.fit);
+    if (p.zoom) {
+      const cc = centroidPlain(A, p.grid, p.grid);
+      cam.zoom = p.zoom;
+      cam.cx = cc.x;
+      cam.cy = cc.y;
+      cam.clamp();
+    }
+    if (p.seeds.some((s) => s.hue !== undefined)) {
+      // One tint per creature (the game will use each creature's species hue).
+      const hues = p.seeds.map((s) => s.hue ?? 0);
+      sim.setCreatureTints(bodies.map((b, i) => ({ x: b.x, y: b.y, r: Math.max(P.R, b.radius * 2), hue: hues[i % hues.length] })));
+    }
+    const view = { camera: cam, time: 1.0, quality };
+    sim.render(view);
+    out.push({ label: p.label, mass: sum(A), outside: outsideMax(A, p.grid, p.grid, anim.rim) });
+    live.push({ sim, view });
+  }
+  return out;
+}
+
 (window as unknown as { simTest: unknown }).simTest = {
+  dishChecks,
+  bounce,
+  dishPerf,
+  dishVisual,
   accuracy,
   laneConsistency,
   seedChecks,
