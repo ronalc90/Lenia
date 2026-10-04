@@ -144,10 +144,10 @@ ending the recursion closes: someone, from high above, watches the station the w
 | Character | Look (all procedural canvas art) | Voice | Wants |
 |---|---|---|---|
 | **VELA** (companion, tutorial guide) | A round-bottom flask with glowing bioluma inside, a face on the glass, a candle flame on the cork ("vela" = candle), floating hands. Hovers, breathes, blinks, sloshes; moods neutral / happy (^ ^, waves) / worried (brows, sweat drop, small flame) / awed (big shiny eyes, tall flame, sparkles); mouth syncs with typing. | Cheerful, precise, a bit anxious. Short sentences. Counts things. Tic: **«Anotado.» / "Noted."** Calls you «colega» / "colleague". | Keep the lab alive; fulfil Albor's request without lying to you. |
-| **Dr. Albor** (mentor, on tape) | Amber photograph with scanlines over a cassette whose reels spin; live (epilogue) with dawn behind. | Warm, tired, poetic-scientific; "Day N of the night"; dry wit. | Protect the Choir from becoming a factory; be understood. |
+| **Dr. Albor** (mentor, on tape) | A chibi scientist (docs/ARTE.md §6.6): dark bob with a silver streak, round glasses, freckles, teal sweater, mustard scarf, her night lantern. On tape: a warm sepia memory with scanlines and a cassette whose reels spin; live (secret ending) in full colour with the dawn behind. | Warm, tired, poetic-scientific; "Day N of the night"; dry wit. | Protect the Choir from becoming a factory; be understood. |
 | **The Committee** (foil) | A telex machine printing a paper strip, red light, a stamp. | CAPITALS, bureaucratic, always ends **FIN / END**. Unintentionally funny. | Numbers. More numbers. |
 | **The Choir** (the creatures) | A microscope eyepiece with a **real live Orbium** (CPU Lenia, 64×64) swimming inside; each spoken dot sends a ring out. | First dots (your rhythm), then three small words at a time, lowercase, borrowed from your Journal. | To be answered. |
-| **You** (journal voice) | An open notebook, a glowing pen writing. | Terse first person, serif italic. | — the player decides. |
+| **You** (journal voice, the night-shift scientist) | A chibi scientist in the look picked in the intro (curls + goggles, beanie + stethoscope, bun + glasses), writing in the field notebook when "speaking". | Terse first person, serif italic. | — the player decides. |
 
 ---
 
@@ -527,3 +527,43 @@ Storage: localStorage key `bioluma.encargos` (try/catch everywhere).
 
 Dev page: `?enc=<id>&hold=1`, `&done=1` (celebration), `?why=<id>`, `&wear=scarf,medal,flower`; menu sections
 "Encargos · chain / side / actions". Screenshots: `story-encargo-*.png`.
+
+---
+
+## 11. The opening intro — «Qué haces, la historia y quién es quién»
+
+Owner's request: *«Al iniciar el juego te deben explicar qué haces y la historia y los personajes, que sean doctores
+animados y bonitos.»* A ten-panel animated picture book (~35 s, `INTRO_SECONDS`), shown once on the first launch after
+the title screen and before `t_intro`; replayable from Settings («Ver la introducción»).
+
+| # | Panel | Lines (es) | What the picture does |
+|---|---|---|---|
+| 1 | `station` | «Muy al norte, en una isla de hielo, está la Estación Vigilia.» · «Allí la noche dura cuatro meses. El sol no sale.» | aurora, moon, snowfall, the station on its island (warm window = VELA, cyan window = the dish), signpost VIGILIA 78°N |
+| 2 | `tape` | «La doctora Albor cuidaba el laboratorio. Se fue antes de la noche.» · Albor (tape): «Te dejo mi luz. Cuídalas mucho, ¿vale?» | a sepia memory over the recorder: Albor waves goodbye, lantern in hand; reels spin, sound waves |
+| 3 | `arrive` | «Y llegas tú, para cuidar el turno de noche.» · «¿Cómo eres? Elige tu bata.» + **look picker** | you walk through the snow with a suitcase to the lit door where VELA waits, then wave |
+| 4 | `candle` | VELA: «¡Hola! Soy VELA, la ayudante del laboratorio.» · «Mi vela da calor. ¡Y la placa da luz!» | the dark lab; a spark lights VELA's wick and warm light spreads; you go from surprised to happy |
+| 5 | `dish` | VELA: «En esta placa crece vida de verdad. ¡Y brilla!» · «Las llamamos criaturas. Las cuidaremos juntos.» | the glowing dish with real catalog creatures swimming, light rays; you and VELA amazed |
+| 6 | `sow` (how to 1/4) | «Toca la placa para sembrar una semilla de vida.» · «Algunas se apagan. ¡No pasa nada! Prueba otra vez.» | a finger taps: one seed becomes a creature (✓), another fades in a grey puff |
+| 7 | `essence` (2/4) | «Si se queda con forma, ¡es una criatura!» · «Las criaturas te dan Esencia. Las manchas sin forma, no.» | drops rise from the creature into a counter; the shapeless smear shows 0 and ✕ |
+| 8 | `clock` (3/4) | «Tu tiempo de laboratorio es corto. ¡Mira el reloj!» · «Al terminar, tu Esencia se convierte en Datos.» | the lab clock drains 2:00 → 0:00, drops fly into the Datos card (+12) |
+| 9 | `tree` (4/4) | «Con Datos, haz crecer el Árbol: mejoras para todo.» · «Y abre Mundos nuevos, con otras criaturas.» | seven coloured routes light node by node; seven world dishes with their creatures pop in |
+| 10 | `go` | VELA: «Albor dejó un secreto en la placa. ¿Lo buscamos?» · Tú: «¡Vamos a sembrar!» → **¡Empezar!** | the lab: Albor's Polaroid and lantern on the wall, the dish, VELA and you waving |
+
+Rules (tested in `src/story/introScript.test.ts` and `tests/e2e/intro-shots.mjs`): every line ≤ 12 words, es + en,
+≤ 2 lines per panel, 30–45 s in total; each panel has **Siguiente** (primary, ≥ 52 px) and **Saltar intro**; tapping
+the picture advances; keys → / Enter / Space, ← and Esc. Reduce motion: each picture shows its finished state, no loops,
+text at once. The pictures stay night in both themes; the text card follows the theme. The hook in panel 10 points at
+the secret ending without spoiling it.
+
+**No repetition with `t_intro`.** When the intro ends (watched or skipped) the integrator calls
+`story.setFlag('introSeen')`; `t_intro` then only says «¡Ya estamos! Tu primera semilla, colega.» and «¡Toca la placa!»
+(`T_INTRO_AFTER_INTRO`) before its tap task, instead of VELA's full hello (`T_INTRO_LINES`, still used for players who
+never saw the intro).
+
+**Files**: `src/story/introScript.ts` (panels, texts), `src/ui/intro/` (`intro.ts` UI, `scenes.ts` painters,
+`intro.css`, `dev.ts`), `src/ui/art/characters/` (the doctors), `intro-dev.html` (`?view=gallery|intro`, `&panel=N`,
+`&theme=light`, `&lang=en`, `&rm=1`, `&t=2.5`, `&look=curls|beanie|bun`), `tests/e2e/intro-shots.mjs`.
+
+**Wiring** (`src/main.ts`, integrator): `createIntro(root, { lang, reduceMotion, onDone })` from `./ui/intro` when the
+splash is dismissed on a fresh game and `!introSeen()`; `onDone` → `story.setFlag('introSeen')`; the story waits while
+`intro.isOpen` (add it to `isBlocked`). Settings: `mountIntroEntry(el, { lang, onOpen })` inside `settingsSections`.

@@ -234,7 +234,7 @@ corcho.
 
 **No**: llama azul o verde; VELA sin vela; boca o cejas sobre el vidrio vacío; VELA tapando el elemento que señala.
 
-### 6.2 Dra. Albor — la grabadora
+### 6.2 Dra. Albor — la grabadora (antes; hoy la dibuja §6.6)
 
 Grabadora de casete portátil de los 70: plástico crema, ventana ahumada con **dos carretes** que giran (más rápido
 cuando habla), cinta marrón, etiqueta de cinta de carrocero escrita a mano, **aguja de VU** que salta con la voz, teclas
@@ -254,10 +254,38 @@ Teletipo pesado verde grisáceo con moldura cromada, **rodillo** negro, **tira d
 Ocular de microscopio de latón con moleteado; dentro, **un Orbium vivo de verdad** (`LeniaLens`, simulación CPU): el
 Coro habla con anillos violetas que salen de la criatura. Retícula con escala y viñeta.
 
-### 6.5 Tú — el cuaderno
+### 6.5 Tú — el cuaderno (antes; hoy la dibuja §6.6)
 
 Cuaderno de campo abierto bajo la lámpara: papel cálido rayado, un Orbium dibujado en tinta cian, una pluma estilográfica
 que escribe línea a línea cuando «hablas».
+
+### 6.6 Los doctores — Albor y tú
+
+Pedido del dueño: *«doctores animados y bonitos»*. `src/ui/art/characters/` (`doctor.ts` el dibujante, `people.ts`
+quién es quién). Proporción chibi: la cabeza es casi la mitad del cuerpo; bata blanca corta, manos de manopla, botitas.
+Contorno tinta `#2a2130` de 1,35 u, caras con ojos grandes (tinta arriba, iris de color abajo, **dos brillos: el cálido
+es la vela, el frío la placa**), rubor, cejas que actúan. Luz: la vela ilumina cara y bata desde arriba a la derecha;
+la placa deja un rebote cian bajo la mandíbula. Encajan junto a VELA: misma escala de cabeza, misma paleta cálida/fría.
+
+| Quién | Rasgos | Objeto |
+|---|---|---|
+| **Dra. Albor** | melena oscura con un mechón plateado, gafas redondas, pecas, jersey verde azulado, **bufanda mostaza** | su **farol** (el origen del Destello) |
+| **Tú · Rizos** | rizos oscuros, piel morena, **gafas de laboratorio** en la frente, jersey coral | portapapeles |
+| **Tú · Gorro** | pelirrojo, pecas, **gorro de lana cian con pompón**, estetoscopio, jersey marino | taza humeante |
+| **Tú · Moño** | moño negro, gafitas, estetoscopio, jersey lavanda | cuaderno |
+
+**Humores** (`DOCTOR_MOODS`): neutral · contenta (^ ^, saluda, destello) · sorpresa (ojos grandes, manos a las mejillas,
+rayitas) · preocupada (cejas en V invertida, manos juntas, gota de sudor) · pensando (mano al mentón, ceja alzada,
+burbujas) · orgullosa (guiño, manos en la cintura) · con sueño (ojos cerrados, «z»). Los humores del guion se traducen
+(`awed` → sorpresa).
+**Gestos**: reposo, saludar, sostener, mentón, mejillas, cintura, manos juntas, señalar, escribir, caminar.
+**Animación**: respiración, balanceo lento de la cabeza, parpadeo, mirada que deriva, rebote al hablar y boca abierta
+(«D» con lengua), «pop» al cambiar de humor, pompón y bufanda que se mecen. *Reducir movimiento*: todo quieto salvo la
+expresión y la boca (test).
+**En el diálogo**: `albor` en cinta = recuerdo sepia con líneas de barrido y un casete cuyos carretes giran; `albor` en
+vivo = a todo color con el alba detrás; `you` = tu bata elegida escribiendo en el cuaderno. API idéntica a la de
+`portraits.ts` (`drawAlbor`, `drawYou`, `Portrait`).
+**Vista previa**: `intro-dev.html` (galería de todos en todos los humores y gestos, retratos de diálogo, los tres juntos).
 
 ## 7. Movimiento
 
