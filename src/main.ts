@@ -4,20 +4,15 @@
  */
 import { bus } from './core/bus';
 import { Camera } from './core/camera';
-import type { DetectorReport, Quality, Simulation } from './core/types';
+import type { DetectorReport, LeniaParams, Quality } from './core/types';
 import { createSimulation } from './sim/webgl';
+import { QUALITY_GRID } from './sim/perf';
 import { createDetector } from './detect/detector';
 import { createGame } from './game/game';
-import { loadSave, offlineSeconds, writeSave } from './game/save';
+import { clearSave, loadSave, offlineSeconds, writeSave } from './game/save';
 import { createUI } from './ui/ui';
 import { createAudio } from './audio/audio';
 
-/** Fixed-aspect grids per quality profile (w × h). */
-const GRIDS: Record<Quality, [number, number]> = {
-  low: [128, 160],
-  medium: [192, 240],
-  high: [224, 280],
-};
 /**
  * Base simulation rate (steps per second) at speed ×1. Orbium swims ~0.24
  * cells/step, so 30 steps/s keeps motion graceful and readable while halving
@@ -27,6 +22,8 @@ const STEPS_PER_SEC = 30;
 /** Detector cadence in simulation steps. */
 const DETECT_EVERY = 10;
 const AUTOSAVE_MS = 30_000;
+/** Kernel changes (R, rings) recompile the step shader; wait for the slider to settle. */
+const KERNEL_DEBOUNCE_MS = 350;
 const IDLE_AFTER_MS = 60_000;
 
 function pickQuality(setting: 'auto' | Quality): Quality {
@@ -50,12 +47,14 @@ function boot(): void {
   }
 
   const quality = pickQuality(settings.quality);
-  const [gridW, gridH] = GRIDS[quality];
+  const { w: gridW, h: gridH } = QUALITY_GRID[quality];
+  /** The screen pass runs per device pixel; cap the ratio to keep phones cool. */
+  const maxDpr = quality === 'low' ? 1.5 : 2;
   const camera = new Camera(gridW, gridH);
   const glCanvas = document.createElement('canvas');
   glCanvas.className = 'gl-dish';
 
-  let sim: Simulation | null = null;
+  let sim: ReturnType<typeof createSimulation> | null = null;
   let paused = false;
   let lastInteraction = performance.now();
   let idle = false;
@@ -68,7 +67,8 @@ function boot(): void {
     glCanvas,
     onDishResize(cssW, cssH, dpr) {
       camera.setView(cssW, cssH);
-      sim?.resizeCanvas(Math.round(cssW * dpr), Math.round(cssH * dpr));
+      const r = Math.min(dpr, maxDpr);
+      sim?.resizeCanvas(Math.round(cssW * r), Math.round(cssH * r));
     },
     onDishTap(x, y, opts) {
       const spec = game.actions.seedAt(x, y, opts);
@@ -85,11 +85,7 @@ function boot(): void {
       if (spec) sim?.seed(spec);
     },
     onExtinguish() {
-      if (game.actions.extinguish()) {
-        sim?.clear();
-        detector.reset();
-        save();
-      }
+      if (game.actions.extinguish()) save();
     },
     onPauseToggle() {
       paused = !paused;
@@ -99,17 +95,12 @@ function boot(): void {
     exportSave: () => game.exportString(),
     importSave(s) {
       const ok = game.importString(s);
-      if (ok) {
-        sim?.clear();
-        detector.reset();
-        save();
-      }
+      if (ok) save();
       return ok;
     },
     resetSave() {
+      clearSave();
       game.reset();
-      sim?.clear();
-      detector.reset();
       save();
     },
     onUserGesture() {
@@ -136,7 +127,7 @@ function boot(): void {
   // Re-apply size now that the simulation exists.
   {
     const rect = glCanvas.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
     if (rect.width > 0) {
       camera.setView(rect.width, rect.height);
       sim.resizeCanvas(Math.round(rect.width * dpr), Math.round(rect.height * dpr));
@@ -157,6 +148,7 @@ function boot(): void {
     game.applyOffline(away);
     const gained = game.view().essence - before;
     if (gained > 0) ui.showOfflineCard(Math.min(away, 24 * 3600), gained);
+    save();
   }
   if (saved.game && saved.savedAt) grantOffline(offlineSeconds(saved.savedAt));
 
@@ -165,6 +157,8 @@ function boot(): void {
   bus.on('dishClear', () => {
     sim!.clear();
     detector.reset();
+    epoch++; // drop snapshots requested before the clear
+    reports.length = 0;
   });
   // Capture a portrait of every newly registered species.
   bus.on('speciesNew', ({ speciesId, x, y }) => {
@@ -172,45 +166,83 @@ function boot(): void {
     game.setSpeciesPortrait(speciesId, sim!.capture(x, y, size));
   });
 
+  let saveWarned = false;
   function save(): void {
     if (!sim) return;
+    let ok = false;
     try {
-      writeSave(game.serialize(), sim.exportState(), sim.gridW, sim.gridH);
+      ok = writeSave(game.serialize(), sim.exportState(), sim.gridW, sim.gridH);
     } catch (err) {
       console.warn('save failed', err);
     }
+    if (!ok && !saveWarned) {
+      saveWarned = true;
+      bus.emit('toast', {
+        text: {
+          es: 'No se pudo guardar la partida en este navegador. Exporta tu partida desde Ajustes.',
+          en: 'Could not save your game in this browser. Export it from Settings.',
+        },
+        kind: 'warn',
+      });
+    }
+    if (ok) saveWarned = false;
   }
 
   // ── Main loop ──
   let last = performance.now();
   let acc = 0;
-  let pending: DetectorReport | null = null;
+  /** Detector reports produced since the last game tick (async readbacks). */
+  const reports: DetectorReport[] = [];
+  let epoch = 0;
+  let snapInFlight = false;
   let lastView = 0;
   let lastAudio = 0;
   let lastSave = performance.now();
   let lastRate = -1;
   const start = last;
 
-  function syncParams(): void {
+  let kernelWantSince = 0;
+  let kernelWantKey = '';
+  /** Push calibration to the GPU: growth params at once, kernel changes debounced. */
+  function syncParams(now: number): void {
     const want = game.simParams;
     const have = sim!.params;
-    if (
-      want.mu !== have.mu ||
-      want.sigma !== have.sigma ||
-      want.dt !== have.dt ||
-      want.R !== have.R ||
-      want.rings.length !== have.rings.length ||
-      want.rings.some((r, i) => r !== have.rings[i])
-    ) {
-      sim!.setParams(want);
+    const patch: Partial<LeniaParams> = {};
+    if (want.mu !== have.mu) patch.mu = want.mu;
+    if (want.sigma !== have.sigma) patch.sigma = want.sigma;
+    if (want.dt !== have.dt) patch.dt = want.dt;
+    const kernelKey = `${want.R}|${want.rings.join(',')}`;
+    if (kernelKey !== `${have.R}|${have.rings.join(',')}`) {
+      if (kernelKey !== kernelWantKey) {
+        kernelWantKey = kernelKey;
+        kernelWantSince = now;
+      } else if (now - kernelWantSince >= KERNEL_DEBOUNCE_MS) {
+        patch.R = want.R;
+        patch.rings = [...want.rings];
+      }
     }
+    if (Object.keys(patch).length) sim!.setParams(patch);
+  }
+
+  /** Non-blocking detector readback; at most one in flight. */
+  function requestDetection(): void {
+    const s = sim!;
+    if (snapInFlight || s.contextLost) return;
+    snapInFlight = true;
+    const myEpoch = epoch;
+    s.snapshotAsync()
+      .then((snap) => {
+        if (myEpoch === epoch) reports.push(detector.update(snap, s.params));
+      })
+      .catch((err) => console.warn('snapshot failed', err))
+      .finally(() => (snapInFlight = false));
   }
 
   function frame(now: number): void {
     const dt = Math.min(0.25, (now - last) / 1000);
     last = now;
     const s = sim!;
-    syncParams();
+    syncParams(now);
 
     if (!paused && !document.hidden) {
       acc += dt * STEPS_PER_SEC * game.speed;
@@ -222,11 +254,14 @@ function boot(): void {
         const k = Math.min(n, DETECT_EVERY - (s.stepCount % DETECT_EVERY));
         s.advance(k);
         n -= k;
-        if (s.stepCount % DETECT_EVERY === 0) pending = detector.update(s.snapshot(), s.params);
+        if (s.stepCount % DETECT_EVERY === 0) requestDetection();
       }
     }
-    game.tick(dt, pending);
-    pending = null;
+    // Feed every report so no died/exploded/divided event is lost; time advances once.
+    const n = reports.length;
+    for (let i = 0; i < n - 1; i++) game.tick(0, reports[i]);
+    game.tick(dt, n ? reports[n - 1] : null);
+    reports.length = 0;
 
     const rate = paused ? 0 : STEPS_PER_SEC * game.speed;
     if (rate !== lastRate) {
@@ -236,13 +271,15 @@ function boot(): void {
     s.render({ camera, time: (now - start) / 1000, quality });
     ui.frame((now - start) / 1000, dt);
 
+    let view: ReturnType<typeof game.view> | null = null;
     if (now - lastView > 100) {
       lastView = now;
-      ui.update(game.view());
+      view = game.view();
+      ui.update(view);
     }
     if (now - lastAudio > 1000) {
       lastAudio = now;
-      const v = game.view();
+      const v = view ?? game.view();
       const st = v.settings;
       audio.setVolumes(st.sfxVolume, st.musicVolume, st.muted);
       audio.setState({
@@ -283,8 +320,10 @@ function boot(): void {
   });
   window.addEventListener('pagehide', save);
 
-  // Debug handle for e2e tests and the curious.
-  (window as unknown as { bioluma: unknown }).bioluma = { game, sim, detector, camera, bus };
+  // Debug handle for development and e2e builds only.
+  if (import.meta.env.DEV || import.meta.env.VITE_E2E === '1') {
+    (window as unknown as { bioluma: unknown }).bioluma = { game, sim, detector, camera, bus };
+  }
 
   registerServiceWorker();
 }
