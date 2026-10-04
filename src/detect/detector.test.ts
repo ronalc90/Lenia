@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { DetectorEvent, DetectorReport, FieldSnapshot, LeniaParams } from '../core/types';
 import { CpuLenia } from '../sim/cpu';
 import { catalogByCode, catalogPattern, paramsOf } from '../sim/catalog';
+import { Deflector } from '../sim/deflect';
 import { snapshotFromCpu } from '../sim/snapshot';
 import { createDetector, DISH_OVERGROWN_FILL } from './detector';
 import { placeRotated, runSim, runSpecies } from './harness';
@@ -317,5 +318,81 @@ describe('detector: robustness', () => {
     const after = runSim(sim, params, { steps: sim.stepCount + 200, detector: det });
     expect(after.events.filter((e) => e.type === 'behavior')).toEqual([]);
     expect(after.last.creatures[0].behavior).toBe('pulsing');
+  });
+});
+
+describe('detector: round dish (glass deflection, ADR-025)', () => {
+  /**
+   * One CPU simulation in a Ø96 dish with the game's deflector (steering every non-exploded
+   * creature, never gated on its behaviour) feeding two detectors: one told about every turn
+   * (`noteTurn`, as main does) and a control that is not.
+   */
+  function dishRun(code: string, steps: number, rotation: number) {
+    const params = paramsOf(catalogByCode(code)!);
+    const n = 128;
+    const dish = { cx: n / 2, cy: n / 2, radius: 48 };
+    const sim = new CpuLenia(n, n, params);
+    sim.setDish(dish);
+    placeRotated(sim.A, n, n, catalogPattern(code), n / 2, n / 2, rotation);
+    const startMass = sim.mass();
+    const noted = createDetector();
+    const control = createDetector();
+    const deflector = new Deflector();
+    const behaviours = { noted: new Set<string>(), control: new Set<string>() };
+    let turns = 0;
+    let last: DetectorReport | null = null;
+    while (sim.stepCount < steps) {
+      sim.step(10);
+      const snap = snapshotFromCpu(sim.A, n, n, 2, sim.stepCount);
+      last = noted.update(snap, params);
+      const ctl = control.update(snap, params);
+      for (const e of last.events) if (e.type === 'behavior') behaviours.noted.add(e.behavior);
+      for (const e of ctl.events) if (e.type === 'behavior') behaviours.control.add(e.behavior);
+      const bodies = last.creatures.map((c) => ({ id: c.id, x: c.x, y: c.y, vx: c.vx, vy: c.vy, radius: c.radius, steerable: c.state !== 'exploded' }));
+      const t = deflector.update(bodies, dish, sim.stepCount, 10);
+      sim.applyTurns(t);
+      for (const turn of t) noted.noteTurn(turn.id, turn.angle);
+      turns += t.length;
+    }
+    return { last: last!, behaviours, turns, massRatio: sim.mass() / startMass };
+  }
+
+  it('an Orbium bouncing around the Ø96 dish for 3000 steps stays a swimmer (the unaware control reads a spinner)', () => {
+    const r = dishRun('O2u', 3000, 1);
+    expect(r.turns).toBeGreaterThan(40); // it really bounced (~120 turns)
+    expect(r.last.creatures.length).toBe(1);
+    expect(r.last.creatures[0].state).toBe('stable');
+    expect(r.last.creatures[0].behavior).toBe('swimmer');
+    expect([...r.behaviours.noted]).toEqual(['swimmer']);
+    expect(r.behaviours.control.has('spinner')).toBe(true); // what the glass does without noteTurn
+    expect(r.massRatio).toBeGreaterThan(0.8);
+  });
+
+  it('a true spinner (Gyrorbium, swims in circles) stays a spinner in the dish', () => {
+    const r = dishRun('OG2g', 1500, 0);
+    expect(r.last.creatures.length).toBe(1);
+    expect(r.last.creatures[0].behavior).toBe('spinner');
+    expect([...r.behaviours.noted]).toEqual(['spinner']);
+  });
+
+  it('on the torus (no turns) nothing changes; turns for unknown ids or of 0 / NaN are ignored', () => {
+    const sim = new CpuLenia(64, 64, ORBIUM);
+    sim.placeCentered(catalogPattern('O2u'), 32, 32);
+    const plain = createDetector();
+    const poked = createDetector();
+    let a: DetectorReport | null = null;
+    for (let k = 0; k <= 150; k++) {
+      if (k) sim.step(10);
+      const snap = snapshotFromCpu(sim.A, 64, 64, 2, sim.stepCount);
+      a = plain.update(snap, ORBIUM);
+      const b = poked.update(snap, ORBIUM);
+      expect(b).toEqual(a);
+      poked.noteTurn(999, 1);
+      for (const c of b.creatures) {
+        poked.noteTurn(c.id, 0);
+        poked.noteTurn(c.id, Number.NaN);
+      }
+    }
+    expect(a!.creatures[0].behavior).toBe('swimmer');
   });
 });

@@ -40,6 +40,11 @@ import { SIG, SIG_LENGTH, SIG_UNKNOWN, SPECIES_MATCH_THRESHOLD, signatureDistanc
  *     (unseen for 20 steps).
  *  6. Behaviours over a 1000-step window, thresholds in R and steps:
  *     colony > divider > spinner > swimmer > pulsing > still.
+ *
+ * Round dish (ADR-025): the game turns swimmers away from the glass and from each other by rotating
+ * their matter (sim/deflect.ts). Such a turn is not the creature's own: `noteTurn` records it per
+ * creature and the behaviour analysis discounts it, so a swimmer that bounces around the dish stays
+ * a swimmer instead of reading as a spinner (docs/DISH.md §7).
  */
 
 // ───────────────────────────── constants ─────────────────────────────
@@ -93,7 +98,9 @@ const F_PARTS = 7;
 const F_H = 8; // 8..13: harmonic amplitudes n = 1..6
 const F_ROT = 14; // 14..19: accumulated rotation (rad) seen through harmonic n = 1..6
 const F_DENS = 20;
-const F_COUNT = 21;
+/** Cumulative external turn (rad) noted through `noteTurn` up to this sample. */
+const F_EXT = 21;
+const F_COUNT = 22;
 const HIST_CAP = 160;
 const NH = 6;
 
@@ -186,10 +193,12 @@ interface Motion {
   speed: number;
   /** Net displacement rate, cells/step. */
   net: number;
-  /** Heading angular velocity, rad/step (0 when not moving). */
+  /** Heading angular velocity, rad/step (0 when not moving), external turns discounted. */
   turnHead: number;
-  /** Body angular velocity through the strongest harmonic, rad/step. */
+  /** Body angular velocity through the strongest harmonic, rad/step, external turns discounted. */
   turnBody: number;
+  /** External turns (noteTurn) within the window: walls or neighbours folded the path. */
+  deflected: boolean;
   /** Mean amplitude of that harmonic. */
   bodyAmp: number;
   /** Relative amplitude of the dominant mass oscillation. */
@@ -232,6 +241,9 @@ interface Track {
   vy: number;
   rot: Float64Array;
   phase: Float64Array;
+  /** Cumulative external turn (rad) noted for this creature, and its value at the last measurement. */
+  ext: number;
+  extMeasured: number;
   motion: Motion | null;
   signature: number[];
   /** Fused into another creature (kept only as a memory in its `absorbed`). */
@@ -250,11 +262,21 @@ interface Track {
 
 // ───────────────────────────── detector ─────────────────────────────
 
-export function createDetector(opts: DetectorOptions = {}): Detector {
+/** The detector plus the round-dish hook (a superset of the `Detector` contract). */
+export interface DishDetector extends Detector {
+  /**
+   * The game rotated creature `id`'s matter by `angle` radians (same sense as `Turn.angle` in
+   * sim/deflect.ts: positive = clockwise on screen, like atan2(y, x)). Call it with every turn the
+   * deflector applies, before the next snapshot is taken; unknown ids are ignored.
+   */
+  noteTurn(id: number, angle: number): void;
+}
+
+export function createDetector(opts: DetectorOptions = {}): DishDetector {
   return new LeniaDetector(opts);
 }
 
-class LeniaDetector implements Detector {
+class LeniaDetector implements DishDetector {
   private readonly thr: number;
   private readonly link: number;
   private readonly minMassR2: number;
@@ -323,6 +345,15 @@ class LeniaDetector implements Detector {
     this.lastClassify = -Infinity;
     this.lastReport = null;
     this.hasPrev = false;
+  }
+
+  noteTurn(id: number, angle: number): void {
+    if (!Number.isFinite(angle) || angle === 0) return;
+    for (const t of this.tracks) {
+      if (t.id !== id || t.fused) continue;
+      t.ext += angle;
+      return;
+    }
   }
 
   update(snap: FieldSnapshot, params: LeniaParams): DetectorReport {
@@ -570,6 +601,8 @@ class LeniaDetector implements Detector {
       vy: 0,
       rot: new Float64Array(NH + 1),
       phase: new Float64Array(NH + 1),
+      ext: 0,
+      extMeasured: 0,
       motion: null,
       signature: new Array<number>(SIG_LENGTH).fill(SIG_UNKNOWN),
       fused: false,
@@ -1049,15 +1082,20 @@ class LeniaDetector implements Detector {
     const rec = this.rec;
     const ms = [m1r, m1i, m2r, m2i, m3r, m3i, m4r, m4i, m5r, m5i, m6r, m6i];
     const fresh = !t.measured || t.hist.count === 0;
+    // A rigid external rotation by θ shifts harmonic n's phase by n·θ: take it out, so the
+    // accumulated rotation is the body's own spin only.
+    const dExt = fresh ? 0 : t.ext - t.extMeasured;
+    t.extMeasured = t.ext;
     for (let n = 1; n <= NH; n++) {
       const re = ms[2 * n - 2];
       const im = ms[2 * n - 1];
       rec[F_H + n - 1] = S > 0 ? Math.hypot(re, im) / S : 0;
       const ph = Math.atan2(im, re);
-      if (!fresh) t.rot[n] += wrapPi(ph - t.phase[n]) / n;
+      if (!fresh) t.rot[n] += wrapPi(ph - t.phase[n] - n * dExt) / n;
       t.phase[n] = ph;
       rec[F_ROT + n - 1] = t.rot[n];
     }
+    rec[F_EXT] = t.ext;
     rec[F_STEP] = step;
     rec[F_MASS] = t.mass;
     rec[F_UX] = t.ux;
@@ -1125,6 +1163,10 @@ class LeniaDetector implements Detector {
     const net = Math.hypot(h.get(h.count - 1, F_UX) - h.get(k0, F_UX), h.get(h.count - 1, F_UY) - h.get(k0, F_UY)) / T;
     let path = 0;
     const heads: number[] = [];
+    // External turn at the middle of each chunk: a turn noted inside a chunk bends that chunk's
+    // heading about halfway, so the difference of chunk midpoints is the external share of the
+    // heading change between two chunks.
+    const extMid: number[] = [];
     let kPrev = k0;
     for (let k = k0 + 1; k < h.count; k++) {
       if (h.get(k, F_STEP) - h.get(kPrev, F_STEP) < 50 && k < h.count - 1) continue;
@@ -1132,14 +1174,18 @@ class LeniaDetector implements Detector {
       const dy = h.get(k, F_UY) - h.get(kPrev, F_UY);
       const d = Math.hypot(dx, dy);
       path += d;
-      if (d > 0.05 * R) heads.push(Math.atan2(dy, dx));
+      if (d > 0.05 * R) {
+        heads.push(Math.atan2(dy, dx));
+        extMid.push((h.get(k, F_EXT) + h.get(kPrev, F_EXT)) / 2);
+      }
       kPrev = k;
     }
     const speed = path / T;
+    const deflected = h.get(h.count - 1, F_EXT) !== h.get(k0, F_EXT);
     let turnHead = 0;
     if (speed * this.window > R && heads.length >= 4) {
       let acc = 0;
-      for (let i = 1; i < heads.length; i++) acc += wrapPi(heads[i] - heads[i - 1]);
+      for (let i = 1; i < heads.length; i++) acc += wrapPi(heads[i] - heads[i - 1] - (extMid[i] - extMid[i - 1]));
       turnHead = acc / T;
     }
     // Body rotation through the strongest angular harmonic.
@@ -1207,7 +1253,7 @@ class LeniaDetector implements Detector {
     const pulseDominance = varTot > 0 ? Math.min(1, (2 * bestP) / (n * varTot)) : 0;
     const dtSample = T / (n - 1);
     const pulsePeriod = bestK ? (n * dtSample) / bestK : 0;
-    return { speed, net, turnHead, turnBody, bodyAmp: bestAmp, pulseAmp, pulseDominance, pulsePeriod };
+    return { speed, net, turnHead, turnBody, deflected, bodyAmp: bestAmp, pulseAmp, pulseDominance, pulsePeriod };
   }
 
   private classify(step: number, R: number, params: LeniaParams, snap: FieldSnapshot, events: DetectorEvent[]): void {
@@ -1221,7 +1267,12 @@ class LeniaDetector implements Detector {
       t.motion = mo;
       classifiable.push(t);
       let b: Behavior;
-      const swim = mo.net * this.window > 4 * R;
+      // A swimmer covers ground. In the round dish the glass (through the deflector's turns) folds
+      // its path back, so net displacement over the window is bounded by the dish; a long path with
+      // little turning of its own is a swimmer too.
+      const swim =
+        mo.net * this.window > 4 * R ||
+        (mo.deflected && mo.speed * this.window > 8 * R && Math.abs(mo.turnHead) < fullTurn / 2);
       const spinHead = mo.speed * this.window > R && Math.abs(mo.turnHead) >= fullTurn;
       const spinBody = mo.bodyAmp >= 0.05 && Math.abs(mo.turnBody) >= fullTurn;
       if (spinHead || spinBody) b = 'spinner';

@@ -36,7 +36,10 @@ export interface Body {
   radius: number;
   /**
    * false = obstacle only (others bounce off it, it is never turned): exploded blobs, mazes,
-   * anything that is not a healthy creature. Default true.
+   * anything that is not a healthy creature. Default true. Do not gate it on the detector's
+   * `spinner` label: real spinners are already left alone by `maxCurl`, and a swimmer misread as a
+   * spinner would then hit the glass unsteered and die (pass every turn to the detector's
+   * `noteTurn` so it is not misread in the first place).
    */
   steerable?: boolean;
 }
