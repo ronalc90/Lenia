@@ -440,7 +440,7 @@ Nada de esto lo toca el arte: lo aplican los integradores en sus archivos. Todo 
 
 **Materia** (agente de la placa)
 - `sim.setMatterLUT(lutFromStops(MATTER_ART.night))` en lugar de `matterLUT()`; `setRenderStyle(ART_RENDER_STYLE)`
-  como estilo por defecto; `setCreatureTints(list)` (sin cantidad: las filas de tinte de `src/sim/tintlut.ts` ya están calibradas; 0,6 las volvía grisáceas`. Para tintes exactos: textura `matterLUT2D()` y la
+  como estilo por defecto; `setCreatureTints(list)` sin cantidad (las filas de tinte de `src/sim/tintlut.ts` ya están calibradas; 0,6 las volvía grisáceas). Para tintes exactos: textura `matterLUT2D()` y la
   fila `familyIndex(hue) + 1`.
 - `src/core/palette.ts` (`MATTER_STOPS`, contrato): el integrador puede copiar `MATTER_ART.night` para que
   `sprites.ts` y `lens.ts` coincidan.
