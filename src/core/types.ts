@@ -286,6 +286,9 @@ export interface CreatureView {
   /** Essence per second this creature currently yields. */
   eps: number;
   age: number;
+  /** Optional velocity in cells per simulation step (overlay extrapolation). */
+  vx?: number;
+  vy?: number;
 }
 
 export interface GoldenView {

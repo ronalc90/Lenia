@@ -101,6 +101,19 @@ describe('extinction', () => {
     expect(s.pendingBehaviors).toBe(0);
   });
 
+  it('clears the offline production history: the new Era cannot be paid with the old one', () => {
+    const { g } = setupRichGame();
+    for (let i = 0; i < 40; i++) g.tick(0.5, null); // build some active-play history
+    expect(g.state.epsHistory.length + g.state.bucketTime).toBeGreaterThan(0);
+    expect(g.actions.extinguish()).toBe(true);
+    expect(g.state.epsHistory).toEqual([]);
+    expect(g.state.bucketSum).toBe(0);
+    expect(g.state.bucketTime).toBe(0);
+    const before = g.state.essence;
+    g.applyOffline(8 * 3600);
+    expect(g.state.essence).toBe(before);
+  });
+
   it('heritage nodes change the reset', () => {
     const { g, st } = setupRichGame();
     st.genome = 100;

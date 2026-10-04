@@ -31,7 +31,7 @@ import type {
   Text,
   UpgradeView,
 } from '../core/types';
-import catalogSignaturesJson from '../detect/catalogSignatures.json';
+import { CATALOG_REFS } from '../detect/catalogRefs';
 import { matchSignature, signatureDistance, SPECIES_MATCH_THRESHOLD } from '../detect/signature';
 import { CATALOG, catalogByCode } from '../sim/catalog';
 import * as B from './balance';
@@ -84,7 +84,7 @@ import {
   type SpeciesState,
 } from './state';
 
-/** Entry of src/detect/catalogSignatures.json (written by the detector owner). */
+/** Reference signature of a catalog species (default: the detector's CATALOG_REFS). */
 export interface CatalogSignature {
   code: string;
   name: string;
@@ -146,8 +146,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
   const bus = deps.bus;
   const now = deps.now ?? (() => Date.now());
   const rng = deps.rng ?? Math.random;
-  const catalogSigs: CatalogSignature[] = (deps.catalogSignatures ??
-    (catalogSignaturesJson as unknown as CatalogSignature[])).filter(
+  const catalogSigs: CatalogSignature[] = (deps.catalogSignatures ?? CATALOG_REFS).filter(
     (e) => e && e.viable !== false && Array.isArray(e.signature) && e.signature.length > 0,
   );
   let grid = { ...(deps.grid ?? B.DEFAULT_GRID) };
@@ -964,6 +963,11 @@ export function createGame(deps: GameDeps, save?: string): Game {
     s.eraStablePeak = 0;
     s.eraHadStable = false;
     s.buffs = [];
+    // Offline pays the recent production of *this* Era: the old Era's history must not
+    // fund a fresh dish (extinguish, close the app, collect hours of old income).
+    s.epsHistory = [];
+    s.bucketSum = 0;
+    s.bucketTime = 0;
     s.goldenTimer = -1;
     s.autoSeedTimer = 0;
     s.pipetteTimer = 0;
@@ -1112,6 +1116,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
         speciesName: sp ? speciesName(sp) : null,
         eps: (perCreature.get(c.id) ?? 0) * bm,
         age: c.age,
+        vx: Number.isFinite(c.vx) ? c.vx : 0,
+        vy: Number.isFinite(c.vy) ? c.vy : 0,
       });
     }
     return out;
@@ -1122,7 +1128,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
     const free = s.charges.free > 0 || pipetteReady();
     const obj = s.objective < B.OBJECTIVES.length ? B.OBJECTIVES[s.objective] : null;
     const objCur = obj ? metric(obj.metric) : 0;
-    const termNow = essenceTerm(s.eraEssence);
+    const extAvailable = extinctionAvailable();
+    const gainNow = currentGenomeGain();
     const upgrades = UPGRADES.map(upgradeView);
     upgrades.sort((a, b) => Number(b.unlocked) - Number(a.unlocked));
     const achievements: AchievementView[] = B.ACHIEVEMENTS.map((a) => ({
@@ -1166,13 +1173,10 @@ export function createGame(deps: GameDeps, save?: string): Game {
       achievements,
       extinction: {
         progress: Math.min(1, s.eraEssence / EXTINCTION_ESSENCE_NEEDED),
-        available: termNow >= B.EXTINCTION_MIN_ESSENCE_TERM,
-        genomeGain: currentGenomeGain(),
+        available: extAvailable,
+        genomeGain: gainNow,
         gainIn10Min: currentGenomeGain(baseEps * 600),
-        requirement:
-          termNow >= B.EXTINCTION_MIN_ESSENCE_TERM
-            ? TEXT.extinctionGain(currentGenomeGain())
-            : TEXT.extinctionRequirement(EXTINCTION_ESSENCE_NEEDED, s.eraEssence),
+        requirement: extAvailable ? TEXT.extinctionGain(gainNow) : TEXT.extinctionRequirement(EXTINCTION_ESSENCE_NEEDED, s.eraEssence),
       },
       golden: golden ? { x: golden.x, y: golden.y, life: Math.max(0, golden.life / B.GOLDEN_LIFE) } : null,
       buffs: s.buffs.map((b) => ({ id: b.id, name: TEXT.bloom, remaining: b.remaining, mult: b.mult })),
@@ -1315,7 +1319,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
       const n = qty === 'max' ? maxAffordable(def, lvl, budget) : Math.min(qty, remaining);
       if (n <= 0) return false;
       const cost = costForQty(def, lvl, n);
-      if (!(cost <= budget)) return false;
+      // Non-finite cost (or budget) would turn the balance into NaN and poison the save.
+      if (!Number.isFinite(cost) || !(cost <= budget)) return false;
       if (def.currency === 'essence') s.essence = Math.max(0, s.essence - cost);
       else s.samples = Math.max(0, s.samples - cost);
       s.upgrades[id] = lvl + n;
