@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import scriptSource from './script.ts?raw';
 import type { Text } from '../core/types';
 import { ENDINGS } from './endings';
 import { MAX_WORDS, MAX_WORDS_TUTORIAL, SCENES, SCENE_BY_ID, STORY_JOURNAL, T_INTRO_AFTER_INTRO, T_INTRO_LINES } from './script';
@@ -116,5 +117,12 @@ describe('story script', () => {
   it('there are three mid-game choices plus the final question', () => {
     const ids = new Set(SCENES.filter((s) => s.choice).map((s) => s.choice!.id));
     expect([...ids].sort()).toEqual(['final', 'lamp', 'rhythm', 'sample']);
+  });
+});
+
+describe('script wording', () => {
+  it('never names punctuation in words (players read it as a glitch)', () => {
+    const bad = /signo de (interrogaci|exclamaci)|question mark|exclamation mark|letra grande|big letters/i;
+    expect(scriptSource).not.toMatch(bad);
   });
 });

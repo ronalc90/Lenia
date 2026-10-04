@@ -237,7 +237,7 @@ export const SCENES: SceneDef[] = [
       vela('worried', '¡Uy! Dos semillas se tocaron y se fundieron: ya no tienen forma.', 'Whoa! Two seeds touched and melted together: no shape any more.', at('dish')),
       vela('neutral', 'La materia sin forma no da Esencia. Se come la placa.', 'Shapeless matter gives no Essence. It eats the dish.'),
       vela('happy', 'Por eso la disolví. Siembra lejos de las demás.', 'So I dissolved it. Sow away from the others.', at('dish')),
-      vela('happy', 'Anotado. Con letra grande.', 'Noted. In big letters.'),
+      vela('happy', '¡Lo apunto bien grande en mi libreta!', 'I\'m writing that down, nice and big!'),
     ],
   },
   {
@@ -466,7 +466,7 @@ export const SCENES: SceneDef[] = [
       you('Placa nueva. Mismos ojos.', 'New dish. Same eyes.'),
       vela('worried', 'Colega… la placa está vacía. Pero el Bestiario las reconoce a todas.', 'Colleague… the dish is empty. But the Bestiary still knows them all.'),
       vela('worried', 'La placa no tiene memoria. No debería tenerla.', 'The dish has no memory. It shouldn\'t have any.'),
-      vela('awed', '…Anotado. Con signo de interrogación.', '…Noted. With a question mark.'),
+      vela('awed', '…Lo apunto en mi libreta. ¡Qué misterio!', '…I\'m writing it down. What a mystery!'),
     ],
     journal: 's_memory',
   },
