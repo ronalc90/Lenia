@@ -2,7 +2,7 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0B0E12" />
     <meta name="color-scheme" content="dark light" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -20,18 +20,23 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=optional"
     />
     <style>
+      /* Metric-matched fallbacks: with display=optional a late web font is never swapped in, and the
+         fallback has Inter's / JetBrains Mono's metrics, so text never jumps (also offline / native). */
+      @font-face { font-family: 'Inter Fallback'; src: local('Arial'), local('Helvetica'), local('Liberation Sans'), local('Roboto'); size-adjust: 107.6%; ascent-override: 90.4%; descent-override: 22.5%; line-gap-override: 0%; }
+      @font-face { font-family: 'JetBrains Mono Fallback'; src: local('Courier New'), local('Liberation Mono'), local('DejaVu Sans Mono'), local('Menlo'); size-adjust: 100%; ascent-override: 102%; descent-override: 30%; line-gap-override: 0%; }
       html, body { margin: 0; height: 100%; background: #0B0E12; color: #E6EDF3; overscroll-behavior: none; }
-      body { font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+      body { font-family: Inter, 'Inter Fallback', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
       #app { position: fixed; inset: 0; overflow: hidden; }
-      #boot { position: fixed; inset: 0; display: grid; place-items: center; font: 500 14px/1.4 Inter, system-ui, sans-serif; color: #8B98A5; letter-spacing: 0.08em; }
+      #boot { position: fixed; inset: 0; display: grid; place-items: center; font: 500 14px/1.4 Inter, 'Inter Fallback', system-ui, sans-serif; color: #8B98A5; letter-spacing: 0.08em; }
     </style>
   </head>
   <body>
     <div id="app"></div>
     <div id="boot">BIOLUMA</div>
+    <script type="module" src="/src/version-badge.ts"></script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

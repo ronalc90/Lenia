@@ -16,7 +16,8 @@
     "e2e:audio": "node tests/e2e/audio-render.mjs",
     "build:single": "SINGLE=1 vite build",
     "calibrate": "vite-node scripts/calibrate-detector.ts",
-    "bot": "vite-node scripts/balance-bot.ts"
+    "bot": "vite-node scripts/balance-bot.ts",
+    "bump": "node scripts/bump-version.mjs"
   },
   "devDependencies": {
     "playwright-core": "^1.63.0",

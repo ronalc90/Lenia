@@ -1,14 +1,48 @@
-import { defineConfig } from 'vite';
+import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { defineConfig, type Plugin } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 
 // `SINGLE=1 vite build` inlines everything into one HTML file (used for the
 // shareable test build); the default build is a normal multi-file PWA build.
 const single = process.env.SINGLE === '1';
 
+/** Release number (bumped with `npm run bump` on every published update). */
+const version: string = JSON.parse(readFileSync(new URL('./version.json', import.meta.url), 'utf8')).version;
+
+/** Exact commit of this build: Vercel provides it; locally ask git. */
+function gitSha(): string {
+  const env = process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.GITHUB_SHA;
+  if (env) return env.slice(0, 7);
+  try {
+    return execSync('git rev-parse --short=7 HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  } catch {
+    return 'dev';
+  }
+}
+
+const build = { version, sha: gitSha(), date: new Date().toISOString() };
+
+/** Emits /version.json next to the game so a deployment can be checked from any device. */
+function versionFile(): Plugin {
+  return {
+    name: 'bioluma-version-file',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify(build, null, 2) + '\n' });
+    },
+  };
+}
+
 export default defineConfig({
   base: './',
-  plugins: single ? [viteSingleFile()] : [],
-  define: { __SINGLE_FILE__: JSON.stringify(single) },
+  plugins: single ? [viteSingleFile()] : [versionFile()],
+  define: {
+    __SINGLE_FILE__: JSON.stringify(single),
+    __APP_VERSION__: JSON.stringify(build.version),
+    __GIT_SHA__: JSON.stringify(build.sha),
+    __BUILD_DATE__: JSON.stringify(build.date),
+  },
   build: {
     outDir: single ? 'dist-single' : 'dist',
     target: 'es2022',
