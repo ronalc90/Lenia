@@ -1,0 +1,293 @@
+name: Release
+
+# Builds every distributable from one commit: web (dist + portal zip), desktop (Windows NSIS + portable,
+# macOS dmg, Linux AppImage), Android debug APK. On a `v*` tag it also drafts a GitHub Release.
+# Signing and store uploads stay OFF until their secrets exist (see docs/PLATAFORMAS.md):
+#   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD -> signed AAB
+#   BUTLER_API_KEY + repo variable ITCH_TARGET (user/game)                                    -> itch.io push
+#   repo variable STEAM_APP_ID                                                                -> Steam depot folders
+#   (Windows/macOS code signing: CSC_LINK / CSC_KEY_PASSWORD / APPLE_* - wire them in when bought.)
+# No Anthropic or other AI keys are used here (CLAUDE.md rule 7, ADR-020).
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    name: Web build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Version (tag v1.2.3 -> 1.2.3, else package.json)
+        id: version
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then v="${GITHUB_REF_NAME#v}"; else v="$(node -p "require('./package.json').version")"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Bioluma $v"
+
+      - run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build (typecheck + Vite)
+        run: npm run build
+
+      - name: Platform layer self-test
+        run: node --experimental-strip-types --no-warnings platforms/shared/platform.selftest.ts
+
+      - name: Steam achievement plan is in sync with the game
+        continue-on-error: true
+        run: npx vite-node platforms/steam/scripts/gen-achievements.ts --check
+
+      - name: Portal zip (itch.io / galaxy.click / CrazyGames)
+        env:
+          BIOLUMA_VERSION: ${{ steps.version.outputs.version }}
+        run: platforms/portals/zip-web.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+          if-no-files-found: error
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bioluma-web-${{ steps.version.outputs.version }}
+          path: platforms/portals/out/*.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  desktop:
+    name: Desktop (${{ matrix.os }})
+    needs: web
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: --win
+            unpacked: release/win-unpacked/Bioluma.exe
+            artifacts: |
+              platforms/desktop/release/*.exe
+          - os: macos-latest
+            target: --mac
+            unpacked: release/mac-universal/Bioluma.app/Contents/MacOS/Bioluma
+            artifacts: |
+              platforms/desktop/release/*.dmg
+          - os: ubuntu-latest
+            target: --linux
+            unpacked: release/linux-unpacked/bioluma
+            artifacts: |
+              platforms/desktop/release/*.AppImage
+    defaults:
+      run:
+        shell: bash
+        working-directory: platforms/desktop
+    env:
+      BIOLUMA_VERSION: ${{ needs.web.outputs.version }}
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false' # no signing until certificates exist
+      ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: platforms/desktop/package-lock.json
+
+      - uses: actions/cache@v4
+        with:
+          path: .cache
+          key: electron-${{ runner.os }}-${{ hashFiles('platforms/desktop/package-lock.json') }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
+      - run: npm ci
+
+      - name: Package
+        run: npm run dist -- ${{ matrix.target }}
+
+      - name: Self-test the packaged app (boots the game, checks bridge/CSP/no service worker)
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            # --no-sandbox: Ubuntu 24.04 runners block the unprivileged user namespaces Chromium uses.
+            xvfb-run -a "${{ matrix.unpacked }}" --self-test --no-sandbox
+          else
+            "${{ matrix.unpacked }}" --self-test
+          fi
+
+      - name: Steam depot folders (only when the STEAM_APP_ID variable exists)
+        if: vars.STEAM_APP_ID != ''
+        env:
+          STEAM_APP_ID: ${{ vars.STEAM_APP_ID }}
+        run: npm run dist:steam -- ${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bioluma-desktop-${{ runner.os }}-${{ needs.web.outputs.version }}
+          path: ${{ matrix.artifacts }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        if: vars.STEAM_APP_ID != ''
+        with:
+          name: steam-depot-${{ runner.os }}-${{ needs.web.outputs.version }}
+          path: platforms/desktop/release-steam/*-unpacked
+          retention-days: 7
+
+  android:
+    name: Android (Capacitor)
+    needs: web
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: platforms/mobile
+    env:
+      BIOLUMA_VERSION: ${{ needs.web.outputs.version }}
+      # versionCode = major*10000 + minor*100 + patch (patch-native.mjs): bump the tag for every Play upload.
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: platforms/mobile/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
+      - run: npm ci
+
+      - name: Native project (generated unless android/ is committed)
+        run: |
+          if [ ! -d android ]; then
+            npx cap add android
+            npm run assets -- --android
+          fi
+          npm run sync:android
+
+      - name: Debug APK
+        working-directory: platforms/mobile/android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Release AAB (signed; only when the keystore secrets exist)
+        if: env.HAS_KEYSTORE == 'true'
+        working-directory: platforms/mobile/android
+        env:
+          BIOLUMA_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          BIOLUMA_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          BIOLUMA_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.keystore"
+          BIOLUMA_KEYSTORE_PATH="$RUNNER_TEMP/upload.keystore" ./gradlew bundleRelease --no-daemon
+          rm -f "$RUNNER_TEMP/upload.keystore"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bioluma-android-debug-${{ needs.web.outputs.version }}
+          path: platforms/mobile/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        if: env.HAS_KEYSTORE == 'true'
+        with:
+          name: bioluma-android-aab-${{ needs.web.outputs.version }}
+          path: platforms/mobile/android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+          retention-days: 30
+
+  itch:
+    name: itch.io push (only with BUTLER_API_KEY)
+    needs: web
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BIOLUMA_VERSION: ${{ needs.web.outputs.version }}
+      BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+      ITCH_TARGET: ${{ vars.ITCH_TARGET }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.BUTLER_API_KEY != '' && env.ITCH_TARGET != ''
+
+      - uses: actions/download-artifact@v4
+        if: env.BUTLER_API_KEY != '' && env.ITCH_TARGET != ''
+        with:
+          name: bioluma-web-${{ needs.web.outputs.version }}
+          path: platforms/portals/out
+
+      - name: Install butler and push the html5 channel
+        if: env.BUTLER_API_KEY != '' && env.ITCH_TARGET != ''
+        run: |
+          curl -fsSL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q butler.zip -d "$RUNNER_TEMP/butler" && chmod +x "$RUNNER_TEMP/butler/butler"
+          BUTLER="$RUNNER_TEMP/butler/butler" platforms/portals/itch-push.sh
+
+      - name: Skipped
+        if: env.BUTLER_API_KEY == '' || env.ITCH_TARGET == ''
+        run: echo "::notice::itch.io push skipped (set secret BUTLER_API_KEY and variable ITCH_TARGET to enable)"
+
+  github-release:
+    name: Draft GitHub Release
+    needs: [web, desktop, android]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # only this job may create the (draft) release
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: bioluma-*
+          merge-multiple: true
+
+      - name: Create draft release with all binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ls -la artifacts
+          gh release create "$TAG" artifacts/* --repo "$GITHUB_REPOSITORY" --draft --title "Bioluma $TAG" \
+            --notes "Draft created by the release workflow. Unsigned builds: see docs/PLATAFORMAS.md before publishing."
