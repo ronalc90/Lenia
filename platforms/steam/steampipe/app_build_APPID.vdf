@@ -1,0 +1,21 @@
+// SteamPipe app build script (template). platforms/steam/scripts/upload.sh renders it into
+// platforms/steam/steampipe/out/app_build_<APP_ID>.vdf, replacing every __PLACEHOLDER__.
+// Paths are relative to the rendered file (platforms/steam/steampipe/out/).
+"AppBuild"
+{
+	"AppID"	"__APP_ID__"
+	"Desc"	"Bioluma __VERSION__"
+	"BuildOutput"	"../../build-logs/"
+	"ContentRoot"	"../../../desktop/release-steam/"
+	// Branch to set live after upload. Keep it a beta branch ("beta" must exist in Steamworks);
+	// releases to "default" are promoted by hand in Steamworks > SteamPipe > Builds.
+	"SetLive"	"__SET_LIVE__"
+	// "1" = dry run: computes the manifest without uploading.
+	"Preview"	"__PREVIEW__"
+	"Depots"
+	{
+		"__DEPOT_WIN__"	"depot_build___DEPOT_WIN__.vdf"
+		"__DEPOT_MAC__"	"depot_build___DEPOT_MAC__.vdf"
+		"__DEPOT_LINUX__"	"depot_build___DEPOT_LINUX__.vdf"
+	}
+}

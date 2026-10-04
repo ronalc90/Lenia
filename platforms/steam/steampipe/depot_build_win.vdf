@@ -1,0 +1,17 @@
+// SteamPipe depot build script (template): Windows x64 (electron-builder dir target). Launch option: Bioluma.exe.
+// Rendered by platforms/steam/scripts/upload.sh as depot_build_<DEPOT_ID>.vdf.
+"DepotBuild"
+{
+	"DepotID"	"__DEPOT_WIN__"
+	"ContentRoot"	"../../../desktop/release-steam/win-unpacked/"
+	"FileMapping"
+	{
+		"LocalPath"	"*"
+		"DepotPath"	"."
+		"Recursive"	"1"
+	}
+	// Never ship debug symbols or the builder's metadata.
+	"FileExclusion"	"*.pdb"
+	"FileExclusion"	"builder-debug.yml"
+	"FileExclusion"	"builder-effective-config.yaml"
+}

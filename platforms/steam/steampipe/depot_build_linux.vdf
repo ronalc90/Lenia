@@ -1,0 +1,17 @@
+// SteamPipe depot build script (template): Linux x64 / Steam Deck native. Launch option: bioluma (add --no-sandbox only if it fails inside the Steam Linux Runtime).
+// Rendered by platforms/steam/scripts/upload.sh as depot_build_<DEPOT_ID>.vdf.
+"DepotBuild"
+{
+	"DepotID"	"__DEPOT_LINUX__"
+	"ContentRoot"	"../../../desktop/release-steam/linux-unpacked/"
+	"FileMapping"
+	{
+		"LocalPath"	"*"
+		"DepotPath"	"."
+		"Recursive"	"1"
+	}
+	// Never ship debug symbols or the builder's metadata.
+	"FileExclusion"	"*.pdb"
+	"FileExclusion"	"builder-debug.yml"
+	"FileExclusion"	"builder-effective-config.yaml"
+}
