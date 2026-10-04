@@ -164,6 +164,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
   let newSpeciesTokens: number = B.SPECIES_NEW_BURST;
   /** The dish is flooded (too much matter): nothing pays, nothing registers. */
   let overgrown = false;
+  /** Active seconds the dish has been flooded (it cleans itself after OVERGROWN_AUTO_CLEAN). */
+  let overgrownFor = 0;
   const knownIds = new Set<number>();
   const lastBehavior = new Map<number, Behavior | null>();
   let perCreature = new Map<number, number>();
@@ -997,6 +999,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     creatureSpecies.clear();
     unassigned.clear();
     overgrown = false;
+    overgrownFor = 0;
     knownIds.clear();
     lastBehavior.clear();
     incomeAcc.clear();
@@ -1550,6 +1553,17 @@ export function createGame(deps: GameDeps, save?: string): Game {
     sinceNewSpecies += dt;
     newSpeciesTokens = Math.min(B.SPECIES_NEW_BURST, newSpeciesTokens + dt / B.SPECIES_NEW_MIN_INTERVAL);
     saturatedToastT -= dt;
+    // Play-test soft-lock: a flooded dish pays 0 forever unless cleaned. After a while it cleans
+    // itself for free (sterilizeDish stays for the manual button).
+    if (overgrown) {
+      overgrownFor += dt;
+      if (overgrownFor >= B.OVERGROWN_AUTO_CLEAN) {
+        clearTransient();
+        bus.emit('dishClear', {});
+        bus.emit('dishOvergrown', { on: false });
+        toast(TEXT.dishAutoCleaned, 'info');
+      }
+    } else overgrownFor = 0;
     for (const r of recentSeeds) r.t -= dt;
     recentSeeds = recentSeeds.filter((r) => r.t > 0);
     for (const m of pendingMutations) m.t -= dt;

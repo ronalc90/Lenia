@@ -127,6 +127,11 @@ export const DISH_OVERGROWN_FILL = 0.25;
 /** The overgrown state ends when the fill drops below this (hysteresis). [design] */
 export const DISH_OVERGROWN_CLEAR = 0.15;
 /**
+ * A dish that stays overgrown this many active seconds cleans itself for free (owner play-test:
+ * the flooded dish soft-locked the game before the "Limpiar placa" button shipped). [play-test]
+ */
+export const OVERGROWN_AUTO_CLEAN = 20;
+/**
  * New species registrations are a token bucket: up to SPECIES_NEW_BURST at once, refilling one
  * token every SPECIES_NEW_MIN_INTERVAL seconds, so fragment storms can't spam the bestiary. [play-test]
  */

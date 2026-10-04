@@ -55,6 +55,30 @@ describe('dish overgrowth (play-test: flood unlocked everything in seconds)', ()
     expect(game.view().species.length).toBe(B.SPECIES_NEW_BURST + 1);
   });
 
+  it('a dish that stays flooded cleans itself after 20 s, for free, keeping everything earned', () => {
+    const { bus, count, log } = recordingBus();
+    const game = createGame({ bus, rng: seededRng(15) });
+    const flood = mazeReport(60, 0.5);
+    run(game, B.OVERGROWN_AUTO_CLEAN - 1, flood);
+    expect(game.view().overgrown).toBe(true);
+    expect(count('dishClear')).toBe(0);
+    const essence = game.view().essence;
+    for (let i = 0; i < 20 && count('dishClear') === 0; i++) game.tick(0.1, flood);
+    expect(count('dishClear')).toBe(1);
+    expect(game.view().overgrown).toBe(false);
+    expect(game.view().essence).toBe(essence);
+    game.tick(0.5, null); // the integrator clears the dish: no flood in the next reports
+    expect(game.view().overgrown).toBe(false);
+    const toasts = (log.get('toast') ?? []) as { text: { es: string; en: string } }[];
+    expect(toasts.some((x) => x.text.es.startsWith('La placa se desbordó y se limpió sola'))).toBe(true);
+    // A dish that recovers on its own before the delay is never wiped.
+    const g2 = createGame({ bus: recordingBus().bus, rng: seededRng(16) });
+    run(g2, B.OVERGROWN_AUTO_CLEAN - 5, flood);
+    run(g2, 10, mazeReport(5, 0.05));
+    run(g2, B.OVERGROWN_AUTO_CLEAN - 5, flood);
+    expect(g2.view().overgrown).toBe(true);
+  });
+
   it('sterilizeDish clears the flood for free', () => {
     const { bus, count } = recordingBus();
     const game = createGame({ bus, rng: seededRng(14) });

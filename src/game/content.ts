@@ -323,6 +323,10 @@ export const TEXT = {
   pipetteReady: t('Pipeta de emergencia lista: siembra gratis', 'Emergency pipette ready: free seed'),
   freePrintReady: t('Archivo: Impresión gratis lista', 'Archive: free Print ready'),
   invalidImport: t('Partida no válida', 'Invalid save'),
+  dishAutoCleaned: t(
+    'La placa se desbordó y se limpió sola. Siembra con calma: si chocan muchas criaturas, se forma un laberinto.',
+    'The dish overflowed and cleaned itself. Seed calmly: when many creatures collide, they form a maze.',
+  ),
   extinctionRequirement: (need: number, have: number) =>
     t(`Gana ${f(need)} Esencia en esta Era (llevas ${f(have)})`, `Earn ${f(need)} Essence this Era (you have ${f(have)})`),
   extinctionGain: (g: number) => t(`Extinguir ahora da ${f(g)} Genoma`, `Extinguishing now gives ${f(g)} Genome`),
