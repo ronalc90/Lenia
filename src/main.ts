@@ -11,6 +11,8 @@ import { createDetector, DISH_OVERGROWN_FILL } from './detect/detector';
 import { createGame } from './game/game';
 import { TEXT } from './game/content';
 import { clearSave, loadSave, offlineSeconds, writeSave } from './game/save';
+// Art tokens (--bl-*) before every module stylesheet (docs/ARTE.md §12).
+import './ui/art/art.css';
 import { createUI } from './ui/ui';
 import { createAudio } from './audio/audio';
 import { detectPlatform, endingAchievementId, initPlatform, type Platform } from './platform/platform';

@@ -21,3 +21,4 @@ export {
   type SummarySound,
   type EqRow,
 } from './summary';
+export { createSessionFlow, type SessionFlow, type SessionFlowOptions, type SessionFlowSound } from './flow';

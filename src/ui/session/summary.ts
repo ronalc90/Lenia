@@ -18,6 +18,7 @@ import type { PriceExplain } from '../moments/price';
 import { renderPattern } from '../portrait';
 import { Portrait } from '../story/portraits';
 import { treeIcon } from '../tree/icons';
+import '../art/art.css';
 import './session.css';
 
 export interface SummarySpecies {
@@ -76,7 +77,7 @@ export function equationRows(d: DatosBreakdown, l: Lang, night: number): EqRow[]
   rows.push({
     kind: 'essence',
     tiles: [
-      { icon: 'drop', color: 'var(--ss-essence)', value: fmt(d.essence, l), label: SESSION_UI.earned[l] },
+      { icon: 'drop', color: 'var(--bl-accent)', value: fmt(d.essence, l), label: SESSION_UI.earned[l] },
       { value: fmt(d.div, l), label: SESSION_UI.oneDato[l] },
     ],
     ops: ['÷'],
@@ -87,18 +88,18 @@ export function equationRows(d: DatosBreakdown, l: Lang, night: number): EqRow[]
       kind: 'mult',
       tiles: [
         { value: fmt(d.base, l), label: DATOS_NAME[l] },
-        { icon: 'moon', color: 'var(--ss-gold)', value: `×${dec(d.nightMult, l)}`, label: SESSION_UI.nightBonus(night)[l] },
+        { icon: 'moon', color: 'var(--bl-moon)', value: `×${dec(d.nightMult, l)}`, label: SESSION_UI.nightBonus(night)[l] },
       ],
       ops: [''],
       result: fmt(d.fromEssence, l),
     });
   }
   const META: Record<DatosBreakdown['terms'][number]['kind'], { icon: string; color: string; label: Text }> = {
-    species: { icon: 'species', color: 'var(--ss-good)', label: SESSION_UI.newSpecies },
-    behaviors: { icon: 'behavior', color: 'var(--ss-accent)', label: SESSION_UI.newBehaviors },
-    encargos: { icon: 'encargo', color: 'var(--ss-gold)', label: SESSION_UI.encargos },
-    goldens: { icon: 'spark', color: 'var(--ss-gold)', label: SESSION_UI.sparks },
-    records: { icon: 'trophy', color: 'var(--ss-gold)', label: SESSION_UI.records },
+    species: { icon: 'species', color: 'var(--bl-good)', label: SESSION_UI.newSpecies },
+    behaviors: { icon: 'behavior', color: 'var(--bl-accent)', label: SESSION_UI.newBehaviors },
+    encargos: { icon: 'encargo', color: 'var(--bl-gold)', label: SESSION_UI.encargos },
+    goldens: { icon: 'spark', color: 'var(--bl-gold)', label: SESSION_UI.sparks },
+    records: { icon: 'trophy', color: 'var(--bl-gold)', label: SESSION_UI.records },
   };
   for (const t of d.terms) {
     const m = META[t.kind];
@@ -114,13 +115,13 @@ export function equationRows(d: DatosBreakdown, l: Lang, night: number): EqRow[]
       kind: 'book',
       tiles: [
         { value: fmt(d.sub, l), label: DATOS_NAME[l] },
-        { icon: 'encyclopedia', color: 'var(--ss-datos)', value: `${Math.round((d.bookMult - 1) * 100)} %`, label: SESSION_UI.encyclopedia[l] },
+        { icon: 'encyclopedia', color: 'var(--bl-aurora)', value: `${Math.round((d.bookMult - 1) * 100)} %`, label: SESSION_UI.encyclopedia[l] },
       ],
       ops: ['×'],
       result: `+${fmt(d.book, l)}`,
     });
   }
-  if (d.minimum > 0) rows.push({ kind: 'minimum', tiles: [{ icon: 'gift', color: 'var(--ss-good)', value: `+${d.minimum}`, label: SESSION_UI.minimum[l] }], ops: [], result: `+${fmt(d.minimum, l)}` });
+  if (d.minimum > 0) rows.push({ kind: 'minimum', tiles: [{ icon: 'gift', color: 'var(--bl-good)', value: `+${d.minimum}`, label: SESSION_UI.minimum[l] }], ops: [], result: `+${fmt(d.minimum, l)}` });
   return rows;
 }
 
@@ -267,6 +268,18 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
     raf = requestAnimationFrame(loop);
   }
 
+  /**
+   * The Datos total is the point of the card: scroll just enough that it sits above the sticky
+   * buttons (audit: on a phone they covered it). Scrolls the card only, never its ancestors.
+   */
+  function revealTotal(smooth: boolean): void {
+    const total = card.querySelector('.ss-total');
+    const actions = card.querySelector('.ss-actions');
+    if (!total || !actions || !open) return;
+    const over = total.getBoundingClientRect().bottom - (actions.getBoundingClientRect().top - 8);
+    if (over > 0) card.scrollBy({ top: over, behavior: smooth && !rm() ? 'smooth' : 'auto' });
+  }
+
   const api: SessionSummaryView = {
     el: layer,
     get isOpen() {
@@ -289,7 +302,7 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
       const treeBtn = `<button type="button" class="ss-btn ${treeFirst ? 'primary' : ''}" data-act="tree">${treeIcon('tree', 26)}<span class="tx">${esc(SESSION_UI.goTree[l])}${
         treeSub ? `<small>${esc(treeSub)}</small>` : ''
       }</span></button>`;
-      const nextBtn = `<button type="button" class="ss-btn ${treeFirst ? '' : 'blue'}" data-act="next">${treeIcon('play', 22)}<span class="tx">${esc(SESSION_UI.again[l])}</span></button>`;
+      const nextBtn = `<button type="button" class="ss-btn ${treeFirst ? '' : 'primary'}" data-act="next">${treeIcon('play', 22)}<span class="tx">${esc(SESSION_UI.again[l])}</span></button>`;
       card.innerHTML = `
         <div class="ss-head"><h2>${esc(SESSION_UI.endTitle(sum.n)[l])}</h2><span class="ss-chip">${treeIcon('clockIcon', 15)}${fmtClock(sum.seconds)}</span></div>
         <div class="ss-vela"><div class="ss-bubble">${esc(vela)}</div></div>
@@ -310,6 +323,7 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
       requestAnimationFrame(() => layer.classList.add('show'));
       paintPortraits();
       startVela(vela);
+      if (!staged) requestAnimationFrame(() => revealTotal(false));
       if (staged) {
         const rowEls = [...card.querySelectorAll<HTMLElement>('.ss-row')];
         const step = 380;
@@ -327,6 +341,7 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
         const t0 = 450 + rowEls.length * step;
         timers.push(
           setTimeout(() => {
+            revealTotal(true);
             const start = performance.now();
             const dur = 900;
             const tick = () => {

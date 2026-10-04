@@ -11,7 +11,10 @@ import { SESSION_UI, WORLD_TEXT } from '../../game/treeText';
 import { WORLD_BY_ID, type WorldId } from '../../game/worlds';
 import { fmt, fmtClock } from '../format';
 import { renderPattern } from '../portrait';
+import { artIcon, WORLD_ICON } from '../art/icons';
+import { worldArt, worldColors } from '../art/worlds';
 import { treeIcon } from '../tree/icons';
+import '../art/art.css';
 import './session.css';
 
 export interface SessionStartOptions {
@@ -61,10 +64,11 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
       const picked = w === start.world;
       const foot = found === 0 ? SESSION_UI.worldSpecies(sp.length)[l] : found === sp.length ? SESSION_UI.worldAllFound[l] : SESSION_UI.worldFound(found, sp.length)[l];
       const cells = sp.map((x) => `<span class="sp${x.found ? ' found' : ''}" data-w="${w}" data-code="${esc(x.code)}"></span>`).join('');
-      return `<button type="button" class="ss-world${picked ? ' on' : ''}" data-world="${w}" style="--wh:${def.hue}" aria-pressed="${picked}">
-        <span class="ss-wtop"><b>${esc(WORLD_TEXT[w].name[l])}</b>${isNew ? `<em class="ss-wnew">${esc(SESSION_UI.worldNew[l])}</em>` : ''}${
+      // The world's painted card (src/ui/art/worlds.ts) behind the text; always a night surface.
+      return `<button type="button" class="ss-world art-force-dark${picked ? ' on' : ''}" data-world="${w}" style="--wc:${worldColors(w).ring}" aria-pressed="${picked}">${worldArt(w)}
+        <span class="ss-wtop">${artIcon(WORLD_ICON[w], 18, 'ss-wic')}<b>${esc(WORLD_TEXT[w].name[l])}</b>${
           picked ? `<span class="ss-wpick">${treeIcon('check', 16)}</span>` : ''
-        }</span>
+        }</span>${isNew ? `<em class="ss-wnew">${esc(SESSION_UI.worldNew[l])}</em>` : ''}
         <span class="ss-wdesc">${esc(WORLD_TEXT[w].desc[l])}</span>
         <span class="ss-wsp">${cells}</span>
         <span class="ss-wfoot">${esc(foot)}</span>
@@ -91,10 +95,10 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
       const l = opts.lang();
       const gifts: string[] = [];
       if (start.startEssence > 0)
-        gifts.push(`<span class="ss-gift" style="--c:var(--ss-essence)">${treeIcon('drop', 20)}${esc(l === 'es' ? `${fmt(start.startEssence, l)} Esencia` : `${fmt(start.startEssence, l)} Essence`)}</span>`);
+        gifts.push(`<span class="ss-gift" style="--c:var(--bl-accent)">${treeIcon('drop', 20)}${esc(l === 'es' ? `${fmt(start.startEssence, l)} Esencia` : `${fmt(start.startEssence, l)} Essence`)}</span>`);
       if (start.freeSeeds > 0)
         gifts.push(
-          `<span class="ss-gift" style="--c:var(--ss-good)">${treeIcon('gift', 20)}${esc(
+          `<span class="ss-gift" style="--c:var(--bl-good)">${treeIcon('gift', 20)}${esc(
             l === 'es' ? `${start.freeSeeds} ${start.freeSeeds === 1 ? 'siembra gratis' : 'siembras gratis'}` : `${start.freeSeeds} free ${start.freeSeeds === 1 ? 'seed' : 'seeds'}`,
           )}</span>`,
         );
@@ -105,7 +109,7 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
             return `<span class="mini" style="--hue:${info?.hue ?? 195}" data-sp="${esc(id)}"></span>`;
           })
           .join('');
-        gifts.push(`<span class="ss-gift" style="--c:var(--ss-accent)">${treeIcon('snow', 20)}${minis}${esc(SESSION_UI.startKeep(Math.max(start.fridge.length, start.fridgeSlots))[l])}</span>`);
+        gifts.push(`<span class="ss-gift" style="--c:var(--bl-frost)">${treeIcon('snow', 20)}${minis}${esc(SESSION_UI.startKeep(Math.max(start.fridge.length, start.fridgeSlots))[l])}</span>`);
       }
       const fresh = start.fresh
         .filter((id) => TREE_BY_ID[id])

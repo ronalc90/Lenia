@@ -1,7 +1,9 @@
 /* ──────────────────────────────────────────────────────────────────────────
    Lab session UI (src/ui/session): HUD timer, "¡Último minuto!" banner,
    "¡Tiempo!" stamp, start card and the end-of-session summary.
-   Dark by default; light under any ancestor [data-theme='light'].
+   Dark by default; light under any ancestor [data-theme='light']. Colours, type
+   and easing are the art tokens (--bl-*, src/ui/art/art.css, docs/ARTE.md §12);
+   only the alpha lines, shadows, scrim and rgb triplets below are local.
    ────────────────────────────────────────────────────────────────────────── */
 
 .ss-root,
@@ -9,59 +11,26 @@
 .ss-layer,
 .ss-banner,
 .ss-stamp {
-  --ss-surface: #141a21;
-  --ss-surface2: #1b232c;
-  --ss-ink: #e6edf3;
-  --ss-dim: #8b98a5;
-  --ss-faint: #5d6874;
   --ss-line: rgba(230, 237, 243, 0.1);
   --ss-line2: rgba(230, 237, 243, 0.18);
   --ss-shadow: rgba(0, 0, 0, 0.55);
   --ss-scrim: rgba(4, 6, 9, 0.62);
-  --ss-accent: #5bc0eb;
-  --ss-accent-ink: #062130;
-  --ss-warn: #f2a541;
   --ss-warn-rgb: 242, 165, 65;
-  --ss-danger: #ff7a5c;
-  --ss-good: #8ae234;
-  --ss-good-rgb: 138, 226, 52;
-  --ss-good-ink: #11240a;
-  --ss-gold: #ffd166;
   --ss-gold-rgb: 255, 209, 102;
-  --ss-datos: #5ee0c4;
-  --ss-essence: #5bc0eb;
-  --ss-font: Inter, 'Inter Fallback', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --ss-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  --ss-ease: cubic-bezier(0.2, 0, 0, 1);
-  font-family: var(--ss-font);
-  color: var(--ss-ink);
+  font-family: var(--bl-font-ui);
+  color: var(--bl-text);
 }
 :where([data-theme='light']) .ss-root,
 :where([data-theme='light']) .ss-hud,
 :where([data-theme='light']) .ss-layer,
 :where([data-theme='light']) .ss-banner,
 :where([data-theme='light']) .ss-stamp {
-  --ss-surface: #ffffff;
-  --ss-surface2: #f1f5f9;
-  --ss-ink: #0f1720;
-  --ss-dim: #4e5c6a;
-  --ss-faint: #8391a0;
   --ss-line: rgba(15, 23, 32, 0.09);
   --ss-line2: rgba(15, 23, 32, 0.18);
   --ss-shadow: rgba(24, 36, 52, 0.2);
   --ss-scrim: rgba(15, 23, 32, 0.4);
-  --ss-accent: #0d79ae;
-  --ss-accent-ink: #ffffff;
-  --ss-warn: #b25f00;
-  --ss-warn-rgb: 178, 95, 0;
-  --ss-danger: #c53c1b;
-  --ss-good: #2f7d0e;
-  --ss-good-rgb: 47, 125, 14;
-  --ss-good-ink: #ffffff;
-  --ss-gold: #946300;
-  --ss-gold-rgb: 196, 140, 10;
-  --ss-datos: #0b7d6a;
-  --ss-essence: #0d79ae;
+  --ss-warn-rgb: 143, 77, 0;
+  --ss-gold-rgb: 133, 86, 0;
 }
 .ss-layer [hidden],
 .ss-hud [hidden] {
@@ -88,7 +57,7 @@
   min-height: 56px;
   padding: 5px 18px 5px 6px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--ss-surface) 90%, transparent);
+  background: color-mix(in srgb, var(--bl-surface) 90%, transparent);
   border: 1.5px solid var(--ss-line2);
   box-shadow: 0 6px 18px var(--ss-shadow);
   backdrop-filter: blur(6px);
@@ -100,7 +69,7 @@
   width: 46px;
   height: 46px;
   flex: none;
-  color: var(--ss-accent);
+  color: var(--bl-accent);
 }
 .ss-dial svg.ring {
   position: absolute;
@@ -130,44 +99,45 @@
 }
 .ss-time b {
   display: block;
-  font: 800 1.9rem/1 var(--ss-mono);
+  font: 800 1.9rem/1 var(--bl-font-ui);
+  font-variant-numeric: tabular-nums;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
 }
 .ss-time small {
   display: block;
   margin-top: 3px;
-  font: 700 0.66rem/1 var(--ss-font);
+  font: 700 0.66rem/1 var(--bl-font-ui);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--ss-dim);
+  color: var(--bl-text2);
   white-space: nowrap;
 }
 .ss-hud[data-state='wait'] .ss-time b {
-  color: var(--ss-dim);
+  color: var(--bl-text2);
 }
 .ss-hud[data-state='warn'],
 .ss-hud[data-state='count'] {
-  border-color: var(--ss-warn);
-  background: color-mix(in srgb, var(--ss-warn) 16%, var(--ss-surface));
+  border-color: var(--bl-warn);
+  background: color-mix(in srgb, var(--bl-warn) 16%, var(--bl-surface));
 }
 .ss-hud[data-state='warn'] .ss-dial,
 .ss-hud[data-state='count'] .ss-dial,
 .ss-hud[data-state='warn'] .ss-time b,
 .ss-hud[data-state='count'] .ss-time b {
-  color: var(--ss-warn);
+  color: var(--bl-warn);
 }
 .ss-hud[data-state='warn'] {
   animation: ss-warn 1s ease-in-out infinite;
 }
 .ss-hud[data-state='count'] .ss-time b.tick {
-  animation: ss-tick 0.45s var(--ss-ease);
+  animation: ss-tick 0.45s var(--bl-ease-standard);
 }
 .ss-hud[data-state='over'] .ss-time b {
-  color: var(--ss-danger);
+  color: var(--bl-danger);
 }
 .ss-hud.sprint {
-  border-color: var(--ss-gold);
+  border-color: var(--bl-gold);
   box-shadow: 0 0 0 3px rgba(var(--ss-gold-rgb), 0.25), 0 6px 18px var(--ss-shadow);
 }
 .ss-sprint {
@@ -175,9 +145,9 @@
   margin-left: 2px;
   padding: 4px 8px;
   border-radius: 999px;
-  background: var(--ss-gold);
+  background: var(--bl-gold);
   color: #2a1d00;
-  font: 800 0.74rem/1 var(--ss-font);
+  font: 800 0.74rem/1 var(--bl-font-ui);
   white-space: nowrap;
 }
 .ss-hud.sprint .ss-sprint {
@@ -191,15 +161,16 @@
   transform: translateX(-50%);
   padding: 4px 10px;
   border-radius: 999px;
-  background: var(--ss-good);
-  color: var(--ss-good-ink);
-  font: 800 0.86rem/1 var(--ss-mono);
+  background: var(--bl-good);
+  color: var(--bl-night);
+  font: 800 0.86rem/1 var(--bl-font-ui);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  animation: ss-plus 1.6s var(--ss-ease) forwards;
+  animation: ss-plus 1.6s var(--bl-ease-standard) forwards;
 }
 .ss-plus small {
   margin-left: 4px;
-  font: 700 0.7rem/1 var(--ss-font);
+  font: 700 0.7rem/1 var(--bl-font-ui);
   opacity: 0.85;
 }
 
@@ -212,14 +183,14 @@
   transform: translate(-50%, -50%);
   padding: 14px 26px;
   border-radius: 20px;
-  background: var(--ss-warn);
+  background: var(--bl-warn);
   color: #261400;
-  font: 900 1.6rem/1 var(--ss-font);
+  font: 800 1.6rem/1 var(--bl-font-display);
   letter-spacing: -0.01em;
   white-space: nowrap;
   box-shadow: 0 12px 34px rgba(var(--ss-warn-rgb), 0.45);
   pointer-events: none;
-  animation: ss-banner 2.2s var(--ss-ease) forwards;
+  animation: ss-banner 2.2s var(--bl-ease-standard) forwards;
 }
 .ss-stamp {
   position: absolute;
@@ -228,11 +199,11 @@
   top: 46%;
   transform: translate(-50%, -50%) rotate(-8deg);
   padding: 18px 34px;
-  border: 6px solid var(--ss-danger);
+  border: 6px solid var(--bl-danger);
   border-radius: 22px;
-  color: var(--ss-danger);
-  background: color-mix(in srgb, var(--ss-surface) 70%, transparent);
-  font: 900 3rem/1 var(--ss-font);
+  color: var(--bl-danger);
+  background: color-mix(in srgb, var(--bl-surface) 70%, transparent);
+  font: 800 3rem/1 var(--bl-font-display);
   letter-spacing: 0.02em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -271,11 +242,11 @@
   overscroll-behavior: contain;
   padding: 18px 16px max(16px, env(safe-area-inset-bottom));
   border-radius: 24px 24px 0 0;
-  background: var(--ss-surface);
-  border-top: 3px solid var(--ss-accent);
+  background: var(--bl-surface);
+  border-top: 3px solid var(--bl-accent);
   box-shadow: 0 -16px 50px var(--ss-shadow);
   transform: translateY(105%);
-  transition: transform 0.34s var(--ss-ease);
+  transition: transform 0.34s var(--bl-ease-standard);
 }
 .ss-layer.show .ss-card {
   transform: none;
@@ -292,10 +263,10 @@
     border-radius: 24px;
     border-top: 0;
     border: 1px solid var(--ss-line2);
-    border-top: 4px solid var(--ss-accent);
+    border-top: 4px solid var(--bl-accent);
     transform: translateY(30px) scale(0.97);
     opacity: 0;
-    transition: transform 0.3s var(--ss-ease), opacity 0.25s;
+    transition: transform 0.3s var(--bl-ease-standard), opacity 0.25s;
   }
   .ss-layer.show .ss-card {
     opacity: 1;
@@ -310,8 +281,8 @@
 .ss-head h2 {
   flex: 1;
   margin: 0;
-  font: 900 1.45rem/1.1 var(--ss-font);
-  letter-spacing: -0.02em;
+  font: 700 1.5rem/1.1 var(--bl-font-display);
+  letter-spacing: -0.01em;
 }
 .ss-chip {
   display: inline-flex;
@@ -319,10 +290,11 @@
   gap: 5px;
   padding: 6px 10px;
   border-radius: 999px;
-  background: var(--ss-surface2);
+  background: var(--bl-surface2);
   border: 1px solid var(--ss-line);
-  color: var(--ss-dim);
-  font: 700 0.8rem/1 var(--ss-mono);
+  color: var(--bl-text2);
+  font: 700 0.8rem/1 var(--bl-font-ui);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .ss-vela {
@@ -341,9 +313,9 @@
   flex: 1;
   padding: 10px 14px;
   border-radius: 16px;
-  background: var(--ss-surface2);
+  background: var(--bl-surface2);
   border: 1px solid var(--ss-line2);
-  font: 600 0.98rem/1.3 var(--ss-font);
+  font: 600 0.98rem/1.3 var(--bl-font-ui);
 }
 .ss-bubble::before {
   content: '';
@@ -353,7 +325,7 @@
   width: 14px;
   height: 14px;
   margin-top: -7px;
-  background: var(--ss-surface2);
+  background: var(--bl-surface2);
   border-left: 1px solid var(--ss-line2);
   border-bottom: 1px solid var(--ss-line2);
   transform: rotate(45deg);
@@ -362,15 +334,15 @@
   margin: 12px 0;
   padding: 12px;
   border-radius: 16px;
-  background: var(--ss-surface2);
+  background: var(--bl-surface2);
   border: 1px solid var(--ss-line);
 }
 .ss-box h4 {
   margin: 0 0 10px;
-  font: 800 0.72rem/1 var(--ss-font);
+  font: 800 0.72rem/1 var(--bl-font-ui);
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--ss-dim);
+  color: var(--bl-text2);
 }
 
 /* The visual equation of the Datos */
@@ -398,35 +370,38 @@
   gap: 6px;
   padding: 5px 9px 5px 6px;
   border-radius: 10px;
-  background: var(--ss-surface);
+  background: var(--bl-surface);
   border: 1px solid var(--ss-line2);
   min-height: 40px;
 }
 .ss-t .ic {
-  color: var(--c, var(--ss-dim));
+  color: var(--c, var(--bl-text2));
 }
 .ss-t b {
   display: block;
-  font: 800 1rem/1.05 var(--ss-mono);
+  font: 800 1rem/1.05 var(--bl-font-ui);
+  font-variant-numeric: tabular-nums;
 }
 .ss-t span.l {
   display: block;
-  font: 600 0.66rem/1.15 var(--ss-font);
-  color: var(--ss-dim);
+  font: 600 0.66rem/1.15 var(--bl-font-ui);
+  color: var(--bl-text2);
 }
 .ss-op {
-  font: 800 1.05rem/1 var(--ss-mono);
-  color: var(--ss-faint);
+  font: 800 1.05rem/1 var(--bl-font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--bl-text3);
 }
 .ss-rhs {
   flex: none;
   min-width: 60px;
   text-align: right;
-  font: 800 1.15rem/1 var(--ss-mono);
-  color: var(--ss-datos);
+  font: 800 1.15rem/1 var(--bl-font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--bl-aurora);
 }
 .ss-row.in {
-  animation: ss-in 0.35s var(--ss-ease) both;
+  animation: ss-in 0.35s var(--bl-ease-standard) both;
 }
 .ss-row.pending {
   opacity: 0;
@@ -439,28 +414,29 @@
   margin-top: 8px;
   padding: 10px 12px;
   border-radius: 14px;
-  background: color-mix(in srgb, var(--ss-datos) 14%, var(--ss-surface));
-  border: 2px solid var(--ss-datos);
+  background: color-mix(in srgb, var(--bl-aurora) 14%, var(--bl-surface));
+  border: 2px solid var(--bl-aurora);
 }
 .ss-total .lbl {
   display: flex;
   align-items: center;
   gap: 8px;
-  font: 800 1rem/1.1 var(--ss-font);
-  color: var(--ss-datos);
+  font: 800 1rem/1.1 var(--bl-font-ui);
+  color: var(--bl-aurora);
 }
 .ss-total b {
-  font: 900 2.1rem/1 var(--ss-mono);
-  color: var(--ss-datos);
+  font: 900 2.1rem/1 var(--bl-font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--bl-aurora);
   letter-spacing: -0.03em;
 }
 .ss-total.done b {
-  animation: ss-bump 0.5s var(--ss-ease);
+  animation: ss-bump 0.5s var(--bl-ease-standard);
 }
 .ss-minnote {
   margin: 6px 0 0;
-  font: 600 0.78rem/1.3 var(--ss-font);
-  color: var(--ss-dim);
+  font: 600 0.78rem/1.3 var(--bl-font-ui);
+  color: var(--bl-text2);
 }
 
 /* Species of the session */
@@ -494,8 +470,8 @@
 .ss-sp .nm {
   display: block;
   margin-top: 4px;
-  font: 700 0.68rem/1.15 var(--ss-font);
-  color: var(--ss-ink);
+  font: 700 0.68rem/1.15 var(--bl-font-ui);
+  color: var(--bl-text);
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -508,9 +484,9 @@
   right: -2px;
   padding: 3px 6px;
   border-radius: 999px;
-  background: var(--ss-good);
-  color: var(--ss-good-ink);
-  font: 800 0.62rem/1 var(--ss-font);
+  background: var(--bl-good);
+  color: var(--bl-night);
+  font: 800 0.62rem/1 var(--bl-font-ui);
 }
 .ss-best {
   display: flex;
@@ -532,13 +508,14 @@
 }
 .ss-best b {
   display: block;
-  font: 800 1rem/1.2 var(--ss-font);
+  font: 800 1rem/1.2 var(--bl-font-ui);
 }
 .ss-best span {
   display: block;
   margin-top: 2px;
-  font: 800 0.92rem/1 var(--ss-mono);
-  color: var(--ss-essence);
+  font: 800 0.92rem/1 var(--bl-font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--bl-accent);
 }
 .ss-records {
   display: flex;
@@ -554,11 +531,11 @@
   border-radius: 12px;
   background: rgba(var(--ss-gold-rgb), 0.14);
   border: 1px solid rgba(var(--ss-gold-rgb), 0.5);
-  color: var(--ss-ink);
-  font: 700 0.8rem/1.2 var(--ss-font);
+  color: var(--bl-text);
+  font: 700 0.8rem/1.2 var(--bl-font-ui);
 }
 .ss-rec .rt-ic {
-  color: var(--ss-gold);
+  color: var(--bl-gold);
 }
 .ss-actions {
   position: sticky;
@@ -569,14 +546,23 @@
   gap: 10px;
   margin: 16px -16px calc(-1 * max(16px, env(safe-area-inset-bottom)));
   padding: 12px 16px max(16px, env(safe-area-inset-bottom));
-  background: linear-gradient(to top, var(--ss-surface) 78%, color-mix(in srgb, var(--ss-surface) 0%, transparent));
+  background: linear-gradient(to top, var(--bl-surface) 78%, color-mix(in srgb, var(--bl-surface) 0%, transparent));
 }
-@media (min-width: 560px) {
-  .ss-actions {
-    flex-direction: row-reverse;
-  }
+/* Side by side on every width (primary on the right, under the thumb): one row of buttons keeps the
+   sticky bar short so it does not sit on the Datos total (audit, 390×844). */
+.ss-actions {
+  flex-direction: row-reverse;
+}
+.ss-actions .ss-btn {
+  flex: 1 1 0;
+  min-width: 0;
+}
+@media (max-width: 559px) {
   .ss-actions .ss-btn {
-    flex: 1;
+    gap: 8px;
+    min-height: 56px;
+    padding: 0 12px;
+    font-size: 1rem !important;
   }
 }
 .ss-btn {
@@ -589,36 +575,32 @@
   padding: 0 18px;
   border-radius: 18px;
   border: 1.5px solid var(--ss-line2);
-  background: var(--ss-surface2);
-  color: var(--ss-ink) !important;
-  font: 800 1.08rem/1 var(--ss-font) !important;
+  background: var(--bl-surface2);
+  color: var(--bl-text) !important;
+  font: 800 1.08rem/1 var(--bl-font-ui) !important;
   cursor: pointer;
 }
 .ss-btn.primary {
   border: 0;
-  background: var(--ss-good);
-  color: var(--ss-good-ink) !important;
-  box-shadow: 0 10px 26px rgba(var(--ss-good-rgb), 0.32);
-}
-.ss-btn.blue {
-  border: 0;
-  background: var(--ss-accent);
-  color: var(--ss-accent-ink) !important;
+  background: var(--bl-accent-fill);
+  color: var(--bl-accent-ink) !important;
+  box-shadow: var(--bl-shadow-glow);
 }
 .ss-btn small {
   display: block;
   margin-top: 3px;
-  font: 700 0.74rem/1 var(--ss-font);
+  font: 700 0.74rem/1.15 var(--bl-font-ui);
   opacity: 0.85;
 }
 .ss-btn .tx {
+  min-width: 0;
   text-align: left;
 }
 .ss-btn:active {
   transform: scale(0.98);
 }
 .ss-btn:focus-visible {
-  outline: 3px solid var(--ss-gold);
+  outline: 3px solid var(--bl-gold);
   outline-offset: 3px;
 }
 
@@ -667,20 +649,21 @@
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--ss-accent) 16%, var(--ss-surface));
-  border: 3px solid var(--ss-accent);
-  color: var(--ss-accent);
+  background: color-mix(in srgb, var(--bl-accent) 16%, var(--bl-surface));
+  border: 3px solid var(--bl-accent);
+  color: var(--bl-accent);
 }
 .ss-start-time b {
   display: block;
-  font: 900 2.3rem/1 var(--ss-mono);
+  font: 900 2.3rem/1 var(--bl-font-ui);
+  font-variant-numeric: tabular-nums;
   letter-spacing: -0.03em;
-  color: var(--ss-accent);
+  color: var(--bl-accent);
 }
 .ss-start-time span {
   display: block;
   margin-top: 4px;
-  font: 700 0.95rem/1.25 var(--ss-font);
+  font: 700 0.95rem/1.25 var(--bl-font-ui);
 }
 .ss-gifts {
   display: flex;
@@ -694,12 +677,12 @@
   min-height: 40px;
   padding: 6px 12px 6px 8px;
   border-radius: 12px;
-  background: var(--ss-surface);
+  background: var(--bl-surface);
   border: 1px solid var(--ss-line2);
-  font: 700 0.86rem/1.2 var(--ss-font);
+  font: 700 0.86rem/1.2 var(--bl-font-ui);
 }
 .ss-gift .rt-ic {
-  color: var(--c, var(--ss-accent));
+  color: var(--c, var(--bl-accent));
 }
 .ss-gift .mini {
   width: 26px;
@@ -725,8 +708,8 @@
   padding: 5px 10px 5px 5px;
   border-radius: 12px;
   border: 1.5px solid var(--bc, var(--ss-line2));
-  background: var(--ss-surface);
-  font: 700 0.84rem/1 var(--ss-font);
+  background: var(--bl-surface);
+  font: 700 0.84rem/1 var(--bl-font-ui);
 }
 .ss-new .n .rt-ic {
   color: var(--bc);
@@ -735,10 +718,10 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font: 700 0.95rem/1.3 var(--ss-font);
+  font: 700 0.95rem/1.3 var(--bl-font-ui);
 }
 .ss-goal .rt-ic {
-  color: var(--ss-gold);
+  color: var(--bl-gold);
 }
 .ss-hint {
   display: flex;
@@ -746,8 +729,8 @@
   justify-content: center;
   gap: 8px;
   margin: 12px 0 0;
-  font: 700 0.9rem/1.3 var(--ss-font);
-  color: var(--ss-dim);
+  font: 700 0.9rem/1.3 var(--bl-font-ui);
+  color: var(--bl-text2);
   text-align: center;
 }
 .ss-layer .b-time { --bc: #5bc0eb; }
@@ -876,27 +859,41 @@
   padding: 2px 4px 6px;
   scrollbar-width: thin;
 }
+/* A world card is its painted art (worldArt, first child) with the text on top; always night
+   (.art-force-dark), so --wc is the world's ring colour, AA on dark (docs/ARTE.md §9, §12). */
 .ss-world {
-  --wc: hsl(var(--wh) 72% 64%);
-  flex: 0 0 min(220px, 62%);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  flex: 0 0 min(240px, 66%);
+  /* About 16:10 (the art's frame), taller when the text needs it. */
+  min-height: 150px;
   scroll-snap-align: start;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  min-height: 48px;
   padding: 10px 12px 10px;
   border-radius: 16px;
   text-align: left;
   cursor: pointer;
-  background: linear-gradient(160deg, color-mix(in srgb, var(--wc) 16%, var(--ss-surface)) 0%, var(--ss-surface) 70%);
-  border: 2px solid var(--ss-line2);
-  transition: border-color 0.2s, transform 0.15s var(--ss-ease), box-shadow 0.2s;
+  color: var(--bl-text);
+  background: var(--bl-bg);
+  border: 2px solid rgba(230, 237, 243, 0.18);
+  transition: border-color 0.2s, transform 0.15s var(--bl-ease-standard), box-shadow 0.2s;
 }
-:where([data-theme='light']) .ss-world {
-  --wc: hsl(var(--wh) 62% 40%);
+.ss-world > svg.bl-world {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+}
+.ss-wic {
+  flex: none;
+  color: var(--wc);
 }
 .ss-world:hover {
-  border-color: color-mix(in srgb, var(--wc) 60%, var(--ss-line2));
+  border-color: color-mix(in srgb, var(--wc) 60%, transparent);
 }
 .ss-world:active {
   transform: scale(0.98);
@@ -906,7 +903,7 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--wc) 28%, transparent);
 }
 .ss-world:focus-visible {
-  outline: 3px solid var(--ss-accent);
+  outline: 3px solid var(--bl-accent);
   outline-offset: 2px;
 }
 .ss-wtop {
@@ -917,16 +914,18 @@
 .ss-wtop b {
   flex: 1;
   min-width: 0;
-  font: 800 0.95rem/1.15 var(--ss-font);
-  color: var(--ss-ink);
+  font: 700 1.08rem/1.15 var(--bl-font-display);
+  color: var(--bl-text);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
 }
 .ss-wnew {
   flex: none;
+  align-self: flex-start;
   padding: 3px 7px;
   border-radius: 999px;
-  background: var(--ss-good);
-  color: var(--ss-good-ink);
-  font: 800 0.66rem/1 var(--ss-font);
+  background: var(--bl-good);
+  color: var(--bl-night);
+  font: 800 0.66rem/1 var(--bl-font-ui);
   font-style: normal;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -939,11 +938,12 @@
   height: 24px;
   border-radius: 50%;
   background: var(--wc);
-  color: var(--ss-surface);
+  color: var(--bl-surface);
 }
 .ss-wdesc {
-  font: 500 0.8rem/1.3 var(--ss-font);
-  color: var(--ss-dim);
+  font: 500 0.82rem/1.3 var(--bl-font-ui);
+  color: var(--bl-text);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
 }
 .ss-wsp {
   display: flex;
@@ -958,8 +958,8 @@
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: color-mix(in srgb, var(--ss-surface2) 80%, transparent);
-  border: 1.5px dashed var(--ss-line2);
+  background: color-mix(in srgb, var(--bl-night) 72%, transparent);
+  border: 1.5px dashed rgba(230, 237, 243, 0.3);
 }
 .ss-wsp .sp.found {
   border-style: solid;
@@ -972,17 +972,16 @@
 .ss-wsp .sp:not(.found) canvas {
   filter: grayscale(1) brightness(0) invert(1) opacity(0.22);
 }
-:where([data-theme='light']) .ss-wsp .sp:not(.found) canvas {
-  filter: brightness(0) opacity(0.2);
-}
 .ss-wsp .sp i {
   position: absolute;
-  font: 800 0.9rem/1 var(--ss-mono);
+  font: 800 0.9rem/1 var(--bl-font-ui);
+  font-variant-numeric: tabular-nums;
   font-style: normal;
-  color: var(--ss-dim);
+  color: var(--bl-text2);
 }
 .ss-wfoot {
-  font: 800 0.78rem/1 var(--ss-mono);
+  font: 800 0.78rem/1 var(--bl-font-ui);
+  font-variant-numeric: tabular-nums;
   color: var(--wc);
 }
 
@@ -992,8 +991,8 @@
   align-items: center;
   gap: 6px;
   margin: -2px 0 8px;
-  font: 700 0.86rem/1.25 var(--ss-font);
-  color: var(--ss-essence);
+  font: 700 0.86rem/1.25 var(--bl-font-ui);
+  color: var(--bl-accent);
 }
 
 /* HUD: "+12 Datos al terminar · Más tiempo: faltan 4" (tap: the Datos sum) */
@@ -1009,11 +1008,11 @@
   padding: 4px 12px 4px 8px;
   border-radius: 18px;
   border: 1px solid var(--ss-line2);
-  background: color-mix(in srgb, var(--ss-surface) 86%, transparent);
+  background: color-mix(in srgb, var(--bl-surface) 86%, transparent);
   backdrop-filter: blur(6px);
   box-shadow: 0 4px 14px var(--ss-shadow);
-  color: var(--ss-ink);
-  font: 700 0.8rem/1.15 var(--ss-font);
+  color: var(--bl-text);
+  font: 700 0.8rem/1.15 var(--bl-font-ui);
   cursor: pointer;
   position: relative;
 }
@@ -1023,20 +1022,21 @@
   inset: -6px 0;
 }
 .ss-prev .d {
-  color: var(--ss-datos);
-  font: 800 0.9rem/1 var(--ss-mono);
+  color: var(--bl-aurora);
+  font: 800 0.9rem/1 var(--bl-font-ui);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .ss-prev .g {
   min-width: 0;
   text-align: center;
-  color: var(--ss-dim);
+  color: var(--bl-text2);
 }
 .ss-prev.ready .g {
-  color: var(--ss-good);
+  color: var(--bl-good);
 }
 .ss-prev.bump .d {
-  animation: ss-bump 0.4s var(--ss-ease);
+  animation: ss-bump 0.4s var(--bl-ease-standard);
 }
 .ss-hudwrap {
   display: flex;

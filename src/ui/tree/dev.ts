@@ -45,6 +45,7 @@ import { createPriceSheet } from '../moments/price';
 import { computeDatos, researchPickWorld, sessionPreview, unlockedWorlds } from '../../game/session';
 import { createSessionHud, createSessionStart, createSessionSummary, datosExplain, hudViewOf } from '../session';
 import { createTreeView } from './treeView';
+import '../art/art.css';
 
 const q = new URLSearchParams(location.search);
 const lang: Lang = q.get('lang') === 'en' ? 'en' : 'es';

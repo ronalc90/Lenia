@@ -19,6 +19,7 @@ import type { SessionState } from '../../game/session';
 import { SESSION_UI } from '../../game/treeText';
 import { fmt, fmtClock } from '../format';
 import { treeIcon } from '../tree/icons';
+import '../art/art.css';
 import './session.css';
 
 export type SessionHudSound = 'tick' | 'warn' | 'lastMinute' | 'timesUp' | 'extend';

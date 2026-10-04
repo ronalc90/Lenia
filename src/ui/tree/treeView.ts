@@ -48,7 +48,9 @@ import { fmt, fmtShort } from '../format';
 import { createPriceSheet, PriceTicker, type PriceExplain } from '../moments/price';
 import '../moments/moments.css';
 import { renderPattern } from '../portrait';
+import { ROUTE_ICON } from '../art/icons';
 import { treeIcon } from './icons';
+import '../art/art.css';
 import './tree.css';
 
 export interface TreeViewData {
@@ -102,6 +104,9 @@ const Z_MIN = 0.16;
 const Z_MAX = 1.9;
 /** Below this zoom node names and branch labels fade out. */
 const FAR_Z = 0.55;
+/** A node's extent in world px around its centre: the 64-px tile, then its name and price below. */
+const NODE_ABOVE = 40;
+const NODE_BELOW = 84;
 /** Where the night labels sit on their circles: between Mundos and Destello. */
 const GATE_LABEL_ANGLE = ((-90 + 5.5 * (360 / 7)) * Math.PI) / 180;
 /** Night boundaries: dashed circles between the last ring of a night and the first of the next. */
@@ -115,15 +120,6 @@ const dec2 = (x: number, l: Lang): string => {
 };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const branchOf = (def: TreeNodeDef): BranchId | 'core' => def.branch;
-const BRANCH_ICON: Record<BranchId, string> = {
-  time: 'clock',
-  dropper: 'dropper',
-  dish: 'dish',
-  life: 'culture',
-  discovery: 'microscope',
-  worlds: 'world',
-  spark: 'spark',
-};
 
 interface NodeEl {
   def: TreeNodeDef;
@@ -167,6 +163,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     <div class="rt-fx"></div>`;
   root.appendChild(el);
   const vp = el.querySelector('.rt-vp') as HTMLElement;
+  const topBar = el.querySelector('.rt-top') as HTMLElement;
   const world = el.querySelector('.rt-world') as HTMLElement;
   const datosEl = el.querySelector('.rt-datos') as HTMLElement;
   const datosNum = datosEl.querySelector('b') as HTMLElement;
@@ -345,10 +342,15 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     clampCam();
     applyCam();
   }
-  /** The visible area minus the top bar and (on phones) the open sheet. */
-  function freeArea(): { cx: number; cy: number; w: number; h: number } {
+  /**
+   * The visible area minus the top bar and (on phones) the open sheet. The bar is measured: on a
+   * 390-px phone it wraps to two rows (Datos + button, then the title) and a fixed inset let it
+   * cover the top node.
+   */
+  function freeArea(): { cx: number; cy: number; w: number; h: number; top: number } {
     const { w, h } = vpSize();
-    const top = 78;
+    const bar = topBar.getBoundingClientRect();
+    const top = Math.max(78, bar.height > 0 ? bar.bottom - vp.getBoundingClientRect().top + 10 : 0);
     let bottom = 18;
     let right = 0;
     if (selected && open) {
@@ -357,7 +359,28 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     }
     const aw = w - right;
     const ah = h - top - bottom;
-    return { cx: aw / 2, cy: top + ah / 2, w: aw, h: ah };
+    return { cx: aw / 2, cy: top + ah / 2, w: aw, h: ah, top };
+  }
+  /**
+   * Camera y that leaves no node half under the top bar. When the tree is taller than the screen
+   * (the zoom floor on a phone) a centred fit cut the top node in two under «Árbol · Noche 2»
+   * (audit, tree-mid.png): nodes that straddle the bar's edge are pushed fully below it.
+   */
+  function clearOfBar(camY: number, z: number, barBottom: number): number {
+    let y = camY;
+    for (let pass = 0; pass < 4; pass++) {
+      let shift = 0;
+      for (const [id, st] of states) {
+        if (st.status === 'hidden') continue;
+        const p = TREE_LAYOUT.get(id)!;
+        const top = y + (p.y * D - NODE_ABOVE) * z;
+        const bottom = y + (p.y * D + NODE_BELOW) * z;
+        if (top < barBottom && bottom > barBottom) shift = Math.max(shift, barBottom + 4 - top);
+      }
+      if (shift <= 0) break;
+      y += shift;
+    }
+    return y;
   }
   function fitView(animate = true): void {
     let minX = -0.6;
@@ -378,11 +401,13 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     const z = Math.max(FAR_Z + 0.04, Math.min(1.1, Math.min(a.w / ((maxX - minX + 2 * pad) * D), a.h / ((maxY - minY + 2 * pad) * D))));
     const wx = ((minX + maxX) / 2) * D;
     const wy = ((minY + maxY) / 2) * D;
-    if (animate) animateTo(wx, wy, z, a.cx, a.cy);
+    const zz = Math.min(Z_MAX, Math.max(Z_MIN, z));
+    const sy = a.cy + clearOfBar(a.cy - wy * zz, zz, a.top) - (a.cy - wy * zz);
+    if (animate) animateTo(wx, wy, z, a.cx, sy);
     else {
-      cam.z = Math.min(Z_MAX, Math.max(Z_MIN, z));
+      cam.z = zz;
       cam.x = a.cx - wx * cam.z;
-      cam.y = a.cy - wy * cam.z;
+      cam.y = sy - wy * cam.z;
       clampCam();
       applyCam();
     }
@@ -781,7 +806,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     const chips: string[] = [];
     if (!mystery && br !== 'core') {
       const n = routeNodes(br).length;
-      chips.push(`<span class="rt-chip br">${treeIcon(BRANCH_ICON[br], 14)}${esc(tx(BRANCH_TEXT[br].name, l))} · ${esc(tx(TREE_UI.step(def.step, n), l))}</span>`);
+      chips.push(`<span class="rt-chip br">${treeIcon(ROUTE_ICON[br], 14)}${esc(tx(BRANCH_TEXT[br].name, l))} · ${esc(tx(TREE_UI.step(def.step, n), l))}</span>`);
       chips.push(
         st.maxed
           ? `<span class="rt-chip done">${treeIcon('check', 14)}${esc(tx(TREE_UI.maxed, l))}</span>`
@@ -881,7 +906,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       d.className = 'rt-p';
       d.style.left = `${p.x}px`;
       d.style.top = `${p.y}px`;
-      d.style.setProperty('--c', i % 3 === 0 ? 'var(--rt-good)' : color);
+      d.style.setProperty('--c', i % 3 === 0 ? 'var(--bl-good)' : color);
       fx.appendChild(d);
       const a = (i / 16) * Math.PI * 2 + Math.random() * 0.3;
       const r = 50 + Math.random() * 60;
