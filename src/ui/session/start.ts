@@ -167,7 +167,7 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
         <div class="ss-actions"><button type="button" class="ss-btn primary" data-act="go">${treeIcon('play', 24)}<span class="tx">${esc(SESSION_UI.startGo[l])}</span></button></div>`;
       for (const m of card.querySelectorAll<HTMLElement>('[data-sp]')) {
         const info = opts.speciesInfo?.(m.dataset.sp!);
-        if (info?.portrait) m.appendChild(renderPattern(info.portrait, 52, 0.8));
+        if (info?.portrait) m.appendChild(renderPattern(info.portrait, 52, 0.8, info.hue));
       }
       paintWorldPortraits();
       card.setAttribute('aria-label', SESSION_UI.startTitle(start.n)[l]);

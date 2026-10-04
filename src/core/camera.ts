@@ -23,6 +23,12 @@ export class Camera implements CameraState {
 
   /** Room around the dish at zoom 1 for the glass wall and its shadow, as a share of the radius. */
   static readonly DISH_FIT_MARGIN = 0.07;
+  /**
+   * A tall panel (phone portrait) has more height than the round dish needs: this share of the spare
+   * height goes above the dish, the rest below it, where the tools, the seed meter and VELA sit. So
+   * the dish hugs the HUD instead of floating in the middle of an empty band.
+   */
+  static readonly DISH_TOP_SHARE = 0.18;
 
   constructor(
     public gridW: number,
@@ -38,6 +44,26 @@ export class Camera implements CameraState {
   setView(w: number, h: number): void {
     this.viewW = Math.max(1, w);
     this.viewH = Math.max(1, h);
+    if (this.dishShape) this.clampCenter();
+  }
+
+  /**
+   * Camera centre that shows the whole dish at zoom 1 (and the point zooms ease back to): the dish
+   * centre, moved so a tall panel's spare height sits mostly under the dish (DISH_TOP_SHARE).
+   */
+  get homeX(): number {
+    return this.dishShape ? this.dishShape.cx : this.gridW / 2;
+  }
+
+  get homeY(): number {
+    const d = this.dishShape;
+    if (!d) return this.gridH / 2;
+    const s = this.scale;
+    const rPx = this.fitRadius * (1 + Camera.DISH_FIT_MARGIN) * (s / this.zoom);
+    const slack = this.viewH - 2 * rPx;
+    if (slack <= 1) return d.cy;
+    const wantY = rPx + slack * Camera.DISH_TOP_SHARE; // dish centre on screen (CSS px) at zoom 1
+    return d.cy + (this.viewH / 2 - wantY) / s;
   }
 
   /** The round dish, or null on the torus. */
@@ -74,6 +100,26 @@ export class Camera implements CameraState {
       dy = wrapDelta(dy, this.gridH);
     }
     return { x: this.viewW / 2 + dx * s, y: this.viewH / 2 + dy * s };
+  }
+
+  /** Signed delta along x between two grid points: the short way round on the torus, plain in the round dish. */
+  deltaX(d: number): number {
+    return this.dishShape ? d : wrapDelta(d, this.gridW);
+  }
+
+  /** Signed delta along y (see deltaX). */
+  deltaY(d: number): number {
+    return this.dishShape ? d : wrapDelta(d, this.gridH);
+  }
+
+  /** A grid x brought back onto the torus (unchanged in the round dish). */
+  wrapX(x: number): number {
+    return this.dishShape ? x : mod(x, this.gridW);
+  }
+
+  /** A grid y brought back onto the torus (unchanged in the round dish). */
+  wrapY(y: number): number {
+    return this.dishShape ? y : mod(y, this.gridH);
   }
 
   screenToGrid(px: number, py: number): { x: number; y: number } {
@@ -130,15 +176,17 @@ export class Camera implements CameraState {
       // Keep the view over the dish: the centre may wander as far as the zoom lets the rim stay
       // in view (none at zoom 1).
       const lim = Math.max(0, this.fitRadius * (1 + Camera.DISH_FIT_MARGIN) * (1 - 1 / this.zoom));
-      const dx = this.cx - d.cx;
-      const dy = this.cy - d.cy;
+      const hx = this.homeX;
+      const hy = this.homeY;
+      const dx = this.cx - hx;
+      const dy = this.cy - hy;
       const r = Math.hypot(dx, dy);
       if (this.zoom <= 1.0001 || r === 0) {
-        this.cx = d.cx;
-        this.cy = d.cy;
+        this.cx = hx;
+        this.cy = hy;
       } else if (r > lim) {
-        this.cx = d.cx + (dx / r) * lim;
-        this.cy = d.cy + (dy / r) * lim;
+        this.cx = hx + (dx / r) * lim;
+        this.cy = hy + (dy / r) * lim;
       }
       return;
     }

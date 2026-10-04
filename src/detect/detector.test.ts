@@ -395,4 +395,19 @@ describe('detector: round dish (glass deflection, ADR-025)', () => {
     }
     expect(a!.creatures[0].behavior).toBe('swimmer');
   });
+
+  it('measures the fill over the round dish, not the whole square grid', () => {
+    const sim = new CpuLenia(128, 128, ORBIUM);
+    const dish = { cx: 64, cy: 64, radius: 30 };
+    sim.setDish(dish);
+    sim.placeCentered(catalogPattern('O2u'), 64, 64);
+    const snap = snapshotFromCpu(sim.A, 128, 128, 2, 0);
+    const torus = createDetector().update(snap, ORBIUM).fill;
+    const det = createDetector();
+    det.setDish(dish);
+    const round = det.update(snap, ORBIUM).fill;
+    // Same matter, a disc of radius 30 instead of 128²: π·30² / 128² ≈ 0.17 of the area.
+    expect(round / torus).toBeGreaterThan(5);
+    expect(round / torus).toBeLessThan(6.5);
+  });
 });

@@ -28,6 +28,9 @@ import {
   sessionRemaining,
   summarize,
   tickSession,
+  countdownSeconds,
+  sprintSeconds,
+  warnSeconds,
   validateResearch,
   validateSession,
   type ResearchState,
@@ -56,7 +59,7 @@ function playOne(r: ResearchState, essence: number, extra: (s: SessionState) => 
 }
 
 describe('session clock', () => {
-  it('a new save gets a 3-minute session whose clock waits for the first seed', () => {
+  it('a new save gets a 15 s session whose clock waits for the first seed', () => {
     const fx = treeEffects({});
     const { session, start } = beginSession(freshResearch(), fx);
     expect(session.n).toBe(1);
@@ -69,14 +72,38 @@ describe('session clock', () => {
     expect(sessionRemaining(session)).toBe(C.SESSION_BASE_SECONDS);
   });
 
-  it('warns at one minute and 30 s, counts the last 10 seconds and ends exactly once', () => {
+  it('a 15 s run warns in its last 4 s, counts its last 5 and ends exactly once (no "último minuto")', () => {
     const { session } = beginSession(freshResearch(), treeEffects({}));
     noteSeed(session);
-    const ev = run(session, C.SESSION_BASE_SECONDS + 5);
+    expect(session.limit).toBe(15);
+    const ev: SessionEvent[] = [];
+    let warnAt = -1;
+    for (let k = 0; k < (C.SESSION_BASE_SECONDS + 5) * 4; k++) {
+      const e = tickSession(session, 0.25, treeEffects({}));
+      if (e.some((x) => x.type === 'warn')) warnAt = sessionRemaining(session);
+      ev.push(...e);
+    }
+    const t = types(ev);
+    expect(t).not.toContain('lastMinute');
+    expect(t.filter((x) => x === 'warn')).toHaveLength(1);
+    expect(warnAt).toBeCloseTo(warnSeconds(15), 6);
+    expect(warnSeconds(15)).toBe(C.SESSION_WARN_MIN);
+    expect(ev.filter((e) => e.type === 'countdown').map((e) => (e as { seconds: number }).seconds)).toEqual([5, 4, 3, 2, 1]);
+    expect(t.filter((x) => x === 'timesUp')).toHaveLength(1);
+    expect(t[t.length - 1]).toBe('timesUp');
+    expect(session.phase).toBe('over');
+  });
+
+  it('a long run warns at one minute and 30 s and counts the last 10 seconds', () => {
+    const fx = treeEffects({ clock: 6, clock2: 3, clock3: 3, clock4: 3 });
+    const { session } = beginSession(freshResearch(), fx);
+    noteSeed(session);
+    const ev = run(session, fx.sessionSeconds + 5, fx);
     const t = types(ev);
     expect(t.filter((x) => x === 'lastMinute')).toHaveLength(1);
     expect(t.filter((x) => x === 'warn')).toHaveLength(1);
     expect(t.indexOf('lastMinute')).toBeLessThan(t.indexOf('warn'));
+    expect(warnSeconds(fx.sessionSeconds)).toBe(C.SESSION_WARN_SECONDS);
     expect(ev.filter((e) => e.type === 'countdown').map((e) => (e as { seconds: number }).seconds)).toEqual([10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
     expect(t.filter((x) => x === 'timesUp')).toHaveLength(1);
     expect(t[t.length - 1]).toBe('timesUp');
@@ -97,7 +124,7 @@ describe('session clock', () => {
 
   it('the tree makes it longer and new species, Encargos and Sparks extend it', () => {
     const fx = treeEffects({ clock: 2, sparkTime: 1 });
-    const { session } = beginSession(freshResearch(), fx);
+    const { session } = beginSession({ ...freshResearch(), sessions: 1 }, fx);
     expect(session.limit).toBe(C.SESSION_BASE_SECONDS + 2 * C.TIME_CLOCK);
     noteSeed(session);
     // Base rule: a species new to the Bestiary adds seconds; one already known does not.
@@ -110,13 +137,23 @@ describe('session clock', () => {
     expect(sessionRemaining(session)).toBe(session.limit + C.SESSION_TIME_PER_SPECIES + C.SESSION_TIME_PER_ENCARGO + C.TIME_PER_GOLDEN);
   });
 
-  it('extending out of the countdown restarts it', () => {
-    const fx = treeEffects({ encTime: 2 });
-    expect(fx.timePerEncargo).toBeGreaterThan(C.SESSION_COUNTDOWN);
+  it('session 1 counts its silent Encargos but they do not stretch the 15 s run', () => {
+    const fx = treeEffects({});
     const { session } = beginSession(freshResearch(), fx);
     noteSeed(session);
-    run(session, fx.sessionSeconds - 5, fx);
-    expect(session.countdown).toBe(5);
+    expect(session.n).toBe(1);
+    expect(noteEncargo(session, fx)).toEqual([]);
+    expect(session.encargos).toBe(1);
+    expect(sessionRemaining(session)).toBe(C.SESSION_BASE_SECONDS);
+  });
+
+  it('extending out of the countdown restarts it', () => {
+    const fx = treeEffects({ encTime: 2 });
+    expect(fx.timePerEncargo).toBeGreaterThan(countdownSeconds(fx.sessionSeconds));
+    const { session } = beginSession({ ...freshResearch(), sessions: 1 }, fx);
+    noteSeed(session);
+    run(session, fx.sessionSeconds - 3, fx);
+    expect(session.countdown).toBe(3);
     noteEncargo(session, fx);
     run(session, 1, fx);
     expect(session.countdown).toBe(0);
@@ -131,7 +168,9 @@ describe('session clock', () => {
     const fx = treeEffects({ sprint: 2 });
     const { session: b } = beginSession(freshResearch(), fx);
     noteSeed(b);
-    const ev = run(b, C.SESSION_BASE_SECONDS - C.SPRINT_SECONDS - 1, fx);
+    expect(sprintSeconds(C.SESSION_BASE_SECONDS)).toBeCloseTo(C.SESSION_BASE_SECONDS * C.SPRINT_SHARE, 9);
+    expect(sprintSeconds(600)).toBe(C.SPRINT_SECONDS);
+    const ev = run(b, C.SESSION_BASE_SECONDS - sprintSeconds(C.SESSION_BASE_SECONDS) - 1, fx);
     expect(sessionProdMult(b, fx)).toBe(1);
     expect(types(ev)).not.toContain('sprint');
     expect(types(run(b, 2, fx))).toContain('sprint');
@@ -245,15 +284,16 @@ describe('summary and banking', () => {
     expect(sum.vela).toBe('record');
   });
 
-  it('keeps the best creatures in the Nevera only with the node', () => {
+  it('keeps the best creature for the starter slot, and more with the Nevera node', () => {
     const none = playOne(freshResearch(), 300, (s) => noteKeep(s, ['a', 'b', 'a']));
-    expect(none.sum.keep).toEqual([]);
-    expect(none.research.fridge).toEqual([]);
+    expect(none.sum.keep).toEqual(['a'].slice(0, C.STARTER_CREATURES));
+    expect(none.research.fridge).toEqual(['a'].slice(0, C.STARTER_CREATURES));
     const r = { ...freshResearch(), levels: { lab: 1, fridge: 2 } };
-    const two = playOne(r, 300, (s) => noteKeep(s, ['a', 'b', 'c']));
-    expect(two.research.fridge).toEqual(['a', 'b']);
+    const two = playOne(r, 300, (s) => noteKeep(s, ['a', 'b', 'c', 'd']));
+    expect(two.research.fridge).toEqual(['a', 'b', 'c', 'd'].slice(0, C.STARTER_CREATURES + 2));
     const next = beginSession(two.research, treeEffects(two.research.levels));
-    expect(next.start.fridge).toEqual(['a', 'b']);
+    expect(next.start.fridge).toEqual(['a', 'b', 'c', 'd'].slice(0, C.STARTER_CREATURES + 2));
+    expect(next.start.fridgeSlots).toBe(C.STARTER_CREATURES + 2);
     expect(next.session.n).toBe(2);
   });
 
@@ -369,7 +409,7 @@ describe('Datos preview before the clock runs out', () => {
     noteEssence(session, 9.5 * C.DATOS_ESSENCE_DIV);
     p = sessionPreview(r, session, fx, 0);
     expect(p.datos).toBe(9);
-    const rich = { ...r, levels: { lab: 1, clock: 3, dropper: 3, dish: 3, culture: 5, notebook: 3, worldCold: 1, spark: 3 } };
+    const rich = { ...r, levels: { lab: 1, clock: C.TIME_CLOCK_LEVELS, dropper: 3, dish: 3, culture: 5, notebook: 3, worldCold: 1, spark: 3 } };
     p = sessionPreview(rich, session, fx, 0);
     expect(p.goal!.cost).toBe(C.TREE_RING_START[2]);
     expect(p.goal!.missing).toBe(Math.max(0, C.TREE_RING_START[2] - 1 - 9));

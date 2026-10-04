@@ -68,7 +68,7 @@ describe('sessions cycle: the clock and the wallet', () => {
     expect(v.session).toMatchObject({ n: 2, phase: 'ready' });
     expect(v.essence).toBe(C.SESSION_START_ESSENCE);
     expect(v.charges).toEqual({ free: C.SESSION_BASE_FREE_SEEDS, guaranteed: C.SESSION_SURE_SEEDS });
-    expect(g.speed).toBe(1);
+    expect(g.speed).toBe(C.SESSION_SIM_PACE); // the time-lapse (ADR-027)
   });
 
   it('"Terminar ahora" pays what was earned, without the minimum', () => {
@@ -92,8 +92,9 @@ describe('sessions cycle: never punish growth', () => {
     s.charges = { free: 0, guaranteed: 0 };
     s.essence = 1000;
     expect(g.view().seedCost).toBe(C.SESSION_SEED_PRICE);
-    run(g, 1, report(stable(4)), 0.5);
-    expect(g.view().seedCost).toBe(C.SESSION_SEED_PRICE); // 4 creatures alive: same price
+    // 3 alive + the starter creature (docs/RITMO.md §4.2) leave room for one more seed in the base dish.
+    run(g, 1, report(stable(3)), 0.5);
+    expect(g.view().seedCost).toBe(C.SESSION_SEED_PRICE); // 3 creatures alive: same price
     expect(g.view().seedPrice).toMatchObject({ crowdMult: 1, satMult: 1, stepMult: 1, capacity: C.DISH_CAPACITY[0] });
     for (const x of [30, 90, 150]) {
       g.actions.seedAt(x, 200);
@@ -140,12 +141,15 @@ describe('sessions cycle: gifts and boosts are proportional', () => {
     expect(g.view().sessionPreview).not.toBeNull();
   });
 
-  it('the Spark gives 30 s of your Esencia (and a sure seed), and says so', () => {
+  it('the Spark gives SPARK_GIFT_SECONDS of your Esencia (and a sure seed), and says so', () => {
     const { g, log } = sessionsGame(3);
     const rep = report(stable(3));
-    g.actions.seedAt(150, 200);
-    g.actions.endSessionNow!(); // session 1 has no Spark
-    g.actions.startSession!();
+    // Sessions before SPARK_FROM_SESSION have no Spark (docs/RITMO.md §4.4).
+    for (let n = 1; n < C.SPARK_FROM_SESSION; n++) {
+      g.actions.seedAt(150, 200);
+      g.actions.endSessionNow!();
+      g.actions.startSession!();
+    }
     g.actions.seedAt(150, 200);
     for (let i = 0; i < 400 && !g.view().golden; i++) g.tick(0.25, rep);
     expect(g.view().golden).not.toBeNull();
@@ -245,6 +249,13 @@ describe('sessions cycle: the tree, worlds and nights', () => {
 
   it('Encargos add time and Datos in a session, and wait for the next one between sessions', () => {
     const { g } = sessionsGame();
+    // Session 1's Encargos are silent and do not stretch its 15 s (docs/RITMO.md §3.3).
+    g.actions.seedAt(150, 200);
+    const b1 = g.session!.bonus;
+    g.grantEncargo({ essence: 5, samples: 0 });
+    expect(g.session!.bonus).toBe(b1);
+    g.actions.endSessionNow!();
+    g.actions.startSession!();
     g.actions.seedAt(150, 200);
     const n0 = g.session!.encargos;
     const bonus0 = g.session!.bonus;
@@ -266,7 +277,7 @@ describe('sessions cycle: saves', () => {
   it('a running session survives a save and a load', () => {
     const { g } = sessionsGame();
     g.actions.seedAt(150, 200);
-    run(g, 20, report(stable(2)), 0.5);
+    run(g, 5, report(stable(2)), 0.5);
     const save = g.serialize();
     expect(JSON.parse(save).v).toBe(B.SAVE_VERSION);
     const { g: h } = sessionsGame(2, save);

@@ -10,6 +10,7 @@ import {
   TREE_NODES,
   affordableNodes,
   baseEffects,
+  birthSeconds,
   beforeAfter,
   branchAngle,
   buyNode,
@@ -44,9 +45,12 @@ function ownPath(id: string, into: Record<string, number> = {}): Record<string, 
   return into;
 }
 
-/** The published route plan (owner page "Rutas de mejora de Bioluma"): name, ring, levels, factor. */
+/**
+ * The published route plan (owner page "Rutas de mejora de Bioluma"): name, ring, levels, factor.
+ * Reloj follows docs/RITMO.md §3.2 (15 s runs that grow to 2:30): more, smaller clock levels.
+ */
 const PLAN: Record<string, [string, number, number, number][]> = {
-  time: [['clock', 1, 3, 2], ['clock2', 2, 2, 2], ['fridge', 2, 3, 2], ['sprint', 3, 3, 2], ['encTime', 3, 2, 2], ['clock3', 4, 2, 2], ['clock4', 5, 3, 2]],
+  time: [['clock', 1, 6, 1.5], ['clock2', 2, 3, 2], ['fridge', 2, 3, 2], ['sprint', 3, 3, 2], ['encTime', 3, 2, 2], ['clock3', 3, 3, 2], ['clock4', 4, 3, 2]],
   dropper: [['dropper', 1, 3, 2], ['startEssence', 2, 4, 2], ['freeSeeds', 3, 3, 2], ['stabilizer', 3, 5, 1.5], ['bigSeed', 3, 1, 2], ['autoSeeder', 3, 6, 1.5], ['cheapSeeds', 4, 3, 2], ['dropperMax', 5, 1, 2]],
   dish: [['dish', 1, 3, 3], ['slots', 2, 3, 2], ['crowdCost', 3, 2, 2], ['nursery', 3, 1, 2], ['incubator', 3, 2, 3], ['dishXL', 4, 1, 2], ['ecosystem', 4, 2, 2]],
   life: [['culture', 1, 5, 1.5], ['nutrient', 2, 3, 2], ['culture2', 3, 3, 2], ['swimAffinity', 3, 3, 2], ['stillAffinity', 3, 3, 2], ['colonyAffinity', 4, 3, 2], ['symbiosis', 4, 1, 2], ['abundance', 4, 1, 2], ['eternalLife', 5, 99, 1.1]],
@@ -121,31 +125,33 @@ describe('always more: "antes → después"', () => {
   });
 
   it('reads like the plan', () => {
-    expect(beforeAfter({}, 'clock')).toMatchObject({ before: { es: 'Sesión 2:00' }, after: { es: 'Sesión 2:15' } });
-    expect(beforeAfter({ clock: 3, clock2: 1 }, 'clock2').after!.es).toBe('Sesión 3:15');
+    expect(beforeAfter({}, 'clock')).toMatchObject({ before: { es: 'Sesión 0:15' }, after: { es: 'Sesión 0:20' } });
+    expect(beforeAfter({ clock: 6, clock2: 1 }, 'clock2').after!.es).toBe('Sesión 1:05');
     expect(beforeAfter({ culture: 1 }, 'culture')).toMatchObject({ before: { es: 'Esencia ×1,15' }, after: { es: 'Esencia ×1,32', en: 'Essence ×1.32' } });
     expect(beforeAfter({}, 'dish')).toMatchObject({ before: { es: `Sitio para ${C.DISH_CAPACITY[0]} criaturas` }, after: { es: `Sitio para ${C.DISH_CAPACITY[1]} criaturas`, en: `Room for ${C.DISH_CAPACITY[1]} creatures` } });
     expect(beforeAfter({}, 'slots')).toMatchObject({ before: { es: 'Sitio para 5 criaturas' }, after: { es: 'Sitio para 6 criaturas' } });
-    expect(beforeAfter({}, 'sparkGift')).toMatchObject({ before: { es: 'Regalo: 30 s de Esencia' } });
-    expect(beforeAfter({}, 'sprint').after!.es).toBe('Últimos 30 s: Esencia ×1,5');
+    expect(beforeAfter({}, 'sparkGift')).toMatchObject({ before: { es: 'Regalo: 10 s de Esencia' }, after: { es: 'Regalo: 12 s de Esencia' } });
+    expect(beforeAfter({}, 'sprint').after!.es).toBe('Al final: Esencia ×1,5');
+    expect(beforeAfter({}, 'incubator')).toMatchObject({ before: { es: 'Nacen en 4,4 s' }, after: { es: 'Nacen en 3,8 s', en: 'Hatch in 3.8 s' }, better: true });
+    expect(beforeAfter({}, 'fridge')).toMatchObject({ before: { es: '1 criatura viva al empezar' }, after: { es: '2 criaturas vivas al empezar' } });
     expect(beforeAfter({}, 'cheapSeeds')).toMatchObject({ before: { es: 'Precio normal' }, after: { es: 'Semillas −15 %' } });
-    expect(beforeAfter({}, 'autoSeeder')).toMatchObject({ before: { es: 'Nunca' }, after: { es: 'Cada 20 s' } });
-    expect(beforeAfter({}, 'spark')).toMatchObject({ before: { es: 'Llega cada 80–100 s' }, after: { es: 'Llega cada 68–85 s' } });
+    expect(beforeAfter({}, 'autoSeeder')).toMatchObject({ before: { es: 'Nunca' }, after: { es: 'Cada 8 s' } });
+    expect(beforeAfter({}, 'spark')).toMatchObject({ before: { es: 'Llega cada 40–45 s' }, after: { es: 'Llega cada 34–38 s' } });
     expect(beforeAfter({}, 'worldCold')).toMatchObject({ before: { es: '2 especies para encontrar' }, after: { es: '5 especies para encontrar' } });
-    expect(beforeAfter({ clock: 3 }, 'clock').after).toBeNull();
+    expect(beforeAfter({ clock: C.TIME_CLOCK_LEVELS }, 'clock').after).toBeNull();
   });
 
   it('describes a level as one line, "now → next"', () => {
-    expect(effectLine('clock', 0)).toEqual({ es: 'Sesión 2:00 → Sesión 2:15', en: 'Session 2:00 → Session 2:15' });
-    expect(effectLine('clock', 3).es).toBe('Sesión 2:45');
+    expect(effectLine('clock', 0)).toEqual({ es: 'Sesión 0:15 → Sesión 0:20', en: 'Session 0:15 → Session 0:20' });
+    expect(effectLine('clock', C.TIME_CLOCK_LEVELS).es).toBe('Sesión 0:45');
   });
 
   it('the next three levels and their prices feed the bar chart', () => {
     const rows = costRows('clock', 1);
-    expect(rows.map((r) => r.level)).toEqual([2, 3]);
-    expect(rows.map((r) => r.cost)).toEqual([2 * C.TREE_RING_START[1], 4 * C.TREE_RING_START[1]]);
-    expect(rows.map((r) => r.value.es)).toEqual(['Sesión 2:30', 'Sesión 2:45']);
-    expect(costRows('clock', 3)).toEqual([]);
+    expect(rows.map((r) => r.level)).toEqual([2, 3, 4]);
+    expect(rows.map((r) => r.cost)).toEqual([3, 5, 7]);
+    expect(rows.map((r) => r.value.es)).toEqual(['Sesión 0:25', 'Sesión 0:30', 'Sesión 0:35']);
+    expect(costRows('clock', C.TIME_CLOCK_LEVELS)).toEqual([]);
   });
 });
 
@@ -165,8 +171,9 @@ describe('prices: one rule, nothing hidden', () => {
       for (let l = 0; l < Math.min(n.maxLevel, 8); l++) expect(nodeCost(n.id, l), `${n.id}@${l}`).toBe(niceRound(r.start * r.growth ** l));
     }
     expect(nodeCost('clock', 0)).toBe(C.TREE_RING_START[1]);
-    expect(nodeCost('clock', 2)).toBe(4 * C.TREE_RING_START[1]);
-    expect(nodeCost('clock', 3)).toBe(Infinity);
+    expect(nodeCost('clock', 2)).toBe(niceRound(C.TREE_RING_START[1] * C.TIME_CLOCK_GROWTH ** 2));
+    expect(nodeCost('clock', C.TIME_CLOCK_LEVELS)).toBe(Infinity);
+    expect(nodeCost('clock2', 2)).toBe(4 * C.TREE_RING_START[2]);
     expect(nodeCost('dish', 2)).toBe(9 * C.TREE_RING_START[1]);
     expect(nodeCost('stabilizer', 1)).toBe(niceRound(C.TREE_RING_START[3] * 1.5));
   });
@@ -234,7 +241,7 @@ describe('reveal rules', () => {
     const levels = Object.freeze({ lab: 1 }) as Record<string, number>;
     expect(buyNode(ctx(levels, 100), 'dish').ok).toBe(true);
     expect(levels).toEqual({ lab: 1 });
-    expect(canBuy(ctx({ clock: 3 }, 1000), 'clock')).toEqual({ ok: false, block: 'maxed' });
+    expect(canBuy(ctx({ clock: C.TIME_CLOCK_LEVELS }, 1000), 'clock')).toEqual({ ok: false, block: 'maxed' });
     expect(canBuy(ctx({}, C.TREE_RING_START[1] - 1), 'clock')).toEqual({ ok: false, block: 'datos' });
     expect(canBuy(ctx({}, 1000), 'clock2')).toEqual({ ok: false, block: 'locked' });
     expect(canBuy(ctx({}, 100), 'nope').block).toBe('unknown');
@@ -274,9 +281,30 @@ describe('effects', () => {
     expect(baseEffects().worlds).toEqual(['classic']);
   });
 
-  it('the whole Reloj route gives 5:00', () => {
-    const fx = treeEffects({ clock: 3, clock2: 2, clock3: 2, clock4: 3 });
-    expect(fx.sessionSeconds).toBe(5 * 60);
+  it('the whole Reloj route takes a 0:15 run to 2:30 (docs/RITMO.md §3.2)', () => {
+    expect(baseEffects().sessionSeconds).toBe(15);
+    const fx = treeEffects({ clock: 6, clock2: 3, clock3: 3, clock4: 3 });
+    expect(fx.sessionSeconds).toBe(150);
+    // every level of the route adds seconds: the clock grows with almost every visit
+    let prev = baseEffects().sessionSeconds;
+    const lv: Record<string, number> = {};
+    for (const id of ['clock', 'clock2', 'clock3', 'clock4']) {
+      for (let l = 1; l <= TREE_BY_ID[id].maxLevel; l++) {
+        lv[id] = l;
+        const now = treeEffects(lv).sessionSeconds;
+        expect(now, `${id}@${l}`).toBeGreaterThan(prev);
+        expect(now - prev, `${id}@${l}`).toBeLessThanOrEqual(15);
+        prev = now;
+      }
+    }
+  });
+
+  it('time-lapse: a seed is born in 4,4 s, faster with the Incubadora, never past the speed cap', () => {
+    expect(baseEffects().simPace).toBe(C.SESSION_SIM_PACE);
+    expect(birthSeconds(baseEffects())).toBeCloseTo(400 / 90, 6);
+    expect(birthSeconds(treeEffects({ incubator: 2 }))).toBeCloseTo(400 / 120, 6);
+    expect(C.SESSION_SIM_PACE * C.MATURE_SPEED_BY_LEVEL[C.MATURE_SPEED_BY_LEVEL.length - 1]).toBeLessThanOrEqual(C.SIM_PACE_MAX);
+    expect(baseEffects().fridge).toBe(C.STARTER_CREATURES);
   });
 
   it('aggregates multipliers, flags and levels', () => {
@@ -290,11 +318,11 @@ describe('effects', () => {
     expect(fx.datosNightMult).toBeCloseTo(1 + 2 * C.DATOS_NIGHT_BONUS, 9);
     expect(fx.datosMult).toBeCloseTo(1 + 2 * C.ENCYCLOPEDIA_BONUS, 9);
     expect(fx.worlds).toEqual(['classic', 'cold', 'gyro']);
-    expect(treeEffects({ autoSeeder: 6 }).autoSeedInterval).toBeCloseTo(6.55, 2);
+    expect(treeEffects({ autoSeeder: 6 }).autoSeedInterval).toBeCloseTo(C.AUTOSEED_TREE_INTERVAL * C.AUTOSEED_TREE_DECAY ** 5, 9);
   });
 
   it('ignores levels above the cap and unknown ids', () => {
-    expect(treeEffects({ clock: 99 }).sessionSeconds).toBe(C.SESSION_BASE_SECONDS + 3 * C.TIME_CLOCK);
+    expect(treeEffects({ clock: 99 }).sessionSeconds).toBe(C.SESSION_BASE_SECONDS + C.TIME_CLOCK_LEVELS * C.TIME_CLOCK);
     expect(treeEffects({ ghost: 5, calibrator: 2 })).toEqual(baseEffects());
   });
 

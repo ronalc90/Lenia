@@ -506,6 +506,22 @@ export const GOLDEN_WEIGHTS = { bloom: 0.38, lump: 0.32, spores: 0.18, mutagen: 
 
 /** Grid used until the integrator calls setGridSize (medium profile). [brief correction 8] */
 export const DEFAULT_GRID = { w: 192, h: 240 };
+/**
+ * Round dish (ADR-025, docs/DISH.md §1): a seed's body stays this many R inside the glass (a spore
+ * touching the absorbing rim loses its edge before it organises).
+ */
+export const SEED_RIM_MARGIN = 0.5;
+/** Auto-seeder / spore rain spots: at least this many R inside the glass (docs/DISH.md, Phase 2 decision). */
+export const AUTOSEED_RIM_MARGIN = 2;
+/**
+ * The Nevera's first plant of a run (the creature already alive when the clock starts) lands within
+ * this many R of the dish centre. A swimmer needs two detector updates before the glass can steer it:
+ * spawned within 22 cells of the centre of the Ø96 start dish 2 of 10 died at the glass at once, within
+ * 0.6·R (8 cells) 10 of 10 lived 2000 steps (CPU lab, docs/DISH.md §8d).
+ */
+export const STARTER_SPAWN_R = 0.6;
+/** The golden spark drifts at least this many R inside the glass, bouncing off it. */
+export const GOLDEN_RIM_MARGIN = 1;
 
 // ───────────────────────────── Save ────────────────────────────────
 

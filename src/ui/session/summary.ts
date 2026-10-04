@@ -239,7 +239,7 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
     for (const pic of card.querySelectorAll<HTMLElement>('[data-sp]')) {
       if (pic.firstChild) continue;
       const info = opts.speciesInfo(pic.dataset.sp!);
-      if (info?.portrait) pic.appendChild(renderPattern(info.portrait, 120, 0.78));
+      if (info?.portrait) pic.appendChild(renderPattern(info.portrait, 120, 0.78, info.hue));
     }
   }
 

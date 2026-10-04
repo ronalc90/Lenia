@@ -36,6 +36,7 @@ import {
   priceRule,
   routeNodes,
   sessionsToAfford,
+  treeEffects,
   treeStates,
   type BuyResult,
   type NodeState,
@@ -50,6 +51,7 @@ import '../moments/moments.css';
 import { renderPattern } from '../portrait';
 import { ROUTE_ICON } from '../art/icons';
 import { treeIcon } from './icons';
+import { DISH_DIAMETERS } from '../../core/dish';
 import '../art/art.css';
 import './tree.css';
 
@@ -77,6 +79,8 @@ export interface TreeViewOptions {
   onSound?(kind: TreeSound): void;
   /** Species of a world for its node sheet (portraits; unfound ones as silhouettes). */
   worldSpecies?(world: WorldId): { code: string; name: string; portrait: Pattern | null; found: boolean }[];
+  /** Dish diameter (cells) of a Placa level on this device (core/dish dishDiameterFor, capped by quality). */
+  dishDiameter?(level: number): number;
 }
 
 export interface TreeView {
@@ -763,6 +767,39 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     )}</span><div class="col nxt"><small>${esc(tx(TREE_UI.next, l))}</small><b>${esc(tx(ba.after, l))}</b></div></div>`;
   }
 
+  /**
+   * Placa nodes: the dish today (solid glass) and the size one more level gives (the dashed growth
+   * ring of docs/ARTE.md §8.3), drawn to scale.
+   */
+  function dishBox(def: TreeNodeDef, l: Lang): string {
+    if (def.id !== 'dish' && def.id !== 'dishXL') return '';
+    const dia = (lv: number) => opts.dishDiameter?.(lv) ?? DISH_DIAMETERS[Math.min(DISH_DIAMETERS.length - 1, Math.max(0, lv))];
+    const nowLv = treeEffects(data.levels).dishLevel;
+    const nextLv = treeEffects({ ...data.levels, [def.id]: (data.levels[def.id] ?? 0) + 1 }).dishLevel;
+    const dNow = dia(nowLv);
+    const dNext = dia(nextLv);
+    const grows = dNext > dNow;
+    const big = Math.max(dNow, dNext);
+    const W = 200;
+    const H = 132;
+    const rNow = (58 * dNow) / big;
+    const rNext = (58 * dNext) / big;
+    const cx = W / 2;
+    const cy = H / 2;
+    const ring = grows
+      ? `<circle cx="${cx}" cy="${cy}" r="${rNext.toFixed(1)}" fill="none" stroke="var(--bl-accent, #5bc0eb)" stroke-width="2.5" stroke-dasharray="7 6" opacity=".9"/>`
+      : '';
+    const svg = `<svg class="rt-dishpv" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true">
+      <circle cx="${cx + 2}" cy="${cy + 4}" r="${(rNow + 2).toFixed(1)}" fill="rgba(0,0,0,.35)"/>
+      <circle cx="${cx}" cy="${cy}" r="${rNow.toFixed(1)}" fill="#131c26" stroke="#cfe8f5" stroke-width="2.5"/>
+      <path d="M ${(cx - rNow * 0.62).toFixed(1)} ${(cy - rNow * 0.55).toFixed(1)} A ${rNow.toFixed(1)} ${rNow.toFixed(1)} 0 0 1 ${(cx - rNow * 0.1).toFixed(1)} ${(cy - rNow * 0.98).toFixed(1)}" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+      ${ring}</svg>`;
+    const legend = grows
+      ? `<span class="k now">${esc(tx(TREE_UI.now, l))}</span><span class="k nxt">${esc(tx(TREE_UI.next, l))}</span>`
+      : `<span class="k now">${esc(tx(TREE_UI.now, l))}</span>`;
+    return `<div class="rt-box rt-dishbox">${svg}<div class="rt-dishleg">${legend}</div></div>`;
+  }
+
   /** World nodes: the species that live there (found ones in colour, the rest as silhouettes). */
   function worldBox(def: TreeNodeDef, l: Lang): string {
     if (!def.world || !opts.worldSpecies) return '';
@@ -824,6 +861,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       else if (firstBought === selected) body += `<p class="rt-bahint got">${esc(tx(SESSION_UI.sheetHintBought, l))}</p>`;
       body += `<p class="rt-desc">${esc(tx(nodeText(def.id).desc, l))}</p>`;
       body += worldBox(def, l);
+      body += dishBox(def, l);
       if (!st.maxed) {
         if (st.status === 'locked') {
           body += `<div class="rt-needs">${esc(tx(TREE_UI.needs, l))}: ${st.missingRequires.map((id) => needChip(id, l)).join('')}</div>`;

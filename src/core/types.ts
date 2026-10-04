@@ -395,6 +395,11 @@ export interface GameView {
   seedPrice?: SeedPriceView;
   /** (game) The dish is flooded: nothing pays until it is cleaned (actions.sterilizeDish). */
   overgrown?: boolean;
+  /**
+   * (game) The round walled dish (ADR-025) in grid cells, as Game.setDish last set it; null/absent =
+   * the toroidal dish. Overlays clamp to it and never draw wrapped copies.
+   */
+  dish?: { cx: number; cy: number; radius: number } | null;
   canSeed: boolean;
   /** Emergency pipette: free seed refill when broke and nothing lives. */
   pipette: { active: boolean; progress: number };
@@ -549,10 +554,7 @@ export interface ResearchView {
   recentDatos: number[];
   /** What every Encargo done in a session adds: Datos to the summary and seconds to the clock. */
   encargoReward?: { datos: number; seconds: number };
-  /**
-   * Round dish size index for the dish's growth (Placa route: TreeEffects.dishLevel, core/dish
-   * DISH_DIAMETERS). The live dish is still the 4:5 torus until main wires the round dish.
-   */
+  /** Round dish size index (Placa route: TreeEffects.dishLevel → core/dish DISH_DIAMETERS, capped by quality in main). */
   dishLevel?: number;
 }
 

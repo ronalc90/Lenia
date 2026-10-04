@@ -1283,3 +1283,36 @@
 .rt.rm .rt-bahint.got {
   animation: none;
 }
+
+/* Placa nodes: today's dish (solid) and the next size (dashed growth ring), to scale. */
+.rt-dishbox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.rt-dishpv {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+.rt-dishleg {
+  display: flex;
+  gap: 16px;
+  font: 700 0.72rem/1 var(--bl-font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bl-text2);
+}
+.rt-dishleg .k::before {
+  content: '';
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  margin-right: 6px;
+  vertical-align: middle;
+  border-top: 2.5px solid #cfe8f5;
+}
+.rt-dishleg .k.nxt::before {
+  border-top: 2.5px dashed var(--bl-accent, #5bc0eb);
+}

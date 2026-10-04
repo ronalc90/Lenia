@@ -108,14 +108,14 @@ export interface SessionState {
   keep: string[];
   /** One-shot warnings already announced. */
   warned: { minute: boolean; last: boolean; sprint: boolean };
-  /** Last countdown second announced (SESSION_COUNTDOWN … 1), 0 = none yet. */
+  /** Last countdown second announced (countdownSeconds … 1), 0 = none yet. */
   countdown: number;
 }
 
 export type SessionEvent =
   | { type: 'clockStart' }
   | { type: 'lastMinute' }
-  /** The clock turns amber (SESSION_WARN_SECONDS left). */
+  /** The clock turns amber (warnSeconds(total) left). */
   | { type: 'warn' }
   | { type: 'countdown'; seconds: number }
   | { type: 'sprint' }
@@ -261,6 +261,31 @@ export function sessionRemaining(s: SessionState): number {
   return Math.max(0, s.limit + s.bonus - s.elapsed);
 }
 
+/** Seconds the session has in all (limit + bonus). */
+export function sessionTotal(s: Pick<SessionState, 'limit' | 'bonus'>): number {
+  return Math.max(0, s.limit + s.bonus);
+}
+
+const clamp = (x: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, x));
+
+/**
+ * Amber warning: the last quarter of a session, 4–30 s (docs/RITMO.md §3.4). The HUD uses the same
+ * numbers (`remaining <= warnSeconds(total)`), never a fixed 30 s that would paint a 15 s run amber.
+ */
+export function warnSeconds(total: number): number {
+  return clamp(total * C.SESSION_WARN_SHARE, C.SESSION_WARN_MIN, C.SESSION_WARN_SECONDS);
+}
+
+/** Ticking countdown: the last third of a session, 3–10 s, whole seconds. */
+export function countdownSeconds(total: number): number {
+  return Math.round(clamp(total * C.SESSION_COUNTDOWN_SHARE, C.SESSION_COUNTDOWN_MIN, C.SESSION_COUNTDOWN));
+}
+
+/** Recta final window: the last quarter of a session, at most SPRINT_SECONDS. */
+export function sprintSeconds(total: number): number {
+  return Math.min(C.SPRINT_SECONDS, total * C.SPRINT_SHARE);
+}
+
 /** 0..1 of the clock used (for the ring around the timer). */
 export function sessionProgress(s: SessionState): number {
   const total = s.limit + s.bonus;
@@ -283,25 +308,27 @@ export function tickSession(s: SessionState, dt: number, fx: TreeEffects, opts: 
   const ev: SessionEvent[] = [];
   s.elapsed += Math.min(dt, 5);
   const left = sessionRemaining(s);
-  if (!s.warned.minute && left <= C.SESSION_LAST_MINUTE && s.limit + s.bonus > C.SESSION_LAST_MINUTE + 5) {
+  const total = sessionTotal(s);
+  if (!s.warned.minute && left <= C.SESSION_LAST_MINUTE && total > C.SESSION_LAST_MINUTE + 5) {
     s.warned.minute = true;
     ev.push({ type: 'lastMinute' });
   }
-  if (!s.warned.last && left <= C.SESSION_WARN_SECONDS) {
+  if (!s.warned.last && left <= warnSeconds(total)) {
     s.warned.last = true;
     ev.push({ type: 'warn' });
   }
-  if (!s.warned.sprint && fx.sprintMult > 1 && left <= C.SPRINT_SECONDS) {
+  if (!s.warned.sprint && fx.sprintMult > 1 && left <= sprintSeconds(total)) {
     s.warned.sprint = true;
     ev.push({ type: 'sprint' });
   }
-  if (left > 0 && left <= C.SESSION_COUNTDOWN) {
+  const count = countdownSeconds(total);
+  if (left > 0 && left <= count) {
     const sec = Math.ceil(left);
     if (s.countdown === 0 || sec < s.countdown) {
       s.countdown = sec;
       ev.push({ type: 'countdown', seconds: sec });
     }
-  } else if (left > C.SESSION_COUNTDOWN) s.countdown = 0; // extended back out of the countdown
+  } else if (left > count) s.countdown = 0; // extended back out of the countdown
   if (left <= 0) {
     s.phase = 'over';
     ev.push({ type: 'timesUp' });
@@ -351,7 +378,7 @@ function extend(s: SessionState, seconds: number, reason: 'species' | 'encargo' 
 
 /** Production multiplier from the session itself (Sprint final in the last seconds). */
 export function sessionProdMult(s: SessionState, fx: TreeEffects): number {
-  return s.phase === 'running' && fx.sprintMult > 1 && sessionRemaining(s) <= C.SPRINT_SECONDS ? fx.sprintMult : 1;
+  return s.phase === 'running' && fx.sprintMult > 1 && sessionRemaining(s) <= sprintSeconds(sessionTotal(s)) ? fx.sprintMult : 1;
 }
 
 /** The pity seed is due: no creature stable after SESSION_PITY_AFTER seconds of clock. */
@@ -400,10 +427,15 @@ export function noteBehavior(s: SessionState, behavior: Behavior, firstEver: boo
   if (firstEver && !s.newBehaviors.includes(behavior)) s.newBehaviors.push(behavior);
 }
 
+/**
+ * An Encargo (or a game objective) was completed. From ENCARGO_TIME_FROM_SESSION on it adds
+ * fx.timePerEncargo seconds; in session 1 the Encargos are silent (CLARIDAD §3.3), so they do not
+ * stretch the 15 s run to 35 s with "+5 s" chips nobody asked for (docs/RITMO.md §3.3).
+ */
 export function noteEncargo(s: SessionState, fx: TreeEffects): SessionEvent[] {
   if (s.phase === 'over') return [];
   s.encargos++;
-  return extend(s, fx.timePerEncargo, 'encargo');
+  return s.n >= C.ENCARGO_TIME_FROM_SESSION ? extend(s, fx.timePerEncargo, 'encargo') : [];
 }
 
 export function noteGolden(s: SessionState, fx: TreeEffects): SessionEvent[] {

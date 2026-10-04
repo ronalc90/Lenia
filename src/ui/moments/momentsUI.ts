@@ -16,7 +16,7 @@
  * diagrams). Runs one rAF loop only while something is on screen.
  */
 import './moments.css';
-import { wrapDelta, type Camera } from '../../core/camera';
+import type { Camera } from '../../core/camera';
 import type { Behavior, Lang, Pattern, UpgradeView } from '../../core/types';
 import { BRIEF_MS } from '../../moments/config';
 import type { Moments } from '../../moments/moments';
@@ -361,13 +361,17 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
     return { x: left + d.width / 2, y: clamp((top + bottom) / 2, top + 60, top + d.height - 40) };
   }
 
+  /** Camera centre at zoom 1: the round dish's centre, or the middle of the torus. */
+  const homeX = () => cam.homeX;
+  const homeY = () => cam.homeY;
+
   function camTarget(m: MomentView): CamState | null {
     const g = focusGrid(m);
-    const base = Math.min(cam.viewW / cam.gridW, cam.viewH / cam.gridH);
+    const base = cam.dish ? cam.scale / Math.max(1e-6, cam.zoom) : Math.min(cam.viewW / cam.gridW, cam.viewH / cam.gridH);
     // Zoom so the creature shows ~TARGET_PX wide, never more than the moment asks for.
     const fit = TARGET_PX / (2 * CREATURE_CELLS * Math.max(0.01, base));
     const z = clamp(Math.min(m.focus.zoom, Math.max(MIN_ZOOM, fit)), 1, 3);
-    if (!g || m.focus.zoom <= 1.001) return { zoom: 1, cx: cam.gridW / 2, cy: cam.gridH / 2 };
+    if (!g || m.focus.zoom <= 1.001) return { zoom: 1, cx: homeX(), cy: homeY() };
     const d = dishRect();
     const sp = stagePoint();
     // Several creatures (comparison): centre between them and zoom out until they all fit.
@@ -376,8 +380,8 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
     let gy = g.y;
     let zz = z;
     if (pts.length > 1) {
-      const dx = pts.map((p) => wrapDelta(p.x - g.x, cam.gridW));
-      const dy = pts.map((p) => wrapDelta(p.y - g.y, cam.gridH));
+      const dx = pts.map((p) => cam.deltaX(p.x - g.x));
+      const dy = pts.map((p) => cam.deltaY(p.y - g.y));
       const minX = Math.min(...dx);
       const maxX = Math.max(...dx);
       const minY = Math.min(...dy);
@@ -398,7 +402,7 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
       cx = gx - (sx - cam.viewW / 2) / s1;
       cy = gy - (sy - cam.viewH / 2) / s1;
     }
-    return { zoom: zz, cx: ((cx % cam.gridW) + cam.gridW) % cam.gridW, cy: ((cy % cam.gridH) + cam.gridH) % cam.gridH };
+    return { zoom: zz, cx: cam.wrapX(cx), cy: cam.wrapY(cy) };
   }
 
   function applyCam(from: CamState, to: CamState, k: number): void {
@@ -406,16 +410,17 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
     const z = from.zoom + (to.zoom - from.zoom) * e;
     cam.zoom = z;
     if (z <= 1.0005) {
-      cam.cx = cam.gridW / 2;
-      cam.cy = cam.gridH / 2;
+      cam.cx = homeX();
+      cam.cy = homeY();
     } else {
       // At zoom ~1 the centre must be the dish centre; blend the centre in with the zoom.
-      const fx = from.zoom <= 1.0005 ? cam.gridW / 2 : from.cx;
-      const fy = from.zoom <= 1.0005 ? cam.gridH / 2 : from.cy;
-      const tx = to.zoom <= 1.0005 ? cam.gridW / 2 : to.cx;
-      const ty = to.zoom <= 1.0005 ? cam.gridH / 2 : to.cy;
-      cam.cx = fx + wrapDelta(tx - fx, cam.gridW) * e;
-      cam.cy = fy + wrapDelta(ty - fy, cam.gridH) * e;
+      const fx = from.zoom <= 1.0005 ? homeX() : from.cx;
+      const fy = from.zoom <= 1.0005 ? homeY() : from.cy;
+      const tx = to.zoom <= 1.0005 ? homeX() : to.cx;
+      const ty = to.zoom <= 1.0005 ? homeY() : to.cy;
+      cam.cx = fx + cam.deltaX(tx - fx) * e;
+      cam.cy = fy + cam.deltaY(ty - fy) * e;
+      if (cam.dish) cam.clamp(); // the view stays over the round dish
     }
     opts.onFocus?.(cam.cx, cam.cy, cam.zoom);
   }

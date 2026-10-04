@@ -7,13 +7,18 @@ import { Camera } from './core/camera';
 import type { DetectorReport, GameView, LeniaParams, Quality, Text } from './core/types';
 import { matterLUT } from './core/palette';
 import { createSimulation } from './sim/webgl';
-import { QUALITY_GRID } from './sim/perf';
+import { QUALITY_DISH } from './sim/perf';
+import { Deflector } from './sim/deflect';
+import { DishAnimator, dishDiameterFor, dishForGrid, type DishShape } from './core/dish';
+import { ART_RENDER_STYLE } from './ui/art/matter';
+import { DEFAULT_ITEM } from './store/catalog';
 import { createDetector, DISH_OVERGROWN_FILL } from './detect/detector';
 import { createGame } from './game/game';
 import { clearSave, loadSave, offlineSeconds, writeSave } from './game/save';
 // Art tokens (--bl-*) before every module stylesheet (docs/ARTE.md §12).
 import './ui/art/art.css';
-import { createUI } from './ui/ui';
+import { createUI, shortRunRunning } from './ui/ui';
+import { createIntro, introSeen, mountIntroEntry, type Intro } from './ui/intro';
 import { createAudio } from './audio/audio';
 import { detectPlatform, endingAchievementId, initPlatform, secretAchievementId, type Platform } from './platform/platform';
 import { TEXT as GAME_TEXT } from './game/content';
@@ -47,6 +52,7 @@ import { bigSeedChip, createSeedMeter, seedPriceSheetExplain, type SeedMeter } f
 import { attachSecretInputs, createSecretsUI, createStrokeRecorder, mountBasementEntry, type BasementEntry } from './ui/secrets';
 import { createSessionFlow, createWelcomeCard, datosExplain, type SessionFlow, type SessionFlowSound } from './ui/session';
 import { computeDatos } from './game/session';
+import { PREINCUBATE_STEPS } from './game/cycleBalance';
 import { nodeText } from './game/tree';
 
 /**
@@ -70,6 +76,8 @@ const STORE_API_URL: string = import.meta.env.VITE_STORE_API_URL ?? '';
 const STEPS_PER_SEC = 30;
 /** Detector cadence in simulation steps. */
 const DETECT_EVERY = 10;
+/** Most incubation steps a frame under the start card (RITMO §7: ≤ 40, so a phone keeps its frame rate). */
+const PREINCUBATE_PER_FRAME = 40;
 const AUTOSAVE_MS = 30_000;
 /** The dish itself is saved less often (a GPU readback); also on pagehide / tab hidden. */
 const DISH_SAVE_MS = 5 * 60_000;
@@ -139,10 +147,19 @@ function boot(): void {
   }
 
   const quality = pickQuality(settings.quality);
-  const { w: gridW, h: gridH } = QUALITY_GRID[quality];
+  // The round walled dish (ADR-025, docs/DISH.md): a square grid allocated once per quality, the rim
+  // set by the Placa route of the research tree (DISH_DIAMETERS, capped by quality).
+  const dishQ = QUALITY_DISH[quality];
+  const gridW = dishQ.grid;
+  const gridH = dishQ.grid;
+  /** The dish the tree has bought (TreeEffects.dishLevel → Ø96…224, capped by quality). */
+  const boughtDish = (): DishShape => dishForGrid(gridW, gridH, dishDiameterFor(game.effects?.dishLevel ?? 0, dishQ.maxDiameter));
+  /** Rim, camera fit and growth glow, animated when a bigger dish is bought (each session starts at that size). */
+  const dishAnim = new DishAnimator(boughtDish());
   /** The screen pass runs per device pixel; cap the ratio to keep phones cool. */
   const maxDpr = quality === 'low' ? 1.5 : 2;
   const camera = new Camera(gridW, gridH);
+  camera.setDish(dishAnim.rim, dishAnim.fit);
   const glCanvas = document.createElement('canvas');
   glCanvas.className = 'gl-dish';
 
@@ -202,12 +219,28 @@ function boot(): void {
   let flowBusy = (): boolean => false;
   let flowRef: SessionFlow | null = null;
   let welcomeOpen = (): boolean => false;
+  // The opening intro (docs/STORY.md §11): once after the title screen on a new game, replayable from Settings.
+  let intro: Intro | null = null;
+  const introOpen = (): boolean => !!intro?.isOpen;
+  function openIntro(): void {
+    if (introOpen()) return;
+    intro = createIntro(root, {
+      lang: () => game.view().settings.lang,
+      reduceMotion: () => game.view().settings.reduceMotion,
+      onDone: () => {
+        intro = null;
+        story.setFlag('introSeen');
+      },
+      onSound: (k) => audio.playUI?.(k === 'done' ? 'confirm' : k === 'back' ? 'close' : 'tap'),
+    });
+  }
   const moments = createMoments({
     bus,
     getView: () => game.view(),
     // Splash/modal (UI), a session card or the tree, VELA talking, a price/guide sheet, a celebration.
+    // A run shorter than MOMENT_MIN_RUN_SECONDS: the cards wait for its summary (RITMO §2 rule 7).
     isBlocked: () =>
-      (uiRef?.blocked() ?? true) || flowBusy() || (bridge?.storyShowing() ?? false) || sheetOpen() || encargoShowing() || secretShowing(),
+      (uiRef?.blocked() ?? true) || introOpen() || shortRunRunning(game.session) || flowBusy() || (bridge?.storyShowing() ?? false) || sheetOpen() || encargoShowing() || secretShowing(),
     downgrade: (id) => bridge?.covered(id) ?? false,
     // Session 1 has cards only for the basics (seed, life, Essence, shapeless, clock); a new species or
     // way of moving is a brief label there, its full card comes in session 2 (docs/CLARIDAD.md §3.3).
@@ -226,7 +259,7 @@ function boot(): void {
     getView: () => game.view(),
     // Never over a Momento (queued or open), a price / behaviour sheet, a secret's reveal card or a
     // session card ("¡Tiempo!", the summary, the start card); over the Tree it may (t_tree points at it).
-    isBlocked: () => (uiRef?.blocked() ?? true) || moments.isBusy() || sheetOpen() || secretShowing() || encargoShowing() || (flowRef?.cardOpen ?? false) || welcomeOpen(),
+    isBlocked: () => (uiRef?.blocked() ?? true) || moments.isBusy() || sheetOpen() || secretShowing() || encargoShowing() || (flowRef?.cardOpen ?? false) || welcomeOpen() || introOpen(),
     suppress: (id) => storySuppressed.has(id) || (bridge?.suppresses(id) ?? false),
     ui: (name) => (name === 'tree' ? (flowRef?.treeOpen ?? false) : false),
   });
@@ -234,6 +267,7 @@ function boot(): void {
   story.on('journal', ({ id, text }) => bus.emit('journalNew', { id, text }));
   extraJournal.addSource(() => story.journalViews());
   let storyArchive: StoryArchive | null = null;
+  let introEntry: { dispose(): void } | null = null;
   let momentsHelp: HelpSheet | null = null;
   let basementEntry: BasementEntry | null = null;
   /** A story scene or ending is on screen (late-bound: the story UI mounts after the game UI). */
@@ -261,7 +295,7 @@ function boot(): void {
   const objectiveDonePrefix = GAME_TEXT.objectiveDone(0);
 
   // ── Secrets (docs/SECRETS.md, spoilers): easter eggs, +1 % Essence each (max +10 %). ──
-  const secrets = createSecrets({ bus, getView: () => game.view(), grid: { w: gridW, h: gridH } });
+  const secrets = createSecrets({ bus, getView: () => game.view(), center: { x: gridW / 2, y: gridH / 2 } });
   const secretJournal = createSecretJournal();
   extraJournal.addSource(() => secretJournal.views());
   // Older finds (before this wiring) get their Bitácora entry too.
@@ -359,10 +393,12 @@ function boot(): void {
     // One message at a time: a story scene, a Momento, an Encargo bubble or a secret card.
     // Also a Momento about to open (the dish is easing to a stop) and the session cards: a toast or a
     // tip would land on them (one message per event, CLARIDAD §3).
-    isNarrating: () => storyBusy() || (momentsUIRef?.busy ?? false) || moments.isBusy() || encargoShowing() || secretShowing() || flowBusy(),
+    isNarrating: () => introOpen() || storyBusy() || (momentsUIRef?.busy ?? false) || moments.isBusy() || encargoShowing() || secretShowing() || flowBusy(),
     settingsSections: (el) => {
       storyArchive?.dispose();
       storyArchive = storyUI.mountArchive(el);
+      introEntry?.dispose();
+      introEntry = mountIntroEntry(el, { lang: () => game.view().settings.lang, onOpen: openIntro });
       // "¿Qué pasó?": re-watch any Momento, explain mode (full / brief / off) and creature labels.
       momentsHelp?.dispose();
       momentsHelp = momentsUIRef?.mountHelp(el) ?? null;
@@ -370,6 +406,10 @@ function boot(): void {
       basementEntry = secretsUIRef
         ? mountBasementEntry(el, secrets, { lang: () => game.view().settings.lang, createBasement: () => secretsUIRef!.createBasement() })
         : null;
+    },
+    // A new player sees the intro once, right after the title screen (before VELA's t_intro).
+    onSplashDone: () => {
+      if (!introSeen() && game.view().stats.seeds === 0) openIntro();
     },
     cameraBusy: () => momentsUIRef?.busy ?? false,
     onBehaviorInfo: (b) => momentsUIRef?.openBehaviorGuide(b ?? null),
@@ -573,6 +613,7 @@ function boot(): void {
   let welcomeDone = !migrated;
   const flow: SessionFlow = createSessionFlow({
     root,
+    dishDiameter: (lv) => dishDiameterFor(lv, dishQ.maxDiameter),
     holdStart: () => !welcomeDone,
     hudHost: ui.clockSlot,
     previewHost: ui.previewSlot,
@@ -674,6 +715,17 @@ function boot(): void {
   platformRef = platform;
   game.setGridSize(gridW, gridH);
   audio.setDishSize?.(gridW, gridH);
+  /** Glass deflection: swimmers turn away from the rim and from each other (src/sim/deflect.ts). */
+  const deflector = new Deflector();
+  /** Push the rim to everything that uses it (sim mask, camera fit, detector fill, game spots, sound). */
+  function applyDish(): void {
+    const d = dishAnim.rim;
+    sim!.setDish(d);
+    camera.setDish(d, dishAnim.fit);
+    detector.setDish(d);
+    game.setDish(d);
+  }
+  applyDish();
 
   if (saved.dish && saved.dishW === gridW && saved.dishH === gridH) {
     sim.importState(saved.dish, gridW, gridH);
@@ -691,7 +743,12 @@ function boot(): void {
   if (saved.game && saved.savedAt) grantOffline(offlineSeconds(saved.savedAt));
 
   // Dish requests from the game (auto-seeder, rewards, extinction).
-  bus.on('dishSeed', ({ specs }) => specs.forEach((s) => sim!.seed(s)));
+  bus.on('dishSeed', ({ specs }) => {
+    specs.forEach((s) => sim!.seed(s));
+    // A seed while the run waits (the Nevera's plants on the start card) incubates under the card.
+    if (game.session?.phase === 'ready') preincubate = PREINCUBATE_STEPS;
+  });
+  bus.on('sessionStart', () => (preincubate = PREINCUBATE_STEPS));
   // A refused tap (spacing rule, full nursery) always says why; nothing is charged and nothing lands.
   // 'tooClose': the UI draws a red ring and the reason at the spot. 'growing': the seed pill is grey
   // ("Espera…") and its reason chip says why, right above the price (no toast, no layout shift).
@@ -706,6 +763,7 @@ function boot(): void {
   function clearDish(): void {
     sim!.clear();
     detector.reset();
+    deflector.reset();
     epoch++; // drop snapshots requested before the clear
     reports.length = 0;
   }
@@ -748,9 +806,33 @@ function boot(): void {
   type DishStyle = Parameters<NonNullable<typeof sim>['setRenderStyle']>[0];
   let dishStyle: DishStyle | null = null;
   const lightTable = hexToRgb(PALETTE.light.night).map((c) => c / 255) as [number, number, number];
+  /**
+   * The art direction's look (docs/ARTE.md §8.3, ART_RENDER_STYLE: frost-white glass, deeper night)
+   * whenever the equipped dish theme is the default one; with the default palette too, its contour and
+   * glow colours as well. A cosmetic dish theme or palette keeps its own colours.
+   */
+  function artStyle(st: DishStyle): DishStyle {
+    const eq = cosmetics.entitlements;
+    if (eq.equippedId('dish') !== DEFAULT_ITEM.dish) return st;
+    const art = ART_RENDER_STYLE as unknown as DishStyle;
+    const paletteDefault = eq.equippedId('palette') === DEFAULT_ITEM.palette;
+    return {
+      ...st,
+      bg: art.bg,
+      agarIn: art.agarIn,
+      agarOut: art.agarOut,
+      rim: art.rim,
+      rimAmt: art.rimAmt,
+      rimStyle: art.rimStyle,
+      grid: art.grid,
+      ...(paletteDefault ? { contour: art.contour, glowCore: art.glowCore, glowWide: art.glowWide, shadow: art.shadow } : {}),
+    };
+  }
   function pushDishStyle(): void {
     if (!sim || !dishStyle) return;
-    sim.setRenderStyle(document.documentElement.dataset.theme === 'light' ? { ...dishStyle, bg: lightTable } : dishStyle);
+    const st = artStyle(dishStyle);
+    // Light theme: a pale steel bench; the dish itself stays night (GDD §14).
+    sim.setRenderStyle(document.documentElement.dataset.theme === 'light' ? { ...st, bg: lightTable } : st);
   }
   new MutationObserver(pushDishStyle).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   secrets.on('colormap', ({ colormap }) => {
@@ -849,6 +931,11 @@ function boot(): void {
    * would end sessions before anything grows). Always { scale: 1, lockstep: false } in a release.
    */
   const debugTime = { scale: 1, lockstep: false };
+  /**
+   * Steps still to incubate under the start card (ADR-027, RITMO §4.3): the Nevera's plants are alive
+   * when the run starts. Up to PREINCUBATE_PER_FRAME steps a frame, never ahead of the detector.
+   */
+  let preincubate = !saved.dish && game.session?.phase === 'ready' ? PREINCUBATE_STEPS : 0;
   let last = performance.now();
   let acc = 0;
   /** Detector reports produced since the last game tick (async readbacks). */
@@ -908,14 +995,77 @@ function boot(): void {
       .catch((err) => console.warn('snapshot failed', err))
       .finally(() => (snapInFlight = false));
   }
+  /** Glass deflection and lysis counters (debug handle, e2e). */
+  const dishStats = { turns: 0 };
+  /** Species tints: the latest report's creatures with their species hue (extrapolated each frame). */
+  const tintSrc: { id: number; x: number; y: number; vx: number; vy: number; r: number }[] = [];
+  let tintStep = 0;
+  const tintOut: { x: number; y: number; r: number; hue: number }[] = [];
+  /** Species hue of every registered creature (from the game's view, refreshed 10×/s). */
+  const hueById = new Map<number, number>();
   function detect(snap: ReturnType<NonNullable<typeof sim>['snapshot']>): void {
     const s = sim!;
     const report = detector.update(snap, s.params);
     // Dissolve a maze nucleus while it is still small (src/sim/runaway.ts, docs/DISH.md §5b).
-    const caught = runaway.update(report, snap, s.params);
+    const dish = dishAnim.rim;
+    const caught = runaway.update(report, snap, s.params, dish);
     for (const e of caught.erase) s.erase(e.x, e.y, e.radius);
     if (caught.started.length) noteDissolved(caught.started[0]);
+    if (import.meta.env.VITE_E2E === '1')
+      for (const c of caught.started) console.info(`[dish] runaway dissolved #${c.id} (${c.reason}, mass ${c.mass.toFixed(0)}) at step ${s.stepCount}`);
+    // Glass deflection (docs/DISH.md §4): turn swimmers away from the rim and from each other. Positions
+    // move on by the steps run since the snapshot; every turn is told to the detector, so a bouncing
+    // swimmer stays a swimmer (§7). Exploded matter and colonies are obstacles, never steered; the
+    // spinner label is never used (real spinners are left alone by the deflector's curl filter).
+    const lag = Math.max(0, s.stepCount - report.step);
+    const bodies = [];
+    for (const c of report.creatures) {
+      if (c.state === 'dead') continue;
+      bodies.push({
+        id: c.id,
+        x: c.x + c.vx * lag,
+        y: c.y + c.vy * lag,
+        vx: c.vx,
+        vy: c.vy,
+        radius: c.radius,
+        steerable: c.state !== 'exploded' && c.behavior !== 'colony',
+      });
+    }
+    const turns = deflector.update(bodies, dish, s.stepCount, DETECT_EVERY);
+    if (turns.length) {
+      s.applyTurns(turns);
+      for (const t of turns) detector.noteTurn(t.id, t.angle);
+      dishStats.turns += turns.length;
+    }
+    // Tints follow the matter: the report's positions (a turned creature heads its new way from here).
+    // Every body is kept; its hue is looked up each frame, so a species registered while the dish is
+    // paused (its Momento card names the colour) is tinted at once, not at the next report.
+    tintSrc.length = 0;
+    for (const b of bodies) {
+      const turned = turns.find((t) => t.id === b.id);
+      const ca = turned ? Math.cos(turned.angle) : 1;
+      const sa = turned ? Math.sin(turned.angle) : 0;
+      tintSrc.push({ id: b.id, x: b.x, y: b.y, vx: b.vx * ca - b.vy * sa, vy: b.vx * sa + b.vy * ca, r: Math.max(s.params.R, 2.2 * b.radius) });
+    }
+    tintStep = s.stepCount;
     reports.push(report);
+  }
+  /** Tints follow the creatures between reports (each frame, cheap: ≤ 32 entries). */
+  function pushTints(): void {
+    const s = sim!;
+    const ahead = s.stepCount - tintStep;
+    tintOut.length = 0;
+    for (const t of tintSrc) {
+      const hue = hueById.get(t.id);
+      if (hue === undefined || tintOut.length >= 32) continue;
+      tintOut.push({ x: t.x + t.vx * ahead, y: t.y + t.vy * ahead, r: t.r, hue });
+    }
+    s.setCreatureTints(tintOut);
+  }
+  /** Species hues of the creatures in the game's view (registered species only). */
+  function refreshTints(v: GameView): void {
+    hueById.clear();
+    for (const c of v.creatures) if (c.hue !== undefined && c.state !== 'dead') hueById.set(c.id, c.hue);
   }
 
   let lysisToastAt = -Infinity;
@@ -958,8 +1108,32 @@ function boot(): void {
     last = now;
     const s = sim!;
     syncParams(now);
+    // A bigger dish bought in the tree: once the tree and the session cards are out of the way (the
+    // player sees it), the rim and the camera ease out with a glow (1.5 s), before the next session's
+    // first tap.
+    const want = boughtDish();
+    if (want.radius !== dishAnim.target.radius && !flowBusy()) dishAnim.setTarget(want, !game.view().settings.reduceMotion);
+    if (dishAnim.update(dt)) applyDish();
+    s.setDishFx({ grow: dishAnim.glow });
+    pushTints();
     // A Momento eases the dish to a stop (1 → 0 in ~0.45 s) and back; at 0 it holds setPause('moment').
     const ts = momentsUI.timeScale();
+
+    // Incubation under the start card: the detector still sees every 10th step it can (one readback in
+    // flight), and the game ticks with dt 0 (nothing is paid while the run waits).
+    if (preincubate > 0) {
+      if (game.session?.phase !== 'ready' || s.contextLost) preincubate = 0;
+      else if (!document.hidden) {
+        let budget = Math.min(preincubate, PREINCUBATE_PER_FRAME);
+        while (budget > 0 && !snapInFlight) {
+          const k = Math.min(budget, DETECT_EVERY - (s.stepCount % DETECT_EVERY));
+          s.advance(k);
+          budget -= k;
+          preincubate -= k;
+          if (s.stepCount % DETECT_EVERY === 0) requestDetection();
+        }
+      }
+    }
 
     let stepped = 0;
     if (!isPaused() && !document.hidden) {
@@ -985,7 +1159,8 @@ function boot(): void {
     reports.length = 0;
     if (portraitRequests) for (const r of portraitRequests.call(game)) capturePortrait(r.speciesId, r.x, r.y, r.size, r.creatureId);
 
-    const rate = isPaused() ? 0 : STEPS_PER_SEC * game.speed * ts;
+    // Steps/s the overlay extrapolates labels with (the e2e time scale included; 1 in a release).
+    const rate = isPaused() ? 0 : STEPS_PER_SEC * game.speed * ts * debugTime.scale;
     if (rate !== lastRate) {
       lastRate = rate;
       (ui as { setSimRate?: (r: number) => void }).setSimRate?.(rate);
@@ -1006,6 +1181,7 @@ function boot(): void {
       // or its brief label: one label at a time on the dish, docs/ARTE.md §10).
       ui.setCreatureLabels(moments.labelsOnAll(view.era), momentsUI.busy && moments.current() !== null);
       ui.update(view);
+      refreshTints(view);
       flow.update(view);
       setPause('cards', flowBusy());
       // A paused Momento card is the one message on screen: the Encargo bar steps back under it (on a wide
@@ -1106,6 +1282,8 @@ function boot(): void {
       secretsUI,
       flow,
       debugTime,
+      dishStats,
+      dishAnim,
     });
   }
   leaderboard?.startAutoSubmit();

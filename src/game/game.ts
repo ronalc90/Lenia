@@ -91,6 +91,7 @@ import {
   type UpgradeDef,
 } from './defs';
 import { computeProduction, wrapDist, type YieldDetail } from './economy';
+import { clampToDish, insideDish, moveInDish, randomPointInDish, rimDistance, type DishShape } from '../core/dish';
 import { clipGraphemes } from './format';
 import * as C from './cycleBalance';
 import { migrateLegacy, type MigrationReport } from './legacy';
@@ -252,6 +253,12 @@ export interface Game {
   isPaused: boolean;
   /** Dish size in cells (auto-seeder spots, golden spark drift). */
   setGridSize(w: number, h: number): void;
+  /**
+   * The round walled dish (ADR-025), or null for the torus: distances stop wrapping, seeds and
+   * free spots stay inside the rim (with room for the body), the golden spark bounces off the glass.
+   * Call it whenever the rim changes (growth animation included).
+   */
+  setDish(dish: DishShape | null): void;
   /** Read-only access to the raw state (tests, balance bot, debug overlay). */
   readonly state: Readonly<GameState>;
   /** Pay an Encargo reward (main.ts calls it when present). Sessions: it also counts as an Encargo of the session (+time, +Datos). */
@@ -297,6 +304,11 @@ export function createGame(deps: GameDeps, save?: string): Game {
     (e) => e && e.viable !== false && Array.isArray(e.signature) && e.signature.length > 0,
   );
   let grid = { ...(deps.grid ?? B.DEFAULT_GRID) };
+  /** Round dish (null: the torus). */
+  let dish: DishShape | null = null;
+  /** Distance between two dish points: straight in the round dish, shortest way round the torus. */
+  const gdist = (ax: number, ay: number, bx: number, by: number): number =>
+    dish ? Math.hypot(ax - bx, ay - by) : wrapDist(ax, ay, bx, by, grid.w, grid.h);
 
   let s: GameState = (save && loadAny(save)) || defaultState(now());
   let paused = false;
@@ -510,8 +522,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
   function pendingSeeds(): number {
     let n = 0;
     for (const r of recentSeeds) {
-      if (B.RECENT_SEED_MEMORY - r.t > B.SEED_PENDING_WINDOW) continue;
-      const seen = creatures.some((c) => c.state !== 'dead' && wrapDist(c.x, c.y, r.x, r.y, grid.w, grid.h) < s.calib.R);
+      if (recentMemory() - r.t > B.SEED_PENDING_WINDOW) continue;
+      const seen = creatures.some((c) => c.state !== 'dead' && gdist(c.x, c.y, r.x, r.y) < s.calib.R);
       if (!seen) n++;
     }
     return n;
@@ -732,6 +744,11 @@ export function createGame(deps: GameDeps, save?: string): Game {
     return e ? scaledTemplate(e, s.calib.R) : null;
   }
 
+  /** How long (s) a planted spot stays remembered: shorter in the fast session runs (RITMO §4.3). */
+  function recentMemory(): number {
+    return sessions ? C.SESSION_RECENT_SEED_MEMORY : B.RECENT_SEED_MEMORY;
+  }
+
   /** Spores still forming: newborn creatures plus seeds the detector has not reported yet. */
   function forming(): number {
     let n = pendingSeeds();
@@ -788,7 +805,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
   function recordSeed(x: number, y: number, cost: number, manual: boolean, countSeed = true, bodyR = s.calib.R, from?: { x: number; y: number }): void {
     if (countSeed) s.stats.seeds++;
-    recentSeeds.push({ x, y, t: B.RECENT_SEED_MEMORY, r: bodyR });
+    recentSeeds.push({ x, y, t: recentMemory(), r: bodyR });
     if (!s.flags.firstSeed) {
       s.flags.firstSeed = true;
       unlockJournal('firstSeed');
@@ -817,8 +834,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
       out.push({ x: c.x, y: c.y, r: Math.max(B.SEED_BODY_MIN_R * R, B.SEED_BODY_FROM_RG * (Number.isFinite(c.radius) ? c.radius : 0)) });
     }
     for (const r of recentSeeds) {
-      if (B.RECENT_SEED_MEMORY - r.t > B.SEED_SPACING_MEMORY) continue;
-      if (creatures.some((c) => c.state !== 'dead' && wrapDist(c.x, c.y, r.x, r.y, grid.w, grid.h) < R)) continue; // already reported
+      if (recentMemory() - r.t > B.SEED_SPACING_MEMORY) continue;
+      if (creatures.some((c) => c.state !== 'dead' && gdist(c.x, c.y, r.x, r.y) < R)) continue; // already reported
       out.push({ x: r.x, y: r.y, r: r.r });
     }
     return out.concat(extra);
@@ -827,7 +844,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
   /** Room for a seed of body radius `bodyR` at (x, y): SEED_GAP·R of empty dish between it and every body. */
   function seedFits(x: number, y: number, bodyR: number, obstacles: { x: number; y: number; r: number }[]): boolean {
     const gap = B.SEED_GAP * s.calib.R;
-    for (const o of obstacles) if (wrapDist(x, y, o.x, o.y, grid.w, grid.h) < bodyR + o.r + gap) return false;
+    for (const o of obstacles) if (gdist(x, y, o.x, o.y) < bodyR + o.r + gap) return false;
     return true;
   }
 
@@ -837,20 +854,25 @@ export function createGame(deps: GameDeps, save?: string): Game {
    */
   function clearSpotNear(x: number, y: number, bodyR: number): { x: number; y: number } | null {
     const obstacles = seedObstacles();
-    if (seedFits(x, y, bodyR, obstacles)) return { x, y };
     const R = s.calib.R;
+    // Round dish: a seed lands whole inside the glass, its body at least half a kernel from the rim
+    // (a tap on the glass or beyond it moves in).
+    const rimMargin = bodyR + B.SEED_RIM_MARGIN * R;
+    if (dish) ({ x, y } = clampToDish(dish, x, y, rimMargin));
+    if (seedFits(x, y, bodyR, obstacles)) return { x, y };
     const wrap = (v: number, n: number) => ((v % n) + n) % n;
     for (let d = 0.25 * R; d <= B.SEED_RELOCATE * R + 1e-9; d += 0.25 * R) {
       let best: { x: number; y: number } | null = null;
       let bestClear = -Infinity;
       for (let k = 0; k < 16; k++) {
         const a = (k / 16) * Math.PI * 2;
-        const px = wrap(x + Math.cos(a) * d, grid.w);
-        const py = wrap(y + Math.sin(a) * d, grid.h);
+        const px = dish ? x + Math.cos(a) * d : wrap(x + Math.cos(a) * d, grid.w);
+        const py = dish ? y + Math.sin(a) * d : wrap(y + Math.sin(a) * d, grid.h);
+        if (dish && !insideDish(dish, px, py, rimMargin)) continue;
         if (!seedFits(px, py, bodyR, obstacles)) continue;
         // Among the directions of this ring, the one farthest from everything.
         let clear = Infinity;
-        for (const o of obstacles) clear = Math.min(clear, wrapDist(px, py, o.x, o.y, grid.w, grid.h) - o.r);
+        for (const o of obstacles) clear = Math.min(clear, gdist(px, py, o.x, o.y) - o.r);
         if (clear > bestClear) {
           bestClear = clear;
           best = { x: px, y: py };
@@ -869,15 +891,17 @@ export function createGame(deps: GameDeps, save?: string): Game {
     let best: { x: number; y: number } | null = null;
     let bestD = -1;
     for (let i = 0; i < B.AUTOSEED_TRIES; i++) {
-      const x = rng() * grid.w;
-      const y = rng() * grid.h;
-      let d = Infinity;
-      for (const o of obstacles) d = Math.min(d, wrapDist(x, y, o.x, o.y, grid.w, grid.h));
+      // Round dish: anywhere at least AUTOSEED_RIM_MARGIN·R inside the glass, and the glass counts as a
+      // neighbour (a spot hugging the rim is not "far from everything").
+      const p = dish ? randomPointInDish(dish, rng, B.AUTOSEED_RIM_MARGIN * R) : { x: rng() * grid.w, y: rng() * grid.h };
+      const { x, y } = p;
+      let d = dish ? rimDistance(dish, x, y) + B.AUTOSEED_RIM_MARGIN * R : Infinity;
+      for (const o of obstacles) d = Math.min(d, gdist(x, y, o.x, o.y));
       if (d > bestD) {
         bestD = d;
         best = { x, y };
       }
-      if (!obstacles.length) break;
+      if (!obstacles.length && !dish) break;
     }
     // Auto-seeder and golden seeds respect the same room as a tap (a spore of radius R).
     return bestD > minD && best && seedFits(best.x, best.y, B.SEED_RADIUS * R * 1.3, obstacles) ? best : null;
@@ -1004,7 +1028,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     let n = 0;
     for (const o of creatures) {
       if (o.id === c.id || o.state === 'dead') continue;
-      if (wrapDist(o.x, o.y, c.x, c.y, grid.w, grid.h) < r && ++n >= B.SPECIES_NEW_CROWD_NEIGHBORS) return true;
+      if (gdist(o.x, o.y, c.x, c.y) < r && ++n >= B.SPECIES_NEW_CROWD_NEIGHBORS) return true;
     }
     return false;
   }
@@ -1064,7 +1088,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
   /** No other creature close enough to share the capture square. */
   function clearAround(c: Creature): boolean {
     const r = B.PORTRAIT_CLEAR_R * s.calib.R;
-    return !creatures.some((o) => o.id !== c.id && o.state !== 'dead' && wrapDist(o.x, o.y, c.x, c.y, grid.w, grid.h) < r);
+    return !creatures.some((o) => o.id !== c.id && o.state !== 'dead' && gdist(o.x, o.y, c.x, c.y) < r);
   }
 
   /** Scheduled re-captures of settled creatures, only while their species' portrait is not good yet. */
@@ -1086,7 +1110,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
   function registerSpecies(c: Creature, sig: number[], reveal: CatalogSignature | null): SpeciesState {
     const n = ++s.specimenCounter;
     const R = s.calib.R;
-    const mut = pendingMutations.find((m) => wrapDist(m.x, m.y, c.x, c.y, grid.w, grid.h) < B.MUTATION_LINK_DIST * R);
+    const mut = pendingMutations.find((m) => gdist(m.x, m.y, c.x, c.y) < B.MUTATION_LINK_DIST * R);
     const parent = mut ? speciesById(mut.parent) : undefined;
     const rarity: Rarity = reveal
       ? (B.RARITY_BY_CODE[reveal.code] ?? B.DEFAULT_RARITY)
@@ -1268,8 +1292,9 @@ export function createGame(deps: GameDeps, save?: string): Game {
       globalMult: globalMult(),
       symbiosis: has('symbiosis'),
       R: s.calib.R,
-      gridW: grid.w,
-      gridH: grid.h,
+      // Round dish: no wrap (an infinite period makes economy's toroidal distance a straight one).
+      gridW: dish ? Infinity : grid.w,
+      gridH: dish ? Infinity : grid.h,
     });
   }
 
@@ -1301,7 +1326,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       if (!acc) incomeAcc.set(c.id, (acc = { amount: 0, t: 0 }));
       acc.amount += v * bm * dt;
       acc.t += dt;
-      if (acc.t >= B.INCOME_POP_INTERVAL) {
+      if (acc.t >= (sessions ? C.SESSION_INCOME_POP_INTERVAL : B.INCOME_POP_INTERVAL)) {
         bus.emit('income', { id: c.id, x: c.x, y: c.y, amount: acc.amount });
         acc.amount = 0;
         acc.t = 0;
@@ -1519,10 +1544,11 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
   function spawnGolden(): void {
     const ang = rng() * Math.PI * 2;
-    const life = B.GOLDEN_LIFE + (sessions ? fx.goldenLifeBonus : 0);
+    const life = sessions ? C.SESSION_GOLDEN_LIFE + fx.goldenLifeBonus : B.GOLDEN_LIFE;
+    const at = dish ? randomPointInDish(dish, rng, B.GOLDEN_RIM_MARGIN * s.calib.R) : { x: rng() * grid.w, y: rng() * grid.h };
     golden = {
-      x: rng() * grid.w,
-      y: rng() * grid.h,
+      x: at.x,
+      y: at.y,
       vx: Math.cos(ang) * B.GOLDEN_SPEED,
       vy: Math.sin(ang) * B.GOLDEN_SPEED,
       life,
@@ -1533,8 +1559,17 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
   function updateGolden(dt: number): void {
     if (golden) {
-      golden.x = (((golden.x + golden.vx * dt) % grid.w) + grid.w) % grid.w;
-      golden.y = (((golden.y + golden.vy * dt) % grid.h) + grid.h) % grid.h;
+      if (dish) {
+        // The spark bounces off the glass like everything else in the round dish.
+        const m = moveInDish(dish, golden, dt, B.GOLDEN_RIM_MARGIN * s.calib.R);
+        golden.x = m.x;
+        golden.y = m.y;
+        golden.vx = m.vx;
+        golden.vy = m.vy;
+      } else {
+        golden.x = (((golden.x + golden.vx * dt) % grid.w) + grid.w) % grid.w;
+        golden.y = (((golden.y + golden.vy * dt) % grid.h) + grid.h) % grid.h;
+      }
       golden.life -= dt;
       if (golden.life <= 0) {
         golden = null;
@@ -1801,6 +1836,13 @@ export function createGame(deps: GameDeps, save?: string): Game {
    * Nevera: the kept species that live in this world come back alive (their pure catalog template),
    * then this world's own species fill the other slots; never more than the dish holds.
    */
+  /** Near the centre of the round dish: the run's first creature has the most room to be steered. */
+  function starterSpot(d: DishShape): { x: number; y: number } {
+    const r = B.STARTER_SPAWN_R * s.calib.R * Math.sqrt(rng());
+    const a = rng() * Math.PI * 2;
+    return { x: d.cx + r * Math.cos(a), y: d.cy + r * Math.sin(a) };
+  }
+
   function fridgePlants(start: SessionStart): SeedSpec[] {
     const n = Math.min(start.fridgeSlots, room());
     const out: SeedSpec[] = [];
@@ -1815,12 +1857,12 @@ export function createGame(deps: GameDeps, save?: string): Game {
     for (const code of codes.slice(0, n)) {
       const e = catalogByCode(code);
       if (!e) continue;
-      const spot = findFreeSpot(2);
+      const spot = dish && !out.length ? starterSpot(dish) : findFreeSpot(2);
       if (!spot) break;
       const t = turned(scaledTemplate(e, s.calib.R), true);
       const r = Math.max(t.pattern.w, t.pattern.h) / 2;
       out.push({ x: spot.x, y: spot.y, radius: r, density: 1, noise: 0, shape: 'pattern', pattern: t.pattern, bias: 1, rotation: t.rotation, rngSeed: Math.floor(rng() * 2147483647) });
-      recentSeeds.push({ x: spot.x, y: spot.y, t: B.RECENT_SEED_MEMORY, r }); // the next plant keeps clear of it
+      recentSeeds.push({ x: spot.x, y: spot.y, t: recentMemory(), r }); // the next plant keeps clear of it
     }
     return out;
   }
@@ -2339,6 +2381,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
             requirement: { es: '', en: '' },
           },
       golden: golden ? { x: golden.x, y: golden.y, life: Math.max(0, golden.life / golden.max) } : null,
+      dish: dish ? { ...dish } : null,
       buffs: s.buffs.map((b) => ({ id: b.id, name: TEXT.bloom, remaining: b.remaining, mult: b.mult })),
       creatures: creatureViews(),
       objective: obj ? objectiveText(obj.id, objCur, obj.target, sessions) : null,
@@ -2457,8 +2500,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
         brush!.x = p.x;
         brush!.y = p.y;
         specs.push({
-          x: ((p.x % grid.w) + grid.w) % grid.w,
-          y: ((p.y % grid.h) + grid.h) % grid.h,
+          x: dish ? clampToDish(dish, p.x, p.y, R * B.BRUSH_RADIUS).x : ((p.x % grid.w) + grid.w) % grid.w,
+          y: dish ? clampToDish(dish, p.x, p.y, R * B.BRUSH_RADIUS).y : ((p.y % grid.h) + grid.h) % grid.h,
           radius: R * B.BRUSH_RADIUS,
           density: B.BRUSH_DENSITY,
           noise: seedNoise('blob'),
@@ -2741,9 +2784,14 @@ export function createGame(deps: GameDeps, save?: string): Game {
     const dt = Number.isFinite(realDt) ? Math.min(Math.max(realDt, 0), B.MAX_TICK_DT) : 0;
     s.stats.playTime += dt;
     if (bootReplant) {
-      // A session set up while loading: now the dish exists, give it its fresh start.
-      const plants = bootReplant;
+      // A session set up while loading: now the dish exists, give it its fresh start. The Nevera's spots
+      // are chosen again now: at load the round dish was not set yet (a spot could fall outside the glass).
+      let plants = bootReplant;
       bootReplant = null;
+      if (dish && sessionStartInfo && s.session?.phase === 'ready') {
+        recentSeeds.length = 0;
+        plants = fridgePlants(sessionStartInfo);
+      }
       bus.emit('dishClear', {});
       calibrationChanged();
       if (plants.length) bus.emit('dishSeed', { specs: plants });
@@ -2885,7 +2933,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
       // The dish freezes under the end card; the Incubadora speeds it up while seeds are forming.
       const se = s.session;
       if (se?.phase === 'over') return 0;
-      return forming() > 0 ? fx.matureSpeed : 1;
+      // Time-lapse (ADR-027): every run plays at simPace, the Incubadora on top while seeds form.
+      return Math.min(C.SIM_PACE_MAX, fx.simPace * (forming() > 0 ? fx.matureSpeed : 1));
     },
     setBonus(id, name, mult) {
       if (!(mult > 0) || mult === 1) bonuses.delete(id);
@@ -2943,6 +2992,15 @@ export function createGame(deps: GameDeps, save?: string): Game {
     },
     setGridSize(w, h) {
       if (w > 0 && h > 0) grid = { w, h };
+    },
+    setDish(d) {
+      dish = d && d.radius > 0 ? { cx: d.cx, cy: d.cy, radius: d.radius } : null;
+      // A spark outside a smaller rim comes back in (rims only grow in play; tests may shrink them).
+      if (dish && golden && !insideDish(dish, golden.x, golden.y)) {
+        const c = clampToDish(dish, golden.x, golden.y, B.GOLDEN_RIM_MARGIN * s.calib.R);
+        golden.x = c.x;
+        golden.y = c.y;
+      }
     },
     get state() {
       return s;

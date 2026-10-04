@@ -9,6 +9,7 @@ import type {
   LeniaParams,
 } from '../core/types';
 import { wrapDelta } from '../core/camera';
+import { sameDish, type DishShape } from '../core/dish';
 import { SIG, SIG_LENGTH, SIG_UNKNOWN, SPECIES_MATCH_THRESHOLD, signatureDistance } from './signature';
 
 /**
@@ -270,6 +271,12 @@ export interface DishDetector extends Detector {
    * deflector applies, before the next snapshot is taken; unknown ids are ignored.
    */
   noteTurn(id: number, angle: number): void;
+  /**
+   * Round dish (or null for the torus): the dish fill and the "share of the dish" thresholds are
+   * measured over the cells inside the rim, not over the whole square grid. Cheap to call every frame
+   * while the rim grows (the block mask is rebuilt only when the shape changes).
+   */
+  setDish(dish: DishShape | null): void;
 }
 
 export function createDetector(opts: DetectorOptions = {}): DishDetector {
@@ -339,12 +346,49 @@ class LeniaDetector implements DishDetector {
   }
 
   reset(): void {
+    // (the dish shape is a property of the dish, not of its creatures: it survives a reset)
     this.tracks = [];
     this.nextId = 1;
     this.lastStep = -Infinity;
     this.lastClassify = -Infinity;
     this.lastReport = null;
     this.hasPrev = false;
+  }
+
+  private dish: DishShape | null = null;
+  /** Snapshot blocks whose centre lies inside the dish (1/0), for the fill; null = all blocks. */
+  private dishBlocks: Uint8Array | null = null;
+  private dishBlockKey = '';
+  private dishBlockCount = 0;
+
+  setDish(dish: DishShape | null): void {
+    if (dish && this.dish && sameDish(dish, this.dish)) return;
+    this.dish = dish ? { cx: dish.cx, cy: dish.cy, radius: dish.radius } : null;
+    this.dishBlockKey = '';
+  }
+
+  /** Block mask of the dish for a snapshot of w×h blocks at `scale` (rebuilt when either changes). */
+  private dishMaskFor(w: number, h: number, scale: number): Uint8Array | null {
+    const d = this.dish;
+    if (!d) return null;
+    const key = `${w}|${h}|${scale}|${d.cx}|${d.cy}|${d.radius}`;
+    if (key === this.dishBlockKey && this.dishBlocks) return this.dishBlocks;
+    const m = this.dishBlocks && this.dishBlocks.length === w * h ? this.dishBlocks : new Uint8Array(w * h);
+    let n = 0;
+    const r2 = d.radius * d.radius;
+    for (let j = 0; j < h; j++) {
+      const dy = (j + 0.5) * scale - d.cy;
+      for (let i = 0; i < w; i++) {
+        const dx = (i + 0.5) * scale - d.cx;
+        const inside = dx * dx + dy * dy < r2 ? 1 : 0;
+        m[j * w + i] = inside;
+        n += inside;
+      }
+    }
+    this.dishBlocks = m;
+    this.dishBlockKey = key;
+    this.dishBlockCount = n;
+    return m;
   }
 
   noteTurn(id: number, angle: number): void {
@@ -378,7 +422,10 @@ class LeniaDetector implements DishDetector {
       total += v;
       if (v > this.thr) filled++;
     }
-    const fill = N > 0 ? filled / N : 0;
+    // Round dish: the fill is a share of the living area (matter never lies outside the rim).
+    const mask = this.dishMaskFor(snap.w, snap.h, snap.scale);
+    const area = mask ? Math.max(1, this.dishBlockCount) : N;
+    const fill = area > 0 ? Math.min(1, filled / area) : 0;
     const totalMass = total * s * s;
     this.label(snap, this.minMassR2 * R * R);
 
@@ -386,7 +433,7 @@ class LeniaDetector implements DishDetector {
     const newborn = this.trackBlobs(snap, step, R);
 
     // ── 3. creatures ──
-    const dishCells = snap.gridW * snap.gridH;
+    const dishCells = mask ? this.dishBlockCount * s * s : snap.gridW * snap.gridH;
     const spawned: Track[] = [];
     const survivors: Track[] = [];
     for (const t of this.tracks) {

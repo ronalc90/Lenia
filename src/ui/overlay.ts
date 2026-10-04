@@ -5,11 +5,12 @@
  *
  * Draws in CSS pixels (the context is pre-scaled by devicePixelRatio).
  */
-import { mod, wrapDelta, type Camera } from '../core/camera';
+import type { Camera } from '../core/camera';
 import { BEHAVIOR_COLOR, UI as C } from '../core/palette';
 import type { Behavior, CreatureState, CreatureView, GameView, Lang } from '../core/types';
 import { behaviorName, stateName } from './i18n';
 import { StatusLayer } from './moments/status';
+import { CREATURE_ALIVE_MS, DISSOLVE_MS, SEED_BLOOM_MS } from '../game/cycleBalance';
 import { defaultItem, type DishTheme, type HaloStyle, type SparkSkin, type TrailStyle } from '../store/catalog';
 import {
   drawHalo,
@@ -367,8 +368,6 @@ export class Overlay {
     this.cviews = view.creatures;
     this.lang = view.settings.lang;
     this.markers = !!(view.tools as { markers?: boolean }).markers;
-    const gw = this.camera.gridW;
-    const gh = this.camera.gridH;
     const alive = new Set<number>();
     for (const c of view.creatures) {
       alive.add(c.id);
@@ -396,8 +395,8 @@ export class Overlay {
         };
         this.creatures.set(c.id, s);
       } else {
-        const dx = wrapDelta(c.x - s.tx, gw);
-        const dy = wrapDelta(c.y - s.ty, gh);
+        const dx = this.camera.deltaX(c.x - s.tx);
+        const dy = this.camera.deltaY(c.y - s.ty);
         const d = Math.hypot(dx, dy);
         if (d > 0.05) {
           // Low-pass the heading so arrows don't flicker.
@@ -505,8 +504,9 @@ export class Overlay {
     const s = this.camera.scale;
     const base = Math.max(22, 13 * s * 1.25);
     const spec: Record<typeof kind, Omit<Ripple, 'x' | 'y' | 't0'>> = {
-      seed: { dur: 0.3, color: C.accent, maxR: base, rings: 2, width: 2 },
-      big: { dur: 0.42, color: C.accent, maxR: base * 1.6, rings: 3, width: 2.4 },
+      // The seed ring opens in SEED_BLOOM_MS (RITMO §4.4): quick, so a 15 s run feels alive at once.
+      seed: { dur: SEED_BLOOM_MS / 1000, color: C.accent, maxR: base, rings: 2, width: 2 },
+      big: { dur: SEED_BLOOM_MS / 1000, color: C.accent, maxR: base * 1.6, rings: 3, width: 2.4 },
       auto: { dur: 0.36, color: '#7FA8C0', maxR: base * 0.8, rings: 1, width: 1.2 },
       denied: { dur: 0.22, color: C.danger, maxR: base * 0.7, rings: 1, width: 2.2 },
       erase: { dur: 0.3, color: C.warn, maxR: base * 0.9, rings: 1, width: 1.6 },
@@ -629,6 +629,9 @@ export class Overlay {
   }
 
   stableDing(x: number, y: number): void {
+    // "¡Viva!": a ring that opens in CREATURE_ALIVE_MS as the creature turns stable (RITMO §4.4).
+    this.ripples.push({ x, y, t0: this.now, dur: CREATURE_ALIVE_MS / 1000, color: C.accent, maxR: Math.max(26, 13 * this.camera.scale * 1.4), rings: 1, width: 2.2 });
+    if (this.ripples.length > 24) this.ripples.shift();
     this.flash(x, y, C.accent, 1);
     if (!this.reduceMotion) this.burst(x, y, 10, C.accent, { speed: 70, life: 0.6, size: 1.4, grav: 0 });
   }
@@ -647,10 +650,11 @@ export class Overlay {
 
   puff(x: number, y: number): void {
     if (this.reduceMotion) {
-      this.ripples.push({ x, y, t0: this.now, dur: 0.6, color: '#7D8790', maxR: 24, rings: 1, width: 1 });
+      this.ripples.push({ x, y, t0: this.now, dur: DISSOLVE_MS / 1000, color: '#7D8790', maxR: 24, rings: 1, width: 1 });
       return;
     }
-    this.burst(x, y, 12, '#8E99A4', { speed: 28, life: 1.2, size: 2.6, grav: -14, drag: 1.5 });
+    // Death and lysis fade out in DISSOLVE_MS (RITMO §4.4).
+    this.burst(x, y, 12, '#8E99A4', { speed: 28, life: DISSOLVE_MS / 1000, size: 2.6, grav: -14, drag: 1.5 });
   }
 
   goldenCollected(x: number, y: number, reward: string): void {
@@ -725,6 +729,15 @@ export class Overlay {
   /** Clip rect for dish-attached drawing (the dish at zoom 1, the whole view when zoomed). */
   private dishRect(): { x: number; y: number; w: number; h: number } {
     const cam = this.camera;
+    const round = cam.dish;
+    if (round) {
+      // Round dish: the bounding box of the glass (clipped to the view when zoomed in).
+      const p = cam.gridToScreen(round.cx, round.cy);
+      const r = round.radius * cam.scale;
+      const x0 = Math.max(0, p.x - r);
+      const y0 = Math.max(0, p.y - r);
+      return { x: x0, y: y0, w: Math.min(this.w, p.x + r) - x0, h: Math.min(this.h, p.y + r) - y0 };
+    }
     if (cam.zoom > 1.001) return { x: 0, y: 0, w: this.w, h: this.h };
     const s = cam.scale;
     const dw = cam.gridW * s;
@@ -734,6 +747,11 @@ export class Overlay {
 
   /** Call fn at every toroidal copy of a screen point whose disc touches the rect. */
   private copies(px: number, py: number, rad: number, rect: { x: number; y: number; w: number; h: number }, fn: (x: number, y: number) => void): void {
+    // Round dish: nothing wraps, one copy.
+    if (this.camera.dish) {
+      fn(px, py);
+      return;
+    }
     const W = this.camera.gridW * this.camera.scale;
     const H = this.camera.gridH * this.camera.scale;
     for (const ox of [0, -W, W]) {
@@ -757,8 +775,6 @@ export class Overlay {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, this.w, this.h);
     const cam = this.camera;
-    const gw = cam.gridW;
-    const gh = cam.gridH;
     const scale = cam.scale;
     const rm = this.reduceMotion;
 
@@ -774,28 +790,33 @@ export class Overlay {
       let py = s.ty;
       if (rate > 0 && (s.vx || s.vy)) {
         const ahead = Math.min(0.5, Math.max(0, (nowMs - s.at) / 1000)) * rate;
-        px = mod(s.tx + s.vx * ahead, gw);
-        py = mod(s.ty + s.vy * ahead, gh);
-        s.x = mod(s.x + wrapDelta(px - s.x, gw) * kGlide, gw);
-        s.y = mod(s.y + wrapDelta(py - s.y, gh) * kGlide, gh);
+        px = this.camera.wrapX(s.tx + s.vx * ahead);
+        py = this.camera.wrapY(s.ty + s.vy * ahead);
+        s.x = this.camera.wrapX(s.x + this.camera.deltaX(px - s.x) * kGlide);
+        s.y = this.camera.wrapY(s.y + this.camera.deltaY(py - s.y) * kGlide);
       } else {
-        s.x = mod(s.x + wrapDelta(px - s.x, gw) * k, gw);
-        s.y = mod(s.y + wrapDelta(py - s.y, gh) * k, gh);
+        s.x = this.camera.wrapX(s.x + this.camera.deltaX(px - s.x) * k);
+        s.y = this.camera.wrapY(s.y + this.camera.deltaY(py - s.y) * k);
       }
     }
     const g = this.golden;
     if (g) {
-      g.x = mod(g.x + wrapDelta(g.tx - g.x, gw) * k, gw);
-      g.y = mod(g.y + wrapDelta(g.ty - g.y, gh) * k, gh);
+      g.x = this.camera.wrapX(g.x + this.camera.deltaX(g.tx - g.x) * k);
+      g.y = this.camera.wrapY(g.y + this.camera.deltaY(g.ty - g.y) * k);
     }
 
     const rect = this.dishRect();
     ctx.save();
     ctx.beginPath();
-    ctx.rect(rect.x, rect.y, rect.w, rect.h);
+    const round = cam.dish;
+    if (round) {
+      // Round dish: dish-attached drawing stays inside the glass (the GPU draws the glass itself).
+      const c = cam.gridToScreen(round.cx, round.cy);
+      ctx.arc(c.x, c.y, round.radius * scale, 0, Math.PI * 2);
+    } else ctx.rect(rect.x, rect.y, rect.w, rect.h);
     ctx.clip();
 
-    this.drawDishFrame(rect);
+    if (!round) this.drawDishFrame(rect);
     if (!rm) this.drawMotes(time, dt, rect);
     this.drawSpots(time);
     this.drawCreatures(time, rect, scale, rm);
@@ -947,7 +968,7 @@ export class Overlay {
     if (!s.vx && !s.vy) return s.jump > 1.5 && rate > 0 && age < 0.6 ? null : { x: s.tx, y: s.ty };
     if (rate > 0 && age > 0.5) return null;
     const ahead = age * rate;
-    return { x: mod(s.tx + s.vx * ahead, this.camera.gridW), y: mod(s.ty + s.vy * ahead, this.camera.gridH) };
+    return { x: this.camera.wrapX(s.tx + s.vx * ahead), y: this.camera.wrapY(s.ty + s.vy * ahead) };
   }
 
   private drawCreatures(time: number, rect: { x: number; y: number; w: number; h: number }, scale: number, rm: boolean): void {
@@ -973,11 +994,12 @@ export class Overlay {
       this.copies(p.x, p.y, R + 14, rect, (x, y) => {
         // One name per creature: the toroidal copy whose centre is on the dish. A copy just past an edge
         // (only its margin on the dish) put a second name on the far side, under nothing.
-        const home = x >= tx0 && x < tx0 + tw && y >= ty0 && y < ty0 + th;
+        const home = !!this.camera.dish || (x >= tx0 && x < tx0 + tw && y >= ty0 && y < ty0 + th);
         if (s.state === 'stable') {
           if (this.markers && s.behavior) this.drawMarker(x + R * 0.71, y - R * 0.71, s, time, rm);
           // A bare "Estable" under it would repeat its status pill: the name line waits for a species.
-          if (home && showLabels && (s.name || s.behavior || !this.pillsShown())) this.queueName(x, y + R + 4, id === this.selectedId ? s : null, this.nameText(s), s.hue !== undefined ? hueHex(s.hue, 78) : '#C9D6E2');
+          // One label per creature: a creature with a status pill has no name line under it.
+          if (home && showLabels && !(this.pillsShown() && this.statusLayer.hasPill(id)) && (s.name || s.behavior || !this.pillsShown())) this.queueName(x, y + R + 4, id === this.selectedId ? s : null, this.nameText(s), s.hue !== undefined ? hueHex(s.hue, 78) : '#C9D6E2');
         } else if (s.state === 'born') {
           // The status pill already says "Naciendo 62 %" when pills are on.
           if (home && showLabels && !this.pillsShown()) this.queueName(x, y + Math.min(R, 28) + 4, null, this.bornText, '#9FB8CC');
@@ -1259,8 +1281,6 @@ export class Overlay {
 
   private drawArrows(time: number): void {
     const ctx = this.ctx;
-    const gw = this.camera.gridW;
-    const gh = this.camera.gridH;
     for (let i = this.arrows.length - 1; i >= 0; i--) {
       const a = this.arrows[i];
       const t = (time - a.t0) / SEED_ARROW_S;
@@ -1271,8 +1291,8 @@ export class Overlay {
       // From the finger to the seed, the short way round the torus.
       const p = this.camera.gridToScreen(a.fx, a.fy);
       const s = this.camera.scale;
-      const dx = wrapDelta(a.tx - a.fx, gw) * s;
-      const dy = wrapDelta(a.ty - a.fy, gh) * s;
+      const dx = this.camera.deltaX(a.tx - a.fx) * s;
+      const dy = this.camera.deltaY(a.ty - a.fy) * s;
       const len = Math.hypot(dx, dy);
       if (len < 4) continue;
       const ux = dx / len;
@@ -1334,7 +1354,8 @@ export class Overlay {
       for (let r = 0; r < rp.rings; r++) {
         const t = (time - rp.t0 - r * 0.07) / rp.dur;
         if (t < 0 || t > 1) continue;
-        const rad = 3 + (rp.maxR - 3) * easeOutCubic(t) * (1 - r * 0.18);
+        // Reduce motion: the ring does not grow, it only fades.
+        const rad = this.reduceMotion ? rp.maxR * (1 - r * 0.18) : 3 + (rp.maxR - 3) * easeOutCubic(t) * (1 - r * 0.18);
         ctx.lineWidth = rp.width * (1 - t) + 0.4;
         ctx.strokeStyle = rgba(rp.color, 0.9 * Math.pow(1 - t, 1.4));
         ctx.beginPath();

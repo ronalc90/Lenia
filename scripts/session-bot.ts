@@ -1,5 +1,5 @@
 /**
- * Session bot (docs/CICLO.md §11): plays the INTEGRATED sessions cycle end to end
+ * Session bot (docs/RITMO.md §6, docs/CICLO.md §11): plays the INTEGRATED sessions cycle end to end
  * (createGame({ cycle: 'sessions' }): clock, wallet, seed price and room, Spark gift, Abono, research
  * tree, worlds, nights, Nevera — all the game's own code) and reports the pacing, session by session.
  * Only the dish is a model: the statistical dish of the retired classic-loop bot (scripts/balance-bot.ts, deleted in 2B; copied: that script ran
@@ -30,11 +30,12 @@ import catalogSigJson from '../src/detect/catalogSignatures.json';
 
 // ──────────────── dish model (from the retired balance-bot.ts) ────────
 
-const STEPS_PER_SEC = 30;
+const STEPS_PER_SEC = C.SIM_STEPS_PER_SEC;
+const EXT_LOG = process.argv.includes("--ext");
 /** --trace=N prints session N every 15 s. */
 let TRACE = -1;
 const DT = 0.5;
-const BORN_STEPS = 400;
+const BORN_STEPS = C.STABLE_AGE_STEPS;
 const CLASSIFY_STEPS = 1000;
 const BASE_HAZARD = 1 / 2400;
 /**
@@ -43,14 +44,26 @@ const BASE_HAZARD = 1 / 2400;
  * sessions are not 2–3× too rich.
  */
 const MOVER_HAZARD = 1 / 90;
-const MOVER_CROWD = 3;
+/**
+ * Movers start bumping into each other above this share of the dish's room (3 of the base dish's 5).
+ * A fixed 3 made "Placa más grande" a loss in the model: a dish of 9 died as fast as a dish of 5. [model]
+ */
+const MOVER_CROWD_SHARE = 0.6;
 const SWIM_SPEED = 0.8;
 const COLLIDE_R = 1.5;
 const COLLIDE_KILL = 0.6;
 const DIVIDE_EVERY = 1500;
 const GRID = { w: 192, h: 240 };
-/** Seconds the player spends on the summary + the tree between two sessions (pacing clock). */
-const OVERHEAD_SECONDS = 45;
+/**
+ * Seconds the player spends between two sessions (pacing clock): the "¡Tiempo!" stamp and the summary,
+ * then a few seconds per node bought in the tree (docs/RITMO.md §6). A 15 s run is not followed by a
+ * 45 s menu.
+ */
+const SUMMARY_SECONDS = 6;
+const SECONDS_PER_BUY = 2.5;
+const OVERHEAD_MAX = 45;
+/** Hazards of the model are per simulation step (measured at 30 steps/s): the time-lapse scales them. */
+const PER_STEP = 1 / STEPS_PER_SEC;
 
 interface SpeciesModel {
   code: string;
@@ -233,6 +246,13 @@ class Dish {
   clear(): void {
     this.blobs = [];
   }
+  /** Pre-incubation (ADR-027): the integrator runs the dish PREINCUBATE_STEPS under the start card. */
+  preincubate(): void {
+    for (const b of this.blobs) if (b.state === 'born' && b.fate === 'stable') {
+      b.steps = Math.max(b.steps, C.PREINCUBATE_STEPS);
+      b.state = 'stable';
+    }
+  }
   step(dt: number, speed: number): { creatures: Creature[]; events: DetectorEvent[] } {
     const p = this.params();
     const R = p.R;
@@ -260,7 +280,8 @@ class Dish {
         }
       } else if (b.state === 'stable') {
         const mover = b.behavior === 'swimmer' || b.behavior === 'spinner';
-        if (this.rng() < (BASE_HAZARD + (mover && movers >= MOVER_CROWD ? MOVER_HAZARD : 0)) * dt) {
+        const crowd = Math.max(3, Math.round(MOVER_CROWD_SHARE * (Number.isFinite(this.cap) ? this.cap - 2 : 5)));
+        if (this.rng() < (BASE_HAZARD + (mover && movers >= crowd ? MOVER_HAZARD : 0)) * ds * PER_STEP) {
           this.kill(b, 'died');
           continue;
         }
@@ -297,7 +318,7 @@ class Dish {
         if (a.state === 'dead' || c.state === 'dead') continue;
         const moving = a.behavior === 'swimmer' || a.behavior === 'spinner' || c.behavior === 'swimmer' || c.behavior === 'spinner';
         if (!moving) continue;
-        if (wrapDist(a.x, a.y, c.x, c.y) < COLLIDE_R * R && this.rng() < COLLIDE_KILL * dt) this.kill(this.rng() < 0.5 ? a : c, 'died');
+        if (wrapDist(a.x, a.y, c.x, c.y) < COLLIDE_R * R && this.rng() < COLLIDE_KILL * ds * PER_STEP) this.kill(this.rng() < 0.5 ? a : c, 'died');
       }
     }
     const stable = this.blobs.filter((b) => b.state === 'stable' && b.species);
@@ -317,6 +338,8 @@ class Dish {
       state: b.state,
       behavior: b.state === 'stable' ? b.behavior : null,
       age: b.steps,
+      // The game registers a NEW species only after SPECIES_MIN_STABLE_STEPS stable steps (balance.ts).
+      stableSteps: b.state === 'stable' ? Math.max(0, b.steps - BORN_STEPS) : 0,
       vx: 0,
       vy: 0,
       signature: b.species ? b.species.sig.map((v, i) => Math.max(0, v + (b.sigNoise[i] ?? 0))) : new Array(SIG_LEN).fill(0.05),
@@ -355,19 +378,20 @@ const PLAN = [
   // a new world as soon as it opens (the start card picks it), Esencia and time; Datos-only and
   // comfort nodes last.
   // Night 1 (rings 1–2)
-  'dropper', 'dish', 'worldCold', 'culture', 'clock', 'dropper', 'culture', 'dish', 'clock', 'worldGyro', 'culture', 'dropper',
-  'clock', 'dish', 'clock2', 'culture', 'nutrient', 'slots', 'clock2', 'fridge', 'nutrient', 'slots', 'spark', 'startEssence',
+  // RITMO §5: the clock first — a longer run is the most visible "antes → después".
+  'clock', 'dropper', 'clock', 'dish', 'culture', 'clock', 'worldCold', 'dropper', 'clock', 'culture', 'dish', 'culture', 'dropper',
+  'clock2', 'worldGyro', 'culture', 'dish', 'clock2', 'culture', 'nutrient', 'slots', 'clock2', 'fridge', 'nutrient', 'slots', 'spark', 'startEssence',
   'nutrient', 'slots', 'fridge', 'notebook', 'fridge', 'print', 'sparkLife', 'sparkTime', 'startEssence', 'notebook',
   // Night 2 (ring 3)
-  'lab', 'worldShields', 'worldHelix', 'culture2', 'sprint', 'incubator', 'stabilizer', 'swimAffinity', 'culture2', 'autoSeeder',
+  'lab', 'clock3', 'worldShields', 'clock3', 'worldHelix', 'culture2', 'clock3', 'sprint', 'incubator', 'stabilizer', 'swimAffinity', 'culture2', 'autoSeeder',
   'cataloguing', 'stillAffinity', 'sprint', 'stabilizer', 'culture2', 'crowdCost', 'nursery', 'freeSeeds', 'incubator', 'swimAffinity',
   'autoSeeder', 'cataloguing', 'stillAffinity', 'sprint', 'stabilizer', 'bigSeed', 'encTime', 'sparkGift', 'sparkFirst', 'sparkDatos',
   'archive', 'microscope', 'freeSeeds', 'startEssence', 'autoSeeder', 'stabilizer', 'cataloguing', 'encTime', 'notebook',
   // Night 3 (ring 4)
-  'worldLegs', 'abundance', 'clock3', 'dishXL', 'clock3', 'ecosystem', 'colonyAffinity', 'symbiosis', 'cheapSeeds', 'discoBonus',
+  'worldLegs', 'clock4', 'abundance', 'clock4', 'dishXL', 'clock4', 'clock4', 'ecosystem', 'colonyAffinity', 'symbiosis', 'cheapSeeds', 'discoBonus',
   'rareSpores', 'mutations', 'sparkMutagen', 'ecosystem', 'colonyAffinity', 'cheapSeeds', 'discoBonus',
   // Night 4 (ring 5)
-  'worldGiants', 'eternalLife', 'clock4', 'eternalLife', 'dropperMax', 'encyclopedia', 'clock4', 'encyclopedia', 'encyclopedia',
+  'worldGiants', 'eternalLife', 'eternalLife', 'dropperMax', 'encyclopedia', 'encyclopedia', 'encyclopedia',
 ];
 
 /** Which world the start card ends up on: the newest (picked for you, it pays the most); a kid taps around. */
@@ -400,7 +424,7 @@ interface SessionRow {
   base: number;
   /** Abonos bought. */
   boosts: number;
-  /** Esencia/s in the first 30 s of clock and the best of the last 30 s (does production climb?). */
+  /** Esencia/s in the first quarter of the clock and the best of the last quarter (does production climb?). */
   epsEarly: number;
   epsLate: number;
   bought: string[];
@@ -412,7 +436,10 @@ interface RunResult {
   endedAt: number | null; // minutes when the final question would be asked
   endedSession: number | null;
   minDatos: number;
+  /** Clock seconds of session 1 when the first creature was stable. */
   firstStable: number | null;
+  /** Real seconds from the first tap to the first node bought (summary and tree included). */
+  firstBuy: number | null;
 }
 
 /** The final question of the story: Act III ends when this night is ready. */
@@ -432,10 +459,27 @@ function runPolicy(policy: PolicyName, maxSessions: number, seed: number): RunRe
     rare: () => fx().rareSpores,
     speciesOf: (p) => (p ? (TEMPLATE_SPECIES.get(p) ?? null) : null),
   });
-  bus.on('dishSeed', ({ specs }) => specs.forEach((s) => dish.addSeed(s)));
+  bus.on('dishSeed', ({ specs }) => {
+    specs.forEach((s) => dish.addSeed(s));
+    // Starter / Nevera plants of a session that waits for its first tap are pre-incubated (ADR-027),
+    // also the ones a new game re-emits on its first tick.
+    if (game.session?.phase === 'ready') dish.preincubate();
+  });
+  /**
+   * Dish speed with the time-lapse (ADR-027). Until the integrator patches game.ts, game.speed is the
+   * Incubadora alone (0, 1, 7/6 or 4/3); patched, it already carries simPace (≥ 3). Both read the same.
+   */
+  const simSpeed = (): number => {
+    const sp = game.speed;
+    if (!(sp > 0)) return 0;
+    const paced = sp < fx().simPace ? sp * fx().simPace : sp;
+    return Math.min(C.SIM_PACE_MAX, paced);
+  };
+  let steps = 0;
   bus.on('dishClear', () => dish.clear());
   const newSpecies: string[] = [];
   bus.on('speciesNew', ({ speciesId }) => void newSpecies.push(speciesId));
+  if (EXT_LOG) bus.on('sessionExtended', (e) => console.log(`  S${game.session?.n} t=${game.session?.elapsed.toFixed(1)} +${JSON.stringify(e)}`));
 
   const rows: RunResult['rows'] = [];
   let endedAt: number | null = null;
@@ -443,6 +487,7 @@ function runPolicy(policy: PolicyName, maxSessions: number, seed: number): RunRe
   let minDatos = Infinity;
   let clockMinutes = 0;
   let firstStable: number | null = null;
+  let firstBuy: number | null = null;
 
   const freeSpot = (spacingR: number): { x: number; y: number } | null => {
     const R = game.simParams.R;
@@ -464,6 +509,8 @@ function runPolicy(policy: PolicyName, maxSessions: number, seed: number): RunRe
   for (let n = 1; n <= maxSessions; n++) {
     if (n > 1) game.actions.startSession!();
     game.actions.pickWorld!(pickWorld(policy, game, rng));
+    // The starter / Nevera creatures were pre-incubated under the start card (ADR-027).
+    dish.preincubate();
     // Physical room of the model dish: the game refuses taps beyond its capacity; dividers may add a couple.
     dish.cap = fx().capacity + 2;
     let lastSeed = -99;
@@ -474,16 +521,20 @@ function runPolicy(policy: PolicyName, maxSessions: number, seed: number): RunRe
     while (game.session!.phase !== 'over' && st < 3600) {
       st += DT;
       t += DT;
-      const rep = dish.step(DT, game.speed);
-      game.tick(DT, { step: Math.round(t * 30), creatures: rep.creatures, events: rep.events, totalMass: 0, fill: 0.05 });
+      const speed = simSpeed();
+      const rep = dish.step(DT, speed);
+      steps += DT * STEPS_PER_SEC * speed;
+      game.tick(DT, { step: Math.round(steps), creatures: rep.creatures, events: rep.events, totalMass: 0, fill: 0.05 });
       const v = game.view();
       const ses = v.session!;
       if (ses.phase === 'over') break;
       const stableN = rep.creatures.filter((c) => c.state === 'stable').length;
-      if (firstStable === null && stableN > 0) firstStable = t;
+      if (firstStable === null && stableN > 0 && ses.phase === 'running') firstStable = ses.elapsed;
       if (ses.phase === 'running') {
-        if (ses.elapsed <= 30) epsEarly = Math.max(epsEarly, v.essencePerSec);
-        if (ses.remaining <= 30) epsLate = Math.max(epsLate, v.essencePerSec);
+        // First and last quarter of the session (does production climb inside a run?).
+        const q = (ses.limit + ses.bonus) / 4;
+        if (ses.elapsed <= q) epsEarly = Math.max(epsEarly, v.essencePerSec);
+        if (ses.remaining <= q) epsLate = Math.max(epsLate, v.essencePerSec);
       }
       if (TRACE === n && Math.abs(st % 15) < DT / 2) {
         const m = v.multipliers;
@@ -512,7 +563,8 @@ function runPolicy(policy: PolicyName, maxSessions: number, seed: number): RunRe
       // Abono once the dish is full or busy (planner, greedy); the kid now and then.
       const b = v.boost;
       if (b?.affordable && ses.remaining > 25) {
-        const want = policy === 'kid' ? rng() < 0.004 : price.full || v.seedsGrowing || v.essence - b.cost >= 3 * v.seedCost;
+        // A sensible player takes a ×1,25 whenever it leaves a seed in the wallet (spent Esencia never lowers the Datos).
+        const want = policy === 'kid' ? rng() < 0.004 : price.full || v.seedsGrowing || v.essence - b.cost >= v.seedCost;
         if (want) game.actions.buyBoost!();
       }
       // Copies (Copiadora): when few creatures live, plant a known species of this world.
@@ -535,12 +587,12 @@ function runPolicy(policy: PolicyName, maxSessions: number, seed: number): RunRe
     const sum = game.lastSummary!;
     const session = game.session!;
     minDatos = Math.min(minDatos, sum.datos.total);
-    clockMinutes += (session.elapsed + OVERHEAD_SECONDS) / 60;
+    const playedBefore = clockMinutes * 60 + session.elapsed + SUMMARY_SECONDS;
     // Final question: the last night of Act III is ready.
     const species = game.state.species.length;
     const ni = nightInfo(treeCtxOf(game.research!, species));
     if (endedAt === null && (ni.night >= FINAL_NIGHT || (ni.night === FINAL_NIGHT - 1 && ni.ready))) {
-      endedAt = clockMinutes;
+      endedAt = playedBefore / 60;
       endedSession = n;
     }
     // Tree visit.
@@ -568,7 +620,9 @@ function runPolicy(policy: PolicyName, maxSessions: number, seed: number): RunRe
       if (!pick) break;
       if (!game.buyNode(pick).ok) break;
       bought.push(pick);
+      if (firstBuy === null && pick !== 'lab') firstBuy = playedBefore + SECONDS_PER_BUY;
     }
+    clockMinutes += (session.elapsed + Math.min(OVERHEAD_MAX, SUMMARY_SECONDS + SECONDS_PER_BUY * bought.length)) / 60;
     const levels = game.research!.levels;
     const owned = TREE_NODES.filter((d) => d.id !== 'lab' && (levels[d.id] ?? 0) > 0);
     rows.push({
@@ -595,7 +649,7 @@ function runPolicy(policy: PolicyName, maxSessions: number, seed: number): RunRe
     });
     if (endedAt !== null && n >= (endedSession ?? 0) + 2) break;
   }
-  return { policy, rows, endedAt, endedSession, minDatos, firstStable };
+  return { policy, rows, endedAt, endedSession, minDatos, firstStable, firstBuy };
 }
 
 // ───────────────────────────── report ──────────────────────────────
@@ -620,7 +674,7 @@ const med = (xs: number[]) => {
 
 const checks: string[] = [];
 const treeTotal = TREE_NODES.filter((n) => n.id !== 'lab').length;
-console.log(`\nBioluma session bot (integrated game, cycle 'sessions') — up to ${maxSessions} sessions, ${runs} run(s) per policy, overhead ${OVERHEAD_SECONDS} s/session`);
+console.log(`\nBioluma session bot (integrated game, cycle 'sessions') — up to ${maxSessions} sessions, ${runs} run(s) per policy, between runs ${SUMMARY_SECONDS} s + ${SECONDS_PER_BUY} s per buy (≤ ${OVERHEAD_MAX} s); time-lapse ×${C.SESSION_SIM_PACE} (${C.SIM_STEPS_PER_SEC * C.SESSION_SIM_PACE} steps/s)`);
 console.log(`Tree: ${treeTotal} buyable nodes on 7 straight routes (+ the centre); 1 Dato per ${C.DATOS_ESSENCE_DIV} Esencia; seed ${C.SESSION_SEED_PRICE} Esencia (×${C.SEED_PRICE_STEP} per seed bought).\n`);
 for (const policy of policies) {
   const res: RunResult[] = [];
@@ -629,15 +683,15 @@ for (const policy of policies) {
   // Median per session over the runs (the table the plan page shows).
   const N = Math.min(...res.map((r) => r.rows.length));
   console.log(`── ${policy}: median of ${runs} run(s) per session ──`);
-  console.log('| #  | night | clock | Esencia | ×prev | Datos | bank | buys | nodes | routes | species | world   | Abono | eps 30s→end | total min | bought (run 1)');
-  console.log('|----|-------|-------|---------|-------|-------|------|------|-------|--------|---------|---------|-------|-------------|-----------|---------------');
+  console.log('| #  | night | given | played | Esencia | ×prev | Datos | bank | buys | nodes | routes | species | world   | Abono | eps ¼→¼ | total min | bought (run 1)');
+  console.log('|----|-------|-------|--------|---------|-------|-------|------|------|-------|--------|---------|---------|-------|-------------|-----------|---------------');
   const medE = Array.from({ length: N }, (_, i) => med(res.map((r) => r.rows[i].essence)));
   for (let i = 0; i < N; i++) {
     const at = (f: (r: SessionRow) => number) => med(res.map((r) => f(r.rows[i])));
     const row = r0.rows[i];
     const grow = i > 0 && medE[i - 1] > 0 ? `×${(medE[i] / medE[i - 1]).toFixed(2)}` : '';
     console.log(
-      `| ${String(i + 1).padStart(2)} | ${String(at((r) => r.night)).padStart(5)} | ${fmtClock(at((r) => r.seconds)).padStart(5)} | ${fmtN(medE[i]).padStart(7)} | ${grow.padStart(5)} | ${String(at((r) => r.datos)).padStart(5)} | ${String(at((r) => r.bank)).padStart(4)} | ${String(at((r) => r.bought.length)).padStart(4)} | ${String(at((r) => r.nodes)).padStart(5)} | ${String(at((r) => r.branches)).padStart(6)} | ${String(at((r) => r.species)).padStart(7)} | ${row.world.padEnd(7)} | ${String(at((r) => r.boosts)).padStart(5)} | ${`${at((r) => r.epsEarly).toFixed(1)}→${at((r) => r.epsLate).toFixed(1)}`.padStart(11)} | ${at((r) => r.minutes).toFixed(0).padStart(9)} | ${verbose ? row.bought.join(' ') : row.bought.slice(0, 8).join(' ') + (row.bought.length > 8 ? ` +${row.bought.length - 8}` : '')}`,
+      `| ${String(i + 1).padStart(2)} | ${String(at((r) => r.night)).padStart(5)} | ${fmtClock(at((r) => r.limit)).padStart(5)} | ${fmtClock(at((r) => r.seconds)).padStart(6)} | ${fmtN(medE[i]).padStart(7)} | ${grow.padStart(5)} | ${String(at((r) => r.datos)).padStart(5)} | ${String(at((r) => r.bank)).padStart(4)} | ${String(at((r) => r.bought.length)).padStart(4)} | ${String(at((r) => r.nodes)).padStart(5)} | ${String(at((r) => r.branches)).padStart(6)} | ${String(at((r) => r.species)).padStart(7)} | ${row.world.padEnd(7)} | ${String(at((r) => r.boosts)).padStart(5)} | ${`${at((r) => r.epsEarly).toFixed(1)}→${at((r) => r.epsLate).toFixed(1)}`.padStart(11)} | ${at((r) => r.minutes).toFixed(0).padStart(9)} | ${verbose ? row.bought.join(' ') : row.bought.slice(0, 8).join(' ') + (row.bought.length > 8 ? ` +${row.bought.length - 8}` : '')}`,
     );
   }
   if (process.argv.includes('--runs')) {
@@ -652,6 +706,7 @@ for (const policy of policies) {
   const br12 = med(res.map((r) => r.rows[Math.min(11, r.rows.length - 1)]?.branches ?? 0));
   const minD = Math.min(...res.map((r) => r.minDatos));
   const fs = med(res.map((r) => r.firstStable ?? Infinity));
+  const fb = med(res.map((r) => r.firstBuy ?? Infinity));
   const end = (r: RunResult) => (r.endedSession ?? r.rows.length);
   // Buys after every session until the story ends (median over the runs, session by session).
   const nEnd = Math.min(N, Math.max(1, Math.round(endS)) || N);
@@ -667,28 +722,37 @@ for (const policy of policies) {
   // Growth per session in nights 1–2 (geometric mean of the median curve).
   const n12 = Array.from({ length: N }, (_, i) => med(res.map((r) => r.rows[i].night))).filter((x) => x <= 2).length;
   const growth12 = n12 >= 2 ? Math.pow(medE[n12 - 1] / medE[0], 1 / (n12 - 1)) : NaN;
-  // Production inside a session: best Esencia/s of the last 30 s over the first 30 s.
+  // Production inside a session: best Esencia/s of the last quarter over the first quarter.
   const climb = med(res.flatMap((r) => r.rows.slice(0, end(r)).map((x) => (x.epsEarly > 0 ? x.epsLate / x.epsEarly : 1))));
   console.log(
-    `\nmedian: first stable ${Number.isFinite(fs) ? fs.toFixed(0) + ' s' : '—'} · session 1: ${fmtN(s1e)} Esencia, ${s1} Datos, ${s1buys} buys · buys per visit (median, to the end) min ${minBuys}, first three ${early.join('/')} · Esencia growth per session in nights 1–2 ×${growth12.toFixed(2)} · in-session climb ×${climb.toFixed(1)} · routes with a node by session 12: ${br12}/7 · min Datos/session ${minD} · Esencia dips: median curve ${dipsMed} [${dipsList.join(', ')}], per run ${dipsRun.join('/')}; without Spark gifts ${dipsBase.length} [${dipsBase.join(', ')}] · story ending at session ${Number.isFinite(endS) ? endS : '—'} ≈ ${Number.isFinite(endM) ? (endM / 60).toFixed(2) + ' h' : '—'}\n`,
+    `\nmedian: first stable at ${Number.isFinite(fs) ? fs.toFixed(1) + ' s of clock' : '—'} · first purchase ${Number.isFinite(fb) ? fb.toFixed(0) + ' s after the first tap' : '—'} · session 1: ${fmtN(s1e)} Esencia, ${s1} Datos, ${s1buys} buys · buys per visit (median, to the end) min ${minBuys}, first three ${early.join('/')} · Esencia growth per session in nights 1–2 ×${growth12.toFixed(2)} · in-session climb ×${climb.toFixed(1)} · routes with a node by session 12: ${br12}/7 · min Datos/session ${minD} · Esencia dips: median curve ${dipsMed} [${dipsList.join(', ')}], per run ${dipsRun.join('/')}; without Spark gifts ${dipsBase.length} [${dipsBase.join(', ')}] · story ending at session ${Number.isFinite(endS) ? endS : '—'} ≈ ${Number.isFinite(endM) ? (endM / 60).toFixed(2) + ' h' : '—'}\n`,
   );
   const tag = `[${policy}]`;
   const s1limit = r0.rows[0].limit;
   const s1len = r0.rows[0].seconds;
-  checks.push(`${tag} session 1 is 2:00 (+ its "+5 s"): ${s1limit === C.SESSION_BASE_SECONDS && s1len <= C.SESSION_BASE_SECONDS + 60 ? 'OK' : 'FAIL'} (${fmtClock(s1limit)} → ${fmtClock(s1len)})`);
+  checks.push(`${tag} session 1 is ${C.SESSION_BASE_SECONDS} s (+ its "+5 s"): ${s1limit === C.SESSION_BASE_SECONDS && s1len <= C.SESSION_BASE_SECONDS + 15 ? 'OK' : 'FAIL'} (${fmtClock(s1limit)} → ${fmtClock(s1len)})`);
+  checks.push(`${tag} first purchase within 45 s of the first tap (~30 s wanted): ${fb <= 45 ? 'OK' : 'FAIL'} (${Number.isFinite(fb) ? fb.toFixed(0) + ' s' : 'never'})`);
+  checks.push(`${tag} a creature is stable within 5 s of clock in session 1: ${fs <= 5 ? 'OK' : 'FAIL'} (${Number.isFinite(fs) ? fs.toFixed(1) + ' s' : '—'})`);
+  {
+    const lim = Array.from({ length: N }, (_, i) => med(res.map((r) => r.rows[i].limit)));
+    const longest = Math.max(...lim);
+    checks.push(`${tag} runs grow 0:15 → 2–3 min and never shrink: ${lim.every((x, i) => i === 0 || x >= lim[i - 1]) && longest >= 120 && longest <= 185 ? 'OK' : 'FAIL'} (${lim.map(fmtClock).filter((x, i, a) => i === 0 || x !== a[i - 1]).join(' → ')})`);
+  }
   checks.push(`${tag} never a session below ${C.DATOS_MIN} Datos: ${minD >= C.DATOS_MIN ? 'OK' : 'FAIL'} (${minD})`);
   if (policy !== 'kid') {
     checks.push(`${tag} ≥ 2 buys after every session: ${minBuys >= 2 ? 'OK' : 'FAIL'} (min ${minBuys})`);
-    checks.push(`${tag} ≥ 3 buys after each of the first 3 sessions (3–5 wanted): ${early.every((b) => b >= 3) ? 'OK' : 'FAIL'} (${early.join('/')})`);
-    checks.push(`${tag} story ending ≈ 2 h (1:45–2:20): ${endM >= 105 && endM <= 140 ? 'OK' : 'FAIL'} (${Number.isFinite(endM) ? (endM / 60).toFixed(2) + ' h' : 'not reached'})`);
+    checks.push(`${tag} (info) buys after the first 3 sessions: ${early.join('/')}`);
+    const first10 = buysMed.slice(0, 10);
+    checks.push(`${tag} ≥ 2 buys after each of the first 10 runs: ${first10.every((b) => b >= 2) ? 'OK' : 'FAIL'} (${first10.join('/')})`);
+    checks.push(`${tag} story ending 1:30–2:15 (RITMO §6): ${endM >= 90 && endM <= 135 ? 'OK' : 'FAIL'} (${Number.isFinite(endM) ? (endM / 60).toFixed(2) + ' h' : 'not reached'})`);
   }
   if (policy === 'planner') {
     checks.push(`${tag} HARD: the median player never earns less Esencia than in the session before: ${dipsMed === 0 ? 'OK' : 'FAIL'} (${dipsMed} dips)`);
     const allDips = dipsRun.reduce((a, b) => a + b, 0);
     const pairs = res.reduce((a, r) => a + Math.max(0, end(r) - 1), 0);
     checks.push(`${tag} (info) single runs: a session below the one before in ${allDips} of ${pairs} pairs (${((100 * allDips) / Math.max(1, pairs)).toFixed(0)} %: Sparks, seeds and deaths are luck)`);
-    checks.push(`${tag} Esencia ×1,6–2 per session in nights 1–2: ${growth12 >= 1.6 && growth12 <= 2.0 ? 'OK' : 'FAIL'} (×${growth12.toFixed(2)})`);
-    checks.push(`${tag} production climbs inside a session (×1,5+ from the first 30 s to the end): ${climb >= 1.5 ? 'OK' : 'FAIL'} (×${climb.toFixed(1)})`);
+    checks.push(`${tag} Esencia ×1,5–3 per session in nights 1–2 (RITMO: "numbers that explode"): ${growth12 >= 1.5 && growth12 <= 3.0 ? 'OK' : 'FAIL'} (×${growth12.toFixed(2)})`);
+    checks.push(`${tag} production climbs inside a session (×1,5+ from the first quarter to the last): ${climb >= 1.5 ? 'OK' : 'FAIL'} (×${climb.toFixed(1)})`);
     checks.push(`${tag} ≥ 6 of 7 routes by session 12: ${br12 >= 6 ? 'OK' : 'FAIL'} (${br12})`);
     const nightAt = (s: number) => med(res.map((r) => r.rows[Math.min(s - 1, r.rows.length - 1)].night));
     const want = C.NIGHT_GATES.slice(0, 4).map((g) => g.sessions);
@@ -700,6 +764,6 @@ for (const policy of policies) {
     checks.push(`${tag} story ending (no target, for the record): ${Number.isFinite(endM) ? (endM / 60).toFixed(2) + ' h at session ' + endS : 'not reached'}`);
   }
 }
-console.log('Pacing targets (docs/CICLO.md §11):');
+console.log('Pacing targets (docs/RITMO.md §6):');
 for (const c of checks) console.log('  ' + c);
 void TREE_BY_ID;

@@ -22,7 +22,7 @@
  */
 import type { Text } from '../core/types';
 import { DISH_DIAMETERS } from '../core/dish';
-import { GOLDEN_LIFE, SEED_NURSERY_MAX } from './balance';
+import { SEED_NURSERY_MAX } from './balance';
 import * as C from './cycleBalance';
 import { formatDuration, formatNumber } from './format';
 import { NODE_TEXT, VALUE_TEXT as V, type BranchId } from './treeText';
@@ -48,8 +48,13 @@ export interface TreeEffects {
   timePerGolden: number;
   /** Production multiplier during the last SPRINT_SECONDS (1 = no sprint). */
   sprintMult: number;
-  /** Best creatures (one per species) planted alive at the start of the next session. */
+  /** Creatures planted alive (pre-incubated) at the start of every session: STARTER_CREATURES + Nevera (best kept species first). */
   fridge: number;
+  /**
+   * Time-lapse: the dish runs SIM_STEPS_PER_SEC × this during a session (docs/RITMO.md §4, ADR-027).
+   * The integrator sets `game.speed = simPace × (seeds forming ? matureSpeed : 1)`, capped at SIM_PACE_MAX.
+   */
+  simPace: number;
   // ── 💧 Seeding ──
   startEssence: number;
   freeSeeds: number;
@@ -76,7 +81,7 @@ export interface TreeEffects {
   capacity: number;
   /** Seeds that may be forming at once (balance SEED_NURSERY_MAX + Guardería). */
   nurseryMax: number;
-  /** Seeds become paying creatures this many times faster (Incubadora). */
+  /** While seeds are forming the dish runs this many times faster on top of simPace (Incubadora). */
   matureSpeed: number;
   /** +fraction of production per distinct species alive on the dish (Ecosistema). */
   ecosystem: number;
@@ -230,6 +235,12 @@ const dishSize = (fx: TreeEffects): Text => V.room(fx.capacity, DISH_DIAMETERS[M
 const plusPct = (x: number, what: (p: string) => Text): Text => what(pctNum(x));
 const range = (a: number, b: number): string => `${Math.round(a)}–${Math.round(b)}`;
 
+/** Real seconds a seed needs to become a stable (paying) creature with these effects (time-lapse × Incubadora). */
+export function birthSeconds(fx: Pick<TreeEffects, 'simPace' | 'matureSpeed'>): number {
+  const pace = Math.min(C.SIM_PACE_MAX, Math.max(1e-6, fx.simPace * fx.matureSpeed));
+  return C.STABLE_AGE_STEPS / (C.SIM_STEPS_PER_SEC * pace);
+}
+
 /** Every world node: opens one world (in order) and its species. */
 function worldNode(world: WorldId, ring: number, icon: string): NodeSpec {
   return {
@@ -266,13 +277,13 @@ export const TREE_NODES: TreeNodeDef[] = [
 
   // ───── ⏱ Reloj ─────
   ...route('time', [
-    { id: 'clock', ring: 1, icon: 'clock', maxLevel: 3, apply: (fx, l) => void (fx.sessionSeconds += l * C.TIME_CLOCK), measure: (fx) => fx.sessionSeconds, show: session },
-    { id: 'clock2', ring: 2, icon: 'clock2', maxLevel: 2, apply: (fx, l) => void (fx.sessionSeconds += l * C.TIME_CLOCK2), measure: (fx) => fx.sessionSeconds, show: session },
+    { id: 'clock', ring: 1, icon: 'clock', maxLevel: C.TIME_CLOCK_LEVELS, growth: C.TIME_CLOCK_GROWTH, apply: (fx, l) => void (fx.sessionSeconds += l * C.TIME_CLOCK), measure: (fx) => fx.sessionSeconds, show: session },
+    { id: 'clock2', ring: 2, icon: 'clock2', maxLevel: C.TIME_CLOCK2_LEVELS, apply: (fx, l) => void (fx.sessionSeconds += l * C.TIME_CLOCK2), measure: (fx) => fx.sessionSeconds, show: session },
     { id: 'fridge', ring: 2, icon: 'fridge', maxLevel: 3, apply: (fx, l) => void (fx.fridge += l * C.FRIDGE_PER_LEVEL), measure: (fx) => fx.fridge, show: (fx) => V.fridge(fx.fridge) },
     { id: 'sprint', ring: 3, icon: 'sprint', maxLevel: 3, apply: (fx, l) => void (fx.sprintMult = 1 + l * C.SPRINT_PER_LEVEL), measure: (fx) => fx.sprintMult, show: (fx) => V.sprint(multText(fx.sprintMult)) },
     { id: 'encTime', ring: 3, icon: 'encTime', maxLevel: 2, apply: (fx, l) => void (fx.timePerEncargo += l * C.TIME_ENCARGO_BONUS), measure: (fx) => fx.timePerEncargo, show: (fx) => V.perEncargo(fx.timePerEncargo) },
-    { id: 'clock3', ring: 4, icon: 'clock3', maxLevel: 2, apply: (fx, l) => void (fx.sessionSeconds += l * C.TIME_CLOCK3), measure: (fx) => fx.sessionSeconds, show: session },
-    { id: 'clock4', ring: 5, icon: 'clock4', maxLevel: 3, apply: (fx, l) => void (fx.sessionSeconds += l * C.TIME_CLOCK4), measure: (fx) => fx.sessionSeconds, show: session },
+    { id: 'clock3', ring: 3, icon: 'clock3', maxLevel: C.TIME_CLOCK3_LEVELS, apply: (fx, l) => void (fx.sessionSeconds += l * C.TIME_CLOCK3), measure: (fx) => fx.sessionSeconds, show: session },
+    { id: 'clock4', ring: 4, icon: 'clock4', maxLevel: C.TIME_CLOCK4_LEVELS, apply: (fx, l) => void (fx.sessionSeconds += l * C.TIME_CLOCK4), measure: (fx) => fx.sessionSeconds, show: session },
   ]),
 
   // ───── 💧 Gotero ─────
@@ -293,7 +304,7 @@ export const TREE_NODES: TreeNodeDef[] = [
     { id: 'slots', ring: 2, icon: 'slots', maxLevel: 3, apply: (fx, l) => void (fx.extraSlots += l * C.SLOTS_PER_LEVEL), measure: (fx) => fx.capacity, show: (fx) => V.roomOnly(fx.capacity) },
     { id: 'crowdCost', ring: 3, icon: 'crowdCost', maxLevel: 2, apply: (fx, l) => void (fx.extraSlots += l * C.ROOM_PER_LEVEL), measure: (fx) => fx.capacity, show: (fx) => V.roomOnly(fx.capacity) },
     { id: 'nursery', ring: 3, icon: 'nursery', maxLevel: 1, apply: (fx) => void (fx.nurseryMax += C.NURSERY_TREE_BONUS), measure: (fx) => fx.nurseryMax, show: (fx) => V.nursery(fx.nurseryMax) },
-    { id: 'incubator', ring: 3, icon: 'incubator', maxLevel: 2, growth: C.TREE_GROWTH_STEEP, apply: (fx, l) => void (fx.matureSpeed = C.MATURE_SPEED_BY_LEVEL[l] ?? fx.matureSpeed), measure: (fx) => fx.matureSpeed, show: (fx) => V.mature(multText(fx.matureSpeed)) },
+    { id: 'incubator', ring: 3, icon: 'incubator', maxLevel: 2, growth: C.TREE_GROWTH_STEEP, apply: (fx, l) => void (fx.matureSpeed = C.MATURE_SPEED_BY_LEVEL[l] ?? fx.matureSpeed), lower: true, measure: (fx) => birthSeconds(fx), show: (fx) => V.birth(loc(num1(birthSeconds(fx)))) },
     { id: 'dishXL', ring: 4, icon: 'dishXL', maxLevel: 1, apply: (fx) => void (fx.dishLevel = Math.max(fx.dishLevel, C.DISH_XL_LEVEL)), measure: (fx) => fx.capacity, show: dishSize },
     { id: 'ecosystem', ring: 4, icon: 'ecosystem', maxLevel: 2, apply: (fx, l) => void (fx.ecosystem += l * C.ECOSYSTEM_PER_SPECIES), measure: (fx) => fx.ecosystem, show: (fx) => plusPct(fx.ecosystem, V.perSpecies) },
   ]),
@@ -337,7 +348,7 @@ export const TREE_NODES: TreeNodeDef[] = [
   // ───── ✨ Destello ─────
   ...route('spark', [
     { id: 'spark', ring: 1, icon: 'spark', maxLevel: 3, lower: true, apply: (fx, l) => void (fx.goldenIntervalMult *= Math.pow(C.GOLDEN_INTERVAL_FACTOR, l)), measure: (fx) => fx.goldenIntervalMult, show: (fx) => V.sparkEvery(range(C.SESSION_GOLDEN_INTERVAL[0] * fx.goldenIntervalMult, C.SESSION_GOLDEN_INTERVAL[1] * fx.goldenIntervalMult)) },
-    { id: 'sparkLife', ring: 2, icon: 'sparkLife', maxLevel: 2, apply: (fx, l) => void (fx.goldenLifeBonus += l * C.GOLDEN_LIFE_BONUS), measure: (fx) => fx.goldenLifeBonus, show: (fx) => V.sparkStays(GOLDEN_LIFE + fx.goldenLifeBonus) },
+    { id: 'sparkLife', ring: 2, icon: 'sparkLife', maxLevel: 2, apply: (fx, l) => void (fx.goldenLifeBonus += l * C.GOLDEN_LIFE_BONUS), measure: (fx) => fx.goldenLifeBonus, show: (fx) => V.sparkStays(C.SESSION_GOLDEN_LIFE + fx.goldenLifeBonus) },
     { id: 'sparkTime', ring: 2, icon: 'sparkTime', maxLevel: 2, apply: (fx, l) => void (fx.timePerGolden += l * C.TIME_PER_GOLDEN), measure: (fx) => fx.timePerGolden, show: (fx) => V.perSpark(fx.timePerGolden) },
     { id: 'sparkFirst', ring: 3, icon: 'sparkFirst', maxLevel: 1, apply: (fx) => void (fx.goldenFirstDelay = [...C.GOLDEN_FIRST_FAST]), measure: (fx) => (fx.goldenFirstDelay ? 1 : 0), show: (fx) => V.firstSpark(range(...(fx.goldenFirstDelay ?? C.SESSION_GOLDEN_FIRST_DELAY))) },
     { id: 'sparkGift', ring: 3, icon: 'sparkGift', maxLevel: 3, apply: (fx, l) => void (fx.goldenRewardMult *= 1 + l * C.GOLDEN_GIFT_BONUS), measure: (fx) => fx.goldenRewardMult, show: (fx) => V.gifts(Math.round(C.SPARK_GIFT_SECONDS * fx.goldenRewardMult)) },
@@ -363,7 +374,8 @@ export function baseEffects(): TreeEffects {
     timePerEncargo: C.SESSION_TIME_PER_ENCARGO,
     timePerGolden: 0,
     sprintMult: 1,
-    fridge: 0,
+    fridge: C.STARTER_CREATURES,
+    simPace: C.SESSION_SIM_PACE,
     startEssence: C.SESSION_START_ESSENCE,
     freeSeeds: C.SESSION_BASE_FREE_SEEDS,
     dropper: 0,

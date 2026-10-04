@@ -7,7 +7,7 @@
  */
 import './ui.css';
 import { bus } from '../core/bus';
-import { mod, wrapDelta, type Camera } from '../core/camera';
+import type { Camera } from '../core/camera';
 import { BEHAVIOR_COLOR } from '../core/palette';
 import type { Behavior, BuyQty, GameActions, GameView, Lang, Text } from '../core/types';
 import { TABS, type Ctx, type Panel, type TabId, type TextSize, type ThemePref, type ToastKind } from './ctx';
@@ -32,6 +32,7 @@ import type { LeaderboardClient } from './leaderboard-types';
 import { createSplash, type Splash } from './splash';
 import { Toasts } from './toasts';
 import { SESSION_UI } from '../game/treeText';
+import { MOMENT_MIN_RUN_SECONDS, SESSION_TOAST_MAX_MS } from '../game/cycleBalance';
 
 export interface UIDeps {
   actions: GameActions;
@@ -202,6 +203,14 @@ function sanitizePrefs(raw: unknown): Prefs {
 const THEME_KEY = 'bioluma.theme';
 /** Quiet time with an empty dish before the "tap here again" finger returns (QA2 §5b, CLARIDAD J-164). */
 const TAP_AGAIN_HINT_MS = 8000;
+
+/**
+ * A short session run is on the clock (shorter than MOMENT_MIN_RUN_SECONDS): no card may eat it, toasts
+ * are brief and the Momentos wait for the summary (docs/RITMO.md §2 rule 7, §4.4).
+ */
+export function shortRunRunning(se: { phase: string; limit: number; bonus: number } | null | undefined): boolean {
+  return !!se && se.phase === 'running' && se.limit + se.bonus < MOMENT_MIN_RUN_SECONDS;
+}
 /** Simulation steps per second at ×1 (main.ts STEPS_PER_SEC): creature age is shown in seconds. */
 const AGE_STEPS_PER_SEC = 30;
 
@@ -367,6 +376,7 @@ class BiolumaUI implements UI {
     this.build();
     this.root.appendChild(this.el);
     this.toasts.setHold(() => !!this.deps.isNarrating?.() || !!this.splash?.visible);
+    this.toasts.setMaxMs(() => (shortRunRunning(this.v?.session) ? SESSION_TOAST_MAX_MS : Infinity));
     this.bindBus();
     this.bindKeys();
     this.bindResize();
@@ -726,8 +736,9 @@ class BiolumaUI implements UI {
       if (p) {
         const k = 1 - Math.exp(-Math.min(dtSec, 0.1) * 4);
         const cam = this.camera;
-        cam.cx = mod(cam.cx + wrapDelta(p.x - cam.cx, cam.gridW) * k, cam.gridW);
-        cam.cy = mod(cam.cy + wrapDelta(p.y - cam.cy, cam.gridH) * k, cam.gridH);
+        cam.cx = this.camera.wrapX(cam.cx + this.camera.deltaX(p.x - cam.cx) * k);
+        cam.cy = this.camera.wrapY(cam.cy + this.camera.deltaY(p.y - cam.cy) * k);
+        if (cam.dish) cam.clamp(); // the round dish keeps the view over the glass
       }
     }
     this.overlay.draw(timeSec, dtSec);

@@ -420,6 +420,12 @@ export class StatusLayer {
     return this.boxes[i];
   }
 
+  /** Creature `id` got a pill in the last draw() (the overlay then leaves out its name: one label per creature). */
+  hasPill(id: number): boolean {
+    for (let i = 0; i < this.nHits; i++) if (this.hits[i].id === id) return true;
+    return false;
+  }
+
   private alpha = new Map<number, number>();
   /** Per-view work (which creatures get a pill, draw order), redone only when the list changes: no per-frame maps or sorts. */
   private key: { list: readonly CreatureView[] | null; onAll: boolean; sel: number | null } = { list: null, onAll: false, sel: null };

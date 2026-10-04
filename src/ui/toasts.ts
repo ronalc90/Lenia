@@ -37,6 +37,12 @@ export class Toasts {
     this.hold = fn;
   }
 
+  /** Longest a toast may stay (ms): a short session run caps it (RITMO §4.4, SESSION_TOAST_MAX_MS). */
+  private cap: () => number = () => Infinity;
+  setMaxMs(fn: () => number): void {
+    this.cap = fn;
+  }
+
   push(text: string, kind: ToastKind = 'info', icon?: string, onClick?: () => void): void {
     if (!text) return;
     // Skip exact duplicates of what is showing or queued.
@@ -104,7 +110,7 @@ export class Toasts {
     this.el.textContent = '';
     this.el.appendChild(el);
     this.current = el;
-    this.timer = window.setTimeout(() => this.dismiss(), this.queue.length ? 2400 : 3000);
+    this.timer = window.setTimeout(() => this.dismiss(), Math.min(this.cap(), this.queue.length ? 2400 : 3000));
   }
 
   private dismiss(): void {

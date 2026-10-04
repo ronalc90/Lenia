@@ -15,7 +15,7 @@
  */
 import type { Lang, Text } from '../../core/types';
 import * as C from '../../game/cycleBalance';
-import type { SessionState } from '../../game/session';
+import { countdownSeconds, warnSeconds, type SessionState } from '../../game/session';
 import { SESSION_UI } from '../../game/treeText';
 import { fmt, fmtClock } from '../format';
 import { treeIcon } from '../tree/icons';
@@ -75,8 +75,9 @@ export function hudViewOf(s: SessionState, sprintMult: number): SessionHudView {
 export function hudState(v: SessionHudView): 'wait' | 'run' | 'warn' | 'count' | 'over' {
   if (v.phase === 'ready') return 'wait';
   if (v.phase === 'over' || v.remaining <= 0) return 'over';
-  if (v.remaining <= C.SESSION_COUNTDOWN) return 'count';
-  if (v.remaining <= C.SESSION_WARN_SECONDS) return 'warn';
+  // Proportional to the run (RITMO §3.4): a 15 s run is not amber from its first second.
+  if (v.remaining <= countdownSeconds(v.total)) return 'count';
+  if (v.remaining <= warnSeconds(v.total)) return 'warn';
   return 'run';
 }
 

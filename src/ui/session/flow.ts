@@ -29,6 +29,8 @@ export type SessionFlowSound = SessionHudSound | SummarySound | TreeSound;
 export interface SessionFlowOptions {
   /** Layer for the start card, the summary and the tree (above the dish). */
   root: HTMLElement;
+  /** Dish diameter (cells) of a Placa level on this device: the Placa nodes draw it to scale. */
+  dishDiameter?(level: number): number;
   /** Where the clock pill goes (the centre of the game's HUD). */
   hudHost: HTMLElement;
   /** Where the "+12 Datos al terminar" pill goes (the game's dock); default under the clock. */
@@ -117,6 +119,7 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
     onClose: () => tree.close(),
     onSound: (k) => sound(k),
     worldSpecies,
+    dishDiameter: o.dishDiameter,
   });
 
   const summary: SessionSummaryView = createSessionSummary(o.root, {
