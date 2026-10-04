@@ -12,9 +12,19 @@
 > prestigio gratis). Este documento la aplica y dice dónde la medida obligó a desviarse (§4.3 mundos, §4.5 Gotero,
 > §11 ritmo).
 
-Todos los números viven en [`src/game/cycleBalance.ts`](../src/game/cycleBalance.ts) (Fase 2: reexportado desde
-`balance.ts`). Sustituye al ciclo continuo de la GDD (§5 Muestras/Genoma, §8 Laboratorio, §10 Extinción, Calibrar) — ver
-el ADR propuesto en §16.
+> **Tercera decisión del dueño (2.ª prueba):** *«Sigo sin ver el tiempo… el juego debe ser relativamente corto,
+> emocionante y súper incremental… también debe crecer y no castigar por crecer… para comprar mejoras debo ganar más
+> dinero y más rápido.»* → sesión 1 de **2:00** con el reloj a la vista desde la primera semilla; Reloj hasta **5:00**;
+> final de la historia a **~2 h**; **un solo precio de semilla por sesión** (los vivos nunca lo suben; el límite es el
+> **sitio** de la placa); **≥ 2 compras** tras cada sesión; **Abono** dentro de la sesión.
+
+Todos los números viven en [`src/game/cycleBalance.ts`](../src/game/cycleBalance.ts), reexportado desde `balance.ts`.
+Sustituye al ciclo continuo de la GDD (§5 Muestras/Genoma, §8 Laboratorio, §10 Extinción, Calibrar) — ver el ADR-026
+propuesto en §16. Los textos siguen [`docs/CLARIDAD.md`](CLARIDAD.md) (sin jerga; un test lo vigila).
+
+**Estado (Fase 2A, hecho):** el ciclo corre dentro de `createGame({ bus, cycle: 'sessions' })` (sesiones, Árbol,
+mundos, noches, Nevera, Abono, guardado v2). Por defecto `createGame` sigue en el ciclo **clásico**, que es el que usa
+hoy la interfaz viva; la Fase 2B cambia `main.ts`/`ui.ts` y borra el clásico (§15).
 
 ## Índice
 
@@ -41,78 +51,106 @@ el ADR propuesto en §16.
 
 ```mermaid
 flowchart LR
-    A[Tarjeta de inicio<br/>Sesión 4 · 4:00 · elige mundo] --> B[Sembrar · mirar · descubrir<br/>el reloj corre]
+    A[Tarjeta de inicio<br/>Sesión 4 · 2:45 · elige mundo] --> B[Sembrar · mirar · descubrir<br/>el reloj corre]
     B --> C{¿Se acabó el tiempo?}
     C -- no --> B
     C -- sí --> D[¡Tiempo! · la placa se congela]
     D --> E[Fin de la sesión<br/>Esencia ÷ 250 = Datos<br/>+ especies, encargos, récords]
     E --> F[Árbol: 7 rutas rectas<br/>cada compra: antes → después]
     F --> A
-    F -. cada 4–5 sesiones .-> G[Nueva noche · gratis<br/>se abre otro anillo · la historia avanza]
+    F -. cada 3–5 sesiones .-> G[Nueva noche · gratis<br/>se abren mejoras nuevas · la historia avanza]
     G --> A
 ```
 
 **El prestigio en una sola línea** (la que ve el jugador): *Termina la sesión → ganas N Datos («por cada 250 de
 Esencia, 1 Dato») → gástalos en el árbol → la próxima sesión rindes más.* Antes de que acabe la sesión, el HUD ya dice
-cuánto vas a ganar y para qué te alcanza: **«📊 +22 Datos al terminar · Más tiempo: faltan 4»** (al tocarlo, la cuenta
-entera en la hoja «¿Por qué?» de Momentos).
+cuánto vas a ganar y para qué te alcanza: **«📊 +22 Datos al terminar · Más tiempo: te faltan 4 Datos»** (al tocarlo,
+la cuenta entera en la hoja «¿Por qué?» de Momentos; oculta en la sesión 1, cuando aún no se sabe qué es un Dato).
 
-*Un estudiante con tiempo de laboratorio.* Cada **sesión** es una placa nueva y un reloj (3:00 al principio). Las
+*Un estudiante con tiempo de laboratorio.* Cada **sesión** es una placa nueva y un reloj (2:00 al principio). Las
 criaturas estables dan **Esencia**, que se gasta en semillas durante la sesión. Al llegar a cero, la Esencia **ganada** se
 convierte en **Datos** con una cuenta que se ve entera. Con los Datos se compran mejoras del **Árbol** en **7 rutas
 rectas**: en cada ruta, el paso siguiente siempre da más. El **Bestiario** y el **Árbol** nunca se pierden; la placa se
-vacía en cada sesión. Cada 4–5 sesiones la **noche avanza** (gratis): se abre un anillo más del árbol y VELA cuenta el
-siguiente capítulo. **No hay mandos de química**: las reglas del mundo se eligen como **mundos** con sus especies (§4.3).
+vacía en cada sesión. Cada 3–5 sesiones la **noche avanza** (gratis): se abren mejoras nuevas y VELA cuenta el
+siguiente capítulo; la pregunta final de la historia llega hacia la sesión 24 (≈ 2 h). **No hay mandos de química**: las reglas del mundo se eligen como **mundos** con sus especies (§4.3).
 
 ## 2. La sesión
 
 ### 2.1 Tarjeta de inicio
 
-`src/ui/session/start.ts`. **«Sesión 8 · Tienes 5:30 de laboratorio»**; **«Elige un mundo»**: los mundos abiertos como
+`src/ui/session/start.ts`. **«Sesión 8 · Tienes 3:15 de laboratorio»**; **«Elige un mundo»**: los mundos abiertos como
 tarjetas (nombre, una línea en palabras, retratos de sus especies — las que aún no tienes como siluetas con «?» —, y
 «+3 especies» / «Encontradas 1/3» / «¡Todas encontradas!»; el mundo recién abierto lleva **«¡Nuevo!»** y viene elegido);
-lo que el árbol regala al empezar (💧 Esencia · 🎁 siembras gratis · ❄ criaturas de la Nevera con sus retratos);
-**«Nuevo desde la última vez»**; el **encargo**; «El reloj empieza con tu primera gota» y **«¡Empezar!»**. Elegir mundo es
-la **única** elección de reglas del juego y nunca enseña números. En la sesión 1 la tarjeta se omite (VELA presenta).
+lo que el árbol regala al empezar (💧 Esencia · 🎁 semillas gratis · ❄ criaturas de la Nevera con sus retratos);
+**«Nuevo desde la última vez»**; el **encargo**; «El reloj empieza con tu primera semilla» y **«¡Empezar!»**. Elegir mundo
+es la **única** elección de reglas del juego y nunca enseña números. En la sesión 1 la tarjeta se omite (VELA presenta).
+Mientras la sesión espera (`phase 'ready'`), comprar un nodo o cambiar de mundo la vuelve a preparar al momento
+(`setupSession`): la placa, la cartera y la Nevera ya llevan lo nuevo.
 
 ### 2.2 El reloj (HUD)
 
 `src/ui/session/hud.ts`. Una píldora grande sobre la placa (dial + **«2:41»**, «Sesión 4») y debajo la píldora del
-prestigio **«📊 +22 Datos al terminar · Más tiempo: faltan 4»** (o **«¡Alcanza para Más tiempo!»** en verde).
+prestigio **«📊 +22 Datos al terminar · Más tiempo: te faltan 4 Datos»** (o **«¡Alcanza para Más tiempo!»** en verde).
 
 | Momento | Qué se ve | Sonido (gancho) |
 |---|---|---|
-| Antes de la primera gota | «3:30 · Siembra para empezar», en gris | — |
+| Antes de la primera semilla | «2:00 · Siembra para empezar», en gris | — |
 | Corriendo | cifras claras, dial azul | — |
 | Queda 1 minuto | cartel **«¡Último minuto!»** sobre la placa (una vez) | `lastMinute` |
 | Últimos 30 s | la píldora se vuelve **ámbar** y late | `warn` |
 | Últimos 10 s | cada segundo la cifra **rebota** | `tick` |
-| Sprint final (nodo) | chip dorado **«¡Sprint! ×2»** | — |
+| Recta final (nodo) | chip dorado **«¡Recta final! ×2»** | — |
 | Se alarga | chip verde **«+5 s especie»** bajo el reloj | `extend` |
 | 0:00 | sello **«¡TIEMPO!»** sobre la placa congelada (1,6 s), luego el resumen | `timesUp` |
 
 **Cuándo corre:** solo mientras la placa corre; **se detiene** con la pausa, las tarjetas de Momentos, los diálogos y
-cualquier pantalla encima (`tickSession(…, {paused})`). **Empieza con la primera gota.**
+cualquier pantalla encima (`tickSession(…, {paused})`). **Empieza con la primera semilla.** Al acabar, la placa se
+congela (`game.speed` = 0) bajo el resumen.
 
 **Qué lo alarga** (todo visible con «+N s», nada lo resta):
 
 | Fuente | Segundos | De dónde |
 |---|---|---|
-| Duración base | 3:00 | `SESSION_BASE_SECONDS` |
-| ⏱ Más tiempo · Reloj grande · Reloj de arena · Reloj eterno | +30·3, +30·2, +60·2, +30·3 → **9:00** | ruta Reloj |
+| Duración base | **2:00** | `SESSION_BASE_SECONDS` |
+| ⏱ Más tiempo · Reloj grande · Reloj de arena · Reloj eterno | +15·3, +15·2, +30·2, +15·3 → **5:00** | ruta Reloj |
 | Cada especie **nueva** para el Bestiario (regla base) | +5 s | `SESSION_TIME_PER_SPECIES` |
 | Encargo cumplido | +5 s → +10 → +15 («Encargos con prisa») | `SESSION_TIME_PER_ENCARGO` + nodo |
 | Destello atrapado | +5 s → +10 («Destello del tiempo») | nodo |
 
 ### 2.3 La Esencia durante la sesión
 
-Solo se gasta dentro de la sesión: semillas (precio explicado con la hoja «¿Por qué cuesta esto?» de
-`src/ui/moments/seedprice.ts`, con flecha ↑/↓ y su motivo cada vez que cambia) y copias (Copiadora). Los Datos se calculan
-con la Esencia **ganada**, no la guardada: gastar nunca castiga.
+Entra por las criaturas (cada segundo), el **Destello** («El Destello te regala 30 s de tu Esencia»), los Encargos y los
+objetivos; se gasta en semillas, copias y Abono. Los Datos se calculan con la Esencia **ganada**, no la guardada: gastar
+nunca castiga.
+
+**Semillas: un solo precio por sesión, nunca castiga crecer** (`seedPrice`/`seedCost` en `game.ts`):
+
+```
+precio = 4 (SESSION_SEED_PRICE) × Semillas baratas × 1,05 por cada semilla comprada hoy (como mucho ×3), en Esencia entera
+```
+
+Las criaturas vivas **no** suben el precio (sin «recargo por criatura» ni «placa llena ×3»). El límite físico es el
+**sitio**: la placa tiene sitio para **5** criaturas (`DISH_CAPACITY` 5 · 7 · 9 · 12 · 15 por tamaño, + Más sitio y Sin
+apretujones; en Gigantes cabe la mitad). Vivas + naciendo + recién sembradas cuentan; con la placa llena un toque **se
+rechaza gratis** (evento `seedBlocked` con motivo `full`, texto `TEXT.dishFull(n)`: «¡Placa llena! Caben 5. Compra «Placa
+más grande» en el Árbol.»). La regla de separación (no sembrar encima) y la guardería (3 naciendo a la vez, 5 con
+Guardería) se quedan. `GameView.seedPrice` trae las partes (`base`, `cheapMult`, `stepMult`, `bought`, `capacity`,
+`full`). La primera semilla de cada sesión vive seguro (`SESSION_SURE_SEEDS`); en la sesión 1, las tres primeras.
+
+**Abono** (`buyBoost`): comida para la placa — **toda la Esencia ×1,25 hasta el final de la sesión**. Cuesta **20 s de
+tu Esencia actual** (mínimo 15) y el siguiente de la misma sesión, **el doble**. Se puede comprar a partir de los 30 s de
+reloj (`BOOST_FROM_SECONDS`: comprado en el segundo 1, cuando nada produce, costaba solo el mínimo). Es pura ganancia para
+los Datos (cuentan la Esencia ganada). `GameView.boost` = `{ cost, count, mult, nextMult, affordable, wait }`.
+
+**Destello** (desde la sesión 2): llega cada 80–100 s (× Destello frecuente) y regala **30 s de tu Esencia** (36/42/48 s
+con Regalos mejores, mínimo 20) y una semilla segura (3 con Semillas mágicas). Proporcional: una sesión con un Destello
+menos no es una sesión peor. La ventana estrecha hace del Destello un ritmo, no una lotería.
 
 ### 2.4 Terminar antes
 
-Menú de pausa → **«Terminar ahora»** (con confirmación). Cobra lo ganado; el resumen dice cuánto tiempo quedaba.
+Menú de pausa → **«Terminar ahora»** con confirmación «¿Terminar ya? Te llevas 22 Datos.» (`endSessionNow`). Cobra lo
+ganado **sin** el mínimo de 3 Datos (si no, terminar al instante sería una fuente gratis); el resumen dice cuánto tiempo
+quedaba.
 
 ### 2.5 El resumen: «Fin de la sesión N»
 
@@ -120,14 +158,15 @@ Menú de pausa → **«Terminar ahora»** (con confirmación). Cobra lo ganado; 
 Datos»** con la fórmula a la vista (**«💧 Por cada 250 de Esencia, 1 Dato»**) y la ecuación fila a fila que suma de
 verdad (§3.3), con un total que cuenta hacia arriba; especies de hoy con retratos (**«¡Nueva!»**), la mejor criatura,
 récords; dos botones fijos: **«Ir al Árbol · 3 mejoras listas»** y **«Nueva sesión»** (si no alcanza para nada, «Nueva
-sesión» va primero y el árbol dice «Te faltan 12 para Más tiempo»). En escritorio, dos columnas.
+sesión» va primero y el árbol dice «Te faltan 12 Datos para Más tiempo»). En escritorio, dos columnas.
 
 ## 3. Dos monedas: Esencia y Datos
 
 ### 3.1 Esencia 💧 (de la sesión)
 
-La producen las criaturas estables (GDD §5, sin cambios), se gasta en semillas y copias y **se convierte al acabar**.
-Cada sesión empieza con 20 + «Esencia de bolsillo».
+La producen las criaturas (GDD §5, sin cambios), más el Destello, los Encargos y los objetivos; se gasta en semillas,
+copias y Abono y **se convierte al acabar**. Cada sesión empieza con 20 + «Esencia de bolsillo» (+ lo que dejaron los
+Encargos cumplidos entre sesiones, que cuenta como ganado cuando el reloj arranca).
 
 ### 3.2 Datos 📊 (permanentes)
 
@@ -142,7 +181,7 @@ Datos = ⌊ Esencia ganada ÷ 250 ⌋ × noche            (+10 % por noche despu
       + maneras de moverse nuevas × 3 (5, 7 con Premio al descubridor)
       + encargos × 2  + destellos × (Destello sabio)  + récords × 1
       + Gran enciclopedia: +25 / 50 / 75 % de todo lo anterior
-      (nunca menos de 3)
+      (nunca menos de 3, salvo con «Terminar ahora»)
 ```
 
 En pantalla, cada número es entero y se puede comprobar:
@@ -205,143 +244,151 @@ rutas rectas** de 6 a 9 pasos. Reglas fijas (con test):
 ### 4.2 Todas las mejoras
 
 Precios con la regla de §9 (anillo × factor^nivel). «Antes → después» como lo enseña la hoja (con los pasos anteriores
-de la ruta comprados).
+de la ruta comprados). Tablas generadas del código: `npx vite-node scripts/tree-table.ts`.
 
 **Reloj** — Más tiempo en cada sesión y un arranque más rápido.
 
 | # | Nodo | Anillo · 🌙 | Niveles | Precios (×factor) | Antes → después (de 0 al máximo) |
 |---|---|---|---|---|---|
-| 1 | Más tiempo | 1 · 1 | 3 | 3 · 6 · 12 (×2) | Sesión 3:00 → Sesión 3:30 → Sesión 4:00 → Sesión 4:30 |
-| 2 | Reloj grande | 2 · 1 | 2 | 10 · 20 (×2) | Sesión 4:30 → Sesión 5:00 → Sesión 5:30 |
-| 3 | Nevera | 2 · 1 | 3 | 10 · 20 · 40 (×2) | Ninguna al empezar → 1 criatura viva al empezar → 2 criaturas vivas al empezar → 3 criaturas vivas al empezar |
-| 4 | Sprint final | 3 · 2 | 3 | 100 · 200 · 400 (×2) | Últimos 30 s ×1 → Últimos 30 s ×1,5 → Últimos 30 s ×2 → Últimos 30 s ×2,5 |
+| 1 | Más tiempo | 1 · 1 | 3 | 2 · 4 · 8 (×2) | Sesión 2:00 → Sesión 2:15 → Sesión 2:30 → Sesión 2:45 |
+| 2 | Reloj grande | 2 · 1 | 2 | 15 · 30 (×2) | Sesión 2:45 → Sesión 3:00 → Sesión 3:15 |
+| 3 | Nevera | 2 · 1 | 3 | 15 · 30 · 60 (×2) | Ninguna al empezar → 1 criatura viva al empezar → 2 criaturas vivas al empezar → 3 criaturas vivas al empezar |
+| 4 | Recta final | 3 · 2 | 3 | 100 · 200 · 400 (×2) | Últimos 30 s: Esencia ×1 → Últimos 30 s: Esencia ×1,5 → Últimos 30 s: Esencia ×2 → Últimos 30 s: Esencia ×2,5 |
 | 5 | Encargos con prisa | 3 · 2 | 2 | 100 · 200 (×2) | +5 s por encargo → +10 s por encargo → +15 s por encargo |
-| 6 | Reloj de arena | 4 · 3 | 2 | 2000 · 4000 (×2) | Sesión 5:30 → Sesión 6:30 → Sesión 7:30 |
-| 7 | Reloj eterno | 5 · 4 | 3 | 20.000 · 40.000 · 80.000 (×2) | Sesión 7:30 → Sesión 8:00 → Sesión 8:30 → Sesión 9:00 |
+| 6 | Reloj de arena | 4 · 3 | 2 | 2000 · 4000 (×2) | Sesión 3:15 → Sesión 3:45 → Sesión 4:15 |
+| 7 | Reloj eterno | 5 · 4 | 3 | 6000 · 12.000 · 24.000 (×2) | Sesión 4:15 → Sesión 4:30 → Sesión 4:45 → Sesión 5:00 |
 
-**Gotero** — Semillas que prenden más y más para sembrar.
+**Gotero** — Viven más semillas, y tienes más para sembrar.
 
 | # | Nodo | Anillo · 🌙 | Niveles | Precios (×factor) | Antes → después (de 0 al máximo) |
 |---|---|---|---|---|---|
-| 1 | Gotero | 1 · 1 | 3 | 3 · 6 · 12 (×2) | Prenden 24 % → Prenden 32 % → Prenden 45 % → Prenden 59 % |
-| 2 | Esencia de bolsillo | 2 · 1 | 4 | 10 · 20 · 40 · 80 (×2) | Empiezas con 20 de Esencia → Empiezas con 50 de Esencia → Empiezas con 110 de Esencia → Empiezas con 290 de Esencia → Empiezas con 820 de Esencia |
-| 3 | Esporas de regalo | 3 · 2 | 3 | 100 · 200 · 400 (×2) | 1 siembra gratis → 3 siembras gratis → 5 siembras gratis → 7 siembras gratis |
-| 4 | Estabilizador | 3 · 2 | 5 | 100 · 150 · 230 · 340 · 510 (×1,5) | Prenden 59 % → Prenden 65 % → Prenden 71 % → Prenden 76 % → Prenden 80 % → Prenden 84 % |
-| 5 | Gota grande | 3 · 2 | 1 | 100 (×2) | No → Semilla grande ×2,25 |
-| 6 | Sembrador automático | 3 · 2 | 6 | 100 · 150 · 230 · 340 · 510 · 760 (×1,5) | Nunca → Cada 20 s → Cada 16 s → Cada 12 s → Cada 10 s → Cada 8,2 s → … |
-| 7 | Gotas baratas | 4 · 3 | 3 | 2000 · 4000 · 8000 (×2) | Precio normal → Semillas −15 % → Semillas −28 % → Semillas −39 % |
-| 8 | Gotero maestro | 5 · 4 | 1 | 20.000 (×2) | Prenden 76 % → Prenden 100 % |
+| 1 | Gotero | 1 · 1 | 3 | 2 · 4 · 8 (×2) | Viven 24 de cada 100 → Viven 32 de cada 100 → Viven 45 de cada 100 → Viven 59 de cada 100 |
+| 2 | Esencia de bolsillo | 2 · 1 | 4 | 15 · 30 · 60 · 120 (×2) | Empiezas con 20 de Esencia → Empiezas con 50 de Esencia → Empiezas con 110 de Esencia → Empiezas con 290 de Esencia → Empiezas con 820 de Esencia |
+| 3 | Semillas de regalo | 3 · 2 | 3 | 100 · 200 · 400 (×2) | 1 semilla gratis → 3 semillas gratis → 5 semillas gratis → 7 semillas gratis |
+| 4 | Semillas fuertes | 3 · 2 | 5 | 100 · 150 · 230 · 340 · 510 (×1,5) | Viven 59 de cada 100 → Viven 65 de cada 100 → Viven 71 de cada 100 → Viven 76 de cada 100 → Viven 80 de cada 100 → Viven 84 de cada 100 |
+| 5 | Semilla grande | 3 · 2 | 1 | 100 (×2) | No → Semilla grande (más del doble) |
+| 6 | Sembrador automático | 3 · 2 | 6 | 100 · 150 · 230 · 340 · 510 · 760 (×1,5) | Nunca → Cada 20 s → Cada 16 s → Cada 12 s → Cada 10 s → Cada 8,2 s → Cada 6,6 s |
+| 7 | Semillas baratas | 4 · 3 | 3 | 2000 · 4000 · 8000 (×2) | Precio normal → Semillas −15 % → Semillas −28 % → Semillas −39 % |
+| 8 | Gotero maestro | 5 · 4 | 1 | 6000 (×2) | Viven 84 de cada 100 → Viven 100 de cada 100 |
 
 **Placa** — Una placa más grande, con sitio para todas.
 
 | # | Nodo | Anillo · 🌙 | Niveles | Precios (×factor) | Antes → después (de 0 al máximo) |
 |---|---|---|---|---|---|
-| 1 | Placa más grande | 1 · 1 | 3 | 3 · 9 · 27 (×3) | Placa Ø96 → Placa Ø128 → Placa Ø160 → Placa Ø192 |
-| 2 | Más sitio | 2 · 1 | 3 | 10 · 20 · 40 (×2) | +0 sitios baratos → +1 sitio barato → +2 sitios baratos → +3 sitios baratos |
-| 3 | Sin apretujones | 3 · 2 | 2 | 100 · 200 (×2) | Recargo normal → Recargo −40 % → Recargo −68 % |
-| 4 | Guardería | 3 · 2 | 1 | 100 (×2) | No → Las 2 primeras no suben el precio |
-| 5 | Incubadora | 3 · 2 | 2 | 100 · 300 (×3) | Maduran ×1 → Maduran ×2 → Maduran ×3 |
-| 6 | Placa gigante | 4 · 3 | 1 | 2000 (×2) | Placa Ø192 → Placa Ø224 |
-| 7 | Ecosistema | 4 · 3 | 2 | 2000 · 4000 (×2) | +0 % por especie viva → +3 % por especie viva → +6 % por especie viva |
+| 1 | Placa más grande | 1 · 1 | 3 | 2 · 6 · 18 (×3) | Sitio para 5 criaturas → Sitio para 7 criaturas → Sitio para 9 criaturas → Sitio para 12 criaturas |
+| 2 | Más sitio | 2 · 1 | 3 | 15 · 30 · 60 (×2) | Sitio para 12 criaturas → Sitio para 13 criaturas → Sitio para 14 criaturas → Sitio para 15 criaturas |
+| 3 | Sin apretujones | 3 · 2 | 2 | 100 · 200 (×2) | Sitio para 15 criaturas → Sitio para 16 criaturas → Sitio para 17 criaturas |
+| 4 | Guardería | 3 · 2 | 1 | 100 (×2) | 3 creciendo a la vez → 5 creciendo a la vez |
+| 5 | Incubadora | 3 · 2 | 2 | 100 · 300 (×3) | Nacen a su ritmo → Nacen ×2 más rápido → Nacen ×3 más rápido |
+| 6 | Placa gigante | 4 · 3 | 1 | 2000 (×2) | Sitio para 17 criaturas → Sitio para 20 criaturas |
+| 7 | Placa variada | 4 · 3 | 2 | 2000 · 4000 (×2) | +0 % por especie viva → +3 % por especie viva → +6 % por especie viva |
 
 **Vida** — Cada criatura da más Esencia por segundo.
 
 | # | Nodo | Anillo · 🌙 | Niveles | Precios (×factor) | Antes → después (de 0 al máximo) |
 |---|---|---|---|---|---|
-| 1 | Cultivo | 1 · 1 | 5 | 3 · 5 · 7 · 10 · 15 (×1,5) | Esencia ×1 → Esencia ×1,15 → Esencia ×1,32 → Esencia ×1,52 → Esencia ×1,75 → Esencia ×2,01 |
-| 2 | Nutriente | 2 · 1 | 3 | 10 · 20 · 40 (×2) | Esencia +0 % → Esencia +8 % → Esencia +16 % → Esencia +24 % |
+| 1 | Cultivo | 1 · 1 | 5 | 2 · 3 · 5 · 7 · 10 (×1,5) | Esencia ×1 → Esencia ×1,15 → Esencia ×1,32 → Esencia ×1,52 → Esencia ×1,75 → Esencia ×2,01 |
+| 2 | Comida extra | 2 · 1 | 3 | 15 · 30 · 60 (×2) | Esencia +0 % → Esencia +8 % → Esencia +16 % → Esencia +24 % |
 | 3 | Superalimento | 3 · 2 | 3 | 100 · 200 · 400 (×2) | Esencia ×1 → Esencia ×1,25 → Esencia ×1,56 → Esencia ×1,95 |
 | 4 | Nadadoras | 3 · 2 | 3 | 100 · 200 · 400 (×2) | Nadadoras +0 % → Nadadoras +15 % → Nadadoras +30 % → Nadadoras +45 % |
 | 5 | Tranquilas | 3 · 2 | 3 | 100 · 200 · 400 (×2) | Quietas +0 % → Quietas +15 % → Quietas +30 % → Quietas +45 % |
 | 6 | Familias | 4 · 3 | 3 | 2000 · 4000 · 8000 (×2) | Colonias +0 % → Colonias +15 % → Colonias +30 % → Colonias +45 % |
-| 7 | Simbiosis | 4 · 3 | 1 | 2000 (×2) | No → Parejas ×1,5 |
+| 7 | Amistad | 4 · 3 | 1 | 2000 (×2) | No → Especies amigas: Esencia ×1,5 |
 | 8 | Vida abundante | 4 · 3 | 1 | 2000 (×2) | Toda la Esencia ×1 → Toda la Esencia ×1,5 |
-| 9 | Vida eterna | 5 · 4 | ∞ | 20.000 · 22.000 · 24.000 · 27.000 · … (×1,1) | Esencia ×1 → Esencia ×1,1 → Esencia ×1,21 → Esencia ×1,33 → Esencia ×1,46 → Esencia ×1,61 |
+| 9 | Vida eterna | 5 · 4 | ∞ | 10.000 · 11.000 · 12.000 · 13.000 · 15.000 · … (×1,1) | Esencia ×1 → Esencia ×1,1 → Esencia ×1,21 → Esencia ×1,33 → Esencia ×1,46 → Esencia ×1,61 → Esencia ×1,77 → … |
 
 **Descubrir** — Más Datos por cada cosa nueva que encuentras.
 
 | # | Nodo | Anillo · 🌙 | Niveles | Precios (×factor) | Antes → después (de 0 al máximo) |
 |---|---|---|---|---|---|
-| 1 | Cuaderno de campo | 1 · 1 | 3 | 3 · 6 · 12 (×2) | 5 Datos por especie nueva → 7 Datos por especie nueva → 9 Datos por especie nueva → 11 Datos por especie nueva |
-| 2 | Copiadora | 2 · 1 | 1 | 10 (×2) | No → Copias que siempre prenden |
-| 3 | Catalogación | 3 · 2 | 5 | 100 · 150 · 230 · 340 · 510 (×1,5) | Bestiario: Esencia +0 % → Bestiario: Esencia +10 % → Bestiario: Esencia +20 % → Bestiario: Esencia +30 % → Bestiario: Esencia +40 % → Bestiario: Esencia +50 % |
+| 1 | Cuaderno de campo | 1 · 1 | 3 | 2 · 4 · 8 (×2) | 5 Datos por especie nueva → 7 Datos por especie nueva → 9 Datos por especie nueva → 11 Datos por especie nueva |
+| 2 | Copiadora | 2 · 1 | 1 | 15 (×2) | No → Copias que siempre viven |
+| 3 | Coleccionista | 3 · 2 | 5 | 100 · 150 · 230 · 340 · 510 (×1,5) | Bestiario: Esencia +0 % → Bestiario: Esencia +10 % → Bestiario: Esencia +20 % → Bestiario: Esencia +30 % → Bestiario: Esencia +40 % → Bestiario: Esencia +50 % |
 | 4 | Archivo | 3 · 2 | 2 | 100 · 200 (×2) | Nunca → Copia gratis cada 45 s → Copia gratis cada 20 s |
-| 5 | Microscopio | 3 · 2 | 2 | 100 · 200 (×2) | Ficha simple → Rangos y marcas → Todos los detalles |
+| 5 | Microscopio | 3 · 2 | 2 | 100 · 200 (×2) | Ficha simple → Dónde vive y cómo se mueve → Todos los detalles |
 | 6 | Premio al descubridor | 4 · 3 | 2 | 2000 · 4000 (×2) | 3 Datos por manera nueva → 5 Datos por manera nueva → 7 Datos por manera nueva |
-| 7 | Esporas curiosas | 4 · 3 | 1 | 2000 (×2) | No → Buscan formas nuevas |
-| 8 | Mutaciones | 4 · 3 | 1 | 2000 (×2) | No → Copias con variantes |
-| 9 | Gran enciclopedia | 5 · 4 | 3 | 20.000 · 40.000 · 80.000 (×2) | Datos +0 % → Datos +25 % → Datos +50 % → Datos +75 % |
+| 7 | Semillas curiosas | 4 · 3 | 1 | 2000 (×2) | No → Buscan especies que no tienes |
+| 8 | Copias sorpresa | 4 · 3 | 1 | 2000 (×2) | No → Copias con sorpresa |
+| 9 | Gran enciclopedia | 5 · 4 | 3 | 6000 · 12.000 · 24.000 (×2) | Datos +0 % → Datos +25 % → Datos +50 % → Datos +75 % |
 
 **Mundos** — Reglas nuevas en las que nacen otras especies.
 
 | # | Nodo | Anillo · 🌙 | Niveles | Precios (×factor) | Antes → después (de 0 al máximo) |
 |---|---|---|---|---|---|
-| 1 | Mundo 2 · Frío | 1 · 1 | 1 | 3 (×2) | 2 especies posibles → 5 especies posibles |
-| 2 | Mundo 3 · Remolinos | 2 · 1 | 1 | 10 (×2) | 5 especies posibles → 7 especies posibles |
-| 3 | Mundo 4 · Escudos | 3 · 2 | 1 | 100 (×2) | 7 especies posibles → 11 especies posibles |
-| 4 | Mundo 5 · Discos | 3 · 2 | 1 | 100 (×2) | 11 especies posibles → 14 especies posibles |
-| 5 | Mundo 6 · Patas | 4 · 3 | 1 | 2000 (×2) | 14 especies posibles → 16 especies posibles |
-| 6 | Mundo 7 · Gigantes | 5 · 4 | 1 | 20.000 (×2) | 16 especies posibles → 17 especies posibles |
+| 1 | Mundo 2 · Frío | 1 · 1 | 1 | 2 (×2) | 2 especies para encontrar → 5 especies para encontrar |
+| 2 | Mundo 3 · Remolinos | 2 · 1 | 1 | 15 (×2) | 5 especies para encontrar → 7 especies para encontrar |
+| 3 | Mundo 4 · Escudos | 3 · 2 | 1 | 100 (×2) | 7 especies para encontrar → 11 especies para encontrar |
+| 4 | Mundo 5 · Discos | 3 · 2 | 1 | 100 (×2) | 11 especies para encontrar → 14 especies para encontrar |
+| 5 | Mundo 6 · Patas | 4 · 3 | 1 | 2000 (×2) | 14 especies para encontrar → 16 especies para encontrar |
+| 6 | Mundo 7 · Gigantes | 5 · 4 | 1 | 6000 (×2) | 16 especies para encontrar → 17 especies para encontrar |
 
 **Destello** — La chispa dorada viene más y regala más.
 
 | # | Nodo | Anillo · 🌙 | Niveles | Precios (×factor) | Antes → después (de 0 al máximo) |
 |---|---|---|---|---|---|
-| 1 | Destello frecuente | 1 · 1 | 3 | 3 · 6 · 12 (×2) | Llega cada 90–240 s → Llega cada 72–192 s → Llega cada 58–154 s → Llega cada 46–123 s |
-| 2 | Destello lento | 2 · 1 | 2 | 10 · 20 (×2) | Se queda 12 s → Se queda 16 s → Se queda 20 s |
-| 3 | Destello del tiempo | 2 · 1 | 2 | 10 · 20 (×2) | +0 s por chispa → +5 s por chispa → +10 s por chispa |
-| 4 | Primer destello | 3 · 2 | 1 | 100 (×2) | La primera a los 40–80 s → La primera a los 10–20 s |
-| 5 | Regalos mejores | 3 · 2 | 3 | 100 · 200 · 400 (×2) | Regalos ×1 → Regalos ×1,4 → Regalos ×1,8 → Regalos ×2,2 |
+| 1 | Destello frecuente | 1 · 1 | 3 | 2 · 4 · 8 (×2) | Llega cada 80–100 s → Llega cada 68–85 s → Llega cada 58–72 s → Llega cada 49–61 s |
+| 2 | Destello lento | 2 · 1 | 2 | 15 · 30 (×2) | Se queda 12 s → Se queda 16 s → Se queda 20 s |
+| 3 | Destello del tiempo | 2 · 1 | 2 | 15 · 30 (×2) | +0 s por chispa → +5 s por chispa → +10 s por chispa |
+| 4 | Primer destello | 3 · 2 | 1 | 100 (×2) | La primera a los 25–50 s → La primera a los 8–15 s |
+| 5 | Regalos mejores | 3 · 2 | 3 | 100 · 200 · 400 (×2) | Regalo: 30 s de Esencia → Regalo: 36 s de Esencia → Regalo: 42 s de Esencia → Regalo: 48 s de Esencia |
 | 6 | Destello sabio | 3 · 2 | 2 | 100 · 200 (×2) | +0 Datos por chispa → +1 Datos por chispa → +2 Datos por chispa |
-| 7 | Mutágeno potente | 4 · 3 | 1 | 2000 (×2) | 3 semillas seguras → 5 semillas seguras |
+| 7 | Semillas mágicas | 4 · 3 | 1 | 2000 (×2) | 1 semilla segura por chispa → 3 semillas seguras por chispa |
 
-Diferencias con la página del plan: **Placa más grande tiene 3 niveles** (Ø96 es la placa base; 3 niveles llevan a Ø192 y
-Placa gigante a Ø224 — la página decía «4 niveles» con los mismos 4 tamaños); **Pincel y Formas** se retiran (§3.4);
-**«Descubrir da tiempo»** pasa a regla base (+5 s por especie nueva); los precios de los anillos 3–5 se ajustaron (§11).
+Diferencias con la página del plan: **Placa más grande tiene 3 niveles** (sitio para 5 → 7 → 9 → 12; Placa gigante, 15);
+**Más sitio** y **Sin apretujones** dan sitio (+1 criatura por nivel) en lugar de abaratar; **Guardería** deja crecer más
+semillas a la vez; **Coleccionista** (Catalogación) multiplica toda la placa; **Pincel y Formas** se retiran (§3.4);
+**«Descubrir da tiempo»** pasa a regla base (+5 s por especie nueva); los precios de los anillos se ajustaron con el bot
+(§9, §11). Nombres de nodos según CLARIDAD J-104…J-111 (los ids no cambian).
 
 ### 4.3 Mundos: las reglas como tarjetas (sustituye a Calibrar)
 
 `src/game/worlds.ts`. Un mundo es un **preajuste fijo** de `LeniaParams` (μ, σ, R, anillos del núcleo). La ruta 🌍 los
 abre en orden; el mundo recién abierto queda elegido para la próxima sesión (`researchBuy`) y la tarjeta de inicio deja
-cambiar a cualquiera abierto (`researchPickWorld`). Las semillas de un mundo salen de **sus** especies (las que aún no
-tienes, 3× más probables; ×2 más con Esporas curiosas).
+cambiar a cualquiera abierto (`pickWorld`). Las semillas de un mundo salen de **sus** especies (la primera para las
+semillas seguras; las que aún no tienes, 3× más probables; ×2 más con Semillas curiosas). En un mundo solo se pueden
+revelar **sus** especies del catálogo, por la firma (sin distancia de parámetros: Triscutium vive en Discos a 3,1
+unidades de su punto del catálogo).
 
 Comprobación con la simulación de referencia en CPU (`npx vite-node scripts/world-check.ts`): la plantilla exacta de
 cada especie, en el preajuste del mundo, 700 pasos en un toro de 128²; «vive» si su masa queda entre 0,4× y 2,5× y no
-inunda la placa (< 20 %). El preajuste parte del centro de sus especies (media de μ y σ) y, si en el centro alguna no
-vive, se buscó el punto vecino donde viven más (rejilla fina; se prefieren puntos **robustos**, cuyos vecinos también
-funcionan, porque la GPU calcula en float32).
+inunda la placa (< 20 %).
 
-| Mundo | Nodo (anillo) | Preajuste μ · σ · R · anillos | Especies que viven ahí (Bestiario) | Caídas (no viven en ese preajuste) | Paga por criatura* |
-|---|---|---|---|---|---|
-| 1 · Clásico | gratis | 0,15 · 0,015 · 13 · [1] | Orbium (unicaudatus/bicaudatus), Synorbium ignis — **2** | — | 2,65 |
-| 2 · Frío | Mundo 2 (1) | 0,1207 · 0,0105 · 13 · [1] | Orbium ignis, Synorbium solidus, Orbium phantasma — **3** | — | 2,63 |
-| 3 · Escudos | Mundo 3 (2) | 0,2865 · 0,0465 · 13 · [1] | Scutium valvatus y solidus, Gyropteron arcus, Paraptera — **4** | — | 4,32 |
-| 4 · Remolinos | Mundo 4 (3) | 0,16 · 0,0222 · 13 · [1] | Gyrorbium gyrans (gira), Parorbium dividuus — **2** | — | 4,68 |
-| 5 · Discos (plan: «Hélices») | Mundo 5 (3) | 0,356 · 0,063 · 13 · [1] | Discutium/Pyroscutium, Circium, Triscutium — **3** | Helicium solidus, Pentahelicium (inundan) | 4,85 |
-| 6 · Patas | Mundo 6 (4) | 0,23 · 0,0355 · 13 · [1] | Helicium cavus pedes, Synptera — **2** | Parorbium adhaerens (inunda), Gyropteron cavus (muere) | 6,25 |
-| 7 · Gigantes | Mundo 7 (5) | 0,25 · 0,033 · 18 · [½, 1, ⅔] | Hydrogeminium natans — **1** | Kronium dividuus (otro núcleo) | 9,60 · **×2** (caben la mitad) |
+| Mundo | Nodo (anillo) | Preajuste μ · σ · R · anillos | Especies que viven ahí (Bestiario) | Maneras de moverse (medidas) | Paga por criatura* | Esencia del mundo |
+|---|---|---|---|---|---|---|
+| 1 · Clásico | gratis | 0,15 · 0,015 · 13 · [1] | Orbium (unicaudatus/bicaudatus), Synorbium ignis — **2** | nada | 2,65 | ×1 |
+| 2 · Frío | Mundo 2 (1) | 0,1207 · 0,0105 · 13 · [1] | Orbium ignis, Synorbium solidus, Orbium phantasma — **3** | nada | 2,63 | ×1,1 |
+| 3 · Remolinos | Mundo 3 (2) | 0,16 · 0,0222 · 13 · [1] | Gyrorbium gyrans, Parorbium dividuus — **2** | gira, nada | 4,68 | ×1,2 |
+| 4 · Escudos | Mundo 4 (3) | 0,2865 · 0,0465 · 13 · [1] | Scutium valvatus y solidus, Gyropteron arcus, Paraptera — **4** | nada | 4,32 | ×1,3 |
+| 5 · Discos | Mundo 5 (3) | 0,356 · 0,063 · 13 · [1] | Discutium/Pyroscutium, Circium, Triscutium — **3** | nada, quieta | 4,85 | ×1,4 |
+| 6 · Patas | Mundo 6 (4) | 0,23 · 0,0355 · 13 · [1] | Helicium cavus pedes, Synptera — **2** | gira, nada | 6,25 | ×1,5 |
+| 7 · Gigantes | Mundo 7 (5) | 0,25 · 0,033 · 18 · [½, 1, ⅔] | Hydrogeminium natans — **1** | nada | 9,60 | ×1,6 × **2** (cabe la mitad) |
 
-\* Media por especie de complejidad medida × comportamiento × rareza (`world-check.ts --yield`, constantes de
-`balance.ts`). **El orden de los mundos sigue esta columna** (la página ponía Remolinos 2.º, Frío 3.º, Patas 4.º y
-Escudos 5.º): el mundo recién abierto viene elegido en la tarjeta, así que nunca puede pagar menos que el anterior
-(Remolinos 2.º hacía saltar la noche 1 a ×6 y luego Frío bajaba la Esencia a la mitad: un bajón en cada mundo nuevo).
-Los anillos de la ruta son los de la página: 1 · 2 · 3 · 3 · 4 · 5.
+\* Media por especie de complejidad medida × manera de moverse × rareza (`world-check.ts --yield`). **Esencia del
+mundo** (`worldEssenceMult`): cada mundo después del primero, ×(1 + 0,1·(n − 1)) (`WORLD_ESSENCE_STEP`) — abrir un mundo
+tiene que ser pura ganancia (§11: el primer turno en un mundo nuevo espera además a que se registren sus especies). Los
+Gigantes ocupan el doble (R 18): cabe la mitad (`roomMult` ½) y cada uno vale ×2.
+
+**Maneras de moverse** (`npx vite-node scripts/world-check.ts --behaviors`, el detector del juego sobre cada especie en
+el preajuste de su mundo, 3 colocaciones × 1 500 pasos; `WORLD_BEHAVIORS`): **nada** en todos; **gira** en Remolinos y
+Patas; **quieta** en Discos. **Ninguna especie de ningún mundo late, se divide o forma colonia** (Synorbium solidus se
+parte de vez en cuando en Frío, pero el detector la sigue leyendo como nadadora). Por eso (CLARIDAD F-09) los Encargos
+`s_heart` y `s_split` no se ofrecen en el ciclo de sesiones, `colony` pide «Ten tres iguales a la vez», el final secreto
+pide solo las maneras que existen (`REACHABLE_BEHAVIORS`) y los logros de latir/dividirse/colonia no se muestran. Las
+siete especies de Albor (final secreto y Encargo `seven`) son una por mundo: Orbium unicaudatus, Orbium unicaudatus
+ignis, Gyrorbium gyrans, Scutium solidus, Circium ventilans, Helicium cavus pedes e Hydrogeminium natans (`ALBOR_SPECIES_CODES`).
 
 **Lo que la medida cambió respecto a la página:**
 
-- **Orden**: por lo que paga cada mundo (tabla), no por la lista de la página.
 - **Remolinos**: en el centro (μ 0,165) Gyrorbium gyrans muere; ambas viven en una ventana pequeña alrededor de
   (0,16 · 0,0222). Se quedan las dos.
 - **Patas**: Parorbium adhaerens inunda la placa en toda la zona; Gyropteron cavus solo comparte puntos al filo
   (0,232 · 0,0365, no robusto). Se quedan Helicium cavus pedes y Synptera (las de patas).
 - **Hélices → «Discos»**: Helicium solidus y Pentahelicium inundan donde viven los discos (y los discos mueren donde vive
-  Helicium). Se quedan Discutium/Pyroscutium (una sola especie para el Bestiario), Circium y Triscutium; el mundo se
-  llama **«Discos»** porque ya no tiene hélices (una cadena en `treeText.ts` si se prefiere otro nombre).
+  Helicium). Se quedan Discutium/Pyroscutium (una sola especie para el Bestiario), Circium y Triscutium.
 - **Gigantes**: un mundo tiene un solo núcleo; Kronium necesita anillos [1, ⅓], donde Hydrogeminium inunda, y muere en
   los de Hydrogeminium. Se queda **Hydrogeminium natans** (anillos triples, R 18).
-- Total: **17 especies** de Bestiario en los 7 mundos (la página contaba 24 nombres; O2u/O2b y S2s/PS3am son una sola
-  especie para el detector, `CATALOG_GROUPS`). Las 6 caídas siguen en el catálogo para un mundo futuro.
+- Total: **17 especies** de Bestiario en los 7 mundos (O2u/O2b y S2s/PS3am son una sola especie para el detector,
+  `CATALOG_GROUPS`). Las caídas siguen en el catálogo para un mundo futuro.
 
 ### 4.4 Qué se ve: reglas de revelado
 
@@ -355,7 +402,7 @@ Los anillos de la ruta son los de la página: 1 · 2 · 3 · 3 · 4 · 5.
 
 ### 4.5 Gotero: lo que de verdad prende (medido)
 
-La página marcaba ≈25/35/45/60 % como objetivos. El Gotero y el Estabilizador mueven el sesgo hacia la plantilla y quitan
+La página marcaba ≈25/35/45/60 % como objetivos. El Gotero y el Estabilizador (en el juego, «Semillas fuertes») mueven el sesgo hacia la plantilla y quitan
 ruido (`DROPPER_TREE_BIAS/NOISE`, `STABILIZER_TREE_BIAS/NOISE`, `seedConfig`); los porcentajes que enseña la UI son los
 **medidos** (`SEED_SUCCESS`, `npx vite-node scripts/world-check.ts --seeds`: una semilla de radio R con la densidad del
 juego y una plantilla del Mundo Clásico, 500 pasos en un toro de 64²; «prende» si queda un cuerpo de criatura).
@@ -378,43 +425,68 @@ placa redonda (la detección real decide qué es «criatura»).
 
 | Antes | Ahora |
 |---|---|
-| Gotero I–V | 💧 Gotero (3) · Gota grande · Gotero maestro (toda semilla prende) |
-| Estabilizador (10) | 💧 Estabilizador (5) |
+| Gotero I–V | 💧 Gotero (3) · Semilla grande · Gotero maestro (todas las semillas viven) |
+| Estabilizador (10) | 💧 Semillas fuertes (5) |
 | Sembrador automático | 💧 Sembrador automático (6 niveles, 20 s → 6,6 s) |
 | Cultivo · Nutriente | 🌱 Cultivo (5) · Nutriente (3) · Superalimento (3) · Vida abundante · Vida eterna (∞) |
 | Afinidad nadadora / sésil / colonial | 🌱 Nadadoras · Tranquilas · Familias (+15 % por nivel) |
-| Placa I–IV · Incubadora | 🧫 Placa más grande (3) · Más sitio · Sin apretujones · Guardería · Incubadora (las semillas maduran ×2/×3) · Placa gigante · Ecosistema |
+| Placa I–IV · Incubadora | 🧫 Placa más grande (3) · Más sitio · Sin apretujones · Guardería · Incubadora (nacen ×2/×3 más rápido) · Placa gigante · Placa variada |
 | Calibrador I–IV, Recetas, Anillos dobles/triples, Microscopio III (mapa) | 🌍 **Mundos 2–7** (sin mandos) |
-| Microscopio I–II, Marcador, Catalogación, Archivo, Imprimir | 🔬 Microscopio (2) · Catalogación (5) · Archivo (2) · Copiadora |
-| Genoma: Mutaciones / Simbiosis / Arranque con Esencia / Turno doble / Sembrador fiel | 🔬 Mutaciones · 🌱 Simbiosis · 💧 Esencia de bolsillo · ⏱ Reloj grande · 💧 Sembrador |
+| Microscopio I–II, Marcador, Catalogación, Archivo, Imprimir | 🔬 Microscopio (2) · Coleccionista (5) · Archivo (2) · Copiadora |
+| Genoma: Mutaciones / Simbiosis / Arranque con Esencia / Turno doble / Sembrador fiel | 🔬 Copias sorpresa · 🌱 Amistad · 💧 Esencia de bolsillo · ⏱ Reloj grande · 💧 Sembrador |
 | Reserva, Pipeta rápida, Termo, Paneles, Recetas guardadas | retirados (se reembolsan al migrar) |
 
 ## 5. Noches: el prestigio, gratis
 
-La historia mide los actos con `view.era`: Acto I = noche 1, Acto II = noches 2–5, Acto III = noche 6+. La era avanza con
-el **nodo central**, que **no cuesta Datos**:
+La historia mide los actos con `view.era` (= la noche en el ciclo de sesiones): Acto I = noche 1, Acto II = noches 2–5,
+Acto III = noche 6+. La noche avanza con el **nodo central**, que **no cuesta Datos**:
 
 | Pasar a | Sesiones terminadas | Especies en el Bestiario | o bien (nunca atascado) |
 |---|---|---|---|
-| Noche 2 (abre el anillo 3) | 4 | 2 | 8 sesiones |
-| Noche 3 (anillo 4) | 8 | 4 | 12 |
-| Noche 4 (anillo 5) | 13 | 7 | 17 |
-| Noche 5 | 18 | 10 | 22 |
-| Noche 6 (Acto III) | 23 | 12 | 27 |
-| Noche 7 (la pregunta final) | 28 | 14 | 32 |
+| Noche 2 (abre el anillo 3) | 3 | 2 | 7 sesiones |
+| Noche 3 (anillo 4) | 6 | 4 | 10 |
+| Noche 4 (anillo 5) | 10 | 7 | 14 |
+| Noche 5 | 14 | 10 | 18 |
+| Noche 6 (Acto III) | 19 | 12 | 23 |
+| Noche 7 (la pregunta final) | 24 | 14 | 28 |
 
-Cada noche da **+10 % de Datos** (fila visible en la ecuación) y el ritual de la lámpara (el de la Extinción, sin borrar
-nada). El centro late en dorado y la hoja dice «Empezar la Noche 3» con las barras «Sesiones 8/8 · Especies 4/4».
+Con sesiones de 2:00 a 5:00 y ~45 s de resumen y Árbol, la noche 7 llega hacia los **~2 h** (§11). Cada noche da **+10 %
+de Datos** (fila visible en la ecuación) y el ritual de la lámpara (escena `a1_night`: «¡La noche puede avanzar! Mira el
+centro del Árbol. No se borra nada. Se abren mejoras nuevas.»). La primera vez lo dice VELA; desde la Noche 3 también un
+aviso (`TEXT.nightReady`). En la vista: `research.nightReady` y `research.nightProgress` sustituyen a
+`extinction.available`/`progress` (que valen `false`/0 en este ciclo).
 
 ## 6. Encargos dentro de las sesiones
 
-La cadena **persiste** entre sesiones; el encargo actual sale en la tarjeta de inicio y en la barra de objetivo.
-Recompensas: su Esencia se paga en la sesión (no cuenta como ganada), **+5 s** de reloj (§2.2) y **+2 Datos**. Cambios de
-la cadena (Fase 2): «Compra el Gotero/Sembrador/Cultivo/Placa» → «…en el Árbol» (métrica `upgrade:<id>` = nivel del
-nodo con el mismo id); **«Compra el Calibrador» → «Abre el Mundo 2 en el Árbol»** (`upgrade:worldCold`); **«Calibra hasta
-que nazca algo nuevo» → «Juega en un mundo nuevo hasta que nazca algo nuevo»** (métrica `worldNew`: sesión en un mundo
-con especies sin encontrar + especie nueva); `era100k` → «Gana 2 000 Esencia en una sesión»; `extinct` → «Empieza una
-noche nueva».
+La cadena **persiste** entre sesiones; el encargo actual sale en la tarjeta de inicio y en la barra de objetivo. **En la
+sesión 1 no se ve ningún Encargo** (CLARIDAD §3.3): los pasos que se cumplen pasan en silencio y el primero que se ve
+llega en la sesión 2. Recompensas: Esencia (**como mucho 20 s de tu Esencia**, `SIDE_REWARD.sessionMaxSec`; los 60–180 s
+del plan eran un tercio de una sesión), **+5 s** de reloj y **+2 Datos** (`game.grantEncargo`). Si se cumple entre
+sesiones (en el Árbol), la Esencia y los +5 s pasan a la sesión siguiente (`GameState.carry`). Los objetivos de
+`balance.ts` siguen enseñando por debajo con la misma regla (10 s de Esencia, `SESSION_OBJECTIVE_SECONDS`).
+
+`src/story/encargoScript.ts`: el texto principal de cada Encargo es el del ciclo de sesiones; `classic` guarda el del
+ciclo clásico donde cambia (se borra en la Fase 2B) y `resolveEncargo(def, view)` elige. Cambios (CLARIDAD J-14…J-17,
+J-37…J-42, J-129…J-135):
+
+| Encargo | Ciclo de sesiones | Métrica |
+|---|---|---|
+| `dropper`, `culture`, `dish` | «Compra el Gotero / Cultivo / «Placa más grande» en el Árbol.» | `upgrade:<nodo>` |
+| `calib` | «Abre el Mundo 2 en el Árbol.» | `upgrade:worldCold` |
+| `move` | «Juega una sesión en el Mundo 2.» | `world` = cold, con el reloj corriendo |
+| `seeder` | «Compra Más tiempo en el Árbol.» (el Sembrador es de la Noche 2) | `upgrade:clock` |
+| `era100k` | «Gana 2 000 Esencia en una sesión.» | `sessionEssence` |
+| `extinct` | «Empieza una noche nueva en el Árbol.» | noches − 1 |
+| `genome` | «Compra 5 mejoras en el Árbol.» | `treeNodes` |
+| `colony` | «Ten tres iguales a la vez.» (ningún mundo da colonias) | `sameSpecies` |
+| `calibNew`, `s_new` | «Juega un mundo nuevo hasta que nazca algo.» | especie nueva |
+| `rings` | «Abre el Mundo 7 · Gigantes.» | `upgrade:worldGiants` |
+| `seven` | «Encuentra las siete especies de Albor.» | `seedSpecies` (nombres exactos) |
+| `s_dancer` · `s_heart` · `s_split` | solo si algún mundo abierto da esa manera de moverse (gira sí; late y se divide, ninguno) | `behavior` |
+| `swimmer`, `s_spin90` | un minuto | `keepAlive` |
+| Premios en Muestras | Esencia (+5 s y +2 Datos de todo Encargo) | — |
+
+El progreso dice qué es cada número: «1 de 3», «2,4 de 3 Esencia/s», «1:20 de 2:00» (J-136).
 
 ## 7. Progreso offline
 
@@ -432,14 +504,17 @@ No hay: la sesión solo corre mientras se juega. `OFFLINE_DATOS = 0` queda prepa
 ## 9. Precios claros
 
 1. **Una regla, siempre la misma, sin azar:** `precio = inicio del anillo × factor^nivel`, redondeado amable (enteros
-   por debajo de 100; dos cifras por encima). Inicio por anillo: **3 · 10 · 100 · 2 000 · 20 000** (los de la
-   página). Factor **×2**; **×1,5** en los nodos de 5 o más niveles; **×3** en Placa más grande e Incubadora;
-   **×1,1 en Vida eterna** (cuesta un 10 % más y da un 10 % más en cada nivel: así las últimas noches siguen creciendo;
-   con ×1,5 se estancaban, §11).
-2. **La hoja de cada nodo** enseña el precio como ecuación `[3 · Anillo 1] × [×4 · 2 niveles comprados: ×2 cada uno] =
-   [12 Datos]` con la regla en palabras. **Un toque en el precio** abre la hoja compartida **«¿Por qué cuesta esto?»**
-   (`createPriceSheet` de Momentos, `nodePriceExplain`): la misma ecuación, la regla, los 3 niveles siguientes con lo que
-   dan («nivel 3 · 12 Datos → Sesión 4:30») y **«Te faltan 7 Datos — unas 2 sesiones»**.
+   por debajo de 100; dos cifras por encima). Inicio por anillo: **2 · 15 · 100 · 2 000 · 6 000** (página: 3 · 10 · 100 ·
+   2 000 · 20 000; el bot pidió anillo 1 más barato para 3–5 compras tras las primeras sesiones, anillo 2 algo más caro
+   para que el Mundo 3 no llegara a la vez que todo lo demás, y anillo 5 al alcance de las últimas noches). Factor
+   **×2**; **×1,5** en los nodos de 5 o más niveles; **×3** en Placa más grande e Incubadora; **Vida eterna** tiene su
+   propio inicio (**10 000**) y **×1,1** (cuesta un 10 % más y da un 10 % más en cada nivel: las últimas noches compran 3–7
+   niveles y crecen ×1,3–2 por sesión; a 6 000 compraban 12 y los números se disparaban ×3 por sesión).
+2. **La hoja de cada nodo** enseña el precio como ecuación `[2 · precio de salida] × [×4 · 2 niveles comprados: cada uno
+   el doble] = [8 Datos]` con la regla en palabras («Empieza en 2 Datos; cada nivel cuesta el doble.»; ×1,5 «la mitad
+   más», ×3 «el triple», ×1,1 «un poquito más»: CLARIDAD J-88, J-89). **Un toque en el precio** abre la hoja compartida
+   **«¿Por qué cuesta esto?»** (`createPriceSheet` de Momentos, `nodePriceExplain`): la misma ecuación, la regla, los 3
+   niveles siguientes con lo que dan («nivel 3 · 8 Datos → Sesión 2:45») y **«Te faltan 3 Datos — una sesión más»**.
 3. **«Próximos niveles»**: mini gráfico de barras (altura = precio, encima lo que da).
 4. **«Datos 38 / 50»** con barra y «Te faltan 12 Datos — unas 2 sesiones» (media de las 3 últimas, `sessionsToAfford`).
 5. Al comprar, el **PriceTicker** de Momentos junto a los Datos dice **«−12 · Más tiempo»** con la flecha ↓.
@@ -451,7 +526,7 @@ No hay: la sesión solo corre mientras se juega. `OFFLINE_DATOS = 0` queda prepa
 para las noches cerradas (con niebla detrás). Arriba: Datos grandes, «Árbol · Noche 2 · 3 mejoras listas», **«▶ Nueva
 sesión»**. Abajo: + / − / centrar (52 px). Arrastrar, pellizcar o rueda (0,16×–1,9×); al alejarse se ocultan los nombres
 y salen los de las rutas en el borde. **Tocar un nodo** abre la hoja (abajo en móvil, a la derecha en escritorio): icono,
-**NOMBRE**, «Reloj · Paso 1 de 7», **NIVEL 2/3**, el bloque **AHORA → CON UN NIVEL MÁS** («Sesión 4:00 → Sesión 4:30»,
+**NOMBRE**, «Reloj · Paso 1 de 7», **NIVEL 2/3**, el bloque **AHORA → CON UN NIVEL MÁS** («Sesión 2:15 → Sesión 2:30»,
 gris → verde), una línea de descripción, el precio tocable (§9), los niveles siguientes, la barra de Datos y el botón
 **«Comprar · 📊 12»**. Los nodos de mundo enseñan sus especies (siluetas «?» las que faltan). Comprar: salto, anillo de
 partículas del color de la ruta, «2/3» flotando, el contador rebota, la línea crece hacia el «?» siguiente y gira.
@@ -459,96 +534,100 @@ Accesible: cada nodo es un botón con nombre y nivel; teclado (Tab/Enter, flecha
 
 ## 11. Ritmo: bot de sesiones
 
-`npx vite-node scripts/session-bot.ts [sesiones=40] [corridas=3] [--verbose] [--policy=planner|greedy|kid] [--trace=N]`.
-Juega el ciclo con la **economía real** del juego (`createGame`, con las mejoras del árbol traducidas en `applyTree`) y el
-modelo estadístico de placa de `balance-bot.ts`, con tres cambios: una semilla prende con la probabilidad **medida**
-(§4.5), su especie sale del **mundo** que se juega, y la población no pasa del sitio de la placa (también al dividirse).
-Políticas: **planner** (prioridades sensatas; juega el mundo con más especies por encontrar), **greedy** (lo más barato;
-el mundo más nuevo), **kid** (siembra cada 0,6 s, compra al azar, mundo al azar, atrapa menos destellos).
+`npx vite-node scripts/session-bot.ts [sesiones=40] [corridas=3] [--verbose] [--policy=planner|greedy|kid] [--trace=N] [--runs]`.
+Juega el **juego integrado** (`createGame({ cycle: 'sessions' })`): reloj, cartera, precio y sitio de las semillas,
+Destello, Abono, Árbol, mundos, noches y Nevera son el código del juego. Solo la placa es un modelo (el estadístico de
+`balance-bot.ts`): una semilla vive con la probabilidad **medida** (§4.5) y se convierte en la especie de la plantilla que
+eligió el juego; las maneras de moverse son las medidas en cada mundo (§4.3). Políticas: **planner** (un jugador
+sensato: lo que llena la placa primero, cada mundo nuevo en cuanto se abre, llena la placa y luego Abono), **greedy** (lo
+más barato primero), **kid** (siembra cada 0,6 s donde sea, compra al azar, mundo al azar, atrapa menos destellos, casi
+nunca Abono). 45 s de resumen y Árbol por sesión.
 
-### 11.1 Planner: mediana de 4 corridas, sesión a sesión
+### 11.1 Planner: mediana de 7 corridas, sesión a sesión
 
-| Ses. | Noche | Reloj | Esencia | Datos | Mejoras tuyas | Especies | Mundo | Compró después (corrida 1) |
-|---|---|---|---|---|---|---|---|---|
-| 1 | 1 | 3:25 | 3 474 | 32 | 2 | 2 | Clásico | Más tiempo ×3, Cultivo ×2 |
-| 2 | 1 | 4:30 | 8 001 | 34 | 3 | 2 | Clásico | Cultivo ×3, Gotero |
-| 3 | 1 | 4:30 | 6 407 | 27 | 5 | 2 | Clásico | Gotero ×2, Mundo 2, Placa |
-| 4 | 2 | 4:45 | 20,7 K | 101 | 8 | 5 | Frío | 🌙2, Placa ×2, Reloj grande ×2, Cuaderno ×3… |
-| 5 | 2 | 5:30 | 50,1 K | 223 | 10 | 5 | Frío | Nevera ×3, Esencia de bolsillo ×4 |
-| 6 | 2 | 5:30 | 50,2 K | 222 | 16 | 5 | Frío | Mundo 3, Nutriente ×3, Más sitio ×3, Copiadora… |
-| 7 | 2 | 5:55 | 108 K | 504 | 20 | 7 | Remolinos | Esporas, Sin apretujones, Superalimento, Catalogación, Mundo 4 |
-| 8 | 3 | 6:20 | 208 K | 917 | 30 | 7 | Escudos | 🌙3, Sprint, Estabilizador, Guardería, Mundo 5… |
-| 9 | 3 | 6:35 | 331 K | 1 634 | 36 | 11 | Discos | Microscopio, Regalos, Sembrador… |
-| 10 | 3 | 6:35 | 389 K | 1 910 | 36 | 14 | Discos | niveles del anillo 3 |
-| 11 | 3 | 6:20 | 544 K | 2 617 | 36 | 14 | Discos | niveles del anillo 3 |
-| 12 | 3 | 6:20 | 786 K | 3 784 | 36 | 14 | Discos | niveles del anillo 3 |
-| 13 | 4 | 6:20 | 1,31 M | 6 307 | 38 | 14 | Discos | 🌙4, Sembrador, Mundo 6, Reloj de arena |
-| 14 | 4 | 7:40 | 1,78 M | 9 316 | 43 | 16 | Patas | Placa gigante, Familias, Premio, Gotas baratas, Ecosistema |
-| 15 | 4 | 7:30 | 1,75 M | 9 090 | 47 | 16 | Patas | Simbiosis, Esporas curiosas, Mutágeno, Vida abundante |
-| 16 | 4 | 7:30 | 2,74 M | 14 249 | 48 | 16 | Patas | Mutaciones, Reloj de arena… |
-| 17 | 4 | 8:30 | 3,78 M | 19 666 | 48 | 16 | Patas | niveles del anillo 4 |
-| 18 | 5 | 8:40 | 4,73 M | 24 601 | 48 | 16 | Patas | 🌙5, Gotas baratas |
-| 19 | 5 | 8:30 | 3,62 M | 20 284 | 49 | 16 | Patas | Mundo 7 |
-| 20 | 5 | 8:45 | 6,11 M | 34 204 | 51 | 17 | Gigantes | Reloj eterno, Gotero maestro |
-| 22 | 5 | 9:10 | 6,72 M | 47 035 | 53 | 17 | Gigantes | Vida eterna ×2 |
-| 24 | 6 | 9:10 | 10,6 M | 79 836 | 53 | 17 | Gigantes | Vida eterna ×2 |
-| 26 | 6 | 9:30 | 13,0 M | 112 252 | 53 | 17 | Gigantes | Vida eterna ×2 |
-| 28 | 7 (final) | 9:50 | 21,7 M | 195 186 | 53 | 17 | Gigantes | 🌙7, Vida eterna ×2, Reloj eterno |
+| Ses. | Noche | Reloj | Esencia | × anterior | Datos | Compras | Especies | Mundo | Abonos | Compró después (corrida 1) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 1 | 2:25 | 1339 | — | 24 | 5 | 2 | Clásico | 2 | Gotero ×3, Placa más grande ×2 |
+| 2 | 1 | 2:15 | 3400 | ×2,54 | 22 | 3 | 2 | Clásico | 3 | Placa más grande, Mundo 2 · Frío, Cultivo ×2 |
+| 3 | 2 | 2:25 | 6395 | ×1,88 | 48 | 8 | 5 | Frío | 2 | 🌙, Cultivo ×3, Más tiempo ×3 |
+| 4 | 2 | 3:00 | 17,8 K | ×2,78 | 86 | 4 | 5 | Frío | 3 | Mundo 3 · Remolinos, Reloj grande ×2, Comida extra |
+| 5 | 2 | 3:40 | 37,7 K | ×2,12 | 186 | 5 | 7 | Remolinos | 3 | Comida extra ×2, Más sitio ×3, Nevera |
+| 6 | 3 | 3:15 | 46,9 K | ×1,24 | 208 | 8 | 7 | Remolinos | 3 | 🌙, Nevera ×2, Destello frecuente ×3, Esencia de bolsillo ×2 |
+| 7 | 3 | 3:15 | 54,0 K | ×1,15 | 260 | 10 | 7 | Remolinos | 3 | Esencia de bolsillo ×2, Cuaderno de campo ×3, Copiadora, Destello lento ×2 … |
+| 8 | 3 | 4:25 | 74,1 K | ×1,37 | 370 | 4 | 7 | Remolinos | 4 | Semillas de regalo, Sin apretujones, Superalimento |
+| 9 | 3 | 3:55 | 86,9 K | ×1,17 | 419 | 4 | 7 | Remolinos | 4 | Coleccionista, Mundo 4 · Escudos, Recta final, Semillas fuertes |
+| 10 | 4 | 4:15 | 152,0 K | ×1,75 | 768 | 9 | 11 | Escudos | 4 | 🌙, Guardería, Nadadoras, Archivo, Mundo 5 · Discos, Primer destello, Encargos con prisa |
+| 11 | 4 | 4:20 | 176,4 K | ×1,16 | 953 | 8 | 14 | Discos | 4 | Semilla grande, Incubadora, Tranquilas, Microscopio, Regalos mejores, Sembrador automático, Destello sabio, Coleccionista … |
+| 12 | 4 | 3:55 | 230,1 K | ×1,30 | 1201 | 6 | 14 | Discos | 4 | Sembrador automático, Semillas de regalo, Sin apretujones, Superalimento, Recta final |
+| 13 | 4 | 3:55 | 342,1 K | ×1,49 | 1786 | 7 | 14 | Discos | 4 | Nadadoras, Archivo, Encargos con prisa, Tranquilas, Microscopio, Regalos mejores, Destello sabio, Coleccionista … |
+| 14 | 5 | 3:55 | 421,1 K | ×1,23 | 2199 | 7 | 14 | Discos | 4 | 🌙, Sembrador automático, Incubadora, Coleccionista, Semillas fuertes, Sembrador automático, Semillas de regalo |
+| 15 | 5 | 3:55 | 427,3 K | ×1,01 | 2403 | 5 | 14 | Discos | 4 | Superalimento, Recta final, Nadadoras, Tranquilas, Regalos mejores, Coleccionista |
+| 16 | 5 | 4:05 | 882,7 K | ×2,07 | 4954 | 5 | 14 | Discos | 4 | Semillas fuertes, Sembrador automático ×2, Mundo 6 · Patas, Reloj de arena |
+| 17 | 5 | 4:15 | 2,11 M | ×2,39 | 11 837 | 5 | 16 | Patas | 4 | Placa gigante, Familias, Premio al descubridor, Semillas baratas, Placa variada |
+| 18 | 5 | 4:35 | 2,30 M | ×1,09 | 12 911 | 5 | 16 | Patas | 4 | Amistad, Semillas curiosas, Semillas mágicas, Vida abundante, Copias sorpresa |
+| 19 | 6 | 4:35 | 3,32 M | ×1,44 | 18 577 | 6 | 16 | Patas | 4 | 🌙, Reloj de arena, Familias, Premio al descubridor, Semillas baratas, Placa variada |
+| 20 | 6 | 5:15 | 4,21 M | ×1,27 | 25 281 | 4 | 16 | Patas | 4 | Mundo 7 · Gigantes, Reloj eterno, Gotero maestro |
+| 21 | 6 | 5:35 | 6,73 M | ×1,60 | 43 540 | 4 | 17 | Gigantes | 4 | Gran enciclopedia, Familias, Semillas baratas, Vida eterna ×2 |
+| 22 | 6 | 5:30 | 8,48 M | ×1,26 | 63 641 | 5 | 17 | Gigantes | 4 | Reloj eterno, Vida eterna, Gran enciclopedia, Vida eterna ×2 |
+| 23 | 6 | 5:45 | 10,24 M | ×1,21 | 92 140 | 5 | 17 | Gigantes | 5 | Vida eterna ×4, Reloj eterno |
+| 24 | 7 | 6:10 | 21,08 M | ×2,06 | 189 723 | 7 | 17 | Gigantes | 5 | 🌙, Vida eterna, Gran enciclopedia, Vida eterna ×3 |
+| 25 | 7 | 6:10 | 27,09 M | ×1,29 | 303 488 | 6 | 17 | Gigantes | 4 | Vida eterna ×6 |
+| 26 | 7 | 6:10 | 56,71 M | ×2,09 | 635 227 | 7 | 17 | Gigantes | 5 | Vida eterna ×6 |
 
-`npx vite-node scripts/session-bot.ts 30 4 --policy=planner --runs` (con `--runs` imprime cada corrida y la curva sin la
-suerte del Destello). «min» acumulados: 4 · 20 · 46 · 82 · 126 · 164 · 225 (sesión 28 ≈ 3,8 h con 45 s de resumen y
-árbol por sesión).
+`npx vite-node scripts/session-bot.ts 30 7 --policy=planner --runs` (con `--runs`, cada corrida y la curva sin los
+regalos del Destello). Minutos acumulados (con 45 s de resumen y Árbol): S1 3 · S3 9 · S5 18 · S8 31 · S10 41 · S14 60 ·
+S18 80 · S21 97 · **S24 117 (noche 7 lista)**.
 
-### 11.2 Objetivos del plan
+### 11.2 Objetivos (2.ª prueba del dueño)
 
-| Objetivo | Página | planner | greedy | kid |
+| Objetivo | Meta | planner | greedy | kid |
 |---|---|---|---|---|
-| Sesión 1: 3:00 y ≥ 2 compras después | 3:00 · ~950 💧 | ✅ 3:25 (+5 s por especie nueva y encargo) · **3 474 💧** · 5 compras | ✅ · 9 | ✅ · 8 |
-| Noche 1 (S1–4): reloj · Esencia · Datos | 3:00→4:30 · 950→4 500 · 28→48 | 3:25→4:45 · 3,5 K→21 K · 32→101 | | |
-| Noche 2 (S5–8) | 4:30→5:30 · 11 K→35 K | 5:30→6:20 · 50 K→208 K | | |
-| Noche 3 (S9–13) | 6:30→7:40 · 50 K→490 K | 6:35→6:20 · 331 K→1,3 M | | |
-| Noche 4 (S14–18) | 8:10→9:00 · ~1 M→1,3 M | 7:40→8:40 · 1,8 M→4,7 M | | |
-| Noches 2/3/4 en S5/S9/S14 | ✓ | ✅ | ✅ | ✅ (noche 4 en S15) |
-| Final (noche 7 lista) en 3,5–5 h | S28 | ✅ S28 · 3,76 h | ✅ S28 · 3,96 h | ✅ S28 · 3,60 h |
-| Sesiones tras las que se puede comprar ≥ 1 mejora | — | **100 %** | 100 % | 96 % |
-| Mínimo de Datos en una sesión | ≥ 3 | 17 | 30 | 12 |
+| Sesión 1 de 2:00, reloj a la vista desde la primera semilla | 2:00 | ✅ 2:00 (2:25 con sus «+5 s») | ✅ | ✅ |
+| Compras tras cada sesión | ≥ 2 (3–5 al principio) | ✅ mín. 3 · primeras 5/3/8 | ✅ mín. 3 · 9/11/6 | mín. 1 (compra al azar) · 7/4/5 |
+| Esencia por sesión en las noches 1–2 | ×1,6–2 | **×2,3** (más rápido de lo pedido) | ×2,7 | ×1,4 |
+| La producción sube dentro de la sesión (primeros 30 s → final) | se ve | ✅ ×6 | ✅ ×6 | ✅ ×3,5 |
+| Final de la historia (noche 7 lista) | ~2 h | ✅ S24 · 1,95 h | ✅ 2,02 h | S24 · 1,72 h |
+| Noches 2/3/4/5 en S3/S6/S10/S14 | | ✅ | | noche 3 en S10 ✅ |
+| Mínimo de Datos en una sesión | ≥ 3 | 19 | 22 | 6 |
 | Rutas tocadas en la sesión 12 | ≥ 6/7 | 7/7 | 7/7 | 7/7 |
-| **REGLA DURA: ninguna sesión rinde menos que la anterior** | 0 bajones | mediana: **S3 −20 %, S19 −23 %** y tres planos (−1/−2 %) · **sin la suerte del Destello: S10 −5 %, S27 −3 %** | 5 | 5 |
+| **REGLA DURA: la mediana nunca rinde menos que en la sesión anterior** | 0 bajones | ✅ **0** (7 corridas; también 0 con 9) | 3 (S6 −11 %, S7 −3 %, S11 −9 %) | 8 (vuelve a mundos viejos al azar) |
+| Corridas sueltas por debajo de la sesión anterior (información) | | 19 de 161 pares (12 %) | | |
 
 **Lectura.**
 
-- **La forma es la de la página** (3:00 → ~10:00; crecimiento suave; noches en S5/S9/S14; final en S28 a ~3,8 h; siempre
-  hay algo que comprar), pero la Esencia de cada sesión es **~3–4×** la de su tabla. No es el árbol: la economía *dentro*
-  de la sesión subió desde que se hizo esa tabla (complejidades medidas del catálogo — Synorbium ignis 2,0, no 1,2 —;
-  semillas más baratas con `DISH_FREE_SLOTS` 3/5/7/9/12; el Destello «bloom» ×7). Por eso la conversión es **÷250** y
-  no ÷100: con ÷100 el árbol entero se compraba en 13 sesiones y desde ahí las sesiones se estancaban (y bajaban).
-- **La sesión 1** da 3 474 💧 porque el primer Destello llega siempre a los 40–80 s (`GOLDEN_FIRST_DELAY`) y un «bloom»
-  ×7 aporta ~1 000; sin él, ~2 000. Ajuste posible en `balance.ts` (no en este trabajo).
-- **Bajones**: al quitar los buffs del Destello (la curva «sin suerte»), la mediana sube en todas las sesiones salvo dos
-  casi planas (−5 %, −3 %, ruido de muertes). Los dos bajones grandes son **suerte del Destello**: la sesión 18 cazó 7–8
-  destellos y la 19, 5–6 (cada «bloom» vale ~⅓ de una sesión). Lo que sí era estructural y se corrigió: **mundos** (el
-  nuevo pagaba menos que el anterior → reordenados por lo que paga una placa llena, y Gigantes ×2), **la Nevera** al
-  cambiar de mundo (ahora siembra semillas puras del mundo nuevo), **Vida eterna** (×1,5 por nivel estancaba las últimas
-  noches → ×1,1) y **la división** de criaturas por encima del sitio de la placa (modelo del bot).
-- **Recomendación para la regla dura en el juego real**: regalos del Destello proporcionales a la sesión (p. ej. «30 s de
-  tu producción») en lugar de ×7 aleatorio; así una sesión con menos destellos no cae un 20 %.
+- **Lo que hizo falta para la regla dura**, todo en precios y efectos (nada en el bot): regalos del Destello
+  proporcionales y con un ritmo estable (80–100 s; con 50–110 s y ×1,4 por nivel una sesión de 6 min cazaba ~10 y la
+  mitad de su Esencia era suerte); el Abono a la venta desde los 30 s y con precio de la Esencia actual (con el precio
+  del récord, una gran sesión encarecía los Abonos de la siguiente: bajón seguro); **Coleccionista** para toda la placa
+  (antes solo pagaba a especies ya registradas, y el primer turno en un mundo nuevo rendía menos); **cada mundo ×1,1 más
+  de Esencia** y Gigantes con la mitad de sitio; objetivos y Encargos con poca Esencia (10–20 s); y Vida eterna con
+  su propio precio.
+- **Noches 1–2 crecen ×2,3 por sesión** (pedido ×1,6–2): las primeras compras son baratas y cada una se nota (Gotero,
+  Placa, Mundo 2 y 3). Bajar más el ritmo (anillo 1 a 3, o Placa ×4) devolvía bajones en S3 y S6. Se deja así: más
+  dinero y más rápido, como pidió el dueño.
+- **greedy** (lo más barato primero) compra Destellos, Cuadernos y Neveras antes que lo que llena la placa, y entre S6 y
+  S11 tiene tres sesiones planas o algo peores; **kid** vuelve a mundos viejos al azar (pagan menos) y por eso tiene
+  bajones: elegir mundo es la única decisión que puede rendir menos, y la tarjeta de inicio elige el nuevo por él.
 
 ### 11.3 Límites del modelo
 
-La placa estadística no tiene geometría (tope de población por tamaño de placa); las especies salen del mundo con la
-supervivencia **medida** del Gotero; `applyTree` traduce el árbol a los mandos actuales del juego y deja fuera, a favor
-del jugador real, Guardería, Sin apretujones, Gotas baratas y el tamaño de los regalos del Destello. En la Fase 2 el bot
-usará el árbol integrado en `game.ts`.
+La placa estadística no tiene geometría (el sitio la limita por número); muertes y choques siguen el modelo de
+`balance-bot.ts`; Encargos de la historia y la Bitácora no entran (solo los objetivos del juego). Fase 2B: medir con la
+GPU y la placa redonda.
 
 ## 12. Anti-frustración
 
-- **Ninguna sesión vale cero**: mínimo 3 Datos, y la ecuación lo dice.
-- **La sesión 1 garantiza una criatura** (primera gota segura + 3 siembras gratis) y cualquier sesión da una semilla
-  segura si a los 45 s no hay nada estable (`pityDue`).
-- **El reloj no corre** mientras explicas, lees o pausas; empieza con la primera gota.
+- **Ninguna sesión vale cero**: mínimo 3 Datos (salvo «Terminar ahora»), y la ecuación lo dice.
+- **La primera semilla de cada sesión vive seguro**; en la sesión 1, las tres primeras (+3 gratis); cualquier sesión da
+  una semilla segura si a los 45 s no hay nada vivo (`pityDue`).
+- **La sesión 1 enseña solo semillas, criaturas y Esencia**: sin Encargos a la vista, sin píldora de Datos, sin Destello
+  (CLARIDAD §3.3).
+- **El reloj no corre** mientras explicas, lees o pausas; empieza con la primera semilla.
+- **Crecer nunca castiga**: el precio de la semilla no sube por tener criaturas; una placa llena dice por qué y qué
+  comprar.
 - **Sin mandos que estropeen el mundo**: los mundos son preajustes comprobados; la Nevera solo replanta especies que viven
-  en el mundo elegido.
-- **Primeras compras baratas** (3 Datos) y siempre algo a la vista con «te faltan X — unas N sesiones».
+  en el mundo elegido. **Ninguna meta imposible**: lo que piden Encargos, logros y el final secreto existe en algún mundo.
+- **Primeras compras baratas** (2 Datos) y siempre algo a la vista con «te faltan X Datos — unas N sesiones».
 - **Noches gratis** y con salida por sesiones si faltan especies. Nada se pierde salvo la placa.
 
 ## 13. Partidas antiguas
@@ -558,112 +637,116 @@ mejoras y nodos de Genoma → los nodos que hacen lo mismo, **regalando los paso
 los mundos que sus mandos alcanzaban** (I → Frío y Remolinos; II → Escudos y Patas; III → Discos; Anillos
 dobles/triples → Gigantes; los mundos anteriores de la ruta, gratis) y el más nuevo queda elegido; lo que cae en un anillo aún cerrado se **reembolsa** a precio de árbol; lo
 retirado se reembolsa (10 Datos por nivel; Recetas guardadas, 20); **regalo de bienvenida** (20 + 10 por Genoma sin
-gastar + 5 por gastado + 2 por Muestra + 5 por especie + ½·√(Esencia total)).
+gastar + 5 por gastado + 2 por Muestra + 5 por especie + ½·√(Esencia total)). Se aplica una vez, al abrir en el ciclo de
+sesiones una partida que no tiene `research` (`Game.migration` dice qué recibió); las especies sin nombre común lo reciben
+al cargar (`sanitizeLoaded`, CLARIDAD J-150). Una partida v1 sigue cargando tal cual en el ciclo clásico.
 
 ## 14. Archivos y API
 
 | Archivo | Qué |
 |---|---|
-| `src/game/cycleBalance.ts` | Todos los números del ciclo |
-| `src/game/tree.ts` (+ test) | 54 nodos en 7 rutas rectas (`routeNodes`), `beforeAfter`, `treeStates`, `canBuy`, `buyNode` (puro), `treeEffects`, `seedSuccess`/`seedConfig`, `possibleSpecies`, `nodeCost`, `priceRule`, `costRows`, `sessionsToAfford`, `nightInfo`, `nextGoal`, disposición en bandas (`TREE_LAYOUT`, `TREE_EDGES`, `TREE_BANDS`, `TREE_GATES`) |
-| `src/game/worlds.ts` | `WORLDS` (preajuste, especies, caídas), `BASE_WORLD`, `worldSpeciesGroups`, `worldOfSpecies`, `TOTAL_WORLD_SPECIES` |
-| `src/game/treeText.ts` | Textos es/en: rutas, nodos, valores de «antes → después», mundos, HUD, tarjetas, VELA |
-| `src/game/session.ts` (+ test) | `ResearchState` (con `world`) y `SessionState` (con `world`), `beginSession`, `tickSession`, `note*`, `computeDatos`, `sessionPreview`, `summarize`, `applySummary`, `researchBuy`, `researchPickWorld`, `unlockedWorlds`, `nightReady`, `pityDue` |
+| `src/game/cycleBalance.ts` | Todos los números del ciclo (reexportados por `balance.ts`) |
+| `src/game/game.ts` | `createGame({ bus, cycle: 'sessions' })`: el ciclo entero (abajo) |
+| `src/game/tree.ts` (+ test) | 54 nodos en 7 rutas rectas (`routeNodes`), `beforeAfter`, `treeStates`, `canBuy`, `buyNode` (puro), `treeEffects` (con `capacity`, `nurseryMax`), `seedSuccess`/`seedConfig`, `possibleSpecies`, `nodeCost`, `priceRule`, `costRows`, `sessionsToAfford`, `nightInfo`, `nextGoal`, disposición en bandas |
+| `src/game/worlds.ts` | `WORLDS` (preajuste, especies, caídas, `essenceMult`, `roomMult`), `worldEssenceMult`, `worldRoom`, `WORLD_BEHAVIORS`, `REACHABLE_BEHAVIORS`, `worldsWithBehavior`, `worldSpeciesGroups`, `worldOfSpecies`, `TOTAL_WORLD_SPECIES` |
+| `src/game/treeText.ts` | Textos es/en: rutas, nodos, valores de «antes → después», mundos, HUD, tarjetas, VELA, `growthWord` |
+| `src/game/session.ts` (+ test) | `ResearchState`, `SessionState` (con `bought`, `boosts`, `endedEarly`), `beginSession`, `tickSession`, `note*`, `seedStep`, `boostCost`/`boostMult`/`boostWait`, `computeDatos`, `sessionPreview`, `summarize`, `applySummary`, `researchBuy`, `researchPickWorld`, `nightReady`, `pityDue` |
+| `src/game/sessions.test.ts` | El ciclo integrado en `game.ts` (reloj, cartera, precio y sitio, Destello, Abono, Árbol, mundos, noches, Encargos, guardado) |
+| `src/game/clarity.test.ts` | Guardia de jerga (CLARIDAD P1-10) sobre todos los textos del juego y de la historia |
 | `src/game/legacy.ts` (+ test) | `migrateLegacy` |
-| `src/ui/tree/` | `createTreeView` (hoja con antes → después, precio tocable, PriceTicker), `nodePriceExplain`, iconos propios (uno por nodo), `tree.css`, `dev.ts` |
-| `src/ui/session/` | `createSessionHud` (+ `preview`), `createSessionStart` (selector de mundos), `createSessionSummary` (+ `equationRows`, `datosExplain`) |
-| `tree-dev.html` | `?view=tree|summary|start|hud|flow&preset=new|s1|early|mid|late|all&sel=…&why=1&add=…&buy=…&lang=en&theme=light&rm=1` |
-| `tests/e2e/tree-shots.mjs` | 41 capturas (390×844 y 1366×768) + interacción; falla con errores, desbordes o botones < 48 px |
-| `scripts/session-bot.ts` · `scripts/world-check.ts` | Ritmo (§11) · mundos y semillas medidos (§4.3, §4.5) |
+| `src/game/state.ts` | Guardado **v2**: `research?`, `session?`, `carry?` (lee v1 y v2) |
+| `src/story/encargoScript.ts` · `script.ts` · `endings.ts` | Encargos del ciclo de sesiones (+ `classic`, `resolveEncargo`), escenas `t_tree`, `t_world`, `a1_night`, las siete especies de Albor (`alborSpeciesFound`), final secreto con `REACHABLE_BEHAVIORS` |
+| `src/ui/tree/` · `src/ui/session/` | Pantalla del Árbol, HUD, tarjeta de inicio y resumen (se montan en la Fase 2B) |
+| `scripts/session-bot.ts` · `scripts/world-check.ts` (`--behaviors`, `--yield`, `--seeds`) · `scripts/tree-table.ts` | Ritmo (§11) · mundos, maneras de moverse y semillas medidos (§4.3, §4.5) · tablas de §4.2 |
+
+**`Game` (ciclo de sesiones).** `game.cycle`, `game.research`, `game.session`, `game.sessionStart` (lo que enseña la
+tarjeta de inicio), `game.lastSummary` (el resumen, hasta preparar la siguiente), `game.effects` (`TreeEffects`),
+`game.migration`, `game.buyNode(id)` → `BuyResult` (con `revealed` para la animación), `game.grantEncargo(r)`;
+`game.speed` = 0 con la sesión terminada (placa congelada), la velocidad de la Incubadora mientras nacen semillas y si
+no 1. Acciones: `startSession()` (prepara la siguiente tras el resumen), `endSessionNow()`, `buyNode(id)`,
+`pickWorld(id)`, `buyBoost()`; `setCalibration`/`setRings`/`saveRegime`/`loadRegime`, `buyUpgrade`, `buyGenomeNode` y
+`extinguish` no hacen nada en este ciclo. **Vista** (`GameView`, campos opcionales): `cycle`, `session` (`n`, `world`,
+`phase`, `limit`, `bonus`, `elapsed`, `remaining`, `progress`, `essence`, `seeds`, `sprint`, `newSpecies`, `endedEarly`,
+`first`), `research` (`datos`, `night`, `nightReady`, `nightProgress`, `gate`, `sessions`, `levels`, `world`, `worlds`,
+`affordable`, `capacity`, `recentDatos`), `sessionPreview` (`null` en la sesión 1), `boost`; `era` = noche; `upgrades` =
+los nodos del Árbol (nivel, precio en Datos); `genomeNodes` vacío; `extinction.available` = `false`; pestañas
+Laboratorio, Calibrar y Genoma ocultas; `seedPrice` con `cheapMult`, `stepMult`, `bought`, `capacity`, `full`.
+**Eventos** (`bus.ts`): `sessionStart`, `sessionClock` (`clockStart`, `lastMinute`, `warn`, `countdown`, `sprint`),
+`sessionExtended`, `sessionEnd`, `nodeBought` (+ `upgradeBought` con el mismo id), `nightStart`, `worldPicked`,
+`boostBought`; `seedBlocked` con motivo `full`. Una sesión preparada al cargar emite `dishClear` + sus semillas de la
+Nevera en el primer `tick` (la placa ya existe).
 
 ## 15. Cambios para la Fase 2
 
-**`src/game/game.ts`**
-1. Estado `research: ResearchState` y `session: SessionState`; `fx = treeEffects(research.levels)` (cacheado, se
-   recalcula al comprar).
-2. Efectos en lugar de `level('x')`: semilla aleatoria con `seedConfig(fx)` (sesgo/ruido; Gotero maestro = plantilla
-   pura con ruido mínimo), Gota grande `fx.bigSeed`, `seedCost × fx.seedCostMult`, `SEED_CROWD → fx.crowdFactor`, las
-   primeras `fx.nurseryBonus` criaturas no cuentan para la saturación, `freeSlots = DISH_FREE_SLOTS[min(fx.dishLevel,4)] +
-   fx.extraSlots`, diámetro `dishDiameterFor(fx.dishLevel)`, maduración `× fx.matureSpeed` (ventana de detección de
-   criaturas nuevas ÷ matureSpeed), Sembrador `fx.autoSeedInterval`, producción `× fx.prodMult × (1 + fx.ecosystem ·
-   especiesVivas) × sessionProdMult`, `fx.affinity.{swim,still,colony}`, `fx.complexityMult`, `fx.cataloguing`,
-   `fx.symbiosis`, Microscopio `fx.microscope`, Archivo `fx.archiveInterval`, Mutaciones, Esporas curiosas, Destello
-   (`fx.goldenIntervalMult`, `fx.goldenFirstDelay`, `fx.goldenLifeBonus`, `× fx.goldenRewardMult`, `fx.mutagenSeeds`).
-3. **Mundos:** al empezar la sesión, `calib = WORLD_BY_ID[session.world].params` (sin rangos ni límites de Calibrador) y
-   las esporas salen de `sporeCandidates(params, worldSporeEntries)` — o sea, `pickSporeTemplate` con
-   `entries = SPORE_CATALOG.filter(e ∈ world.species)` y pesos uniformes × novedad (×2 con `fx.rareSpores`). La Nevera
-   replanta solo especies con `worldOfSpecies(code) === session.world`.
-4. Ciclo de sesión: `startSession()` (limpia placa y detector, Esencia `fx.startEssence`, siembras `fx.freeSeeds`, mundo,
-   Nevera), `noteSeed`, `noteEssence` en `addEssence`, `noteSpecies`/`noteBehavior` en el registro, `noteGolden`,
-   `noteEncargo`, `noteProduction`/`noteBest` en `econTick`, `tickSession(dt, {paused})`, `pityDue →
-   charges.guaranteed++`, en `timesUp`: congelar, `noteKeep`, `summarize` → evento `sessionEnd`; `endSessionNow()`;
-   `applySummary` al cerrar el resumen; `sessionPreview` cada segundo para el HUD.
-5. Acciones nuevas: `buyNode(id)`, `pickWorld(id)`, `startSession()`, `endSessionNow()`.
-6. **Borrar (Calibrar):** `ranges()` y `CALIBRATOR_RANGES`, `ringOptions()`/`RING_PRESETS`, las acciones
-   `setCalibration`, `setRings`, `saveRegime`, `loadRegime`, `deleteRegime`; `calibrationView()` (rangos, `regimes`,
-   `maxRegimes`, `hints`/`HINT_RADIUS`) y `GameView.calibration` (o dejar solo `{mu, sigma, R, dt, rings}` de lectura para
-   la Bitácora); `s.regimes`, `stats.regimesSaved`; la mejora `calibrator` (y su `unlockJournal('calibrator')`), los
-   nodos `doubleRings`/`tripleRings`/`regimesPersist`; `tabs.calibrate` y `flags.tabCalibrate`; las métricas
-   `calibrations`/`regimesSaved` de logros (o reescribirlas como «mundos visitados»).
-7. Borrar también: Extinción/Genoma (`extinguish`, `genomeGain`…), Muestras (las copias cuestan Esencia), offline,
-   objetivos antiguos; `globalParts()` sin `culture`/`dish`/`genome` (los da el árbol).
+### 15.1 Fase 2A — hecho (lado del juego, detrás de `cycle: 'sessions'`)
 
-**`src/ui/ui.ts`**: quitar la pestaña **Calibrar** (`TABS`, `TAB_LABEL/ICON/LOCK_HINT.calibrate`, el
-`CalibratePanel` de `panel-calibrate.ts` — borrar el archivo —, `calKey` y el punto «nuevo» de calibración en
-`updateTabs`, `prefs.calKey`, el arte vacío `calibrate`) y las pestañas **Laboratorio** y **Genoma** (+ la lista de
-mejoras de Muestras del Bestiario); botón **«Árbol»** (solo entre sesiones; de solo lectura durante la sesión); el
-contador del HUD pasa a 📊 Datos; montar `createSessionHud` (+ `preview`, y `onPreview` → `createPriceSheet` con
-`datosExplain`); «Terminar ahora» en el menú de pausa; `targetRect('tree.node.<id>')` para el tutorial. **`src/ui/ctx.ts`**:
-`TABS = ['bestiary']` (o sin pestañas). **`src/ui/i18n.ts`**: quitar `tabCalibrate`, `lockCalibrate` y los textos de
-Calibrar/Recetas.
+- `game.ts`: estado `research`/`session`; efectos del Árbol en lugar de `level('x')`/`has('x')` (que valen 0/`false` en
+  este ciclo): semillas (`seedConfig`, Semilla grande, precio por sesión, sitio, guardería), producción (Vida, mundo,
+  Placa variada, Recta final, Abono, Coleccionista, afinidades, Comida extra, Amistad), Sembrador, Archivo/Copiadora (en
+  Esencia), Copias sorpresa, Semillas curiosas, Destello (30 s de Esencia, desde la sesión 2), Incubadora (`speed`).
+  Ciclo: `setupSession` (cartera, semillas, mundo, Nevera), reloj con la primera semilla, `tickSession`, fin con
+  `noteKeep` → `summarize` → `applySummary` → `sessionEnd`; objetivos re-apuntados (`SESSION_OBJECTIVES`) y logros
+  (`SESSION_ACHIEVEMENTS`); migración de partidas v1 (§13).
+- Contratos **solo añadidos** (`types.ts`, `bus.ts`, §14). Guardado v2 (lee v1). Calibrar marcado `PHASE-2B-REMOVE`.
+- Textos según CLARIDAD (filas en el informe de la Fase 2A) y guardia de jerga. Historia: `t_tree`, `t_world`,
+  `a1_night`; condiciones con `nightReady`/`nightProgress`; Encargos con `classic`.
 
-**`src/game/state.ts`**: `SAVE_VERSION 2`; `GameState.research`, `GameState.session` (validación
-`validateResearch`/`validateSession`); migración v1→v2 con `migrateLegacy`; quitar `regimes` y los campos retirados.
-**`src/game/save.ts`**: acepta v1 y v2. **`src/game/balance.ts`**: `export * from './cycleBalance'`; borrar
-`CALIBRATOR_COSTS`, `CALIBRATOR_RANGES`, `MAX_REGIMES`, `RING_PRESETS`, `HINT_RADIUS` y las constantes de Laboratorio,
-Genoma, Turno y offline cuando nada las use. **`src/game/content.ts`**: Bitácora (primera sesión, primer nodo, cada noche,
-**primer mundo nuevo** en lugar de `calibrator`); quitar textos de Genoma/Turno/Calibrador y el logro `tinkerer`
-(«Cambia la calibración») → «Visita 3 mundos».
+### 15.2 Fase 2B — pendiente (interfaz e integración)
 
-**`src/core/types.ts` / `bus.ts`**: `GameView.session?`, `GameView.research?` (`datos`, `night`, `nightReady`,
-`affordable`, `world`, `worlds`, `preview`); eventos `sessionStart`, `sessionClock`, `sessionExtended`, `sessionEnd`,
-`nodeBought`, `nightStart`, `worldPicked`; quitar `setCalibration`/`setRings`/`saveRegime`/`loadRegime`/`deleteRegime`
-de `GameActions`.
+**`src/main.ts`**: `createGame({ bus, cycle: 'sessions' }, save)`; ciclo de vida (tarjeta de inicio → sesión → resumen
+→ Árbol → `startSession()`); pausa del reloj con resumen, Árbol, Momentos y diálogos (`game.isPaused`); la placa ya se
+congela sola (`speed` 0); `sim.setParams(game.simParams)` en `calibrationChanged` (lo emite el cambio de mundo); restaurar
+la placa guardada solo si la sesión seguía (`game.session.phase !== 'ready'` o el primer `tick` emite `dishClear`); guardar
+al cerrar cada sesión; sonidos con `sessionClock`/`sessionExtended`/`sessionEnd`/`boostBought`; el manejador de
+`seedBlocked` muestra `TEXT.dishFull(view.seedPrice.capacity)` con el motivo `full`; `grantEncargo` ya existe en `Game`
+(el respaldo de `main.ts` se puede quitar).
 
-**`src/main.ts`**: ciclo de vida (tarjeta de inicio → sesión → resumen → árbol → sesión); pausa del reloj con resumen,
-árbol, Momentos y diálogos; `sim.setParams(world.params)` al empezar cada sesión (el evento `calibrationChanged` deja de
-venir de Calibrar); guardar al cerrar cada sesión; sonidos.
+**`src/ui/ui.ts`**: quitar las pestañas **Laboratorio**, **Calibrar** (borrar `panel-calibrate.ts`, `calKey`,
+`prefs.calKey`, arte `calibrate`) y **Genoma** (+ mejoras de Muestras del Bestiario); montar las cuatro pantallas de
+sesión con **`createSessionFlow`** (`src/ui/session/flow.ts`, ya hecho: HUD + vista previa, tarjeta de inicio, resumen y
+Árbol cableados al `Game` y al bus; el anfitrión llama `flow.update(view)` cada fotograma y pausa la placa mientras
+`flow.busy`; `onPreview` → `createPriceSheet` con `datosExplain`) **sin saltos de maquetación**; Abono (botón con
+`view.boost`, textos `SESSION_UI.boostDesc/boostPrice`); «Terminar ahora» en el menú de pausa (`SESSION_UI.endNow`,
+`endNowConfirm`). *Hecho en 2A:* las cuatro pantallas usan el arte (`--bl-*`, iconos de `src/ui/art`, tarjetas de Mundo
+pintadas, un solo color de acción); la cabecera del Árbol ya no tapa el nodo superior (se mide) y el botón fijo del
+resumen ya no tapa el total de Datos;
+`targetRect('tree.node.<id>' | 'start.world' | 'hud.clock' | 'hud.datos')` para las escenas (CLARIDAD B-19); textos que
+faltan J-160…J-170 (ya en `SESSION_UI`/`TEXT`). **`src/ui/ctx.ts`**: `TABS = ['bestiary']`. **`src/ui/i18n.ts`**: quitar
+Calibrar, Genoma, Muestras, Laboratorio, Pipeta, offline y los carteles del tutorial (CLARIDAD B-01…B-08).
 
-**`src/story` (Encargos y escenas)**: `era` = noche; `extinction.available` → `nightReady`; `extinctionDone` →
-`nightStart`; `tabs.calibrate` (en `encargoScript.ts`, `calibOpen`) → «hay más de un mundo abierto»; el encargo `calib`
-→ «Abre el Mundo 2» y las peticiones «Calibra hasta que nazca algo nuevo» → «Juega en un mundo nuevo…» (§6); la métrica
-`calib` y el contador `calib` de `encargos.ts` → `worldNew`; la línea de VELA del Calibrador (`content.ts`) → la del
-primer mundo; `t_calibrate` del tutorial → «elige el mundo en la tarjeta de inicio».
+**`src/story/story.ts`**: `era` = noche (`view.era` ya lo es); hook `nightStart` (ritual de la lámpara, como
+`extinctionStart`); en partidas veteranas sin historia marcar también `a1_night` como hecha; `{first}`/`{best}` con el
+nombre común (J-128); `TargetId` con los focos nuevos; los Momentos de sesión 1 en modo breve (CLARIDAD §3.3).
 
-**Bots**: `balance-bot.ts` se retira o queda para el modelo antiguo; `session-bot.ts` quita `applyTree` y usa el árbol
-integrado.
+**Borrar el clásico** (todo lo marcado `PHASE-2B-REMOVE`): en `game.ts` `ranges`, `ringOptions`, `calibrationView`
+(dejar `{mu, sigma, R, dt, rings}` de lectura), `setCalibration`, `setRings`, `saveRegime`, `loadRegime`, `deleteRegime`,
+Extinción/Genoma, Muestras, offline, objetivos clásicos, `level`/`has`; en `content.ts` `UPGRADE_TEXT`, `GENOME_TEXT`,
+`*_LEVEL_TEXT`, `OBJECTIVE_TEXT`, `CLASSIC_ONLY_TEXT`, `CLASSIC_ACHIEVEMENT_TEXT`; en `encargoScript.ts` los `classic`;
+en `script.ts` `CLASSIC_ONLY_SCENES`; en `balance.ts` las constantes de Laboratorio, Calibrar, Genoma, Turno y offline;
+`defs.ts`. **Bots**: `balance-bot.ts` se retira.
 
 ## 16. ADR propuesto y preguntas abiertas
 
-**ADR-023 — Sesiones de laboratorio con reloj, Árbol de 7 rutas rectas y Mundos (sustituye el ciclo continuo, la
+**ADR-026 — Sesiones de laboratorio con reloj, Árbol de 7 rutas rectas y Mundos (sustituye el ciclo continuo, la
 Extinción y Calibrar).** *Contexto:* el dueño pidió un árbol con ramas y un prestigio más claro («estudiante con tiempo de
-laboratorio») y, después, rutas lineales donde siempre se gana más y nada de mandos de química. *Decisión:* sesiones
-cortas (3:00 → 9:00) en una placa nueva; la Esencia ganada se convierte en Datos con una división visible (÷250) más
-bonus de descubrimiento, y el HUD la enseña antes de acabar; 53 mejoras en 7 rutas rectas (cada paso necesita solo el
-anterior; cada nivel mejora un número que se enseña como «antes → después»); precios `inicio(anillo) × factor^nivel`; las
-reglas del mundo son 7 **mundos** con preajustes comprobados en CPU que se abren en orden y se eligen como tarjetas; la
-noche (era) avanza gratis por sesiones y especies. Se retiran Calibrar, Muestras, Genoma, Extinción, Turno y offline.
-*Consecuencias:* GDD §4 (Calibrar), §5, §8, §10, §12 llevan «(Corrección v1.3)» apuntando a `docs/CICLO.md`; migración
-generosa de partidas v1; el bot de sesiones verifica el ritmo; Encargos e historia cambian sus condiciones de
-era/Extinción/Calibrar.
+laboratorio»), después rutas lineales donde siempre se gana más y nada de mandos de química, y tras la 2.ª prueba un
+juego corto, emocionante y súper incremental que nunca castigue crecer. *Decisión:* sesiones cortas (2:00 → 5:00) en una
+placa nueva; la Esencia ganada se convierte en Datos con una división visible (÷250) más bonus de descubrimiento, y el
+HUD la enseña antes de acabar; un solo precio de semilla por sesión y el sitio de la placa como límite; Abono dentro de
+la sesión; regalos del Destello proporcionales («30 s de tu Esencia»); 53 mejoras en 7 rutas rectas (cada paso necesita
+solo el anterior; cada nivel mejora un número que se enseña como «antes → después»); precios `inicio(anillo) ×
+factor^nivel`; las reglas del mundo son 7 **mundos** con preajustes comprobados en CPU que se abren en orden y se eligen
+como tarjetas; la noche (era) avanza gratis por sesiones y especies, y la historia termina hacia las 2 h. Se retiran
+Calibrar, Muestras, Genoma, Extinción, Turno y offline. *Consecuencias:* GDD §4 (Calibrar), §5, §8, §10, §12 llevan
+«(Corrección v1.3)» apuntando a `docs/CICLO.md`, y §2 adopta el glosario de `docs/CLARIDAD.md`; migración generosa de
+partidas v1; el bot de sesiones verifica el ritmo sobre el juego integrado; Encargos e historia cambian sus condiciones
+de era/Extinción/Calibrar.
 
 **Preguntas abiertas**
-- **«Discos» en lugar de «Hélices»** para el Mundo 6 (la medida dejó fuera las hélices; ahora es el Mundo 5). ¿Nombre?
-- **÷250 en lugar de ÷100** (§3.3, §11): ¿se acepta, o se prefiere rebajar la economía de la sesión en `balance.ts`
-  (complejidades medidas altas, Destello «bloom» ×7, bonus de Placa/logros/colección) y volver a ÷100?
-- **Varianza**: un Destello «bloom» (×7 durante 15–30 s) vale ~⅓ de una sesión; es la principal causa de que una sesión
-  rinda menos que la anterior por mala suerte (§11). Propuesta para `balance.ts`: regalos proporcionales (p. ej. «30 s
-  de producción») en lugar de multiplicadores grandes.
-- **Incubadora** («las semillas maduran ×2/×3»): el integrador decide si acorta la ventana de detección o acelera la
-  simulación solo mientras hay semillas formándose (los móviles deben sostener 30 fps).
-- **«Terminar ahora»**: cobra todo (propuesta) o un 90 %.
+- **Noches 1–2 crecen ×2,3 por sesión** (pedido ×1,6–2, §11.2): ¿se acepta (más dinero, más rápido) o se frena el
+  principio aceptando algún bajón en la mediana?
+- **Mundos sin «late», «se divide» ni «colonia»** (§4.3, medido): ¿un mundo futuro con una especie que lata o se divida
+  (p. ej. con las caídas del catálogo), o se quitan esas maneras de la Guía para siempre?
+- **Abono**: ¿un icono propio (brote) y un sitio fijo en el HUD? (Fase 2B).
+- **Incubadora**: acelera toda la simulación mientras nacen semillas (`game.speed`); comprobar los 30 fps en móvil.
+- **Esencia de Encargos y objetivos**: cuenta como ganada (para los Datos); con 10–20 s de Esencia el efecto es pequeño.

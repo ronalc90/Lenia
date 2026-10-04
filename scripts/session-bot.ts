@@ -1,54 +1,30 @@
 /**
- * Session bot (docs/CICLO.md §11): plays the session + research-tree loop end to end and reports the
- * pacing, session by session. The dish is the statistical model of scripts/balance-bot.ts (copied:
- * that script runs its report on import) with two changes for the tree: a random seed takes with the
- * MEASURED probability of the Gotero/Estabilizador levels (cycleBalance SEED_SUCCESS), and its
- * species is drawn from the world being played (src/game/worlds.ts), new forms first. The economy
- * inside a session is the REAL game (createGame), with the tree's effects mapped onto today's game
- * knobs until Phase 2 wires the tree into game.ts (see `applyTree` — every approximation is listed).
+ * Session bot (docs/CICLO.md §11): plays the INTEGRATED sessions cycle end to end
+ * (createGame({ cycle: 'sessions' }): clock, wallet, seed price and room, Spark gift, Abono, research
+ * tree, worlds, nights, Nevera — all the game's own code) and reports the pacing, session by session.
+ * Only the dish is a model: the statistical dish of scripts/balance-bot.ts (copied: that script runs
+ * its report on import), where a random seed takes with the MEASURED probability of the
+ * Gotero/Estabilizador levels (cycleBalance SEED_SUCCESS) and grows into the species of the template
+ * the game chose for it (the world's species, new forms first).
  *
- *   npx vite-node scripts/session-bot.ts [maxSessions=40] [runs=3] [--verbose] [--policy=planner]
+ *   npx vite-node scripts/session-bot.ts [maxSessions=40] [runs=3] [--verbose] [--policy=planner] [--trace=N] [--runs]
  *
- * Policies: planner (sensible priorities, picks the world with species left to find), greedy
- * (cheapest node first, newest world), kid (taps a lot, buys at random, random world, catches fewer
- * Sparks). A run stops when the story's final question would be asked (night 7 ready) or at
- * maxSessions.
+ * Policies: planner (sensible priorities, fills the dish, then Abono), greedy (cheapest node first),
+ * kid (taps a lot, buys at random, random world, catches fewer Sparks, rarely an Abono). A run stops
+ * two sessions after the story's final question would be asked (night 7 ready) or at maxSessions.
  */
 import { Bus, type GameEvents } from '../src/core/bus';
-import type { Behavior, Creature, DetectorEvent, LeniaParams, SeedSpec } from '../src/core/types';
+import type { Behavior, Creature, DetectorEvent, LeniaParams, Pattern, SeedSpec } from '../src/core/types';
 import * as GB from '../src/game/balance';
 import * as C from '../src/game/cycleBalance';
 import { createGame, type CatalogSignature, type Game } from '../src/game/game';
-import {
-  applySummary,
-  beginSession,
-  freshResearch,
-  noteBehavior,
-  noteBest,
-  noteEncargo,
-  noteEssence,
-  noteGolden,
-  noteKeep,
-  noteProduction,
-  noteSeed,
-  noteSpecies,
-  pityDue,
-  researchBuy,
-  researchPickWorld,
-  sessionProdMult,
-  summarize,
-  tickSession,
-  treeCtxOf,
-  unlockedWorlds,
-  type ResearchState,
-  type SessionState,
-} from '../src/game/session';
-import type { GameState } from '../src/game/state';
+import { scaledTemplate } from '../src/game/seeding';
+import { treeCtxOf } from '../src/game/session';
 import { seededRng } from '../src/game/testUtil';
-import { BRANCHES, TREE_BY_ID, TREE_NODES, nightInfo, seedSuccess, treeEffects, treeStates, type TreeEffects } from '../src/game/tree';
-import { WORLD_BY_ID, worldSpeciesGroups, type WorldDef, type WorldId } from '../src/game/worlds';
+import { BRANCHES, TREE_BY_ID, TREE_NODES, nightInfo, seedSuccess, treeStates } from '../src/game/tree';
+import { WORLDS, WORLD_BY_ID, type WorldId } from '../src/game/worlds';
 import { catalogGroup } from '../src/species/identity';
-import { CATALOG } from '../src/sim/catalog';
+import { CATALOG, catalogByCode } from '../src/sim/catalog';
 import { SIG_SCALES } from '../src/detect/signature';
 import catalogSigJson from '../src/detect/catalogSignatures.json';
 
@@ -75,13 +51,6 @@ const DIVIDE_EVERY = 1500;
 const GRID = { w: 192, h: 240 };
 /** Seconds the player spends on the summary + the tree between two sessions (pacing clock). */
 const OVERHEAD_SECONDS = 45;
-/**
- * Room on the round dish (src/core/dish.ts grows it with the Placa): living creatures that fit at
- * dish level L = POP_BASE + POP_PER_LEVEL·L (+ Más sitio). The statistical dish has no geometry,
- * so without this cap it packs 30+ creatures, far more than the real dish (QA3: 6–8 at minute 20).
- */
-const POP_BASE = 7;
-const POP_PER_LEVEL = 2;
 
 interface SpeciesModel {
   code: string;
@@ -139,11 +108,20 @@ function sigFor(key: string): number[] {
   const base = REAL_SIGS.length ? REAL_SIGS[Math.floor(r() * REAL_SIGS.length)].signature : new Array(SIG_LEN).fill(0.5);
   return base.map((v, i) => Math.max(0, (v >= 0 ? v : 0) + (r() * 2 - 1) * 6 * scale(i)));
 }
-/** Behaviour and complexity as the detector measured them on the catalog (catalogSignatures.json). */
+/**
+ * How the detector reads each world species AT ITS WORLD'S PRESET (scripts/world-check.ts
+ * --behaviors; at its own catalog point Parorbium, for one, splits, but in Remolinos it swims).
+ */
+const BEHAVIOR_IN_WORLD: Record<string, Behavior> = {
+  O2u: 'swimmer', O2b: 'swimmer', O4i: 'swimmer', O2ui: 'swimmer', O4s: 'swimmer', O2p: 'swimmer', OG2g: 'spinner', O4d: 'swimmer',
+  S1v: 'swimmer', S1s: 'swimmer', PG1a: 'swimmer', P4cp: 'swimmer', S2s: 'swimmer', PS3am: 'swimmer', C0v: 'still', S3s: 'swimmer',
+  H3cp: 'spinner', P3sp: 'swimmer', '3GH2n': 'swimmer',
+};
+/** Behaviour (as measured in its world) and complexity (as the detector measured it on the catalog). */
 const CATALOG_MODELS: SpeciesModel[] = CATALOG.map((e) => {
   const [behavior0, complexity0, robust] = TRAITS[e.code] ?? ['still', 1, 0];
   const real = REAL_SIGS.find((x) => x.code === e.code) as (CatalogSignature & { behavior?: Behavior; complexity?: number }) | undefined;
-  const behavior = real?.behavior ?? behavior0;
+  const behavior = BEHAVIOR_IN_WORLD[e.code] ?? real?.behavior ?? behavior0;
   const complexity = real?.complexity && real.complexity > 0 ? real.complexity : complexity0;
   return { code: e.code, mu: e.m, sigma: e.s, rings: e.b, behavior, complexity, robust, sig: sigFor(e.code) };
 });
@@ -174,7 +152,7 @@ interface Blob {
   sigNoise: number[];
 }
 
-/** What the dish asks the session about: measured seed success, the world's species, maturity. */
+/** What the dish asks the game about: measured seed success, the world's species, the templates. */
 interface DishHooks {
   /** Share of random seeds that take (tree.ts seedSuccess). */
   success(): number;
@@ -184,8 +162,8 @@ interface DishHooks {
   known(): Set<string>;
   /** Esporas curiosas: new forms even likelier. */
   rare(): boolean;
-  /** Incubadora: seeds become creatures this many times faster. */
-  mature(): number;
+  /** The species whose template the game stamped (scaledTemplate patterns are cached objects). */
+  speciesOf(p: Pattern | undefined): SpeciesModel | null;
 }
 
 class Dish {
@@ -199,7 +177,7 @@ class Dish {
     private params: () => LeniaParams,
     private hooks: DishHooks,
   ) {}
-  addSeed(spec: SeedSpec, printed?: SpeciesModel | null): void {
+  addSeed(spec: SeedSpec): void {
     const p = this.params();
     const R = p.R;
     let fate: Blob['fate'] = 'die';
@@ -207,24 +185,26 @@ class Dish {
     const hit = this.blobs.find((b) => b.state !== 'dead' && wrapDist(b.x, b.y, spec.x, spec.y) < 1.2 * R);
     const crowd = this.blobs.filter((b) => b.state === 'born' || b.state === 'stable').length >= this.cap;
     const pool = this.hooks.pool();
+    const tpl = this.hooks.speciesOf(spec.pattern);
     if (crowd) {
       fate = 'die';
     } else if (hit) {
       if (this.rng() < 0.3) this.kill(hit, 'died');
-    } else if (printed !== undefined) {
-      species = printed;
-      fate = printed && pool.includes(printed) ? (this.rng() < 0.95 ? 'stable' : 'die') : 'die';
     } else {
+      // A pure template (Nevera, sure seeds, copies) always takes; a random seed with the measured odds.
       const sure = spec.shape === 'pattern' && (spec.bias ?? 0) >= 1;
       if (pool.length && this.rng() < (sure ? 1 : this.hooks.success())) {
         fate = 'stable';
-        const known = this.hooks.known();
-        const w = pool.map((m) => (known.has(catalogGroup(m.code)) ? 1 : GB.SPORE_NOVELTY * (this.hooks.rare() ? 2 : 1)));
-        let r = this.rng() * w.reduce((a, x) => a + x, 0);
-        species = pool[pool.length - 1];
-        for (let i = 0; i < pool.length; i++) if ((r -= w[i]) < 0) {
-          species = pool[i];
-          break;
+        if (tpl && pool.includes(tpl)) species = tpl;
+        else {
+          const known = this.hooks.known();
+          const w = pool.map((m) => (known.has(catalogGroup(m.code)) ? 1 : GB.SPORE_NOVELTY * (this.hooks.rare() ? 2 : 1)));
+          let r = this.rng() * w.reduce((a, x) => a + x, 0);
+          species = pool[pool.length - 1];
+          for (let i = 0; i < pool.length; i++) if ((r -= w[i]) < 0) {
+            species = pool[i];
+            break;
+          }
         }
       } else fate = this.rng() < 0.2 ? 'explode' : 'die';
     }
@@ -265,7 +245,7 @@ class Dish {
         this.kill(b, 'died');
         continue;
       }
-      if (b.state === 'born' && b.steps >= BORN_STEPS / this.hooks.mature()) {
+      if (b.state === 'born' && b.steps >= BORN_STEPS) {
         if (b.fate === 'stable') b.state = 'stable';
         else if (b.fate === 'explode') {
           b.state = 'exploded';
@@ -348,49 +328,18 @@ class Dish {
   }
 }
 
-// ───────────────────────────── tree → today's game knobs ───────────
+// ───────────────────────────── the integrated game ─────────────────
 
 const MODEL_BY_CODE = new Map(CATALOG_MODELS.map((m) => [m.code, m]));
 const worldPool = (w: WorldId): SpeciesModel[] => WORLD_BY_ID[w].species.map((c) => MODEL_BY_CODE.get(c)!).filter(Boolean);
-
-/**
- * Until Phase 2 wires the tree into game.ts, the bot maps TreeEffects onto the current game state
- * at the start of each session. Exact: start Esencia, free seeds, seed success (the measured table,
- * in the dish model), the world's rules (fixed preset through setRings/setCalibration with every
- * range open), Incubadora (seeds mature faster in the dish model), dish room (cap), production
- * multiplier (setBonus), sprint and Ecosistema (setBonus while they apply), Spark interval (rescaled
- * timer), first Spark, symbiosis. Approximated: Sembrador interval (nearest old level), affinities /
- * Nutriente / Catalogación (nearest old level). Not modelled (conservative: the real game will do a
- * bit better): Guardería, Sin apretujones, Gotas baratas, Spark life and gift size, Mutágeno.
- */
-function applyTree(game: Game, fx: TreeEffects, world: WorldDef, first: boolean): void {
-  const st = game.state as GameState;
-  const nearest = (x: number) => Math.max(0, Math.round(x));
-  st.upgrades = {
-    calibrator: 4, // every range open: the bot sets the world's preset, the player never sees a knob
-    dish: Math.min(4, fx.dishLevel),
-    autoSeeder: fx.autoSeeder ? 1 + nearest(Math.log(fx.autoSeedInterval / GB.AUTOSEED_INTERVAL) / Math.log(GB.AUTOSEED_DECAY)) : 0,
-    swimAffinity: nearest(fx.affinity.swim / GB.AFFINITY_BONUS),
-    sessileAffinity: nearest(fx.affinity.still / GB.AFFINITY_BONUS),
-    colonyAffinity: nearest(fx.affinity.colony / GB.AFFINITY_BONUS),
-    nutrient: nearest((fx.complexityMult - 1) / GB.NUTRIENT_BONUS),
-    cataloguing: nearest(fx.cataloguing / GB.CATALOGUING_BONUS),
-  };
-  for (const id of Object.keys(st.upgrades)) if (!st.unlocked.includes(id)) st.unlocked.push(id);
-  st.nodes = ['doubleRings', 'tripleRings', ...(fx.symbiosis ? ['symbiosis'] : [])];
-  st.essence = fx.startEssence;
-  st.charges = { free: fx.freeSeeds + (first ? GB.START_FREE_SEEDS - C.SESSION_BASE_FREE_SEEDS : 0), guaranteed: first ? GB.START_GUARANTEED_SEEDS : 0 };
-  st.buffs = [];
-  st.eraTime = 0;
-  st.eraHadStable = false;
-  st.eraStablePeak = 0;
-  st.goldenTimer = fx.goldenFirstDelay ? (fx.goldenFirstDelay[0] + fx.goldenFirstDelay[1]) / 2 : -1;
-  st.autoSeedTimer = 0;
-  st.samples = 99; // copies: the bot pays them in Esencia itself (PRINT_SEEDS_PRICE)
-  game.actions.setRings!(world.params.rings);
-  game.actions.setCalibration({ mu: world.params.mu, sigma: world.params.sigma, R: world.params.R, dt: world.params.dt });
-  game.setBonus('tree', { es: 'Árbol', en: 'Tree' }, fx.prodMult);
-  game.setBonus('world', { es: 'Mundo', en: 'World' }, world.essenceMult ?? 1);
+/** Template pattern → species: seeding.ts caches scaledTemplate per code and R, so the game's spec carries the same object. */
+const TEMPLATE_SPECIES = new Map<Pattern, SpeciesModel>();
+for (const w of WORLDS) {
+  for (const code of w.species) {
+    const e = catalogByCode(code);
+    const m = MODEL_BY_CODE.get(code);
+    if (e && m) TEMPLATE_SPECIES.set(scaledTemplate(e, w.params.R), m);
+  }
 }
 
 // ───────────────────────────── policies ────────────────────────────
@@ -399,38 +348,37 @@ type PolicyName = 'planner' | 'greedy' | 'kid';
 
 /** The planner's order of interest (it buys the first affordable one, else saves for it if close). */
 const PLAN = [
-  // Night 1 (rings 1–2): time first (everything scales with it), then the cheap multipliers.
-  'clock', 'clock', 'culture', 'clock', 'dropper', 'worldCold', 'dish', 'culture', 'clock2', 'notebook', 'spark', 'dropper',
-  'clock2', 'culture', 'fridge', 'startEssence', 'worldGyro', 'dish', 'nutrient', 'culture', 'dropper', 'slots', 'fridge',
-  'nutrient', 'startEssence', 'print', 'sparkLife', 'sparkTime', 'dish', 'slots', 'nutrient', 'notebook', 'startEssence', 'fridge',
+  // A sensible player: what fills the dish fastest first (VELA points at the Gotero: CLARIDAD F-03),
+  // a new world as soon as it opens (the start card picks it), Esencia and time; Datos-only and
+  // comfort nodes last.
+  // Night 1 (rings 1–2)
+  'dropper', 'dish', 'worldCold', 'culture', 'clock', 'dropper', 'culture', 'dish', 'clock', 'worldGyro', 'culture', 'dropper',
+  'clock', 'dish', 'clock2', 'culture', 'nutrient', 'slots', 'clock2', 'fridge', 'nutrient', 'slots', 'spark', 'startEssence',
+  'nutrient', 'slots', 'fridge', 'notebook', 'fridge', 'print', 'sparkLife', 'sparkTime', 'startEssence', 'notebook',
   // Night 2 (ring 3)
-  'lab', 'culture2', 'sprint', 'autoSeeder', 'incubator', 'freeSeeds', 'stabilizer', 'worldShields', 'swimAffinity', 'culture2',
-  'cataloguing', 'worldHelix', 'stillAffinity', 'sprint', 'autoSeeder', 'stabilizer', 'culture2', 'encTime', 'cataloguing',
-  'crowdCost', 'nursery', 'bigSeed', 'incubator', 'sparkGift', 'sparkDatos', 'sparkFirst', 'archive', 'microscope', 'swimAffinity',
-  'stillAffinity', 'freeSeeds', 'startEssence', 'sprint', 'autoSeeder', 'stabilizer', 'cataloguing', 'encTime', 'notebook',
+  'lab', 'worldShields', 'worldHelix', 'culture2', 'sprint', 'incubator', 'stabilizer', 'swimAffinity', 'culture2', 'autoSeeder',
+  'cataloguing', 'stillAffinity', 'sprint', 'stabilizer', 'culture2', 'crowdCost', 'nursery', 'freeSeeds', 'incubator', 'swimAffinity',
+  'autoSeeder', 'cataloguing', 'stillAffinity', 'sprint', 'stabilizer', 'bigSeed', 'encTime', 'sparkGift', 'sparkFirst', 'sparkDatos',
+  'archive', 'microscope', 'freeSeeds', 'startEssence', 'autoSeeder', 'stabilizer', 'cataloguing', 'encTime', 'notebook',
   // Night 3 (ring 4)
-  'clock3', 'abundance', 'clock3', 'worldLegs', 'ecosystem', 'colonyAffinity', 'symbiosis', 'dishXL', 'cheapSeeds', 'discoBonus', 'rareSpores',
-  'clock3', 'mutations', 'sparkMutagen', 'ecosystem', 'colonyAffinity', 'cheapSeeds', 'discoBonus',
+  'worldLegs', 'abundance', 'clock3', 'dishXL', 'clock3', 'ecosystem', 'colonyAffinity', 'symbiosis', 'cheapSeeds', 'discoBonus',
+  'rareSpores', 'mutations', 'sparkMutagen', 'ecosystem', 'colonyAffinity', 'cheapSeeds', 'discoBonus',
   // Night 4 (ring 5)
-  'clock4', 'clock4', 'eternalLife', 'worldGiants', 'dropperMax', 'encyclopedia', 'clock4', 'encyclopedia', 'clock4', 'encyclopedia',
+  'worldGiants', 'eternalLife', 'clock4', 'eternalLife', 'dropperMax', 'encyclopedia', 'clock4', 'encyclopedia', 'encyclopedia',
 ];
 
-/** Which world the start card ends up on. */
-function pickWorld(policy: PolicyName, r: ResearchState, known: Set<string>, rng: () => number): WorldId {
-  const open = unlockedWorlds(r);
-  if (policy === 'kid') return rng() < 0.5 ? open[Math.floor(rng() * open.length)] : r.world;
-  // Planner and greedy keep the start card's pick: the newest world (its creatures pay the most,
-  // worlds.ts order). The planner goes back to an older world only for a last session when the
-  // newest has nothing left to find and an older one does (it pays less, so never twice in a row).
-  const newest = open[open.length - 1];
-  if (policy === 'greedy') return newest;
-  void known;
-  void worldSpeciesGroups;
-  return newest;
+/** Which world the start card ends up on: the newest (picked for you, it pays the most); a kid taps around. */
+function pickWorld(policy: PolicyName, game: Game, rng: () => number): WorldId {
+  const open = game.view().research!.worlds as WorldId[];
+  const cur = game.research!.world;
+  if (policy === 'kid') return rng() < 0.5 ? open[Math.floor(rng() * open.length)] : cur;
+  return open[open.length - 1];
 }
 
 interface SessionRow {
   n: number;
+  /** Seconds the session was given (Reloj). */
+  limit: number;
   seconds: number;
   essence: number;
   datos: number;
@@ -444,10 +392,14 @@ interface SessionRow {
   world: WorldId;
   /** Nodes affordable when the session ended (before buying). */
   canBuy: number;
-  /** Sparks caught this session (the biggest source of luck). */
   goldens: number;
-  /** Esencia without the Spark buffs (the luck taken out): the structural curve. */
+  /** Esencia without the Spark gifts (the luck taken out): the structural curve. */
   base: number;
+  /** Abonos bought. */
+  boosts: number;
+  /** Esencia/s in the first 30 s of clock and the best of the last 30 s (does production climb?). */
+  epsEarly: number;
+  epsLate: number;
   bought: string[];
 }
 
@@ -467,39 +419,27 @@ function runPolicy(policy: PolicyName, maxSessions: number, seed: number): RunRe
   const rng = seededRng(seed);
   const bus = new Bus<GameEvents>();
   let t = 0;
-  const game: Game = createGame({ bus, rng: seededRng(seed * 7 + 1), now: () => t * 1000, catalogSignatures: BOT_CATALOG_SIGS, grid: GRID });
-  let research: ResearchState = freshResearch();
-  let fx: TreeEffects = treeEffects(research.levels);
+  const game: Game = createGame({ bus, rng: seededRng(seed * 7 + 1), now: () => t * 1000, catalogSignatures: BOT_CATALOG_SIGS, grid: GRID, cycle: 'sessions' });
+  const fx = () => game.effects!;
   const known = () => new Set(game.state.species.map((s) => catalogGroup(s.catalogCode ?? '')).filter(Boolean));
   const dish = new Dish(rng, () => game.simParams, {
-    success: () => seedSuccess(fx),
-    pool: () => worldPool(session?.world ?? 'classic'),
+    success: () => seedSuccess(fx()),
+    pool: () => worldPool(game.session?.world ?? 'classic'),
     known,
-    rare: () => fx.rareSpores,
-    mature: () => fx.matureSpeed,
+    rare: () => fx().rareSpores,
+    speciesOf: (p) => (p ? (TEMPLATE_SPECIES.get(p) ?? null) : null),
   });
   bus.on('dishSeed', ({ specs }) => specs.forEach((s) => dish.addSeed(s)));
   bus.on('dishClear', () => dish.clear());
-
-  let session: SessionState | null = null;
   const newSpecies: string[] = [];
-  let firstStable: number | null = null;
-  bus.on('speciesNew', ({ speciesId }) => {
-    newSpecies.push(speciesId);
-    if (session) noteSpecies(session, fx, speciesId, true);
-  });
-  bus.on('behaviorNew', ({ behavior }) => session && noteBehavior(session, behavior, true));
-  bus.on('goldenCollected', () => {
-    if (session) noteGolden(session, fx);
-    (game.state as GameState).goldenTimer *= fx.goldenIntervalMult;
-  });
-  bus.on('goldenMissed', () => void ((game.state as GameState).goldenTimer *= fx.goldenIntervalMult));
+  bus.on('speciesNew', ({ speciesId }) => void newSpecies.push(speciesId));
 
   const rows: RunResult['rows'] = [];
   let endedAt: number | null = null;
   let endedSession: number | null = null;
   let minDatos = Infinity;
   let clockMinutes = 0;
+  let firstStable: number | null = null;
 
   const freeSpot = (spacingR: number): { x: number; y: number } | null => {
     const R = game.simParams.R;
@@ -519,131 +459,92 @@ function runPolicy(policy: PolicyName, maxSessions: number, seed: number): RunRe
   };
 
   for (let n = 1; n <= maxSessions; n++) {
-    research = researchPickWorld(research, pickWorld(policy, research, known(), rng));
-    fx = treeEffects(research.levels);
-    const b = beginSession(research, fx);
-    research = b.research;
-    session = b.session;
-    game.actions.sterilizeDish!();
-    applyTree(game, fx, WORLD_BY_ID[session.world], n === 1);
-    dish.cap = POP_BASE + POP_PER_LEVEL * fx.dishLevel + fx.extraSlots;
-    // Nevera: the kept species that live in this world come back alive; the other slots get pure
-    // seeds of this world's species (session.ts SessionStart.fridgeSlots).
-    const pool = worldPool(session.world);
-    const planted: SpeciesModel[] = [];
-    for (const id of b.start.fridge) {
-      const sp = game.state.species.find((x) => x.id === id);
-      const m = sp?.catalogCode ? MODEL_BY_CODE.get(sp.catalogCode) : undefined;
-      if (m && pool.includes(m) && planted.length < b.start.fridgeSlots) planted.push(m);
-    }
-    for (let i = 0; planted.length < b.start.fridgeSlots && pool.length; i++) planted.push(pool[i % pool.length]);
-    for (const m of planted) {
-      const spot = freeSpot(2.5);
-      if (!spot) break;
-      dish.addSeed({ x: spot.x, y: spot.y, radius: 10, density: 1, noise: 0, shape: 'pattern', bias: 1 }, m);
-      noteSeed(session);
-    }
+    if (n > 1) game.actions.startSession!();
+    game.actions.pickWorld!(pickWorld(policy, game, rng));
+    // Physical room of the model dish: the game refuses taps beyond its capacity; dividers may add a couple.
+    dish.cap = fx().capacity + 2;
     let lastSeed = -99;
-    let lastEssenceTotal = game.state.stats.totalEssence;
-    let base = 0;
-    let lastObjective = game.state.objective;
-    let pityGiven = false;
-    let st = 0; // seconds into the session (wall)
-    const seenSpecies = new Set<string>();
-    while (session.phase !== 'over' && st < 3600) {
+    let st = 0;
+    let gifts = 0;
+    let epsEarly = 0;
+    let epsLate = 0;
+    while (game.session!.phase !== 'over' && st < 3600) {
       st += DT;
       t += DT;
       const rep = dish.step(DT, game.speed);
-      // Session-made multipliers (Sprint final, Ecosistema) as outside bonuses.
-      game.setBonus('sprint', { es: 'Sprint', en: 'Sprint' }, sessionProdMult(session, fx));
       game.tick(DT, { step: Math.round(t * 30), creatures: rep.creatures, events: rep.events, totalMass: 0, fill: 0.05 });
       const v = game.view();
-      const alive = new Set(v.creatures.filter((c) => c.state === 'stable' && c.speciesId).map((c) => c.speciesId!));
-      game.setBonus('eco', { es: 'Ecosistema', en: 'Ecosystem' }, 1 + fx.ecosystem * alive.size);
-      for (const id of alive) {
-        if (!seenSpecies.has(id)) {
-          seenSpecies.add(id);
-          noteSpecies(session, fx, id, false);
-        }
-      }
+      const ses = v.session!;
+      if (ses.phase === 'over') break;
       const stableN = rep.creatures.filter((c) => c.state === 'stable').length;
       if (firstStable === null && stableN > 0) firstStable = t;
-      noteProduction(session, v.essencePerSec, stableN);
-      for (const c of v.creatures) noteBest(session, c.speciesId, c.eps);
-      const earned = game.state.stats.totalEssence - lastEssenceTotal;
-      lastEssenceTotal = game.state.stats.totalEssence;
-      noteEssence(session, earned);
-      base += earned / Math.max(1, v.multipliers?.buffs ?? 1);
-      while (lastObjective < game.state.objective) {
-        lastObjective++;
-        noteEncargo(session, fx);
+      if (ses.phase === 'running') {
+        if (ses.elapsed <= 30) epsEarly = Math.max(epsEarly, v.essencePerSec);
+        if (ses.remaining <= 30) epsLate = Math.max(epsLate, v.essencePerSec);
       }
-      if (!pityGiven && pityDue(session)) {
-        pityGiven = true;
-        (game.state as GameState).charges.guaranteed += 1;
-      }
-      tickSession(session, DT, fx);
       if (TRACE === n && Math.abs(st % 15) < DT / 2) {
         const m = v.multipliers;
-        console.log(`  s${n} t=${st.toFixed(0)}s eps=${v.essencePerSec.toFixed(1)} E=${v.essence.toFixed(0)} earned=${session.essence.toFixed(0)} stable=${stableN} alive=${rep.creatures.length} seed=${v.seedCost.toFixed(1)} M=${m?.global.toFixed(2)} sp=${m?.species?.toFixed(2)} beh=${m?.behavior?.toFixed(2)} buffs=${m?.buffs}`);
+        console.log(`  s${n} t=${st.toFixed(0)}s left=${ses.remaining.toFixed(0)} eps=${v.essencePerSec.toFixed(1)} E=${v.essence.toFixed(0)} earned=${ses.essence.toFixed(0)} stable=${stableN} alive=${rep.creatures.length} cap=${v.seedPrice?.capacity} seed=${v.seedCost} M=${m?.global.toFixed(2)} boosts=${v.boost?.count}`);
       }
-      // Spark.
-      if (v.golden && rng() < (policy === 'kid' ? 0.12 : 0.3)) game.actions.collectGolden();
+      // Spark: 30 s of Esencia (the kid misses most).
+      if (v.golden && rng() < (policy === 'kid' ? 0.12 : 0.3)) {
+        const e0 = game.state.essence;
+        game.actions.collectGolden();
+        gifts += Math.max(0, game.state.essence - e0);
+      }
       while (newSpecies.length) game.actions.markSpeciesSeen(newSpecies.shift()!);
-      // Seeding: Esencia only buys seeds during a session.
+      // Seeds: fill the dish (room is the only limit; the price never rises with the living).
       const gap = policy === 'kid' ? 0.6 : 1.5;
-      if (st - lastSeed >= gap && v.canSeed) {
-        const spot = freeSpot(policy === 'kid' ? 1.2 : 2.5);
-        const reserve = policy === 'kid' ? 0 : v.seedCost * 0.5;
-        const free = (v.charges?.free ?? 0) > 0 || v.pipette.progress >= 1;
-        if (spot && (free || v.essence - v.seedCost >= reserve)) {
+      const price = v.seedPrice!;
+      if (st - lastSeed >= gap && v.canSeed && (policy === 'kid' || (!price.full && !v.seedsGrowing))) {
+        const spot = policy === 'kid' ? { x: rng() * GRID.w, y: rng() * GRID.h } : freeSpot(2.5);
+        if (spot) {
           const spec = game.actions.seedAt(spot.x, spot.y);
           if (spec) {
             dish.addSeed(spec);
             lastSeed = st;
-            noteSeed(session);
           }
         }
       }
+      // Abono once the dish is full or busy (planner, greedy); the kid now and then.
+      const b = v.boost;
+      if (b?.affordable && ses.remaining > 25) {
+        const want = policy === 'kid' ? rng() < 0.004 : price.full || v.seedsGrowing || v.essence - b.cost >= 3 * v.seedCost;
+        if (want) game.actions.buyBoost!();
+      }
       // Copies (Copiadora): when few creatures live, plant a known species of this world.
-      if (fx.print && policy !== 'kid' && stableN < 2 && st - lastSeed >= gap) {
-        const price = v.seedCost * C.PRINT_SEEDS_PRICE;
-        const pool = worldPool(session.world);
+      if (fx().print && policy !== 'kid' && stableN < 2 && st - lastSeed >= gap && !price.full) {
+        const pool = worldPool(ses.world as WorldId);
         const sp = game.state.species.find((s) => {
           const m = s.catalogCode ? MODEL_BY_CODE.get(s.catalogCode) : undefined;
           return m && pool.includes(m);
         });
         const spot = freeSpot(2.5);
-        if (sp && spot && v.essence >= price) {
+        if (sp && spot && v.essence >= v.seedCost * C.PRINT_SEEDS_PRICE) {
           const spec = game.actions.printAt(sp.id, spot.x, spot.y);
           if (spec) {
-            (game.state as GameState).essence -= price;
-            dish.addSeed(spec, MODEL_BY_CODE.get(sp.catalogCode!));
+            dish.addSeed(spec);
             lastSeed = st;
-            noteSeed(session);
           }
         }
       }
     }
-    // Clock over: keep the best species for the Nevera, bank the Datos.
-    const best = [...game.view().creatures].filter((c) => c.speciesId && c.eps > 0).sort((a, b) => b.eps - a.eps).map((c) => c.speciesId!);
-    noteKeep(session, best);
-    const sum = summarize(session, research, fx, game.state.species.length);
-    research = applySummary(research, session, sum, fx);
+    const sum = game.lastSummary!;
+    const session = game.session!;
     minDatos = Math.min(minDatos, sum.datos.total);
     clockMinutes += (session.elapsed + OVERHEAD_SECONDS) / 60;
     // Final question: the last night of Act III is ready.
     const species = game.state.species.length;
-    const ni = nightInfo(treeCtxOf(research, species));
+    const ni = nightInfo(treeCtxOf(game.research!, species));
     if (endedAt === null && (ni.night >= FINAL_NIGHT || (ni.night === FINAL_NIGHT - 1 && ni.ready))) {
       endedAt = clockMinutes;
       endedSession = n;
     }
     // Tree visit.
     const bought: string[] = [];
-    const canBuy = [...treeStates(treeCtxOf(research, species)).values()].filter((s) => s.affordable && s.id !== 'lab').length;
+    const canBuy = [...treeStates(treeCtxOf(game.research!, species)).values()].filter((s) => s.affordable && s.id !== 'lab').length;
     for (let guard = 0; guard < 300; guard++) {
-      const states = treeStates(treeCtxOf(research, species));
+      const states = treeStates(treeCtxOf(game.research!, species));
       const can = [...states.values()].filter((s) => s.affordable);
       if (!can.length) break;
       let pick: string | null = null;
@@ -658,32 +559,35 @@ function runPolicy(policy: PolicyName, maxSessions: number, seed: number): RunRe
         });
         const w = want ? states.get(want)! : null;
         if (w && w.affordable) pick = w.id;
-        else if (w && w.missingDatos > 0 && w.missingDatos < (sum.datos.total || 1) * 1.2) pick = null;
+        else if (w && w.missingDatos > 0 && w.missingDatos < (sum.datos.total || 1) * 1.2 && bought.length >= 2) pick = null;
         else pick = can.sort((a, b) => a.cost - b.cost)[0].id;
       }
       if (!pick) break;
-      const r = researchBuy(research, pick, species);
-      if (!r.result.ok) break;
-      research = r.state;
+      if (!game.buyNode(pick).ok) break;
       bought.push(pick);
     }
-    const owned = TREE_NODES.filter((d) => d.id !== 'lab' && (research.levels[d.id] ?? 0) > 0);
+    const levels = game.research!.levels;
+    const owned = TREE_NODES.filter((d) => d.id !== 'lab' && (levels[d.id] ?? 0) > 0);
     rows.push({
       n,
+      limit: session.limit,
       seconds: session.elapsed,
-      essence: session.essence,
+      essence: sum.essence,
       datos: sum.datos.total,
-      bank: research.datos,
+      bank: game.research!.datos,
       nodes: owned.length,
-      levels: owned.reduce((a, d) => a + (research.levels[d.id] ?? 0), 0),
+      levels: owned.reduce((a, d) => a + (levels[d.id] ?? 0), 0),
       branches: BRANCHES.filter((br) => owned.some((d) => d.branch === br)).length,
       species,
-      night: research.levels.lab ?? 1,
+      night: levels.lab ?? 1,
       minutes: clockMinutes,
       world: session.world,
       canBuy,
       goldens: session.goldens,
-      base,
+      base: sum.essence - gifts,
+      boosts: session.boosts,
+      epsEarly,
+      epsLate,
       bought,
     });
     if (endedAt !== null && n >= (endedSession ?? 0) + 2) break;
@@ -713,8 +617,8 @@ const med = (xs: number[]) => {
 
 const checks: string[] = [];
 const treeTotal = TREE_NODES.filter((n) => n.id !== 'lab').length;
-console.log(`\nBioluma session bot — up to ${maxSessions} sessions, ${runs} run(s) per policy, overhead ${OVERHEAD_SECONDS} s/session`);
-console.log(`Tree: ${treeTotal} buyable nodes on 7 straight routes (+ the centre); 1 Dato per ${C.DATOS_ESSENCE_DIV} Esencia.\n`);
+console.log(`\nBioluma session bot (integrated game, cycle 'sessions') — up to ${maxSessions} sessions, ${runs} run(s) per policy, overhead ${OVERHEAD_SECONDS} s/session`);
+console.log(`Tree: ${treeTotal} buyable nodes on 7 straight routes (+ the centre); 1 Dato per ${C.DATOS_ESSENCE_DIV} Esencia; seed ${C.SESSION_SEED_PRICE} Esencia (×${C.SEED_PRICE_STEP} per seed bought).\n`);
 for (const policy of policies) {
   const res: RunResult[] = [];
   for (let k = 0; k < runs; k++) res.push(runPolicy(policy, maxSessions, 1000 + k * 17));
@@ -722,13 +626,15 @@ for (const policy of policies) {
   // Median per session over the runs (the table the plan page shows).
   const N = Math.min(...res.map((r) => r.rows.length));
   console.log(`── ${policy}: median of ${runs} run(s) per session ──`);
-  console.log('| #  | night | clock | Esencia | Datos | bank | nodes | routes | species | world   | can buy | total min | bought (run 1)');
-  console.log('|----|-------|-------|---------|-------|------|-------|--------|---------|---------|---------|-----------|---------------');
+  console.log('| #  | night | clock | Esencia | ×prev | Datos | bank | buys | nodes | routes | species | world   | Abono | eps 30s→end | total min | bought (run 1)');
+  console.log('|----|-------|-------|---------|-------|-------|------|------|-------|--------|---------|---------|-------|-------------|-----------|---------------');
+  const medE = Array.from({ length: N }, (_, i) => med(res.map((r) => r.rows[i].essence)));
   for (let i = 0; i < N; i++) {
     const at = (f: (r: SessionRow) => number) => med(res.map((r) => f(r.rows[i])));
     const row = r0.rows[i];
+    const grow = i > 0 && medE[i - 1] > 0 ? `×${(medE[i] / medE[i - 1]).toFixed(2)}` : '';
     console.log(
-      `| ${String(i + 1).padStart(2)} | ${String(at((r) => r.night)).padStart(5)} | ${fmtClock(at((r) => r.seconds)).padStart(5)} | ${fmtN(at((r) => r.essence)).padStart(7)} | ${String(at((r) => r.datos)).padStart(5)} | ${String(at((r) => r.bank)).padStart(4)} | ${String(at((r) => r.nodes)).padStart(5)} | ${String(at((r) => r.branches)).padStart(6)} | ${String(at((r) => r.species)).padStart(7)} | ${row.world.padEnd(7)} | ${String(at((r) => r.canBuy)).padStart(7)} | ${at((r) => r.minutes).toFixed(0).padStart(9)} | ${verbose ? row.bought.join(' ') : row.bought.slice(0, 8).join(' ') + (row.bought.length > 8 ? ` +${row.bought.length - 8}` : '')}`,
+      `| ${String(i + 1).padStart(2)} | ${String(at((r) => r.night)).padStart(5)} | ${fmtClock(at((r) => r.seconds)).padStart(5)} | ${fmtN(medE[i]).padStart(7)} | ${grow.padStart(5)} | ${String(at((r) => r.datos)).padStart(5)} | ${String(at((r) => r.bank)).padStart(4)} | ${String(at((r) => r.bought.length)).padStart(4)} | ${String(at((r) => r.nodes)).padStart(5)} | ${String(at((r) => r.branches)).padStart(6)} | ${String(at((r) => r.species)).padStart(7)} | ${row.world.padEnd(7)} | ${String(at((r) => r.boosts)).padStart(5)} | ${`${at((r) => r.epsEarly).toFixed(1)}→${at((r) => r.epsLate).toFixed(1)}`.padStart(11)} | ${at((r) => r.minutes).toFixed(0).padStart(9)} | ${verbose ? row.bought.join(' ') : row.bought.slice(0, 8).join(' ') + (row.bought.length > 8 ? ` +${row.bought.length - 8}` : '')}`,
     );
   }
   if (process.argv.includes('--runs')) {
@@ -744,33 +650,52 @@ for (const policy of policies) {
   const minD = Math.min(...res.map((r) => r.minDatos));
   const fs = med(res.map((r) => r.firstStable ?? Infinity));
   const end = (r: RunResult) => (r.endedSession ?? r.rows.length);
-  const buyable = res.flatMap((r) => r.rows.slice(0, end(r)));
-  const pctBuy = (100 * buyable.filter((x) => x.canBuy > 0).length) / Math.max(1, buyable.length);
+  // Buys after every session until the story ends (median over the runs, session by session).
+  const nEnd = Math.min(N, Math.max(1, Math.round(endS)) || N);
+  const buysMed = Array.from({ length: nEnd }, (_, i) => med(res.map((r) => r.rows[i].bought.length)));
+  const minBuys = Math.min(...buysMed);
+  const early = buysMed.slice(0, 3);
   // Dips: a session earning less Esencia than the previous one (median curve and every run).
-  const medE = Array.from({ length: N }, (_, i) => med(res.map((r) => r.rows[i].essence)));
   const dipsMed = medE.slice(1).filter((e, i) => e < medE[i]).length;
   const dipsRun = res.map((r) => r.rows.slice(1, end(r)).filter((x, i) => x.essence < r.rows[i].essence).length);
-  // The same without Spark luck (buff multipliers taken out): what the tree and the worlds do.
   const medB = Array.from({ length: N }, (_, i) => med(res.map((r) => r.rows[i].base)));
   const dipsBase = medB.slice(1).map((e, i) => (e < medB[i] ? `S${i + 2} ${((e / medB[i] - 1) * 100).toFixed(0)} %` : '')).filter(Boolean);
   const dipsList = medE.slice(1).map((e, i) => (e < medE[i] ? `S${i + 2} ${((e / medE[i] - 1) * 100).toFixed(0)} %` : '')).filter(Boolean);
+  // Growth per session in nights 1–2 (geometric mean of the median curve).
+  const n12 = Array.from({ length: N }, (_, i) => med(res.map((r) => r.rows[i].night))).filter((x) => x <= 2).length;
+  const growth12 = n12 >= 2 ? Math.pow(medE[n12 - 1] / medE[0], 1 / (n12 - 1)) : NaN;
+  // Production inside a session: best Esencia/s of the last 30 s over the first 30 s.
+  const climb = med(res.flatMap((r) => r.rows.slice(0, end(r)).map((x) => (x.epsEarly > 0 ? x.epsLate / x.epsEarly : 1))));
   console.log(
-    `\nmedian: first stable ${Number.isFinite(fs) ? fs.toFixed(0) + ' s' : '—'} · session 1: ${fmtN(s1e)} Esencia, ${s1} Datos, ${s1buys} buys · routes with a node by session 12: ${br12}/7 · min Datos/session ${minD} · can buy ≥ 1 node after ${pctBuy.toFixed(0)} % of sessions · Esencia dips: median curve ${dipsMed} [${dipsList.join(', ')}], per run ${dipsRun.join('/')}; without Spark luck ${dipsBase.length} [${dipsBase.join(', ')}] · story ending at session ${Number.isFinite(endS) ? endS : '—'} ≈ ${Number.isFinite(endM) ? (endM / 60).toFixed(2) + ' h' : '—'}\n`,
+    `\nmedian: first stable ${Number.isFinite(fs) ? fs.toFixed(0) + ' s' : '—'} · session 1: ${fmtN(s1e)} Esencia, ${s1} Datos, ${s1buys} buys · buys per visit (median, to the end) min ${minBuys}, first three ${early.join('/')} · Esencia growth per session in nights 1–2 ×${growth12.toFixed(2)} · in-session climb ×${climb.toFixed(1)} · routes with a node by session 12: ${br12}/7 · min Datos/session ${minD} · Esencia dips: median curve ${dipsMed} [${dipsList.join(', ')}], per run ${dipsRun.join('/')}; without Spark gifts ${dipsBase.length} [${dipsBase.join(', ')}] · story ending at session ${Number.isFinite(endS) ? endS : '—'} ≈ ${Number.isFinite(endM) ? (endM / 60).toFixed(2) + ' h' : '—'}\n`,
   );
   const tag = `[${policy}]`;
+  const s1limit = r0.rows[0].limit;
   const s1len = r0.rows[0].seconds;
-  checks.push(`${tag} session 1 lasts 3:00: ${s1len >= C.SESSION_BASE_SECONDS - 1 && s1len <= C.SESSION_BASE_SECONDS + 30 ? 'OK' : 'FAIL'} (${fmtClock(s1len)})`);
-  checks.push(`${tag} first tree visit buys ≥ 2 nodes: ${s1buys >= 2 ? 'OK' : 'FAIL'} (${s1buys})`);
+  checks.push(`${tag} session 1 is 2:00 (+ its "+5 s"): ${s1limit === C.SESSION_BASE_SECONDS && s1len <= C.SESSION_BASE_SECONDS + 60 ? 'OK' : 'FAIL'} (${fmtClock(s1limit)} → ${fmtClock(s1len)})`);
   checks.push(`${tag} never a session below ${C.DATOS_MIN} Datos: ${minD >= C.DATOS_MIN ? 'OK' : 'FAIL'} (${minD})`);
-  if (policy === 'planner') {
-    checks.push(`${tag} session 1 ≈ 950 Esencia (700–1 300): ${s1e >= 700 && s1e <= 1300 ? 'OK' : 'FAIL'} (${fmtN(s1e)})`);
-    checks.push(`${tag} ≥ 6 of 7 routes by session 12: ${br12 >= 6 ? 'OK' : 'FAIL'} (${br12})`);
-    checks.push(`${tag} HARD: no session earns less Esencia than the previous one: ${dipsMed === 0 && dipsRun.every((d) => d === 0) ? 'OK' : 'FAIL'} (median ${dipsMed}, runs ${dipsRun.join('/')})`);
-    const nightAt = (s: number) => med(res.map((r) => r.rows[Math.min(s - 1, r.rows.length - 1)].night));
-    checks.push(`${tag} nights at S5/S9/S14 = 2/3/4: ${nightAt(5) === 2 && nightAt(9) === 3 && nightAt(14) === 4 ? 'OK' : 'FAIL'} (${nightAt(5)}/${nightAt(9)}/${nightAt(14)})`);
+  if (policy !== 'kid') {
+    checks.push(`${tag} ≥ 2 buys after every session: ${minBuys >= 2 ? 'OK' : 'FAIL'} (min ${minBuys})`);
+    checks.push(`${tag} ≥ 3 buys after each of the first 3 sessions (3–5 wanted): ${early.every((b) => b >= 3) ? 'OK' : 'FAIL'} (${early.join('/')})`);
+    checks.push(`${tag} story ending ≈ 2 h (1:45–2:20): ${endM >= 105 && endM <= 140 ? 'OK' : 'FAIL'} (${Number.isFinite(endM) ? (endM / 60).toFixed(2) + ' h' : 'not reached'})`);
   }
-  if (policy === 'kid') checks.push(`${tag} a kid still reaches night 3 by session 15: ${(r0.rows[Math.min(14, r0.rows.length - 1)]?.night ?? 1) >= 3 ? 'OK' : 'FAIL'} (night ${r0.rows[Math.min(14, r0.rows.length - 1)]?.night})`);
-  if (policy !== 'kid') checks.push(`${tag} story ending in 3.5–5 h: ${endM >= 210 && endM <= 300 ? 'OK' : 'FAIL'} (${Number.isFinite(endM) ? (endM / 60).toFixed(2) + ' h' : 'not reached'})`);
+  if (policy === 'planner') {
+    checks.push(`${tag} HARD: the median player never earns less Esencia than in the session before: ${dipsMed === 0 ? 'OK' : 'FAIL'} (${dipsMed} dips)`);
+    const allDips = dipsRun.reduce((a, b) => a + b, 0);
+    const pairs = res.reduce((a, r) => a + Math.max(0, end(r) - 1), 0);
+    checks.push(`${tag} (info) single runs: a session below the one before in ${allDips} of ${pairs} pairs (${((100 * allDips) / Math.max(1, pairs)).toFixed(0)} %: Sparks, seeds and deaths are luck)`);
+    checks.push(`${tag} Esencia ×1,6–2 per session in nights 1–2: ${growth12 >= 1.6 && growth12 <= 2.0 ? 'OK' : 'FAIL'} (×${growth12.toFixed(2)})`);
+    checks.push(`${tag} production climbs inside a session (×1,5+ from the first 30 s to the end): ${climb >= 1.5 ? 'OK' : 'FAIL'} (×${climb.toFixed(1)})`);
+    checks.push(`${tag} ≥ 6 of 7 routes by session 12: ${br12 >= 6 ? 'OK' : 'FAIL'} (${br12})`);
+    const nightAt = (s: number) => med(res.map((r) => r.rows[Math.min(s - 1, r.rows.length - 1)].night));
+    const want = C.NIGHT_GATES.slice(0, 4).map((g) => g.sessions);
+    checks.push(`${tag} nights at S${want.join('/S')} = 2/3/4/5: ${want.every((s, i) => nightAt(s) === i + 2) ? 'OK' : 'FAIL'} (${want.map(nightAt).join('/')})`);
+  }
+  if (policy === 'kid') {
+    const s = C.NIGHT_GATES[1].sessions + C.NIGHT_GATE_FALLBACK;
+    checks.push(`${tag} a kid still reaches night 3 by session ${s}: ${(r0.rows[Math.min(s - 1, r0.rows.length - 1)]?.night ?? 1) >= 3 ? 'OK' : 'FAIL'} (night ${r0.rows[Math.min(s - 1, r0.rows.length - 1)]?.night})`);
+    checks.push(`${tag} story ending (no target, for the record): ${Number.isFinite(endM) ? (endM / 60).toFixed(2) + ' h at session ' + endS : 'not reached'}`);
+  }
 }
 console.log('Pacing targets (docs/CICLO.md §11):');
 for (const c of checks) console.log('  ' + c);

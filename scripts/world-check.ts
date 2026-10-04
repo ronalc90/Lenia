@@ -7,6 +7,9 @@
  *   npx vite-node scripts/world-check.ts --yield    what a creature of each world pays on average
  *                                                   (detector complexity × behaviour × rarity): the
  *                                                   worlds open in this order, so a new one never pays less
+ *   npx vite-node scripts/world-check.ts --behaviors  how the real detector classifies each species of
+ *                                                   each world AT the world's preset (ways of moving
+ *                                                   a player can actually find; docs/CLARIDAD.md F-09)
  *   options: --trials=120 (seeds per cell) --rows=0,1,2,3 (Gotero levels) --steps=700
  *
  * Worlds: each catalog template is stamped exactly at the world's preset on a 128² torus and run
@@ -18,6 +21,8 @@
  * (tree.ts seedConfig) and one of the Clásico world's templates, 500 steps on a 64² torus; it
  * "takes" when one creature-sized body remains (0.4–2.5× a reference Orbium, < 20 % fill).
  */
+import { createDetector } from '../src/detect/detector';
+import { runSpecies } from '../src/detect/harness';
 import { CpuLenia } from '../src/sim/cpu';
 import { applySeedCpu } from '../src/sim/seed';
 import { catalogByCode } from '../src/sim/catalog';
@@ -139,6 +144,48 @@ function worldYield(): void {
   }
 }
 
+/**
+ * Each listed species, stamped at its world's preset on a 128² torus (from 3 rotations), run for
+ * --steps (default 1500) with the game's detector: the behaviour of the main stable creature and
+ * whether it ever divided. A way of moving found in no world is a goal the player cannot reach.
+ */
+function worldBehaviors(): void {
+  const steps = Number(arg('steps', '1500'));
+  const found = new Map<string, string[]>();
+  for (const w of WORLDS) {
+    const parts: string[] = [];
+    for (const code of w.species) {
+      const seen: string[] = [];
+      for (const rotation of [0, 1.1, 2.3]) {
+        let divided = false;
+        const r = runSpecies(code, {
+          size: 128,
+          steps,
+          rotation,
+          params: w.params,
+          pattern: scaledTemplate(catalogByCode(code)!, w.params.R),
+          detector: createDetector(),
+          onReport: (rep) => void (divided ||= rep.events.some((e) => e.type === 'divided')),
+        });
+        const stable = r.last.creatures.filter((c) => c.state === 'stable');
+        const main = stable.sort((a, b) => b.mass - a.mass)[0];
+        const b = main?.behavior ?? (stable.length ? 'unclassified' : 'none');
+        seen.push(b + (divided ? '+divided' : '') + (stable.length > 1 ? `×${stable.length}` : ''));
+        for (const x of [main?.behavior, divided ? 'divider' : null, ...stable.map((c) => c.behavior)]) {
+          if (!x) continue;
+          if (!found.has(x)) found.set(x, []);
+          if (!found.get(x)!.includes(w.id)) found.get(x)!.push(w.id);
+        }
+      }
+      parts.push(`${code}: ${seen.join(' / ')}`);
+    }
+    console.log(`Mundo ${w.n} ${w.id.padEnd(8)} ${parts.join('   ')}`);
+  }
+  console.log('\nWays of moving found (behaviour → worlds):');
+  for (const b of ['still', 'pulsing', 'swimmer', 'spinner', 'divider', 'colony']) console.log(`  ${b.padEnd(8)} ${found.get(b)?.join(', ') ?? 'NONE — no world grows it'}`);
+}
+
 if (process.argv.includes('--seeds')) measureSeeds();
 else if (process.argv.includes('--yield')) worldYield();
+else if (process.argv.includes('--behaviors')) worldBehaviors();
 else checkWorlds();

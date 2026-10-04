@@ -596,7 +596,7 @@ es el reemplazo literal). Al cerrar cada punto: `npm run typecheck`, `npm test` 
     `SECRET_DEFS`, `MS`) y falle si contiene `μ`, `σ`, `régimen`, `regime`, `Genoma`, `Genome`, `Muestra`, `Sample`,
     `Extinci`, `Extinct`, `Calibr`, `espécimen`, `specimen`, `pasos`, `Ø` o `/s` dentro de una frase (permitido solo en
     el chip «+1/s»). Y en `docs/GDD.md` §2, «(Corrección v1.3)»: el glosario pasa a ser el de este documento (con el
-    ADR-023 de CICLO §16).
+    ADR-026 de CICLO §16).
 
 ### P2 — pulido
 
