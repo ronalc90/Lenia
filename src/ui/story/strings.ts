@@ -6,6 +6,7 @@ const t = (es: string, en: string): Text => ({ es, en });
 export const S = {
   skip: t('Saltar', 'Skip'),
   skipTutorial: t('Saltar tutorial', 'Skip tutorial'),
+  skipTutorialSure: t('¿Seguro? Toca otra vez', 'Sure? Tap again'),
   later: t('Todavía no', 'Not yet'),
   continueExp: t('Continuar el experimento', 'Continue the experiment'),
   tapToContinue: t('Toca para seguir', 'Tap to continue'),

@@ -15,9 +15,12 @@
 import { Bus, type GameEvents } from '../../core/bus';
 import type { CreatureView, GameView, Lang } from '../../core/types';
 import { createStory } from '../../story/story';
+import { createEncargos } from '../../story/encargos';
+import { CHAIN, SIDE } from '../../story/encargoScript';
+import { createEncargoUI } from './encargoUI';
 import { SCENES } from '../../story/script';
 import { ENDING_IDS, HINT_KINDS, type EndingId, type HintKind, type Mood, type Speaker } from '../../story/types';
-import { Portrait } from './portraits';
+import { Portrait, setVelaWear } from './portraits';
 import { SPRITE_CODES, sprite } from './sprites';
 import { createStoryUI } from './storyUI';
 
@@ -38,6 +41,7 @@ css.textContent = `
   .dv-ess b { font: 700 20px/1.1 'JetBrains Mono', monospace; color: #5bc0eb; }
   .dv-ess small { font-size: 11px; color: #8b98a5; }
   .dv-cur { font: 600 13px/1 'JetBrains Mono', monospace; color: #8ae234; }
+  .dv-objbar { flex: none; padding: 4px 10px 6px; background: #0b0e12; }
   .dv-dish { position: relative; flex: 1 1 55%; min-height: 0; background: radial-gradient(ellipse at 50% 45%, #0e131a 0%, #07090c 70%); }
   .dv-dish canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
   .dv-obj { position: absolute; left: 10px; right: 10px; top: 8px; font-size: 12px; color: #8b98a5; }
@@ -63,6 +67,7 @@ const screen = document.createElement('div');
 screen.className = 'dv';
 screen.innerHTML = `
   <div class="dv-hud"><div class="dv-ess hud-ess"><b>1 284</b><small>12,4 / s</small></div><span class="dv-cur">◆ 7</span><span class="dv-cur" style="color:#b892ff">✦ 12</span></div>
+  <div class="dv-objbar"></div>
   <div class="dv-dish"><canvas></canvas><div class="dv-obj"></div></div>
   <div class="dv-tabs"><button class="dv-tab" data-tab="lab">Lab</button><button class="dv-tab" data-tab="bestiary">Bestiario</button><button class="dv-tab" data-tab="calibrate">Calibrar</button><button class="dv-tab" data-tab="genome">Genoma</button></div>
   <div class="dv-panel">
@@ -233,6 +238,17 @@ const ui = createStoryUI(app, story, {
   },
 });
 
+// Encargos: driven by hand in the dev page (no polling).
+const encargos = createEncargos({ bus, getView: view, story, storage: null, pollMs: 0, random: () => 0.3 });
+const objBar = document.querySelector<HTMLElement>('.dv-objbar')!;
+const encUI = createEncargoUI(app, encargos, {
+  lang: () => lang,
+  reduceMotion: () => reduce,
+  busy: () => ui.busy,
+  getTargetRect: (id) => (id === 'objective' ? objBar.getBoundingClientRect() : null),
+});
+encUI.mountBadge(objBar);
+
 // Sample archive state: some scenes seen, two endings found.
 story.load({
   v: 1,
@@ -318,6 +334,14 @@ section('Choices', SCENES.filter((s) => s.choice).map((s) => [`${s.id} ▸ choic
 section('Tasks', SCENES.filter((s) => s.wait).map((s) => [`${s.id} ▸ task`, () => play(s.id, { to: 'wait' })]));
 section('Endings', ENDING_IDS.map((id) => [id, () => ending(id)]));
 section('Hints', HINT_KINDS.map((k) => [k, () => hint(k)]));
+section('Encargos · chain', CHAIN.map((e) => [e.id, () => encargos.debug.offer(e.id)]));
+section('Encargos · side', SIDE.map((e) => [e.id, () => encargos.debug.offer(e.id)]));
+section('Encargos · actions', [
+  ['complete current', () => encargos.debug.complete()],
+  ['why?', () => encargos.why()],
+  ['wear all', () => setVelaWear(['scarf', 'medal', 'flower'])],
+  ['wear none', () => setVelaWear([])],
+]);
 if (q.get('menu') !== '0') document.body.append(menuBtn, menu);
 
 function hint(kind: HintKind): void {
@@ -362,6 +386,19 @@ function gallery(): void {
     el.appendChild(p.canvas);
     items.push({ p, talk });
   }
+  // VELA's wardrobe (Encargo rewards).
+  for (const [m, wear] of [
+    ['happy', ['scarf']],
+    ['neutral', ['medal']],
+    ['awed', ['flower']],
+    ['happy', ['scarf', 'medal', 'flower']],
+  ] as [Mood, string[]][]) {
+    const p = new Portrait();
+    p.set('vela', m);
+    p.state.wear = wear;
+    el.appendChild(p.canvas);
+    items.push({ p, talk: false });
+  }
   let last = performance.now();
   const loop = (now: number) => {
     const dt = (now - last) / 1000;
@@ -395,7 +432,24 @@ if (sc) setTimeout(() => play(sc, { line: Number(q.get('line') ?? 0), to: q.get(
 const en = q.get('ending') as EndingId | null;
 if (en && (ENDING_IDS as readonly string[]).includes(en)) setTimeout(() => ending(en, q.get('t') !== null ? Number(q.get('t')) : undefined), 50);
 if (q.get('archive') === '1') toggleArchive();
+const wear = q.get('wear');
+if (wear !== null) setVelaWear(wear ? wear.split(',') : []);
+const encId = q.get('enc');
+if (encId) {
+  if (q.get('hold') === '1') encUI.debug.hold(true);
+  setTimeout(() => {
+    encargos.debug.offer(encId);
+    if (q.get('done') === '1') setTimeout(() => encargos.debug.complete(), Number(q.get('after') ?? 200));
+  }, 80);
+}
+if (q.get('why')) setTimeout(() => {
+  encargos.debug.offer(q.get('why')!);
+  setTimeout(() => {
+    encargos.why();
+    ui.debug.completeTyping();
+  }, 50);
+}, 80);
 const hk = q.get('hint') as HintKind | null;
 if (hk) setTimeout(() => hint(hk), 300);
 
-(window as unknown as { __storyDev: unknown }).__storyDev = { story, ui, play, ending, hint, toggleArchive, bus };
+(window as unknown as { __storyDev: unknown }).__storyDev = { story, ui, play, ending, hint, toggleArchive, bus, encargos, encUI };

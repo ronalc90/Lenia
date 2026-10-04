@@ -232,16 +232,16 @@
 }
 .sty-skip {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 2px;
+  right: 2px;
   min-width: 48px;
-  height: 36px;
+  height: 44px;
   padding: 0 12px;
   border: 0;
   border-radius: 12px;
   background: transparent;
   color: var(--sty-dim);
-  font: 600 12px/1 var(--sty-font);
+  font: 600 14px/1 var(--sty-font);
   letter-spacing: 0.04em;
   cursor: pointer;
   pointer-events: auto;
@@ -701,6 +701,375 @@
 }
 .sty.rm .sty-opt,
 .sty.rm .sty-later {
+  animation: none !important;
+  opacity: 1;
+  transform: none;
+}
+
+/* Skipping the whole tutorial was armed: second tap confirms (QA2 H-03). */
+.sty-skip.armed {
+  color: #f2a541;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Encargos: offer bubble, celebration, objective-bar badge.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.enc {
+  position: absolute;
+  inset: 0;
+  z-index: 44;
+  pointer-events: none;
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: #e6edf3;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.enc *,
+.enc *::before,
+.enc *::after {
+  box-sizing: border-box;
+}
+.enc-fx {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.enc-bubble {
+  --c: #5bc0eb;
+  position: absolute;
+  left: 0;
+  top: 64px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: min(380px, calc(100% - 20px));
+  padding: 10px 14px 12px 8px;
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--c) 16%, transparent), transparent 62%),
+    linear-gradient(180deg, #19212a, #0e131a);
+  border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.55),
+    0 0 22px color-mix(in srgb, var(--c) 20%, transparent);
+  pointer-events: auto;
+  cursor: pointer;
+  transform-origin: var(--ax, 50%) 0;
+  opacity: 0;
+  transform: translateY(-12px) scale(0.86);
+  transition:
+    opacity 260ms ease,
+    transform 380ms cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+.enc-bubble[hidden] {
+  display: none;
+}
+/* The little tail pointing at the objective bar. */
+.enc-bubble::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: calc(var(--ax, 50%) - 7px);
+  width: 14px;
+  height: 14px;
+  background: #19212a;
+  border-left: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+  transform: rotate(45deg);
+  border-top-left-radius: 3px;
+}
+.enc-bubble.in {
+  opacity: 1;
+  transform: none;
+}
+.enc-bubble.out {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.96);
+  transition-duration: 300ms;
+}
+.enc-bubble.tuck {
+  opacity: 0;
+  transform: translateY(-26px) scale(0.3);
+  transition:
+    opacity 340ms ease,
+    transform 360ms cubic-bezier(0.5, 0, 0.8, 0.4);
+}
+.enc-bubble.cheer {
+  border-color: color-mix(in srgb, #ffd166 55%, transparent);
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.55),
+    0 0 30px rgba(255, 209, 102, 0.28);
+}
+.enc-bubble .enc-face {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  margin-top: -2px;
+}
+.enc-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.enc-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 18px;
+}
+.enc-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--c);
+  text-shadow: 0 0 10px currentColor;
+}
+.enc-tag.done {
+  color: #ffd166;
+}
+.enc-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #8b98a5;
+}
+.enc-ask {
+  font-size: 16px;
+  line-height: 1.3;
+  font-weight: 700;
+  text-wrap: pretty;
+}
+.enc-why {
+  font-size: 14px;
+  line-height: 1.35;
+  color: #b7c2cc;
+  text-wrap: pretty;
+}
+.enc-bubble.who-committee .enc-ask,
+.enc-bubble.who-committee .enc-why {
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+.enc-bubble.who-committee .enc-ask {
+  color: #f1ebdc;
+}
+.enc-bubble.who-albor .enc-why {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  font-style: italic;
+  color: #ffe2b8;
+  font-size: 15px;
+}
+.enc-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6px 8px;
+  margin-top: 5px;
+}
+.enc-foot .enc-rewards {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.enc-whybtn {
+  flex: none;
+  margin-left: auto;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c);
+}
+.enc-rewards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.enc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  font: 600 12.5px/1 'JetBrains Mono', ui-monospace, monospace;
+  white-space: nowrap;
+}
+.enc-chip.ess {
+  color: #5bc0eb;
+}
+.enc-chip.smp {
+  color: #8ae234;
+}
+.enc-chip.cos {
+  color: #ff9f80;
+  font-family: Inter, system-ui, sans-serif;
+}
+.enc-chip.jrn {
+  color: #c9b3ff;
+  font-family: Inter, system-ui, sans-serif;
+}
+.enc-gift {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, transparent 40%, #ffd166 40% 60%, transparent 60%), #e4572e;
+  box-shadow: 0 0 8px rgba(228, 87, 46, 0.7);
+}
+.enc-rewards.big {
+  margin-top: 6px;
+}
+.enc-rewards.big .enc-chip {
+  height: 28px;
+  font-size: 14px;
+  padding: 0 10px 0 8px;
+  opacity: 0;
+  transform: scale(0.4);
+  animation: enc-chip-in 420ms cubic-bezier(0.2, 1.6, 0.4, 1) forwards;
+}
+.enc-rewards.big .enc-chip:nth-child(1) {
+  animation-delay: 380ms;
+}
+.enc-rewards.big .enc-chip:nth-child(2) {
+  animation-delay: 560ms;
+}
+.enc-rewards.big .enc-chip:nth-child(3) {
+  animation-delay: 740ms;
+}
+.enc-rewards.big .enc-chip:nth-child(4) {
+  animation-delay: 920ms;
+}
+@keyframes enc-chip-in {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Objective-bar badge (mountBadge). */
+.enc-badge {
+  --c: #5bc0eb;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 2px 4px 2px 2px;
+  border: 1px solid color-mix(in srgb, var(--c) 30%, transparent);
+  border-radius: 14px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--c) 12%, transparent), rgba(255, 255, 255, 0.02) 70%), #10161d;
+  color: #e6edf3;
+  font: 600 13.5px/1.25 Inter, system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+.enc-badge[hidden] {
+  display: none;
+}
+.enc-badge .enc-mini {
+  flex: none;
+  width: 40px;
+  height: 40px;
+}
+.enc-badge-mid {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.enc-badge-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.enc-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.enc-badge-row[hidden] {
+  display: none;
+}
+.enc-badge-num {
+  flex: none;
+  font: 600 11.5px/1 'JetBrains Mono', ui-monospace, monospace;
+  color: var(--c);
+}
+.enc-badge-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.enc-badge-bar[hidden] {
+  display: none;
+}
+.enc-badge-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--c);
+  box-shadow: 0 0 8px var(--c);
+  transition: width 400ms ease;
+}
+.enc-badge-q {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+  color: var(--c);
+  font-weight: 700;
+}
+.enc-badge.side {
+  border-style: dashed;
+}
+.enc-badge.cheer {
+  animation: enc-badge-cheer 900ms ease;
+}
+@keyframes enc-badge-cheer {
+  30% {
+    box-shadow: 0 0 0 3px rgba(255, 209, 102, 0.55), 0 0 26px rgba(255, 209, 102, 0.45);
+    transform: scale(1.03);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enc-bubble,
+  .enc-bubble.tuck {
+    transition: opacity 200ms !important;
+    transform: none !important;
+  }
+  .enc-rewards.big .enc-chip {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
+  .enc-badge.cheer {
+    animation: none;
+  }
+}
+.enc.rm .enc-bubble,
+.enc.rm .enc-bubble.tuck {
+  transition: opacity 200ms !important;
+  transform: none !important;
+}
+.enc.rm .enc-rewards.big .enc-chip {
   animation: none !important;
   opacity: 1;
   transform: none;

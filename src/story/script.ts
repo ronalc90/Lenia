@@ -88,6 +88,12 @@ export const STORY_JOURNAL: JournalDef[] = [
   { id: 's_confession', text: t('VELA me ocultó la verdad porque Albor se lo pidió. No me enfado. Tenía razón: primero me enamoré.', 'VELA hid the truth because Albor asked her to. I am not angry. She was right: I fell in love first.') },
   { id: 's_tape3', text: t('El Destello es un recuerdo de Albor hecho luz. Cada vez que lo atrapé, ella me ayudaba. Ahora la placa me aprende a mí.', 'The Spark is a memory of Albor made of light. Each time I caught it, she was helping me. Now the dish learns me.') },
   { id: 's_words', text: t('Hablaron. Tres palabras cada vez, como quien aprende a nadar.', 'They spoke. Three words at a time, like someone learning to swim.') },
+  // Encargos (src/story/encargoScript.ts)
+  { id: 'e_heat', text: t('Tres criaturas encendieron la calefacción. VELA estrena bufanda. No sé de dónde sacó la lana.', 'Three creatures turned the heating on. VELA has a new scarf. I do not know where she got the wool.') },
+  { id: 'e_extinct', text: t('Primera Extinción. La placa quedó en blanco, pero el Bestiario no. Nada de lo aprendido se fue.', 'First Extinction. The dish went blank, the Bestiary did not. Nothing I learned was lost.') },
+  { id: 'e_medal', text: t('El Comité mandó una medalla. VELA se la colgó y no se la quita ni para dormir.', 'The Committee sent a medal. VELA put it on and will not take it off, not even to sleep.') },
+  { id: 'e_dancer', text: t('Una bailarina. Albor tenía razón: gira sin marearse.', 'A dancer. Albor was right: it spins without getting dizzy.') },
+  { id: 'e_seven', text: t('Las siete especies de la semilla, juntas otra vez. VELA lleva una flor en el tapón.', 'The seven seed species, together again. VELA wears a flower on her cork.') },
   { id: 's_end_harvest', text: t('Cumplí la cuota. La placa ya no canta, pero rinde.', 'I met the quota. The dish no longer sings, but it yields.') },
   { id: 's_end_law', text: t('Escribí un mundo sin errores. Ya nada me sorprende.', 'I wrote a world without mistakes. Nothing surprises me anymore.') },
   { id: 's_end_memory', text: t('Nada se perdió del todo. Recordar también es estar vivo.', 'Nothing was ever fully lost. Remembering is a way of being alive.') },

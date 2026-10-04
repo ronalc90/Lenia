@@ -108,6 +108,13 @@ export interface Story {
   replay(sceneId: string): boolean;
   /** Start any scene for real, ignoring its conditions (dev tools). */
   play(sceneId: string): boolean;
+  /**
+   * Say a few lines now as an ad-hoc scene (e.g. an Encargo's "Why?"): no waits,
+   * no choices, no state changes. Refused (false) while a real scene is on screen.
+   */
+  speak(id: string, title: Text, lines: LineDef[]): boolean;
+  /** Unlock a story journal entry by id (no-op if unknown or already unlocked). */
+  unlockJournal(id: string): void;
   /** The player printed a species (until GameEvents carries a 'print' event). */
   notePrint(): void;
   setEnabled(on: boolean): void;
@@ -544,6 +551,8 @@ export function createStory(deps: StoryDeps): Story {
     let best: SceneDef | null = null;
     for (const def of SCENES) {
       if (onlyPreempting && !def.urgent && !def.chain) continue;
+      // Another surface (e.g. a "moment" explainer) is voicing this beat right now.
+      if (deps.suppress?.(def.id)) continue;
       if (!gapOk(def, t)) continue;
       if (!eligible(def, c, t)) continue;
       if (!best || (def.priority ?? 0) > (best.priority ?? 0)) best = def;
@@ -820,6 +829,16 @@ export function createStory(deps: StoryDeps): Story {
       suspended = null;
       start(def, false);
       return true;
+    },
+    speak(id, title, lines) {
+      if (!lines.length || (active && !active.replay)) return false;
+      if (active) finish(active, true);
+      start({ id, act: 1, title, when: () => false, lines: [...lines] }, true);
+      return true;
+    },
+    unlockJournal(id) {
+      unlockJournal(id);
+      persist();
     },
     notePrint() {
       bump('prints');

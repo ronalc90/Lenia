@@ -368,3 +368,162 @@ skippable, the game never pauses, beats ≥ 20 s apart, endings never stop the g
 are overlays around real creatures (pillar 1), choices do not touch the economy, reduce motion respected, the whole
 story can be turned off. *Consequences:* GDD §3 gets a "(Corrección v1.2)" pointing here; the UI tutorial is disabled in
 favour of the story tutorial.
+
+---
+
+## 10. Encargos (story-driven objectives) — «¿Para qué? ¿Por qué?»
+
+Owner's request: *dialogues that ask you to CULTIVATE things, for WHAT and WHY, with their animations*. An **Encargo**
+is a request from a cast member: one concrete thing to grow, one short line of why, and a reward. Encargos replace the
+plain objective text under the HUD.
+
+### 10.1 Anatomy
+
+| Part | Rule | Example |
+|---|---|---|
+| Speaker | animated portrait (VELA, Albor's tape, the Committee's telex) | VELA, worried |
+| Ask | imperative, ≤ 10 words, shown in the objective bar | «Ten 3 criaturas estables a la vez.» |
+| Why | ≤ 14 words, kid-simple | «¿Me ayudas? Su luz enciende la calefacción. ¡Brrr!» |
+| Goal + progress | read from `GameView` + event counters | stable now 1/3 |
+| Reward | Essence, Samples, a VELA accessory, a Journal line | +30 Esencia · Bufanda para VELA · Bitácora |
+| Thanks | ≤ 12 words, said on completion (tapes can't react: VELA thanks for Albor) | «¡Calorcito! Y me tejí una bufanda.» |
+
+Tests enforce the word limits, es + en everywhere, and the Committee's CAPITALS + "FIN / END".
+
+### 10.2 The chain (teaches the game)
+
+**Act I mirrors `OBJECTIVES` (balance.ts) one to one**: same ids, same order, same Essence rewards (read from that
+table), so the balance bot stays valid. Only the voice changes; the one exception is `two`, which asks for 3 stable
+creatures (the heating) instead of 2.
+
+| # | id | Speaker | Ask (es) | Why (es) | Extra reward |
+|---|---|---|---|---|---|
+| 1 | seed | VELA | Siembra algo en la placa. | La placa duerme. Un toque la despierta. | |
+| 2 | stable | VELA | Consigue una criatura que se quede. | Las que se quedan dan luz. Las otras se deshacen. | |
+| 3 | look | VELA | Mira tu criatura en el Bestiario. | Cada especie tiene nombre. ¡Vamos a conocerla! | |
+| 4 | dropper | VELA | Compra el Gotero. | Con él, tus semillas prenden más a menudo. | |
+| 5 | two | VELA | Ten 3 criaturas estables a la vez. | ¿Me ayudas? Su luz enciende la calefacción. ¡Brrr! | 🧣 scarf, Journal |
+| 6 | eps3 | Committee | PRODUZCAN 3 ESENCIA/S. FIN. | EL COMITÉ PAGA LA LUZ. LA LUZ CUESTA. FIN. | |
+| 7 | calib | VELA | Compra el Calibrador. | Cambia las reglas de su mundo. ¡Y nacen criaturas nuevas! | |
+| 8 | move | VELA | Mueve μ un poquito. | Otras reglas, otra fauna. ¡A ver quién sale! | |
+| 9 | seeder | VELA | Compra el Sembrador automático. | Siembra solo mientras miras. Yo lo vigilo. | |
+| 10 | species3 | Committee | ENVÍEN 3 ESPECIES PARA EL INFORME. FIN. | SIN INFORME NO HAY LUZ. FIN. | |
+| 11 | golden | VELA | Atrapa un Destello. | Pasa volando y deja un regalo. ¡Mira bien! | |
+| 12 | behaviors2 | VELA | Encuentra 2 maneras de moverse. | Unas nadan, otras giran. ¡Cada una a su manera! | |
+| 13 | eps10 | Committee | EXIGIMOS 10 ESENCIA/S. FIN. | LA CALEFACCIÓN NO SE PAGA SOLA. FIN. | |
+| 14 | culture | VELA | Compra Cultivo. | Un caldo más rico. ¡Todas dan más luz! | |
+| 15 | print | Committee | IMPRIMAN UNA COPIA DE UNA ESPECIE. FIN. | LAS COPIAS RINDEN. AL COMITÉ LE ENCANTAN. FIN. | |
+| 16 | species6 | VELA | Encuentra 6 especies. | Seis ya es una familia. ¡Quiero conocerlas a todas! | |
+| 17 | eps50 | Committee | EXIGIMOS 50 ESENCIA/S ANTES DEL AMANECER. FIN. | EL AMANECER ESTÁ LEJOS. LA FACTURA, NO. FIN. | |
+| 18 | dish | VELA | Compra Placa I. | Más sitio: más criaturas sin apretarse. | |
+| 19 | era100k | VELA | Junta 100 000 Esencia esta noche. | Cuando la placa se llena de luz, madura. | |
+| 20 | extinct | VELA | Prueba la Extinción. | La noche termina, la memoria queda. | Journal |
+
+**Acts II–III** (gated by Era, one or two per night): `genome` (era 2, buy a Genome node; 60 s of production),
+`swimmer` (era 2, *keep a swimmer alive 2 minutes*; 2 Samples), `report10` (era 3, Committee wants 10 species;
+120 s of production + 🏅 medal + Journal), `colony` (era 4, Albor: *gather three of a kind*; 3 Samples), `calibNew`
+(era 4, *calibrate until something new is born*; 2 Samples), `rings` (era 5, Double rings), `seven` (era 6, Albor:
+*find the seven seed species*, a nudge towards the secret ending; 5 Samples + 🌸 flower + Journal), `dawnCrowd`
+(era 6, 10 creatures at once).
+
+### 10.3 Side requests (rotating)
+
+These start after step 8 ("move μ"), or from Era 2. One side request is active at a time: the first comes 20 s after
+unlocking, the next 90 s after each completion. An unfinished one rotates out after 12 min, and `dismissSide()` puts
+it away for 1 min. The "once" story requests come first: Albor's *«Cultiva una que gire. Yo las llamaba bailarinas.»*
+(spinner, + Journal), *«Busca una que lata»* (pulsing), and VELA's *«Encuentra una que se divida en dos»*. After those,
+repeatables are picked at random:
+- *calibrate until something new is born*
+- *keep a spinner going 90 s*
+- *catch 2 Sparks*
+- *have {n} creatures at once* (n = now + 2)
+- the Committee's *RAISE OUTPUT TO {n}/S* (n ≈ 1.6 × current)
+- *PRINT 3 COPIES*
+
+Their rewards scale with production (N seconds of Essence/s, with a minimum), so they never go stale. The numbers sit
+in `SIDE_REWARD` (encargoScript.ts) as proposals for the Balancer to move into `balance.ts`.
+
+### 10.4 On screen
+
+- **Offer bubble**: pops out of the objective bar (tail pointing at it). The speaker's portrait mouths the request for
+  a moment; the bubble shows the ask, the why and the reward chips, then **tucks back into the bar** after ~6.5 s.
+  Tapping it opens **"¿Por qué?"**, the full dialogue in the story box (`story.speak`). Bubbles wait while a story
+  dialogue is on screen, and an offer that completes before it is shown is dropped (the celebration tells it).
+- **Celebration**: «✓ ¡Encargo cumplido!», the thanks line, the portrait reacting (awed → happy), reward chips popping
+  in one by one, and a particle burst in the speaker's colour + gold. Reduce motion: fades only, no particles.
+- **Badge** (`mountBadge`): a ready-made objective-bar row with the mini portrait, the ask (2 lines max), a progress
+  bar + count ("1/3", "2,4/3", "1:20/2:00"), and a "?" that opens the full dialogue. A dashed border means a side
+  request.
+- **VELA's wardrobe**: the scarf (heating), the Committee's medal and Albor's flower are drawn on every VELA portrait
+  once earned (`setVelaWear`).
+
+### 10.5 Wiring (exact)
+
+```ts
+import { createStory, createEncargos } from './story';
+import { createStoryUI, createEncargoUI } from './ui/story';
+
+const story = createStory({ bus, getView: () => game.view(), isBlocked /* … as §7.2 */ });
+const encargos = createEncargos({
+  bus,
+  getView: () => game.view(),
+  story,                                   // "¿Por qué?" dialogues + Journal lines
+  grant: (r) => game.grantEncargo?.(r),     // GAME: add { essence, samples } to the wallet (+ stats/toast if wanted)
+});
+if (saved.encargos) encargos.load(saved.encargos);           // writeSave: encargos.serialize()
+const storyUI = createStoryUI(root, story, { /* … as §7.2 */ });
+const encUI = createEncargoUI(root, encargos, {
+  lang: () => game.view().settings.lang,
+  reduceMotion: () => game.view().settings.reduceMotion,
+  busy: () => storyUI.busy,                                   // bubbles wait for dialogues
+  getTargetRect: (id) => ui.targetRect?.(id) ?? null,         // needs 'objective' → the objective bar element
+  onSound: (k) => audio.storyCue?.(k === 'done' ? 'ending' : 'open'),
+});
+encUI.mountBadge(objectiveBarElement);   // or render encargos.current() yourself (label/count/progress/who)
+// UI signals: on opening the Bestiary tab → encargos.signal('tab:bestiary') (and story.signal)
+// onPrint → encargos.notePrint() (and story.notePrint);  resetSave → encargos.reset()
+```
+
+- **Game engineer**:
+  - When Encargos are wired, the old objective chain must stop paying and stop showing. Leave `view.objective` /
+    `objectiveProgress` null (or behind a flag).
+  - Pay rewards in `grantEncargo({ essence, samples })`. `cosmetic` and `journal` are handled by the story layer.
+- **UI integrator**:
+  - Give the objective bar's rect for `'objective'`.
+  - Mount the badge (or draw `encargos.current()`: `who`, `ask`, `count`, `progress.frac`, `kind`). Its tap calls
+    `encargos.why()`.
+  - A 2-line ask needs ~52 px of bar height.
+- **Bus/GameView wishes**: `print` and `tabOpened` events (as §7.5). The Encargos also read `GameView.stats.prints` when
+  present.
+- **Veteran saves** without Encargos data: already-met Act I steps are skipped silently (no double rewards). From Era 2
+  the chain starts at the Act II steps.
+
+### 10.6 API
+
+```ts
+createEncargos(deps: { bus; getView; grant?; story?; storage?; now?; random?; pollMs? }): Encargos
+```
+
+| Group | Members |
+|---|---|
+| Read | `current()` (main first, else side), `main()`, `side()`, `chainProgress()`, `cosmetics()` |
+| Actions | `why(id?)`, `dismissSide()`, `signal(name)`, `notePrint()`, `tick()` |
+| Save | `serialize()`, `load(data)`, `reset()`, `dispose()` |
+| Dev | `debug.offer(id)`, `debug.complete()` |
+
+Events:
+
+| Event | When |
+|---|---|
+| `offer {encargo}` | a request is offered |
+| `progress {encargo}` | its progress count changes |
+| `done {encargo, reward, thanks}` | it is completed |
+| `change` | anything else changes |
+
+`EncargoView` fields: `id`, `kind` (`main` / `side`), `who`, `mood`, `name`, `ask`, `why`, `label` (ask + progress),
+`count`, `progress {current, target, unit, frac}`, `reward {essence, samples, cosmetic, journal}`.
+
+Storage: localStorage key `bioluma.encargos` (try/catch everywhere).
+
+Dev page: `?enc=<id>&hold=1`, `&done=1` (celebration), `?why=<id>`, `&wear=scarf,medal,flower`; menu sections
+"Encargos · chain / side / actions". Screenshots: `story-encargo-*.png`.

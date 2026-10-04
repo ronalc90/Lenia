@@ -28,7 +28,9 @@ export type TargetId =
   | 'golden'
   | 'tab.calibrate'
   | 'tab.genome'
-  | 'extinguish';
+  | 'extinguish'
+  /** The objective bar (Encargos). */
+  | 'objective';
 
 export const TARGET_IDS: readonly TargetId[] = [
   'dish',
@@ -41,6 +43,7 @@ export const TARGET_IDS: readonly TargetId[] = [
   'tab.calibrate',
   'tab.genome',
   'extinguish',
+  'objective',
 ];
 
 /** Environmental hints: overlay effects drawn over the dish, never changes to the simulation (pillar 1). */
@@ -315,6 +318,8 @@ export interface StoryDeps {
   pollMs?: number;
   /** Something else owns the screen (splash, modal, extinction ritual): don't start scenes. */
   isBlocked?: () => boolean;
+  /** Integrator hook: skip starting this scene for now (another surface explains the same event). */
+  suppress?: (sceneId: string) => boolean;
 }
 
 /** What the integrator folds into the main save. */

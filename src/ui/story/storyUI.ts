@@ -105,6 +105,7 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
   const skipBtn = document.createElement('button');
   skipBtn.type = 'button';
   skipBtn.className = 'sty-skip';
+  box.dataset.testid = 'tutorial-next';
   box.append(portraitWrap, nameEl, textEl, nextEl, skipBtn);
 
   const task = document.createElement('div');
@@ -185,6 +186,8 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
 
   function relabelSkip(): void {
     skipBtn.textContent = scene?.id === 't_intro' ? `${tr(S.skipTutorial, L())} ›` : `${tr(S.skip, L())} ›`;
+    // QA selectors shared with the former coach-mark tutorial (tests/e2e/smoke.mjs, tests/e2e/qa).
+    skipBtn.dataset.testid = scene?.id === 't_intro' ? 'tutorial-skip' : 'story-skip';
     skipBtn.setAttribute('aria-label', skipBtn.textContent);
     taskX.setAttribute('aria-label', tr(S.closeTask, L()));
     box.setAttribute('aria-label', tr(S.tapToContinue, L()));
@@ -298,7 +301,8 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
         box.classList.toggle('at-top', boxTop);
       }
       if (boxTop) {
-        box.style.top = 'max(64px, calc(env(safe-area-inset-top) + 56px))';
+        // --sty-top: set by the game UI below its floating objective, so VELA never covers it.
+        box.style.top = 'max(var(--sty-top, 64px), calc(env(safe-area-inset-top) + 56px))';
         box.style.bottom = '';
       } else {
         box.style.bottom = 'max(14px, calc(env(safe-area-inset-bottom) + 10px))';
@@ -442,10 +446,30 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
     story.advance();
   }
   box.addEventListener('click', onBoxTap);
+  // Skipping the WHOLE tutorial asks for a second tap (QA2 H-03); skipping one scene does not.
+  let skipArmedUntil = 0;
   skipBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (scene?.id === 't_intro') story.skipTutorial();
-    else story.skip();
+    if (scene?.id !== 't_intro') {
+      story.skip();
+      return;
+    }
+    const now = performance.now();
+    if (now < skipArmedUntil) {
+      skipArmedUntil = 0;
+      story.skipTutorial();
+      return;
+    }
+    skipArmedUntil = now + 3000;
+    skipBtn.textContent = `${tr(S.skipTutorialSure, L())} ›`;
+    skipBtn.classList.add('armed');
+    window.setTimeout(() => {
+      if (skipArmedUntil && performance.now() >= skipArmedUntil) {
+        skipArmedUntil = 0;
+        skipBtn.classList.remove('armed');
+        relabelSkip();
+      }
+    }, 3100);
   });
   taskX.addEventListener('click', (e) => {
     e.stopPropagation();

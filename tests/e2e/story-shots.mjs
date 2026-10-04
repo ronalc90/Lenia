@@ -78,6 +78,15 @@ const PLAN = [
   ['hint-constellation', '?hint=constellation&menu=0', 2600],
   ['hint-echo', '?hint=echo&menu=0', 1600],
   ['archive', '?archive=1&menu=0', 1400],
+  ['encargo-offer-vela', '?enc=two&hold=1&menu=0', 1600],
+  ['encargo-offer-committee-en', '?enc=eps50&hold=1&menu=0&lang=en', 1600],
+  ['encargo-offer-albor-side', '?enc=s_dancer&hold=1&menu=0', 1600],
+  ['encargo-offer-dynamic', '?enc=s_rate&hold=1&menu=0', 1600],
+  ['encargo-offer-keepalive-en', '?enc=swimmer&hold=1&menu=0&lang=en', 1600],
+  ['encargo-cheer', '?enc=two&done=1&after=100&hold=1&menu=0', 900],
+  ['encargo-cheer-medal-reduced-motion', '?enc=report10&done=1&hold=1&menu=0&rm=1&wear=scarf,medal', 1600],
+  ['encargo-why', '?why=two&menu=0&wear=scarf', 1600],
+  ['encargo-badge-tucked', '?enc=calibNew&menu=0&wear=scarf,medal,flower', 9000],
   ['archive-en', '?archive=1&menu=0&lang=en', 1400],
   ...['harvest', 'law', 'memory', 'tide', 'albor'].flatMap((id) => {
     const closing = id === 'albor' ? 26.8 : 21.2;
