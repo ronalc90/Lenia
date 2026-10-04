@@ -10,6 +10,8 @@ import { measureStepsPerSecond, recommendQuality } from '../../src/sim/perf';
 import { applyEraseCpu, applySeedCpu } from '../../src/sim/seed';
 import { snapshotFromCpu } from '../../src/sim/snapshot';
 import { createSimulation, type StateFormat, type WebGLSimulation } from '../../src/sim/webgl';
+import { paletteLUT, renderStyleFor } from '../../src/store/apply';
+import { cosmeticById, defaultItem, type DishTheme, type PaletteData } from '../../src/store/catalog';
 
 function makeCanvas(cssW = 64, cssH = 64, show = false, label = ''): HTMLCanvasElement {
   const c = document.createElement('canvas');
@@ -446,6 +448,18 @@ function visual(quality: Quality = 'medium', cssW = 300, cssH = 375, only?: stri
   return out;
 }
 
+/** Apply a cosmetic palette + dish theme (catalog ids) to every live dish and re-render. */
+function restyle(paletteId: string, dishId: string) {
+  const pal = (cosmeticById(paletteId)?.data ?? defaultItem('palette').data) as PaletteData;
+  const dish = (cosmeticById(dishId)?.data ?? defaultItem('dish').data) as DishTheme;
+  for (const l of live) {
+    l.sim.setMatterLUT(paletteLUT(pal.stops));
+    l.sim.setRenderStyle(renderStyleFor(pal, dish));
+    l.sim.render(l.view);
+  }
+  return live.length;
+}
+
 function rerender(quality?: Quality) {
   for (const l of live) l.sim.render(quality ? { ...l.view, quality } : l.view);
   return live.length;
@@ -462,5 +476,6 @@ function rerender(quality?: Quality) {
   contextLoss,
   visual,
   rerender,
+  restyle,
 };
 (window as unknown as { simTestReady: boolean }).simTestReady = true;

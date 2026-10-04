@@ -17,6 +17,7 @@ import {
   VERT,
 } from './shaders';
 import { decodeSnapshotPixels, decodeValuePixels, GRAD_ENCODE_MAX, pack16, snapshotSize } from './snapshot';
+import { DEFAULT_RENDER_STYLE, RIM_HALO, normalizeRenderStyle, type SimRenderStyle } from './style';
 
 /**
  * Lenia on WebGL2.
@@ -40,7 +41,8 @@ import { decodeSnapshotPixels, decodeValuePixels, GRAD_ENCODE_MAX, pack16, snaps
  * Extras beyond core Simulation (optional for the integrator): readState /
  * writeState (full 16-bit grid), snapshotAsync (non-blocking readback),
  * prewarmKernel (compile a kernel ahead of setParams), finish, info,
- * contextLost, SeedSpec.patternScale (see seed.ts).
+ * contextLost, SeedSpec.patternScale (see seed.ts), setMatterLUT / setRenderStyle (cosmetic
+ * palettes and dish themes; purely visual, see style.ts).
  */
 
 export type StateFormat = 'auto' | 'half' | 'float' | 'u8';
@@ -105,6 +107,9 @@ export interface SimInfo {
   floatField: boolean;
 }
 
+/** Compiled step programs kept (one per kernel R / rings); each is a few hundred KB of driver memory. */
+const STEP_CACHE_MAX = 18;
+
 const QUALITY_GLOW: Record<Quality, { amount: number; passes: number; cubic: boolean }> = {
   low: { amount: 0, passes: 0, cubic: true },
   medium: { amount: 0.55, passes: 1, cubic: true },
@@ -134,6 +139,11 @@ export class WebGLSimulation implements Simulation {
   private snapT!: Target;
   private extractTargets = new Map<string, Target>();
   private lut!: WebGLTexture;
+  /** Matter colormap (256×1 RGBA8); kept so a restored context gets the same palette. */
+  private lutData: Uint8Array = matterLUT();
+  private style: SimRenderStyle = DEFAULT_RENDER_STYLE;
+  /** Style uniforms must be (re)sent to the render program. */
+  private styleDirty = true;
   private tmplTex!: WebGLTexture;
   private tmplRef: Pattern | null = null;
   private emptyTmpl!: WebGLTexture;
@@ -393,6 +403,29 @@ export class WebGLSimulation implements Simulation {
     return { w: n, h: n, data };
   }
 
+  /**
+   * Non-blocking capture (portraits): the cells are copied on the GPU at the call (the dish as it is
+   * now) and read back through a pixel buffer + fence a frame or two later. Never stalls the main
+   * thread (QA3 F2: synchronous readPixels was 82-87 % of busy time).
+   */
+  captureAsync(x: number, y: number, size: number): Promise<Pattern> {
+    const n = Math.max(1, Math.round(size));
+    if (this.lost || this.disposed) return Promise.resolve({ w: n, h: n, data: new Float32Array(n * n) });
+    return this.readCellsAsync(Math.round(x - n / 2), Math.round(y - n / 2), n, n).then((data) => ({ w: n, h: n, data }));
+  }
+
+  /** Non-blocking exportState(): 8-bit dish for the save, read through a pixel buffer + fence. */
+  exportStateAsync(): Promise<Uint8Array> {
+    if (this.lost || this.disposed) return Promise.resolve(this.exportState());
+    const step = this._step;
+    return this.readCellsAsync(0, 0, this.gridW, this.gridH).then((full) => {
+      if (!this.backup || this.backup.step <= step) this.backup = { data: full.slice(), step };
+      const out = new Uint8Array(full.length);
+      for (let i = 0; i < full.length; i++) out[i] = Math.round(full[i] * 255);
+      return out;
+    });
+  }
+
   exportState(): Uint8Array {
     const full = this.lost || this.disposed ? (this.backup?.data ?? new Float32Array(this.gridW * this.gridH)) : this.readState();
     const out = new Uint8Array(full.length);
@@ -471,7 +504,50 @@ export class WebGLSimulation implements Simulation {
     gl.uniform1f(p.u('uGlowAmt'), q.amount);
     gl.uniform1i(p.u('uCubic'), q.cubic ? 1 : 0);
     gl.uniform1f(p.u('uGradBias'), this.floatField ? 0 : 0.5);
+    if (this.styleDirty) this.uploadStyle(p);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /** Style uniforms persist in the render program; sent only after a change or a rebuild. */
+  private uploadStyle(p: Prog): void {
+    const gl = this.gl;
+    const st = this.style;
+    gl.uniform3fv(p.u('uBg'), st.bg);
+    gl.uniform3fv(p.u('uAgarIn'), st.agarIn);
+    gl.uniform3fv(p.u('uAgarOut'), st.agarOut);
+    gl.uniform3fv(p.u('uRim'), st.rim);
+    gl.uniform3fv(p.u('uContour'), st.contour);
+    gl.uniform3fv(p.u('uGlowCore'), st.glowCore);
+    gl.uniform3fv(p.u('uGlowWide'), st.glowWide);
+    gl.uniform3fv(p.u('uShadow'), st.shadow);
+    gl.uniform1f(p.u('uRimAmt'), st.rimAmt);
+    gl.uniform1f(p.u('uRimHalo'), st.rimStyle === 'glow' ? RIM_HALO.glow : RIM_HALO.normal);
+    gl.uniform1f(p.u('uRimDouble'), st.rimStyle === 'double' ? 1 : 0);
+    gl.uniform4fv(p.u('uLabGrid'), st.grid);
+    this.styleDirty = false;
+  }
+
+  /**
+   * Swap the matter colormap (256×1 RGBA8, e.g. src/store/apply.ts paletteLUT). Purely visual:
+   * the simulation state and the detector never see it.
+   */
+  setMatterLUT(lut: Uint8Array): void {
+    if (lut.length !== 256 * 4) throw new Error('setMatterLUT: expected 256×1 RGBA8 (1024 bytes)');
+    this.lutData = lut.slice();
+    if (this.lost || this.disposed) return; // initGL uploads lutData on restore
+    const gl = this.gl;
+    gl.bindTexture(gl.TEXTURE_2D, this.lut);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 256, 1, gl.RGBA, gl.UNSIGNED_BYTE, this.lutData);
+  }
+
+  /** Dish and accent colours of the screen pass (style.ts). Defaults reproduce the original look exactly. */
+  setRenderStyle(style: SimRenderStyle): void {
+    this.style = normalizeRenderStyle(style);
+    this.styleDirty = true;
+  }
+
+  get renderStyle(): Readonly<SimRenderStyle> {
+    return this.style;
   }
 
   resizeCanvas(width: number, height: number): void {
@@ -619,7 +695,7 @@ export class WebGLSimulation implements Simulation {
 
     this.lut = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, this.lut);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, matterLUT());
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.lutData);
     this.texParams(gl.LINEAR, gl.CLAMP_TO_EDGE);
 
     this.progs = {
@@ -629,6 +705,7 @@ export class WebGLSimulation implements Simulation {
       glowDown: this.program(GLOW_DOWN),
       glowBlur: this.program(GLOW_BLUR),
     };
+    this.styleDirty = true; // new render program: its style uniforms start at zero
     this.ensureStepProgram();
     this.info = {
       ...this.info,
@@ -696,8 +773,8 @@ export class WebGLSimulation implements Simulation {
     const pk = buildPackedKernel(R, rings, this.fm.lanes);
     if (!prog) {
       prog = this.program(stepSource(pk, this.fm.enc, this.offMin, this.offMax));
-      // Small LRU: calibrating R sweeps through kernels; keep the last few compiled.
-      if (this.stepCache.size >= 6) {
+      // LRU: calibrating R sweeps through kernels; keep plenty compiled (QA3 F11: 6 evicted R = 13).
+      if (this.stepCache.size >= STEP_CACHE_MAX) {
         const [oldKey, old] = this.stepCache.entries().next().value as [string, Prog];
         if (old !== this.stepProg) {
           this.gl.deleteProgram(old.p);
@@ -762,6 +839,56 @@ export class WebGLSimulation implements Simulation {
     const px = new Uint8Array(w * h * 4);
     gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
     return decodeValuePixels(px, w * h);
+  }
+
+  /**
+   * Async readCells: the extract pass runs now into its own target (so a later sync read cannot
+   * overwrite it), the pixels go to a fresh pixel-pack buffer, and a fence tells when they are ready.
+   */
+  private readCellsAsync(x0: number, y0: number, w: number, h: number): Promise<Float32Array> {
+    const gl = this.gl;
+    const t = this.makeTarget(w, h, gl.RGBA8, gl.NEAREST, gl.CLAMP_TO_EDGE);
+    const p = this.progs.extract;
+    this.useStateReader(p);
+    const ox = ((x0 % this.gridW) + this.gridW) % this.gridW;
+    const oy = ((y0 % this.gridH) + this.gridH) % this.gridH;
+    gl.uniform2i(p.u('uOrigin'), ox, oy);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, t.fbo);
+    gl.viewport(0, 0, w, h);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    const buf = gl.createBuffer()!;
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buf);
+    gl.bufferData(gl.PIXEL_PACK_BUFFER, w * h * 4, gl.STREAM_READ);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+    const fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0)!;
+    gl.flush();
+    const cleanup = () => {
+      if (!this.lost && !this.disposed) {
+        gl.deleteBuffer(buf);
+        this.deleteTarget(t);
+      }
+    };
+    return new Promise<Float32Array>((resolve) => {
+      const poll = () => {
+        if (this.lost || this.disposed) {
+          resolve(new Float32Array(w * h));
+          return;
+        }
+        if (gl.clientWaitSync(fence, 0, 0) === gl.TIMEOUT_EXPIRED) {
+          setTimeout(poll, 4);
+          return;
+        }
+        gl.deleteSync(fence);
+        const px = new Uint8Array(w * h * 4);
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buf);
+        gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, px);
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+        cleanup();
+        resolve(decodeValuePixels(px, w * h));
+      };
+      setTimeout(poll, 0);
+    });
   }
 
   private extractTarget(w: number, h: number): Target {

@@ -1,5 +1,6 @@
 // GPU simulation check in headless Chromium (SwiftShader).
 // Usage: node tests/e2e/sim-check.mjs [--shot <png>] [--quick] [--visual-only] [--quality low|medium|high]
+//        [--looks palette.id:dish.id,palette.id:dish.id]  (extra screenshots <shot>-<palette>-<dish>.png)
 //
 // Starts a Vite dev server on the repo, opens tests/e2e/sim-test.html and runs:
 //  - Orbium GPU vs CpuLenia on 128×128 after 100 steps (max |ΔA| < 0.02, mass ±1%)
@@ -19,6 +20,9 @@ const args = process.argv.slice(2);
 const quick = args.includes('--quick');
 const visQuality = args.includes('--quality') ? args[args.indexOf('--quality') + 1] : 'medium';
 const visualOnly = args.includes('--visual-only');
+const looks = args.includes('--looks')
+  ? args[args.indexOf('--looks') + 1].split(',').filter(Boolean).map((x) => x.split(':'))
+  : [];
 const shot = args.includes('--shot')
   ? resolve(args[args.indexOf('--shot') + 1])
   : '/tmp/claude-0/-home-user-Lenia/a5114f5a-39a4-539d-9a6a-14e769759a92/scratchpad/sim-render.png';
@@ -166,6 +170,19 @@ try {
   mkdirSync(dirname(shot), { recursive: true });
   await page.screenshot({ path: shot, fullPage: true });
   console.log(`screenshot → ${shot}`);
+  // Cosmetic looks (palette + dish theme), then back to the defaults: must match the first shot.
+  for (const [pal, dish] of looks) {
+    await page.evaluate(([p, d]) => window.simTest.restyle(p, d), [pal, dish ?? 'dish.nightlab']);
+    const out = shot.replace(/\.png$/, `-${pal}-${dish ?? 'dish.nightlab'}.png`);
+    await page.screenshot({ path: out, fullPage: true });
+    console.log(`screenshot → ${out}`);
+  }
+  if (looks.length) {
+    await page.evaluate(() => window.simTest.restyle('palette.bioluma', 'dish.nightlab'));
+    const out = shot.replace(/\.png$/, '-restored-default.png');
+    await page.screenshot({ path: out, fullPage: true });
+    console.log(`screenshot → ${out}`);
+  }
   check('no console errors', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
 } catch (err) {
   console.error(err);

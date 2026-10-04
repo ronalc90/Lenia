@@ -400,15 +400,23 @@ uniform float uTime;
 uniform float uGlowAmt;
 uniform float uGradBias;
 uniform int uCubic;
+// Render style (src/sim/style.ts DEFAULT_RENDER_STYLE; cosmetics may change it). Defaults are the
+// former constants: background (11,14,18)/255, agar (20,27,34)/255 → (14,19,25)/255, rim
+// (91,192,235)/255, contour .40,.90,1, glow core .45,.85,1, glow wide .28,.36,.95, shadow .42,.70,1.
+uniform vec3 uBg;
+uniform vec3 uAgarIn;
+uniform vec3 uAgarOut;
+uniform vec3 uRim;
+uniform vec3 uContour;
+uniform vec3 uGlowCore;
+uniform vec3 uGlowWide;
+uniform vec3 uShadow;
+uniform float uRimAmt;      // 0.22
+uniform float uRimHalo;     // 0.025 ('glow' rims: 0.06)
+uniform float uRimDouble;   // 1 = second rim line 3 px inside
+uniform vec4 uLabGrid;      // rgba of a faint grid every 16 cells; a = 0 disables it
 out vec4 o;
 
-const vec3 BG = vec3(11.0, 14.0, 18.0) / 255.0;
-const vec3 AGAR_IN = vec3(20.0, 27.0, 34.0) / 255.0;
-const vec3 AGAR_OUT = vec3(14.0, 19.0, 25.0) / 255.0;
-const vec3 RIM = vec3(91.0, 192.0, 235.0) / 255.0;
-const vec3 CYAN = vec3(0.40, 0.90, 1.00);
-const vec3 GLOW_CORE = vec3(0.45, 0.85, 1.00);
-const vec3 GLOW_WIDE = vec3(0.28, 0.36, 0.95);
 const vec3 LIGHT = vec3(-0.45, -0.55, 0.70);   // from the top-left, towards the viewer
 
 vec4 fieldCubic(vec2 g) {
@@ -454,7 +462,13 @@ void main() {
   // Agar: slightly lighter than the background, with a very faint vignette.
   vec2 e = rel / halfSize;
   float vig = smoothstep(1.6, 0.2, length(e));
-  vec3 col = mix(AGAR_OUT, AGAR_IN, vig);
+  vec3 col = mix(uAgarOut, uAgarIn, vig);
+  // Optional lab grid (graph paper), toroidal like the dish; drawn under the matter.
+  if (uLabGrid.a > 0.0) {
+    vec2 gd = abs(fract(g / 16.0 + 0.5) - 0.5) * 16.0 * uScale;
+    float gline = 1.0 - smoothstep(0.5 * uDpr, 0.5 * uDpr + 1.0, min(gd.x, gd.y));
+    col = mix(col, uLabGrid.rgb, uLabGrid.a * gline);
+  }
   // Inner shadow near the rim, like a glass dish wall.
   col *= 0.78 + 0.22 * smoothstep(0.0, 14.0 * uDpr, inside);
 
@@ -466,7 +480,7 @@ void main() {
   vec3 l = normalize(LIGHT);
   float shade = dot(n, l) - l.z;                  // 0 on flat matter
   // Shadows sink into deep cyan/indigo instead of grey (stays luminous).
-  mat = mix(mat, mat * vec3(0.42, 0.70, 1.0), clamp(-shade * 1.4, 0.0, 0.85));
+  mat = mix(mat, mat * uShadow, clamp(-shade * 1.4, 0.0, 0.85));
   mat *= 1.0 + 0.35 * max(shade, 0.0);
   float spec = pow(max(dot(n, normalize(l + vec3(0.0, 0.0, 1.0))), 0.0), 48.0);
   mat += vec3(0.9, 0.97, 1.0) * spec * 0.35 * smoothstep(0.15, 0.45, v);
@@ -474,26 +488,30 @@ void main() {
 
   // "This produces": luminous cyan sheen on steep edges + a thin iso-contour.
   float edge = smoothstep(0.02, 0.16, gm);
-  col += CYAN * 0.14 * edge * (1.0 - smoothstep(0.25, 0.65, v));
+  col += uContour * 0.14 * edge * (1.0 - smoothstep(0.25, 0.65, v));
   float fw = max(fwidth(v), 1e-5);
   float dist = abs(v - 0.13) / fw;
   float hw = 0.55 * uDpr;
   float line = 1.0 - smoothstep(hw - 0.5, hw + 0.75, dist);
-  col += CYAN * line * (0.25 + 0.75 * edge) * 0.85;
+  col += uContour * line * (0.25 + 0.75 * edge) * 0.85;
 
   // Bloom from the half-res blurred bright matter: wide indigo, cyan core.
   if (uGlowAmt > 0.0) {
     float gl = texture(uGlow, g / uGrid).r;
-    col += (GLOW_WIDE * gl + GLOW_CORE * gl * gl * 1.4) * uGlowAmt;
+    col += (uGlowWide * gl + uGlowCore * gl * gl * 1.4) * uGlowAmt;
   }
 
   // Dish edge: antialiased cut to the background plus a subtle rim line.
   float aa = clamp(inside + 0.5, 0.0, 1.0);
-  vec3 outCol = mix(BG, col, aa);
+  vec3 outCol = mix(uBg, col, aa);
   float rim = exp(-pow(inside / (0.9 * uDpr), 2.0));
-  outCol += RIM * rim * 0.22;
+  outCol += uRim * rim * uRimAmt;
+  if (uRimDouble > 0.0) {
+    float rim2 = exp(-pow((inside - 3.0 * uDpr) / (0.7 * uDpr), 2.0));
+    outCol += uRim * rim2 * uRimAmt * 0.6 * uRimDouble;
+  }
   float halo = exp(-max(-inside, 0.0) / (10.0 * uDpr)) * (1.0 - aa);
-  outCol += RIM * halo * 0.025;
+  outCol += uRim * halo * uRimHalo;
 
   // Dither to kill banding in the dark gradients.
   outCol += (hash12(gl_FragCoord.xy + fract(uTime) * 61.0) - 0.5) / 255.0;
