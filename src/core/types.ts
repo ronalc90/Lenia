@@ -236,7 +236,10 @@ export interface GenomeNodeView {
 
 export interface SpeciesView {
   id: string;
-  /** Provisional ("Espécimen 3") until revealed or renamed. */
+  /**
+   * Common name in the player's language, unique in the bestiary: "Nadadora celeste" / "Sky swimmer"
+   * (body + colour family), or the player's own name. The Latin name is `scientificName`.
+   */
   name: string;
   /** Real catalog name revealed (italic latin). */
   catalogName: string | null;
@@ -253,13 +256,17 @@ export interface SpeciesView {
   /** Discovered but not yet looked at in the bestiary. */
   isNew: boolean;
   /**
-   * (species) Accent hue in degrees (115–335: never the warn/danger/gold/good bands), frozen at
-   * registration, well separated from the other species of the bestiary. For halos, card accents,
-   * badges and the matter tint: e.g. `hsl(${hue} 70% 62%)`.
+   * (species) Accent hue in degrees: one of 12 colour families (`colorName`), frozen at registration
+   * and different from every other species' family until 12 species (then the most separated hue).
+   * For halos, card accents, badges and the matter tint: e.g. `hsl(${hue} 70% 62%)`.
    */
   hue?: number;
   /** (species) Secondary line under the name: "Criatura 3" / "Creature 3" (the registration number). */
   subtitle?: string;
+  /** (species) Scientific line, small italic: the catalog name or a procedural Latin name ("Caudion natans"). */
+  scientificName?: string | null;
+  /** (species) Its colour family in words ("celeste" / "sky"), the colour of `hue`. */
+  colorName?: Text;
   /** (species) What its body looks like, in plain words: "disco con cola", "anillo", "media luna"… */
   shapeLabel?: Text;
   /** (species) Stable id of that body kind (pair, ring, trefoil, lobes, spindle, tailed, shield, crescent, cloud, disc). */
@@ -455,8 +462,8 @@ export interface GameView {
     behavior?: number;
   };
   /**
-   * (game) QA2 H-05: more than SEED_NURSERY_FREE seeds are still forming, so the next seed is
-   * pricier: show "⏳ Espera… / Wait…" in grey instead of a red price.
+   * (game) QA2 H-05: the nursery is full (SEED_NURSERY_MAX spores still forming): the next tap is
+   * refused for free (bus 'seedBlocked' reason 'growing'). Show "⏳ Espera… / Wait…" in grey, not a price.
    */
   seedsGrowing?: boolean;
   /** (game) Turno de laboratorio: the generator that lights the dish during this Era. */
