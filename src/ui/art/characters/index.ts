@@ -1,0 +1,31 @@
+/** The human cast, drawn in code (docs/ARTE.md §6.6). */
+export {
+  DOCTOR_MOODS,
+  MOOD_GESTURE,
+  drawDoctorAt,
+  drawDoctorBust,
+  drawLantern,
+  mix,
+  type DoctorMood,
+  type DoctorPose,
+  type DoctorSpec,
+  type Gesture,
+  type HairStyle,
+  type HeldItem,
+} from './doctor';
+export {
+  ALBOR,
+  LOOK_STORAGE_KEY,
+  PLAYER_LOOKS,
+  PLAYER_LOOK_IDS,
+  PLAYER_LOOK_NAMES,
+  doctorMood,
+  drawAlborPortrait,
+  drawCassette,
+  drawYouPortrait,
+  getPlayerLook,
+  playerSpec,
+  setPlayerLook,
+  type PeoplePose,
+  type PlayerLookId,
+} from './people';

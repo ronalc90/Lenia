@@ -7,8 +7,9 @@
  */
 import type { Mood, Speaker } from '../../story/types';
 import { LeniaLens } from '../story/lens';
-import { drawAlborArt, drawChoirArt, drawCommitteeArt, drawYouArt } from './cast';
-import { drawVelaArt, featherEdges, type ArtMood } from './vela';
+import { drawChoirArt, drawCommitteeArt } from './cast';
+import { drawAlborPortrait, drawYouPortrait } from './characters';
+import { ART_MOODS as VELA_MOODS, drawVelaArt, featherEdges, type ArtMood } from './vela';
 
 export type { ArtMood } from './vela';
 export { ART_MOODS } from './vela';
@@ -41,12 +42,18 @@ export function getVelaWear(): readonly string[] {
   return velaWear;
 }
 
-export function drawVela(ctx: CanvasRenderingContext2D, s: PortraitState, t: number, opts: { mini?: boolean } = {}): void {
-  drawVelaArt(ctx, { ...s, mood: s.mood as ArtMood, wear: s.wear ?? velaWear }, t, opts);
+/** VELA has no 'thinking' face (a doctors' mood): she shows her neutral one. */
+function velaMood(m: ArtMood | Mood): ArtMood {
+  return (VELA_MOODS as readonly string[]).includes(m) ? (m as ArtMood) : 'neutral';
 }
 
+export function drawVela(ctx: CanvasRenderingContext2D, s: PortraitState, t: number, opts: { mini?: boolean } = {}): void {
+  drawVelaArt(ctx, { ...s, mood: velaMood(s.mood), wear: s.wear ?? velaWear }, t, opts);
+}
+
+/** Dr. Albor as a chibi scientist (docs/ARTE.md §6.6): a sepia memory with a cassette on tape, in colour live. */
 export function drawAlbor(ctx: CanvasRenderingContext2D, s: PortraitState, t: number): void {
-  drawAlborArt(ctx, s, t);
+  drawAlborPortrait(ctx, s, t);
 }
 
 export function drawCommittee(ctx: CanvasRenderingContext2D, s: PortraitState, t: number): void {
@@ -57,8 +64,9 @@ export function drawChoir(ctx: CanvasRenderingContext2D, s: PortraitState, t: nu
   drawChoirArt(ctx, s, t, lens);
 }
 
+/** You: the night-shift scientist in the look picked in the intro, writing in the field notebook. */
 export function drawYou(ctx: CanvasRenderingContext2D, s: PortraitState, t: number): void {
-  drawYouArt(ctx, s, t);
+  drawYouPortrait(ctx, s, t);
 }
 
 /** `opts.mini` (VELA only): the simplified avatar for 24–56 px (Portrait picks it automatically). */
