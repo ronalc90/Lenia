@@ -13,6 +13,18 @@ export const QUALITY_GRID: Record<Quality, { w: number; h: number }> = {
   high: { w: 224, h: 280 },
 };
 
+/**
+ * Round dish (ADR-022, docs/DISH.md): square grid allocated once per profile and the largest rim
+ * it allows. 4 empty cells around the largest dish make clamp-to-edge reads exact zero padding
+ * (core/dish.ts DISH_GRID_MARGIN). Cost at the largest rim ≤ the old 4:5 grids (low 20 106 cells
+ * vs 20 480, medium/high 39 408 vs 46 080 / 62 720).
+ */
+export const QUALITY_DISH: Record<Quality, { grid: number; maxDiameter: number }> = {
+  low: { grid: 168, maxDiameter: 160 },
+  medium: { grid: 232, maxDiameter: 224 },
+  high: { grid: 232, maxDiameter: 224 },
+};
+
 /** Simulation substeps per rendered frame per profile. */
 export const QUALITY_SUBSTEPS: Record<Quality, number> = { low: 1, medium: 1, high: 2 };
 
