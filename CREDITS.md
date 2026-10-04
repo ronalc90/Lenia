@@ -97,6 +97,9 @@ dividing) are inspired by, and reimplemented from, published research code. No c
   **SIL Open Font License 1.1**. Currently they are requested from Google Fonts at runtime, with system-font
   fallbacks; they are not redistributed in this repository. If they are ever bundled, their license texts will be
   added next to the font files.
+- **Fraunces**, by Undercase Type (Phaedra Charles and Flavia Zimbardi), licensed under the **SIL Open Font License
+  1.1** and requested from Google Fonts in the same way. Used for display titles and italic Latin species names
+  (ADR-024).
 
 ## Audio
 

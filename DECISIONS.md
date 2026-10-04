@@ -384,3 +384,34 @@ ADR that supersedes the old one.
 - **Consequences:** GDD §3 gets a "(Corrección v1.2)" pointing here; the UI tutorial is disabled in favour of the
   story tutorial. The story persists under its own storage key (`bioluma.story`) and is wired in `src/main.ts`
   (journal entries merged into the Bitácora, tab signals, archive in Settings, ending achievements).
+
+## ADR-023: Final name, no ads, a paid game later
+
+- **Status:** Accepted (2026-10-04). Source: the owner.
+- **Context:** The working title, the business model and the storefronts were open. ADR-016 considered portals that
+  pay through ads (CrazyGames).
+- **Decision:** the name **Bioluma** is final. The game shows **no ads**, ever. It will be sold as a paid game later
+  (Steam, mobile stores, web); the cosmetic store of ADR-021 stays optional and cosmetic-only. Ad-funded portals,
+  CrazyGames included, are out.
+- **Consequences:** no ad SDKs or ad placements in any build. Platform packaging (docs/PLATAFORMAS.md) targets paid
+  storefronts; free web builds are demos or test builds.
+
+## ADR-024: Art direction: code-drawn, one icon grid, warm candle against cold life
+
+- **Status:** Accepted (2026-10-04). Source: owner request ("apartado artístico del más alto nivel"); the bible is
+  [`docs/ARTE.md`](docs/ARTE.md).
+- **Context:** an audit of every screen found mixed stroke widths, emoji next to line icons, no single primary-action
+  colour, layering bugs and a cold-blue candle on VELA, which contradicts her name and the story.
+- **Decision:**
+  - All art stays code-drawn (SVG, Canvas 2D, shaders); still no AI art and no raster assets from generators.
+  - One icon set in `src/ui/art/icons.ts`: 24 px grid, **stroke 1.75** (1.5 broke at 16–20 px), round joins, a 20 %
+    duotone fill. Legacy icon functions re-export it.
+  - Design tokens `--bl-*` (`src/ui/art/tokens.ts` → `art.css`), AA-tested text roles in both themes, z-layers.
+  - Type: Inter for UI and **all player-facing numbers with tabular figures**; **Fraunces** for display titles and
+    italic Latin names; JetBrains Mono only for instrument readouts.
+  - VELA: glass flask, bioluminescent liquid, cork and a **warm** candle flame; six moods. One code-drawn backdrop per
+    Mundo, so a world is picked by its look.
+  - Matter ramp reaches white at 0.94 (not 0.7) so creature interiors keep structure.
+- **Consequences:** GDD §14 gets "(Corrección v1.3)" for stroke and number type. CREDITS.md lists Fraunces. The
+  integrators swap the art in following ARTE.md §12.
+

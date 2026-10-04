@@ -643,9 +643,9 @@ Modo claro opcional en Fase 2, con la placa siempre oscura.
 
 **Siembra.** El dedo deja una onda concéntrica de 300 ms y la materia aparece con fundido de 150 ms, para que el toque se sienta físico. Si no alcanza la Esencia, la onda es roja y corta.
 
-**Tipografía.** Interfaz: Inter o la fuente del sistema. Números y sliders: JetBrains Mono (variable, subset latino, < 40 KB). Títulos de especie en cursiva, como nombres científicos.
+**Tipografía.** Interfaz: Inter o la fuente del sistema. Números y sliders: JetBrains Mono (variable, subset latino, < 40 KB). Títulos de especie en cursiva, como nombres científicos. **(Corrección v1.3, ADR-024)** Los números que ve el jugador usan Inter con cifras tabulares; JetBrains Mono queda solo para lecturas de instrumento. Los títulos grandes y los nombres latinos en cursiva usan Fraunces.
 
-**Iconografía.** Iconos de línea de 24 px, trazo 1.5, un solo color; set propio dibujado en SVG, sin bibliotecas externas. **Icono de la app:** una placa circular con un Orbium estilizado, generado como SVG (`public/icon.svg`) y rasterizado a 512, 192 y 180 px (maskable incluido). Ningún arte generado por IA.
+**Iconografía.** Iconos de línea de 24 px, trazo 1.5 **(Corrección v1.3, ADR-024: trazo 1.75 con un relleno suave del 20 %, porque 1.5 se rompía a 16–20 px)**, un solo color; set propio dibujado en SVG, sin bibliotecas externas. **Icono de la app:** una placa circular con un Orbium estilizado, generado como SVG (`public/icon.svg`) y rasterizado a 512, 192 y 180 px (maskable incluido). Ningún arte generado por IA.
 
 **Motion.** Transiciones de panel de 180 ms con easing estándar; ningún elemento de interfaz se anima en bucle salvo el halo de las criaturas y el punto de "nuevo". Reducir movimiento apaga ambos. **(v1.1)** El Destello y los efectos de la capa de diversión son la excepción deliberada (breves y respetan Reducir movimiento).
 
