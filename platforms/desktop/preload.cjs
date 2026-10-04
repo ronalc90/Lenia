@@ -37,4 +37,16 @@ contextBridge.exposeInMainWorld('bioluma_platform', {
     /** @param {string} text */
     write: (text) => ipcRenderer.invoke('bioluma:save-write', String(text)),
   },
+  /**
+   * Cosmetic DLC for the store (src/store/providers/steam.ts SteamStoreBridge). Without Steam every
+   * call resolves to [] / false / null, and the provider stays unavailable (it also checks `steam`).
+   */
+  steamStore: {
+    /** @param {number[]} appIds */
+    ownedDlc: (appIds) =>
+      ipcRenderer.invoke('bioluma:dlc-owned', Array.isArray(appIds) ? appIds.filter((x) => Number.isInteger(x)).slice(0, 256) : []),
+    /** @param {number} appId */
+    openDlcStore: (appId) => ipcRenderer.invoke('bioluma:dlc-store', Number(appId)),
+    authTicket: () => ipcRenderer.invoke('bioluma:auth-ticket'),
+  },
 });

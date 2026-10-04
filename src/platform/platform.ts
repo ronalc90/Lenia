@@ -78,6 +78,12 @@ export interface DesktopBridge {
   quit(): void;
   /** Plain-text save mirrored to a file that Steam Auto-Cloud syncs. */
   cloudSave: { read(): Promise<string | null>; write(text: string): Promise<boolean> };
+  /** Cosmetic DLC (src/store/providers/steam.ts SteamStoreBridge); no-ops without Steam. */
+  steamStore?: {
+    ownedDlc(appIds: number[]): Promise<number[]>;
+    openDlcStore(appId: number): Promise<boolean>;
+    authTicket?(): Promise<string | null>;
+  };
 }
 
 /** A remote save slot (galaxy.click account, Steam Cloud file). Data is `game.exportString()`. */

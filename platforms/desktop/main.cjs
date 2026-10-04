@@ -200,6 +200,10 @@ function registerIpc(getWin, steam) {
   ipcMain.handle('bioluma:stats', (e, stats) => trusted(e) && steam.setStats(stats));
   ipcMain.handle('bioluma:save-read', (e) => (trusted(e) ? steam.readSave() : null));
   ipcMain.handle('bioluma:save-write', (e, text) => (trusted(e) ? steam.writeSave(text) : false));
+  // Cosmetic DLC (src/store/providers/steam.ts): no-ops returning []/false/null without Steam.
+  ipcMain.handle('bioluma:dlc-owned', (e, ids) => (trusted(e) ? steam.ownedDlc(ids) : []));
+  ipcMain.handle('bioluma:dlc-store', (e, id) => (trusted(e) ? steam.openDlcStore(id) : false));
+  ipcMain.handle('bioluma:auth-ticket', (e) => (trusted(e) ? steam.authTicket() : null));
   ipcMain.on('bioluma:quit', (e) => {
     if (trusted(e)) app.quit();
   });

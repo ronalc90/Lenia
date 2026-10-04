@@ -162,6 +162,46 @@ function createSteam(opts) {
       }
       return ok;
     },
+    /**
+     * Cosmetic DLC owned by this Steam account (src/store/providers/steam.ts). Empty without Steam.
+     * @param {unknown} appIds
+     * @returns {number[]}
+     */
+    ownedDlc(appIds) {
+      if (!client || !Array.isArray(appIds)) return [];
+      return appIds.filter((id) => {
+        if (!Number.isInteger(id) || id <= 0) return false;
+        try {
+          return !!client.apps.isDlcInstalled(id);
+        } catch {
+          return false;
+        }
+      });
+    },
+    /**
+     * Open the Steam overlay on a DLC's store page with it added to the cart. False without Steam.
+     * @param {unknown} appId
+     */
+    openDlcStore(appId) {
+      if (!client || !Number.isInteger(appId) || /** @type {number} */ (appId) <= 0) return false;
+      try {
+        client.overlay.activateToStore(appId, 2 /* EOverlayToStoreFlag AddToCartAndShow */);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    /** Hex session ticket for server-side ownership checks (ISteamUser), or null. */
+    async authTicket() {
+      if (!client?.auth?.getSessionTicket) return null;
+      try {
+        const t = await client.auth.getSessionTicket();
+        const bytes = t?.getBytes?.();
+        return bytes ? Buffer.from(bytes).toString('hex') : null;
+      } catch {
+        return null;
+      }
+    },
     async readSave() {
       try {
         if (client?.cloud.isEnabledForApp() && client.cloud.fileExists(SAVE_FILE)) return client.cloud.readFile(SAVE_FILE);
