@@ -56,7 +56,9 @@ try {
     });
     const page = await ctx.newPage();
     page.on('console', (m) => {
-      if (m.type() === 'error') errors.push(`[${vp.name}] ${m.text()}`);
+      // Google Fonts can't be reached through the sandbox proxy; that's environmental.
+      if (m.type() === 'error' && !/ERR_CERT|fonts\.(googleapis|gstatic)/.test(m.text() + (m.location()?.url ?? '')))
+        errors.push(`[${vp.name}] ${m.text()}`);
     });
     page.on('pageerror', (e) => errors.push(`[${vp.name}] pageerror: ${e.message}`));
     await page.goto(`http://localhost:${port}/`);
