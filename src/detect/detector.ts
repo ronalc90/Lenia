@@ -102,6 +102,11 @@ const TWO_PI = Math.PI * 2;
 const EXPLODE_MASS_R2 = 12;
 const EXPLODE_DISH_FRAC = 0.1;
 const DISH_FILL_EXPLODE = 0.4;
+/**
+ * Above this dish fill the dish is flooded: every component is "exploded", however small or
+ * steady it looks (a maze of fragments is not a fauna). Mirrors balance.DISH_OVERGROWN_FILL.
+ */
+export const DISH_OVERGROWN_FILL = 0.25;
 const BIG_BLOB_DISH_FRAC = 0.02;
 /** Stable requires the core blob to hold this share of the creature's mass. */
 const DOMINANT_SHARE = 0.8;
@@ -868,7 +873,8 @@ class LeniaDetector implements Detector {
     let trig =
       t.mass > EXPLODE_DISH_FRAC * dishCells ||
       t.mass > EXPLODE_MASS_R2 * R * R ||
-      (fill > DISH_FILL_EXPLODE && t.area > BIG_BLOB_DISH_FRAC * dishCells);
+      (fill > DISH_FILL_EXPLODE && t.area > BIG_BLOB_DISH_FRAC * dishCells) ||
+      fill > DISH_OVERGROWN_FILL;
     const qr = this.quarterRatio(t, step);
     if (qr > 3) trig = true;
     if (trig) t.explodedAt = step;

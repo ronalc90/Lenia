@@ -3,7 +3,7 @@ import type { DetectorEvent, DetectorReport, FieldSnapshot, LeniaParams } from '
 import { CpuLenia } from '../sim/cpu';
 import { catalogByCode, catalogPattern, paramsOf } from '../sim/catalog';
 import { snapshotFromCpu } from '../sim/snapshot';
-import { createDetector } from './detector';
+import { createDetector, DISH_OVERGROWN_FILL } from './detector';
 import { placeRotated, runSim, runSpecies } from './harness';
 import { matchSignature, signatureDistance } from './signature';
 
@@ -128,10 +128,12 @@ describe('detector: behaviours', () => {
 });
 
 describe('detector: division', () => {
-  it('Orbium in its budding regime (σ = 0.0212) produces divided events with parent ids', () => {
+  it('Orbium in its budding regime (σ = 0.0212) divides, then floods the dish and is exploded', () => {
     // Parorbium dividuus does not divide under our implementation: its catalog form is
     // a bound pair of half-orbia that never separates (it is reported as one creature).
-    // What does divide is Orbium pushed to σ ≈ 0.021: it swells and buds off orbia.
+    // What does divide is Orbium pushed to σ ≈ 0.021: it buds off orbia so fast that the
+    // dish floods (> 35 % fill within ~200 steps) into a maze of fragments. That flood must
+    // never count as a fauna (play-test bug: it paid +900/s and registered dozens of species).
     const { log, last } = runLogged('O2u', { size: 64, steps: 700, params: { sigma: 0.0212 } });
     const divided = log.filter((x) => x.ev.type === 'divided').map((x) => x.ev as Extract<DetectorEvent, { type: 'divided' }>);
     expect(divided.length).toBeGreaterThanOrEqual(2);
@@ -140,10 +142,11 @@ describe('detector: division', () => {
     // every child is announced as born and carries its parent id
     for (const id of childIds) expect(log.some((x) => x.ev.type === 'born' && x.ev.id === id)).toBe(true);
     const kids = last.creatures.filter((c) => childIds.includes(c.id));
-    expect(kids.length).toBeGreaterThan(0);
     for (const k of kids) expect(k.parentId).toBe(divided.find((d) => d.childIds.includes(k.id))!.parentId);
-    // budded orbia stabilize
-    expect(kids.some((k) => k.state === 'stable')).toBe(true);
+    // the flooded dish: nothing is stable
+    expect(last.fill).toBeGreaterThan(DISH_OVERGROWN_FILL);
+    expect(last.creatures.length).toBeGreaterThan(0);
+    for (const c of last.creatures) expect(c.state).toBe('exploded');
   });
 });
 
