@@ -25,6 +25,7 @@ import type {
   LeniaParams,
   Pattern,
   Rarity,
+  SeedPriceView,
   SeedSpec,
   Settings,
   SpeciesView,
@@ -274,13 +275,28 @@ export function createGame(deps: GameDeps, save?: string): Game {
    * n_alive = stable + newborn (+ seeds the detector has not seen yet); n_sat ignores the first
    * SEED_NURSERY_FREE newborns, so a short burst is fine but spamming seeds cannot dodge the price.
    */
-  function seedCost(radiusFactor = B.SEED_RADIUS): number {
+  /** The seed price split into its factors (shown to the player by the price explainer). */
+  function seedPrice(): SeedPriceView {
     const stable = stableCount();
     const young = aliveCount() - stable + pendingSeeds();
-    const n = stable + young;
-    const nSat = stable + Math.max(0, young - B.SEED_NURSERY_FREE);
-    const sat = Math.pow(B.SEED_SATURATION_GROWTH, Math.max(0, nSat - freeSlots()));
-    return B.SEED_C0 * radiusFactor * radiusFactor * (1 + B.SEED_CROWD * n) * sat;
+    const alive = stable + young;
+    const used = stable + Math.max(0, young - B.SEED_NURSERY_FREE);
+    const slots = freeSlots();
+    return {
+      base: B.SEED_C0 * B.SEED_RADIUS * B.SEED_RADIUS,
+      alive,
+      crowdMult: 1 + B.SEED_CROWD * alive,
+      freeSlots: slots,
+      used,
+      satMult: Math.pow(B.SEED_SATURATION_GROWTH, Math.max(0, used - slots)),
+      bigMult: (B.SEED_BIG_RADIUS * B.SEED_BIG_RADIUS) / (B.SEED_RADIUS * B.SEED_RADIUS),
+      freeSeeds: s.charges.free,
+    };
+  }
+
+  function seedCost(radiusFactor = B.SEED_RADIUS): number {
+    const p = seedPrice();
+    return B.SEED_C0 * radiusFactor * radiusFactor * p.crowdMult * p.satMult;
   }
 
   function helpBias(): number {
@@ -1153,6 +1169,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       genome: s.genome,
       era: s.era,
       seedCost: cost,
+      seedPrice: seedPrice(),
       canSeed: free || s.essence >= cost,
       pipette: { active: pipetteReady() || (pipetteWanted() && s.pipetteTimer > 0), progress: Math.min(1, s.pipetteTimer / pipetteTime()) },
       tools: {

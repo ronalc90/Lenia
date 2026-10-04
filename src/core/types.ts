@@ -330,6 +330,8 @@ export interface GameView {
   era: number;
   /** Cost of a normal seed right now. */
   seedCost: number;
+  /** (game) Why the seed costs what it costs, for the price explainer. */
+  seedPrice?: SeedPriceView;
   canSeed: boolean;
   /** Emergency pipette: free seed refill when broke and nothing lives. */
   pipette: { active: boolean; progress: number };
@@ -389,6 +391,26 @@ export interface GameView {
   objectiveProgress?: { current: number; target: number; reward: number } | null;
   /** (game) Production multiplier breakdown for the HUD tooltip. */
   multipliers?: { global: number; buffs: number };
+}
+
+/** Breakdown of the seed price: base × crowd × saturation (× size for big seeds). */
+export interface SeedPriceView {
+  /** Base cost of a normal seed (c0). */
+  base: number;
+  /** Creatures alive or being born (incl. seeds not yet detected). */
+  alive: number;
+  /** Crowding multiplier 1 + 0.25·alive. */
+  crowdMult: number;
+  /** Cheap slots on the dish (Placa upgrade adds more). */
+  freeSlots: number;
+  /** Creatures counted against the free slots. */
+  used: number;
+  /** Saturation multiplier (×3 per creature beyond the free slots). */
+  satMult: number;
+  /** Multiplier of a big (long-press) seed. */
+  bigMult: number;
+  /** Free seeds waiting (Lluvia de esporas). */
+  freeSeeds: number;
 }
 
 /** (game) Seed shapes selectable with the Gotero. */
