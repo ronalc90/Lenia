@@ -1,0 +1,317 @@
+[
+ {
+  "code": "O2u",
+  "name": "Orbium unicaudatus",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.15,
+  "s": 0.015,
+  "cells": "7.MD6.qL$6.pKqEqFURpApBRAqQ$5.VqTrSsBrOpXpWpTpWpUpCrQ$4.CQrQsTsWsApITNPpGqGvL$3.IpIpWrOsGsBqXpJ4.LsFrL$A.DpKpSpJpDqOqUqSqE5.ExD$qL.pBpTT2.qCrGrVrWqM5.sTpP$.pGpWpD3.qUsMtItQtJ6.tL$.uFqGH3.pXtOuR2vFsK5.sM$.tUqL4.GuNwAwVxBwNpC4.qXpA$2.uH5.vBxGyEyMyHtW4.qIpL$2.wV5.tIyG3yOxQqW2.FqHpJ$2.tUS4.rM2yOyJyOyHtVpPMpFqNV$2.HsR4.pUxAyOxLxDxEuVrMqBqGqKJ$3.sLpE3.pEuNxHwRwGvUuLsHrCqTpR$3.TrMS2.pFsLvDvPvEuPtNsGrGqIP$4.pRqRpNpFpTrNtGtVtStGsMrNqNpF$5.pMqKqLqRrIsCsLsIrTrFqJpHE$6.RpSqJqPqVqWqRqKpRXE$8.OpBpIpJpFTK!"
+ },
+ {
+  "code": "O2b",
+  "name": "Orbium bicaudatus",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.15,
+  "s": 0.014,
+  "cells": "13.pK$14.qV$6.VpA.MpEpKpITqV$4.BpPpNrIrEqDpWpOpLpUqNvT$4.IqRrNsPsKqHJ3.GqOuC$4.TrLsTrPrLpS6.uUD$3.SpWqNrBqLpRqPqE6.vA$2.FpTpMLpHqPqHrVsPrS5.qUqA$K.pCpRG.ErFsRsVuSuPqN4.CrR$pA.pTU3.rWuBuRvXwTwKpF4.rCH$.tPqHH3.qFvAwUwVyJyKwNL2.DqLR$.pGsGA4.vPxSyDxE2yOuHS.XqJT$2.xIE4.sCyHyOvLvRyFxCsGpVpXqGP$2.VsU4.DxQyOvVuSwDwQuBrMqSqCF$3.vG5.tEyKwVvIvKvMtVrXqTpM$4.sU4.qFvDwMvNuUuDsUrKqDO$4.qCrDJ2.pPsKuGuHtOsQrNqKpC$5.pTqTpVpNqFrJsGsKrVrDqFpFD$6.QqCqJqPqVqXqRqHpOTC$8.LWpFpEXPG!"
+ },
+ {
+  "code": "O2ui",
+  "name": "Orbium unicaudatus ignis",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.11,
+  "s": 0.012,
+  "cells": "8.DPXUD$5.pFqMqRpTpW2qBqDpXB$4.HrHsLrVqFpTpJXpCpSqMsL$3.UpWrSrAqCpKQA3.SqPsV$2.pBqAqEqApSpIpN6.CsS$.EpWqApIQpBqVrNqL7.wO$.pIqCXB2.rP2sUqF6.U$.pXpR4.sEuBuKtW7.uJ$PqHpA4.rTuTvNvMtL6.qR$DqSO5.vDwLwUwI7.pN$.tHK5.uUxBxUxWtF6.qK$.vCO5.LxM2yOxT6.qG$2.pN6.uE3yOsN4.SpU$2.wU6.CxQ2yOvWqJ3.pSpK$2.H7.tU2xTwSuGrGpUqAqER$3.tL6.rLwDwPwBvAtGrQqUpQ$3.CqS5.qXuTvHuJtJsJrFpWR$4.pJqC3.IrJtNtJsFrEqKpOS$5.pCqGpNpMqErKrXrIqHpNpDPC$6.HpNqAqGqJqEpOpDPKA$8.EPSQNIC!"
+ },
+ {
+  "code": "O4s",
+  "name": "Synorbium solidus",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.122,
+  "s": 0.0106,
+  "cells": "23.OTVM.qF$18.qHK.pCpDpLpIpApJpRXqN$18.qHsGpKqGqMX4.pLsO$18.OtUsLqLqHA5.RwN$19.uEvVrJRO6.LrS$17.KpHrFwGsV.pBpS6.uC$13.AIVpDpIpPpMsXuLqIqCsHqQ6.rU$12.GpBpKpAUNE2.tCuArUtOuApO5.rI$6.pV4.GpBpAE6.rWvGtUtDwBvOG4.pQpG$6.sDrJ2.IpEpA9.vRwOtWvBxVvF4.pEpR$4.AGrFuEsKWpKpH10.uJyHvEtKwSyOtK3.pFpQ$4.DqDqOuLvPpWpMI10.GyOwUsFtFxKxErPWVpTpI$3.QpIqQqAsDwDtSN12.vNyOtWsTuVwNtXqWqBqFR$2.VpKpAUWpAsEtWG12.pNxLwGuCuFuWtVrTqTpUC$.CpKN2.TEpJuCsV13.tIvVuWtXtLsPrNqLV$.OpC3.pDrCpXsPvCsL12.qLtOtTtAsErLqNpIC$VUT4.rVsHsJwEwOX11.pQrOsCrPqVqFpGH$pLpBQ4.sGuRtNvFyOyD10.TpXqOqRqGpMTE$.uCU4.PvHwFuTwDyOvE7.BpApMpRpLpBOF$.qDpQ5.uPyKuSsPwByJrH5.RpIpANA$2.wF5.qUyOwAsGtKwMuXpQ2.LpEpAC$2.qQA5.xFxOtLtCuUvCsEqEpSpRW$3.uE5.tBxBvBtOtUtVsLrCqFV$3.MrG4.qMuRuVtStBsMrNqLpD$4.pXqKE.CpXsLtJsPrTrBqFpDB$5.pHqKpWpSqLrHrOrDqKpPTB$6.DpKpVqFqGqApMXJ$9.EHGC!"
+ },
+ {
+  "code": "O2p",
+  "name": "Orbium phantasma",
+  "R": 13,
+  "T": 40,
+  "b": [
+   1.0
+  ],
+  "m": 0.13,
+  "s": 0.009,
+  "cells": "7.pJOSR2LvA$3.pJqJATrHpKpIpJpOpQvEpH$3.qPrTpHpKqAqB2ADPpRxD$3.MsLpDE.qSpW4.rGuQ$2.HpPqTpD2.rSsVpX4.sDrD$2.pGpH.qPqHWqNuJuMpG4.sK$.HpUE.qKtFqWpRsTwKuW4.qDpO$RpApM3.tVuFrGsIwHyEtB3.pEqG$qBpUpB3.rWwUvDtCuOyOxJqK2.pJpX$.uVpE4.xOyOtLsHvKxOtLpDOqBpI$2.uR4.uXyOuNsAtCvJuKrEqFqJL$2.tWqK3.sAxFvDsMsItRtVsCqUpQ$3.tDpE2.qDuGuStDsLsTsQrKqBM$3.RrRpSWpXsFtNtDsHrRqWpVS$4.SqUqSqTrLrXrQqWqCpJPA$5.DpHpXqEqCpSpHTH$7.AGIHDA!"
+ },
+ {
+  "code": "OG2r",
+  "name": "Gyrorbium revolvens",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.133,
+  "s": 0.0177,
+  "cells": "$11.pIqOpMSH2C2E$8.qQtCvBvSwP2yEsIqSpWpSpOVB$7.JqGrApXpGpLsCwVyOuKsJsFsCrLqCA$7.pIqLP2.EVsAyKyOtNtItBsWsKqF$7.qDS4.CqEvSyOvRsVrVrBrOsBU$6.PpT6.pVvAyOyJrNpH.GqTrG$G5.VpK6.pPuKyOvMqB4.rLF$6.VW6.pNxGxVsUpH4.qFpF$5.pNqQqG.DRXpBrQuOwNxIrPpD4.pJpU$4.pRtGsEqJ.HRpTrQtHuKvWvXrBpE4.pJpT$4.pOrWpOpE5.OsNwCvPrKpL4.qGpC$2.DRpMqBJpP6.rMwEvXsJqC4.rOC$3.pPpWN.pR6.pJwBwFtJrHX.ArArB$3.pGqXM.pSP5.N2vOtWsRrIqPrNsGG$4.rLqT.pBpO5.qMvIuRtVtLtDtAsRpN$5.tAqMHqApA3.AtNuOtWtLtDsRrVpK$6.tAtUqQqIpOTqXuGuOtUtArXrCpVE$8.tDwOxVxNvWuDsVrOqEW$12.DKD!"
+ },
+ {
+  "code": "O4i",
+  "name": "Synorbium ignis",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.152,
+  "s": 0.0156,
+  "cells": "22.FJRrG$20.BLpApFpGpIsT$17.pGXAKpFpOpHpDpPqDvF$16.pFrJrGUXpNS3.DqCxO$16.TtIvAsGpNpA6.pHyA$16.KuMwVxWsAQ7.sMqN$16.JqVxRyOuCpKQ7.xJ$13.BEKTpIxFxJuArFqPpS6.sHqP$12.HW2pHpKpNpJuJtPsSsNsApV5.pJtD$12.pFpOpAQIB2.tBtVuGuHuAP4.pMtBL$4.CI5.PpPO6.qLuQvVwJwSwVtE3.rBsNpA$6.L3.GpNV8.uDxBxXyL3yOuBsDsOrXpE$5.KqLrD.PpKpQ10.xT5yOyBvAtDrJpC$5.PrFsPsHpXqBU10.tE2yOuTtUvGwDuSsPqVV$5.OqRsOtFrHpOG11.yOyLtQrOsItStGrTqIP$4.pFqBqDrDsDsGQ12.uUyIuTsIsFsPsErDpSJ$3.pBpXpHNVqOsEsQI11.qQwCvItKsNsCrJqLpG$3.pXpB3.pXsOvPwApJ10.pHtGtQsRrVrGqMpPM$2.FqAC2.KqLsIxNyOyKpL9.pQ2rTrEqNqCpLO$qT.MpV3.pGrMtIxF3yO8.FqEqOqApLpCQF$.tDKqB3.RsFvSxTyG2yOvX7.pIpTWI$2.vLqN4.sLwByMxWwT2yOrN5.TpON$2.sFwI4.VvEyJyOwIwLyBvJpL3.PpNN$3.xC5.qAxRyOxMwJxCwGsNpQXpHpNS$3.qFtR5.rOxSyBwXwQvVtTrQqPqCW$4.vIF5.tAwJwNwBvBtOrWqNpE$4.CtN5.qNuAvIuWtTsGqPpEB$5.qCsEV2.QqPsWtVtIrVqHXC$6.pGrMqRqHqQrNsEsCrBpRO$7.BpMqJqNqOqHpOTF$10.AEC!"
+ },
+ {
+  "code": "OG2g",
+  "name": "Gyrorbium gyrans",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.156,
+  "s": 0.0224,
+  "cells": "10.EL2QLE$7.TpU2qHqCpXpUpNpFL$4.JrVtTuKuPuKtLrXqTqHqCpPpDG$3.qWtDqRpKqEsMuXvBtGrApXpUpSpIO$2.rQrN4.pAuAvRtTrIpUpIpKpFO$.pSsM6.tJwFuNsPsFrVpPpDL$.uFB6.tJ2yO2yLyOyDsKL$pDuC6.pFxW3yOwIwD2xPqH$rNtV5.EsMxCyIyOwXtJsMtJwFuX$sHuSV3.EpDvOwFxEwQsRqR2qHsFvWE$rQvJsWpPQpKpSqCvEvBuCpD3.BpDtGrQ$pXuKvMuPtLsWsCrIuCtBrS6.qWrQ$EsKvEwXyBwLtVrVsCrDqH6.pXrG$.qHtVxJyOwQrQpNqJpPV6.qJqE$.JsUxMyOrX10.pFqRJ$2.rQxPwIpI9.pKqJT$2.qJxEuPpKB7.qCpP$2.EvOvMpPO5.TrGqH$3.sCyOqEpIOEBOqHqEsRtG$4.xMsMqJqCpXqJqRpIqOuCtBsF$5.xPrAqTqMpSE.rSsMrLqRqHV.TpS$6.vErDE2.VpPB$7.pIrNqHpKQ!"
+ },
+ {
+  "code": "O4d",
+  "name": "Parorbium dividuus",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.174,
+  "s": 0.022,
+  "cells": "37.G$37.pN$29.KXO5.WK$28.GpV2qP2pApBSG.tC$28.pLrGsGsKrOqB2qCqApLuX$21.F4.RpHqIsBtAsVrSpLpEpHpSqLuNsI$21.pW2.MpJpTpWpSrDrUrRqRA2.BUrLxM$16.A4.pJOPpSpWpKTJpIqLqSqMpR4.MyBpA$16.qW5.sXpTqFXB2.pCqPrOrTrK5.tOuL$6.LpAR7.rL5.vIqTpN4.VrSsXtNtJqS4.pOvO$5.BpPqKqIpORpFpL2pOpHqGsG4.vKrTO4.ItAuJvBvCuIE3.GuEX$5.AqSrWsFrOqBpXpSpRpTqHqKvV4.tHvL6.uEvSwOwVwJrR3.JsRqD$4.UpMrWtBsXrVpXQHCGTqJwSqN3.qFxL6.uMwXyAyHyEvHpO2.pBrWqF$qV2.pEpXqDrKsArUqRpA5.GtGwD4.xJ6.uCyC3yOyBsOpFQpWrPpV$rU.XqCpSVKqHqSqOpX6.HyAL3.vGqX5.tJ4yOyNuRrFqEqTrKpH$qJrWqBpTN2.qGrJrTrQqM6.uVsS3.sCtB4.DsTyDyOyIyFxPvEsL2rJqWN$.vQqPS3.rHsQtItKsU6.rDuE3.pJsRqHA2.pBsJwHxQxIwUwIuSsWrXrIqBB$.xIqL4.rTuAuWvEuVrL5.pNtJV2.AqQrLpWXpBqCsCuM2vUvNuUtTsQrSqPX$.wJsL4.rKvGwJwWwTvDX4.pJsFpH3.MqIqWqNqJqXrXtGuCuHuAtMsQrVqVpMD$.sXvC4.qTwLxTyGyHxVsL4.pTrJpB4.IpLqIqTrErRsFsNsQsOsErNqQpPK$.pAwE4.qLxM4yOvRqNIAWqJqPM6.LpFpVqNqXrGrIrDqRqEpIK$2.vCqE3.qJwT4yOxEsXqHpRqDqRpRA8.EPpFpMpOpMpFPD$2.sBsKM2.qKvO2yOyCxVwSuArUrAqUqIQ12.BEC$2.VsOqSpCpBqSuEwXxJwWwOvOtVsIrMqQpI$3.qJrQqUqJrFtBuXvRvQvFuKtEsCrDpRH$3.HqLrJrIrOsMtM2uCtQtAsErGqCO$4.KqBrArKrUsFsLsMsFrQqXqBT$5.FpHqFqQrBrErCqSqJpPQ$7.KpApLpPpOpJUJ$10.2D!"
+ },
+ {
+  "code": "O4a",
+  "name": "Parorbium adhaerens",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.23,
+  "s": 0.0323,
+  "cells": "33.E$33.pFpP$31.LQqCtGrD$27.OQpDpSqEqOrAvMvBsM$26.pUqR2qM2qRqWrNtTxUwL$25.pArLsCrDpXpFTpApPqW2yOwQ$18.pD.2TpApIpUqMrLrGpPE4.GsR2yOqO$18.pFuXrDqWqRqOqJqCpITLG5.GxEyOwQV$14.pD3.TvMsUrVqOpKLB2.VpS2qC4.sW2yBsRB$14.tQqE3.vBxWrSpF5.pUrDrXsHsKpUBVrLuNwIuKpX$12.EqCrQvEqE2.uFyIrNG4.JqTsMtTuKuPuSsHrArNsW2uKrIB$12.pPrAsKxWvJ2.sMyGrS6.rLtTvJwIwSwVwLtOsHsKtJtTrVL$10.EpNqRrDrQtByGvGpArGxWxJ6.rVuSwSxWyGyIyGvWtJsMsUtGrSQ$6.BpFpSpFpXqOqEpIpFqJvRyGuXsFxPyO6.pKvMxW4yOxHuCsRsMsRrIQ$6.pNrArVrLqRpNG3.pFyOyIuUwNyOsP6.uSyL4yOxMuKsUsKsHqTG$4.OpPqJrNrVqTV6.pKyOyIvM2yO6.sM5yOwQuIsWsHrSpXB$3.pAqEqOqJpPpNQ8.wVyOvTwIyOsW5.rGwN2yOyGxHvRtVsRrXqWpA$TpSVqMqWqCQ.GQO7.pAyOwStOwQwVpX4.rAuPwSwXwLvOuKtGsFrGpSE$pKtJqWrIqMO2.pAqCqJpX7.wFxMsMsRvOtTpXGJpKrLtQuUuXuNuAtDsHrGpXJ$pSuCvJrVpP2.JqHrQsHsFrG6.rVwSsMqJrVtOsMqWqMqWrXsPsWsUsPsFrLqRpPJ$.uSyBsFT2.QrQtDuCuItTqM5.pUuUsKpIpFqM2rQrIrDrAqTqOqMqHqCpNVE$.vGyIwQG2.TtDuPvWwLwIvBT4.pNtDrSTBGVpIpKpFVOL2JGB$.rD2yOqE2.pPuNwFxJyDyGxUtGL3.qCsHqWJ$2.2yOuIVEqTvWxJyL3yOxJsCpKQpKqWrQpP$2.uIyOwQrSqJrVwAyG5yOvEsF2rDrIqJL$2.qTxPwVtJrSsKvE5yOyDvWtTsKrNqJT$2.TuIvWuC2sMuAwN3yOxUwQvBtLrVqHQ$3.rLuIuFtBsMtBuNwAwVwSwFvEtTsFqJQ$3.pAsCtLtD2sPtDuAuPuUuKtOsHqOV$4.pKrQsPsMsKsMsU2tDsUrXqRpDB$5.pDqRrN2rV2rXrSrGqEpDE$6.JpFqCqJqMqHpXpIL$8.BG2JE!"
+ },
+ {
+  "code": "H3cp",
+  "name": "Helicium cavus pedes",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.22,
+  "s": 0.034,
+  "cells": "8.BGJE11.O$6.BVpUqJqEpNQB9.qRqJpPpA$5.BpDqRrQrSrLqOpNOBE6.rDtTtQtLtDsRsC$5.TqMsFsRsKrSqWqCpIsFrQqCpN2pIpKpUsKvBwDuPtLtTvGuF$4.JpXsRtTtGsCrGqRqJuXxJvBtLsMrXrQrN2rIsCrDrGrIrNsHxCvO$3.GqJuPwNwDuArGpUrGwF2yOwFuFsWsCrIqRpXpFQOVpNqMrNuKxWE$2.GrXxE3yOvOrVsMwS2yOwSsPqJpITJB6.GpNrIyOvR$.BsRyDxJxC3yOxCyG2yOxUrNE12.BpK2yO$.rDxUtVqCqJuN6yOtLG14.J2yOpD$.xCtV3.pAwA4yOvBqR7.2qEqCpU4.LyOyGqR$qOxWJ4.rNyB3yOuC8.rVsCrVrSrQpK.BuUyOwDrN$uCwN5.pFwLxRyLyOqE8.rQuCtVtQtLtJtLuIwXyBvJrXG$vJwQ5.EuNwAxExR9.uAwNwIvTvMvGvEvTwXuXvBsHV$uPyIpN5.sUuAvBuN9.xHyOyGxPwLvEwAvJ2uCuXsRpI$sKyOvGV4.rL2rQqO8.Q3yOyItTtGtQtBsHtJuPsUpI$pKwQyOwAsCqHpSpDpSpFJ9.sM3yOxJtGsRsCrGrDsMuFsPQ$.sMwX2yOxEsHpKB10.pKxC3yOuKsUrLqHpUqErVtVrQ$.OtDwLyIyOvRqR9.JrDwN3yOwXtDrDpP2pApPrVtGpU$2.pStTwVyBvEqJpFG4.GpKrQvByD4yOuCrVpSQLTqCsKrS$3.rSvRwSpU2qJpPpAQVpSrNuIwAwXxHxMxPyDwQtTrNpP2QpPrNsFT$3.pNuXvTTpKqEqM2qJqWsHtTtLsHrQ2rIrStJtVtTsHqRqCqOrSrXpD$4.uIvEEQpKqEqRrIsCsFqJB4.pAqWsPtJtDsPsKsHrDO$4.VuIrQEOpFpUqEpNpF6.JpNqTrQrVrQqTpD$5.tBtQO5.qCE5.BJ2QL$6.rNrVpD3.O$8.TJ!"
+ },
+ {
+  "code": "P3sp",
+  "name": "Synptera sinus pedes",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.22,
+  "s": 0.035,
+  "cells": "8.BIRX2pCUK$6.AQpMqCqM2qRqNqGpRpAG$5.HqBrSsP2sWsRsIsArNrAqEpFH$4.LsMuVvHvFvHvIvAuEtIsQsArGqHpEG$3.EuPxCvR2uEvOxGxNwJuTtQtAsJrNqKpFG$3.uXyOvErCpPqRuByE2yOwMvBuKtTsXrXqRpIH$2.sFyOxApQ3.sAyE2yOyMxHwQvMuCtCsIrDpOI$2.xMyOsM4.qNxS5yOvVtDsAsDsMrTpVI$.rB2yOpA4.qPxJ4yOyJsWpQUpNrJtBsTqPL$.tJ2yO5.rXwRyF3yOtEE3.PrPuCuDsHqGM$.uNyJyF4.pNtRwCxUyNyMtC6.pGtEvIvKuNtHrQpOB$.uUyAyFC2.GrCsXvMxLyEtW8.rVuSvRvPvIuStPrMR$.uIxKxVpH2.VqIsEvDxMwF9.rVuMvAuKtNtDtItMsBS$pDtXwOwRqSE2.pHrNvHxOqE8.pNuAvVvJtKrGqBqFrRtCrOC$rNtMvTsHrNpRI.pCsIvWvE8.UtOxQyOxDtUqJHApGrTtDpX$rDtDHpTrGqXqApKqNtPvQsNS7.sJyC3yOvCqUH.BqLtFrW$qPV.OqEqWrAqUrLtNuErLqEC5.MwS4yOwBrXpD.CqDtDtFO$qB3.pBqDqPqTqVrXrQrIrFpL5.tK2yOxIxCxHvWsXqGVpAqUtSuApK$5.QpFpIpDpIpApU2rApMI2.CvAyCyOwWvWwEvUtUrHqBqMsOuVuLpX$12.pKqWrDqJpNpEVuDuOuIuDuEuJuMuStArKsNuQvVuKpX$13.pIqRrGrBqKpIrQqRqKqUrOsFtBtWvLtJuUwGwAtSpP$14.UqGrCrFpSpC.CRpNqNrPtGwEyOwNwKvAsMW$15.HpSrFqKD6.sIxTyOxAvHtGqWE$7.EpE8.qErEP7.2yOxOtCrApG$17.GrIqE6.W2yOxGqFS$17.rMqWrFpNC2.ApArX2yOsO$16.qNtDrJpRrEqJpKpIqBrJwByKxP$16.qOrStG.pIqVrFrIrSsWyAwQpN$16.pBqIrR2.JpSqLqVrKvGrE$17.VqH5.CtMrB$24.pOqF!"
+ },
+ {
+  "code": "PG1c",
+  "name": "Gyropteron cavus",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.25,
+  "s": 0.04,
+  "cells": "10.BOpA2pIpDL$9.JpApSqJqWrAqWqEpIB$7.pNrN2sHsCsFsHsMsHrNqWpNE$5.uK6yOwQuXuAtLsUsCrApN$3.rIyD2yO2xW5yOxHvMuFtBrXqMpA$2.rQxMyIuIpI2.qTwX5yOwLuNsWrIpP$.pPvMwLtGpK4.sKxM5yOwIuIsMqJO$.sPvBuPrIB4.qEwQyG4yOyGvRtQrGpD$pDsW2uPqT5.qCvGxH5yOwQuNsCpK$pXsUuSvRqO5.pKuIwV2yOxU2yOxEvBsPpN$qCsFuUxMtQ5.BtGwQ3yOxCxRwQvBsRpP$pPrSuCwXyD6.rIwS3yOxJ2vOuKsHpK$VrAtGvRyOV6.xE3yOwStLtTtDrGV$BqEsUuUxMrS6.wL3yOwSrQrVrLqCE$.pIsHtVwLsMpK5.sK3yOwLqCqHpUT$.JrXtGvEqTqRpF3.pFtGvWwQxPtJ2VO$2.rQsUrLEpSqOpUpNpSrQtJtGrXrLJ$2.rGsH2.TpUqWrArIrXrQpN$2.qRrI3.OpXqMqOqHO$2.pKqH5.L$3.J!"
+ },
+ {
+  "code": "PG1a",
+  "name": "Gyropteron arcus",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.283,
+  "s": 0.0481,
+  "cells": "8.O2pATKA$7.pLqSrMrSrPrCqHpGH$6.pIrOtHuKvAvCuRtUsOqTpB$5.qXtSvWxNyFyL2yOxSwKuLsApMA$3.rJuFvUxBxXyM6yOxSvJsIpJ$2.qOtKvOxGyH9yOxQvErRU$.pCsJvDxGyL2yOwVvBuTvBvNwJxHyCyDwVtXqKE$.qXuEwTxBuBqR2.OpRqUrArPtDvHxBxIvLrXW$pDsRqDrMrIpH4.JpNqLqJqWsUvPxDwGtEpRA$pQ.qHrKqGD5.XqDqRqTsAuTwVwPtUqHE$.GqMrFpN6.XqFrLrRsQvDxDwWuFqPI$.IqNrCpO5.ApMqUsHtNuRwPxTxCuFqPJ$2.qDrGqHJ4.VqNsFuBwIyB2yOxAtUqKI$2.pIrBrGpTF2.UqWtDvKxL4yOwLtEpXF$2.CqGrTrWqXtXvGwVyE6yOyBvKsEpLC$3.pArPyE11yOwLtWrCW$4.sGwOxWyM7yOyBwKuMsGqAJ$4.rDtKvKwRtMwC4yOxDvPuCsKqPpAA$9.GvByOxUwEuRtGrUqMpFE$10.rCtUuItMsEqVpUXE$10.pTrFrHqNpQVIA$10.C2MGB!"
+ },
+ {
+  "code": "S1v",
+  "name": "Scutium valvatus",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.283,
+  "s": 0.0461,
+  "cells": "4.LrCrNrRrPrMVCJKD$5.pSvOwCwGwEwBuMsUsCrEqCU$4.pLqWsByN2yOyMyIyDwHuKsRqXpE$3.pOqXrKrBqLuQ5yOyBvLtFqXX$2.WqSrCpVM2.GvW4yOyHvKsSqGK$2.pWrEqGH4.QtT4yOxLuKrOpF$pVMqQrIpK6.qOuPyN3yOvUsSqAE$qIuIrLrPpC6.pWsQwJ3yOwStOqOL$WtOxCxDpK5.AqAsFuXyE2yOxAtXqVO$.sFwI2yO5.pBqOsKuIxG2yOwTtWqWP$.qGvCyD2yOqFTpApOqMrSsPuDwLyDxVwDtNqPM$2.tOxE3yOuEsIsEsOtHtRuXwPxNxBvHsTqDG$2.SvEyG3yOxVwGvT2wBwQxGxEwDuGrTpJA$3.rLwG8yOyBxMwOvCsXqOP$3.pUtGwP7yOyCwUvJtOrKpJC$3.HrCtPvWxU4yOxXwQvEtOrQpSH$4.pGrGtAuMvPwJwNwFvKuGsUrHpQK$5.pCqKrOsLtBtFtAsJrLqHpEG$6.IpBpRqDqFqCpQpCLA$8.BFGFC!"
+ },
+ {
+  "code": "S1s",
+  "name": "Scutium solidus",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.29,
+  "s": 0.045,
+  "cells": "5.pGQ$6.sUsDqRR$4.VpXrJwKvNtXrW$2.ApVrGrWsIwKyOyDwTuNO$2.qArOrIqIpPpTxH2yOyIvKqG$rVpIrNrJpH4.xP3yOvFqWA$sKvNsKqE5.pI4yOuHqPC$sNxBuMpD5.JuN3yOwXsUpN$sGxFyOT5.pCtIyF3yOuKqUH$rPwXyOxT5.qKtSxS3yOvIrQT$pQwK2yOtWXJXqHsGuWxW3yOvPsApC$.vQ3yOuVsLsGsXuMwOyK3yOvHrVpC$.rKyK3yOxEwBwCwXyE3yOxQuMrJU$.WvC5yOyM5yOwFtJqOL$2.rVwO9yOwWuMsApOC$2.pLtBwK6yOyJwQuTsQqLP$3.qHsWvEwUxTyCxRwWvRuGsNqSpA$3.HqBrUtHuGuPuLtVsXrSqIXB$4.DpDqEqW2rIqWqGpJN$6.ENTUPHA!"
+ },
+ {
+  "code": "SN+",
+  "name": "Catenoscutium bidirectus",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.29,
+  "s": 0.0432,
+  "cells": "5.rNrGqJpA$5.LvEuNtDrQT$3.pAqMrGrSyBxCvGtDqE$2.pArA2rSrVtTyOyIwFtQqC$2.qMrSrGqJqEqOwN2yOwFtLpA$rNLrGrSqJpIpApDrI3yOvTrL$rGvErSrVqEpA2LpFwD3yOuUqJ$qJuNyBtTqOpDLGTtJ4yOuPrI$pAtDxCyOwNrIpFTpSsRyI4yOxCtB$.rQvGyI2yOwDtJsRtOvRwQxMyI3yOuI$.TtDwF4yOyIvRsMpP3.rSyByOuS$2.qEtQwF4yOwQpP6.wDyOuI$3.qCtLvT3yOxM8.yByOtB$4.pArLuU2yOyI8.rSyOxCrI$6.qJuP2yO9.2yOuPqJ$7.rIxCyOrS8.yI2yOuUrLpA$8.tByOyB8.xM3yOvTtLqC$9.uIyOwD6.pPwQ4yOwFtQqE$10.uSyOyBrS3.pPsMvRyI4yOwFtDT$11.uI3yOyIxMwQvRtOsRtJwD2yOyIvGrQ$12.tBxC4yOyIsRpSTpFrIwNyOxCtDpA$13.rIuP4yOtJTGLpDqOtTyBuNqJ$14.qJuU3yOwDpF2LpAqErVrSvErG$15.rLvT3yOrIpDpApIqJrSrGLrN$15.pAtLwF2yOwNqOqEqJrGrSqM$16.qCtQwFyIyOtTrV2rSrApA$17.qEtDvGxCyBrSrGqMpA$18.TrQtDuNvEL$20.pAqJrGrN!"
+ },
+ {
+  "code": "H3s",
+  "name": "Helicium solidus",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.35,
+  "s": 0.06,
+  "cells": "9.BG2LID$7.GXpSqIqOqMqFpRpEPE$5.DXqGrOsOtEtHtEsUsKrXrJqPpRTC$4.JpPrKtFuQvMvUvWvX2wAvVvMuRtLrUqCO$3.KqBsEuMwJxNyByI6yOyHwKuErUpRH$2.FpXsKvDxO11yOxIuLrUpRI$2.pKsBvCyE12yOwDtCqQWB9.O$.KrBuHxV4yOyM2yGyM4yOyCuRsNrLpUA9.pEqKpHF$.pKsSwO4yOyFwXwGwJxCyC8yOxOuHrPpWpARNLG2.tArSqLpKXB$.qMuI5yOwEuHtRtWuRwBxO9yOxHuMsTrVrKrBqRqKpWtFuFsSrJqOqM$.rJvO4yOxLtJrQrGrLsGtKvAwWyI7yOyGvSuAsSsBrQ2rOrNsEwNuWtJsHrVpA$BrXwK4yOvKqOpDQVpLqMrVtNvNxFyG2yOwMvGuOtQsLrGqEpLpFpIqArBrWyGwWvHuAtJrC$.sCwRyK3yOtLB5.JpNrBsOtS3.BOSMD5.QqKyCyHxAvPuTsXQ$.rSwJxVyL2yOsP25.JvQyOyGxBwEuMqC$.qXvMwVxT2yOtO26.tP2yOyBxHvQrC$.pTuFvPwNxVyOvWX14.pPpB9.tH3yOyCwHrQ$.HsNuFvBwLxXyBrEpLLB.CJXpRqFqEpOUpJvUwBuPsVrDpQL4.pCuN3yOyNwJrU$2.qNsRtIuQwHxSrVrMqVqKqJqTrPsUuKwGyG5yOyDwSuUtArMqKpTpPqDrSwO4yOvVrN$2.JrGrOsQuEvSrPrDrKrPrVsHtBuFwF9yOxQvVuHtCsIsDsRuPyH4yOuVqU$3.pUpWqQrWtJsNpApNpVqEqLqSrNtAvQ9yOyCwRvMuSuQvJxG4yOxOtMpV$4.GRpQqWsD8.pCrDtRwFyByOyHyG3yOyIxQ2xDxT5yOvLrVU$7.LpMP9.ASqJsPvN6yOyMyN5yOwPtEqEB$19.FpLrNuFxH12yOwUtUrAS$19.MqDsKvAxP10yOyDwGtTrGpE$19.GpPrOtSvRxGyFyOyLyDxTxNxKxDwLvCtDqXpEB$20.GpJqSsDtEtUuHuNuRuVuXuUuKtKrWqGUA$22.FUpNqFqUrJrVsFsHsCrJqJpFH$25.FPpBpL2pQpJUG$28.ACB!"
+ },
+ {
+  "code": "S2s",
+  "name": "Discutium solidus",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.356,
+  "s": 0.063,
+  "cells": "8.AEG2JHFB$6.HUpKpWqGqKqLqHpXpOpCOE$4.FpCqGrGsCsQtBtEtDsUsMrXrIqNpRVF$3.MqArPtDuHvDvPvUvVvSvMvAuMtTsWrWqUpRQA$2.MqMsSuSwIxKyDyKyMyKyFxUxKwUwCvGuGtCrTqKpBD$.DqKtHvWyC10yOyHxLwLvHtXsMqUpHE$.pMsWwG14yOyMxJwBuOsVrBpHD$.rLvM6yOyLyDyByGyL6yOyAwOuVsXqVX$VtMxS5yOyGwR2vXwJxCxTyI5yOyLwTuUsOqHM$qGvDyM5yOvWtRtDtHtWuTvSwRxNyEyN4yOwRuJrUpKB$rKwFxXyK3yOxRsJqNqIqSrMsJtIuIvHwIxJyH3yOyMwDtJqOL$sCwLwWxU3yOuRT2.GpBqAqXrXsXuBvIwWyH3yOxTuVrSpB$sHuSvLxAyK2yOrO6.OpOqPrTtFvDxJ4yOwGsUpRA$rXsStVvVxW2yOpO8.IpOrEtJwM4yOxLtSqGC$qBqQsFuPxByLxWqWV9.pFrWwD4yOyJuIqOD$.NqOtGvTxPuLsDqUpKJ8.rDxD5yOuOqOB$2.WrRuFwDrP2rTrHqLpJL6.sK6yOuIqE$3.qBsIrPpKqAqOrBrIrFqOpTXJCBKxI5yOxXtMpI$3.HqJ3.HpBpVqQrGrKrEqQqHqGuE4yOyMyNwNsBB$11.NpNqLrFrTsDsO2yOyNyE2xSyCuLqA$13.GpLqNrPuKyDxUxDwJwCwLvUrV$15.NpTwDwCvMuPtXuCvAsVS$16.GtNtIsPrTrLsDsTpL$16.pEqSqIpNVpBqFpH$16.A5.G!"
+ },
+ {
+  "code": "H5s",
+  "name": "Pentahelicium solidus",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.34,
+  "s": 0.045,
+  "cells": "11.BHNTpApEpFpEpARKD$8.AKpBpQqEqPrBrJrPrSrQrLrCqRqFpPXI$7.OpNqLrHrXsPtFtRuFuM2uRuOuJuBtOsWrXqRpKH$5.GpHqPrTsTtPuKvDvUwNxDxNxTxXyByCxXxNwSvLtSrTpUI22.pFpAG$4.LpXrLsTtWuWvWwUxR12yOwMtWrKpHB21.HrAqGpKpApBN$3.OqGsBtLuRvVxByE7yOyLyM6yOvUtBqNP21.BtAsFrHqPqLqT$2.JqGsHtXvEwKxS6yOyIxJwMwEwOxNyL5yOwEtLqPL20.LtGuFtFsIrVsBpS$.BpSsFuEvNwPyA5yOyNxPvUuDtEsXtOuWxA7yOxQtGpA17.DUpHtHwEvDuCtLtJsC$.VrOuDvUwXyA4yOyMyDwWuRsJqRpUpSqNsDuOxP9yOsE15.XpVqGqMtJxVwWvTuXuTuHpU$BqFtKvVxIyF2yOyLyExRxCwBuCrKpB4.pFsAwA6yOyByN3yO13.pKqJqKqBqDsJyOyHxLwNwDwGrV$MrQvCxM3yOyIxKwNvTuXtOrEH6.pGuMyN3yOtX4.3yOqL9.HpSqRqDV2JqBwLyOyLxUxKxJtMK$pEtAwR4yOxGvRuPtTsSrBJ8.uC3yOvW6.wEyOyJtRsJtFpBpDpGpHpJpQqKqTpUJ3.OuA3yOyHyGuQpO$pTuEyC3yOyMvUtVsSrTqOQ9.wP3yO8.2yOyIxDxGsTsDrMrAqPqKqApDB4.pHsV5yOvIqH$qFuW4yOyNuLsEqWpUM8.EpR4yO8.pU4yOtCqWpJOHC5.MpOqUtJyM4yOvLqN$qGvF5yOtLqKpC5.BJOpBpWrJtL4yOqX8.4yOpE9.pDqJrJsNuPyG4yOvAqI$pVuXyN4yOtPpB4.GpKqHqOqUrCrNsBsPwUwQyC2yO8.3yOvT9.pGrFsItHuJwEyK3yOxVuBpU$pAuDyAyByJ2yOvLpD3.PqEqTqEpKXUVSOsNrOsRyA2yO6.yM3yOtS8.WrPtJuJvEwExM4yOwKsVpE$.sSxCxAxLyFyOyFrGVTpLqKqOpK10.pD3yOqQ3.xH3yOyJuKpP6.UrRuCvNwJxBxSyK2yOyJxEuUrLK$.rBvKvRvXwUxWyOtMqMqKqMqEX13.4yOyN5yOyNvXsFpOA2.BpOrWuOwOxOyDyJ3yOxUwWvLtBqA$.WtJuHuKvDwGxHuCqGqApIJ15.pU9yOxNuSsJqVqFqIrEsUvExIyJ5yOxPwNvKtSrGR$2.rCsWsUtJuIvJtWpGH18.XsUwV6yOyNxAvBtTtHtNuMwFxW6yOxNwHvDtUrVpM$2.QrPrIrOsJtJuDQ20.NqVtQwFyN4yOyLxOwRwKwTxQyM6yOxHvXuTtNrWpVF$3.2pVpWqMrJsEQ21.UqXtLwE6yO2yN7yOxSwPvKuGtCrPpWI$4.NIQpJqEpH21.DpNrRuDwO11yOyDxGwJvLuMtLsIrBpNH$8.DS22.KpWrTtPvFwLxFxOxQxPxMxJxDwQwDvKuRtXtEsHrHqEXC$33.GpHqNrRsPtHtSuAuF2uIuDtStHsRsErNqUqBpDI$35.GVpLqAqMqVrE2rIrGqXqOqFpSpGSG$38.CHOS2WURMHD!"
+ },
+ {
+  "code": "C0v",
+  "name": "Circium ventilans",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.38,
+  "s": 0.07,
+  "cells": "7.LQ$4.pItDyG3yIuKqR$3.rVyI6yOyLtQ$2.rVyL9yOuF$.pIyI10yOyLrV$.tD5yOvRvExH4yOyG$.yG4yOtDqMqErXwN3yOyLpU$LyI3yOvRqMLEpPtQ4yOrD$QyI3yOvEqEE.pItJ4yOrG$.yI3yOxHrXpPpIrAvO3yOyLqE$.uK4yOwNtQtJvO4yOyGG$.qRyL11yOsW$2.tQ10yOyDL$3.uFyL7yOyDpN$4.rVyGyL2yOyLyGsWL$6.pUrDrGqEG!"
+ },
+ {
+  "code": "PS3am",
+  "name": "Pyroscutium ambiguus",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.349,
+  "s": 0.0605,
+  "cells": "13.E4GEB$9.EOpDpNpXqEqJqMqJqEpXpPpDQG$7.GpApUqRrLrXsHsP3sRsPsHsCrQrAqJpNQE$5.BVpXrGsHtDtTuCuKuNuPuNuKuFuAtTtOtGsRrXrApUTB$4.GpIqWsKtQuPvJvTwD2wIwFwDvTvOvEuXuSuPuKuAtLsKrDpPL$3.GpPrLtGuUwAwSxHxPxWyByDyBxUxJwVwIvWvR2vMvJvEuPtLrXqHQ$2.BpNrQtVvTxHyByL8yOyGxMwVwNwIwL2wNwIvOuIsMqMQ$2.pDrLuCwNyI12yOyIxMxCwXxExP2xWxPwNuUsRqHL$.LqRtQwS4yOyGxRxMxPxWyGyIyLyIyDxWxJwXxExRyL4yOxEuXsHpPB$.pKsKwA4yOxUwNvRvJvMvWwLwVxExCwQwF2vWwIwXxRyI4yOxEuKrLT$EqJuAxW3yOyIwIuKtJ2sWtGtTuIuPuNuFtTtOtVuKvGwLxR5yOwLtDpX$JrGvG4yOxUuNsHrD2qOqRqWrG2rLrAqJqMrNsMtLuSwLyD4yOxWuPrDJ$JrQwD4yOxRtGqJpAL5E4.VqOrStBuXxJ5yOvJrVT$ErQwQ5yOsPV12.QpXrItGwF5yOvJrQQ$.rNwX5yOtQ14.EpPrLvB5yOuPqRB$.rAwX2yI3yOxWV6.JQOE5.pUuA4yOyLtVpD$.pXvTxWxPxWyL2yOuAL2ELpApPqHqMqRqJpKJ3.VtG3yOyIxPtT$2.tGxC2wLxJyI2yOrIqTqOqRqTqRqMqHqOrGrSrGqEpFpApKrIwIyOyLxUwLuF$2.pFsWuUuKvJwSxRyGtTrQrGqTqHpNV2JpFqTvEvJsWrGrIrVsKwSyBwXuUsH$3.pD2rXsWuKvRwLtBqHpSpDL5.pNvOxHuX4rSrQxEvRtGqH$4.GpFqMrXtDtVqEB9.sKuNuKqM2qOqMqEsHuFrNL$6.GpNqOrD11.pDrLsMLTpDVLOsMpS$22.QqC6.qRB$30.V!"
+ },
+ {
+  "code": "S3s",
+  "name": "Triscutium solidus",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.4,
+  "s": 0.0797,
+  "cells": "11.DIMPRQOLGC$8.EQpHpVqJqSqXrBrAqTqMqDpPpEQG$6.EXqArCsAsStItRtWtXtUtOtFsRsErLqRpXpFNC$5.NpWrMsXuGvHwAwNwUwWwUwPwHvUvJuRuBtGsJrKqKpLPC$4.UqSsVuUwLxS8yOyGxQxCwJvPuStTsSrPqLpIL$3.SrFtWwJyL13yOyJxRwWwBvBtWsRrKqDWE$2.ErAuIxL18yOxXxCwCuWtQsHqTpKI$2.pWtVxR21yOxWwWvSuLsXrJpTN$2.sIwU6yOyMxXxOxMxRxXyFyKyMyN8yOxNwKvAtMrRqBP$.pQuT6yOyJwOvKvAvDvMwCwPxBxJxOxSyAyGyL5yOyDwVvLtSrWqBO$.rPwWyK5yOvUtEsEsBsIsWtQuJuXvIvOvWwHwUxLyCyM4yOyMxGvQtUrVpVJ$.tHxGxUyL3yOxQrXpNpApDpOqIrEsAsOsWtEtMuBuSvQwSxRyK5yOxLvRtRrMpLE$SuMwAwWyB3yOuIE5.VpUqJqOqRrArOsKtOuXwIxOyK5yOxLvNtHqXX$pTtPuLvSxJyN2yOrH7.RpCWPRpGqFrLtBuRwIxQyL5yOxGvBsNqDJ$qKrRsTuMwNyEyOyJqJQA3.FVpWpSU3.GpNrFtBuVwNxTyM5yOwQuDrLpE$QpPrCtFvNxMyMvJsCqPpRpIpNqEqXsLsVsCqNpHJ2.DpRrNtJvDwQxUyM4yOyHvQsVqEH$2.pLrVuIwKxVtNtDsP2sEsOtDtXuRuLtOsLrOqKpFI.VqHrWtMvCwNxSyM4yOxEuFrGV$3.qLsVuXtBsJsQsUtAtDtFtBtQtOtCsOsPsSsJrMqGpJpGpOqLrRtEuRwIxT5yOvMsIpNA$3.VrFtDpOqIqVrHrLrJ2qXrBqPqEqAqVrUsNsSsHrTqRpNpDpTrDsRuLwJyB4yOwRtHqFF$4.pJ3.K2RJ.E4.OpSrAsDtDtSsOpX2.pAqQsNuSxD4yOxUuEqTK$20.UqIsOuJtWqM3.QqRtFwCyJ4yOuWrHO$21.NrItUuHrHJ3.pArTvIyI4yOvLrOQ$22.pWsQtRsJpH4.qUvI5yOvRrOP$22.MrDtAtDqQI3.rAwV5yOvOrJK$23.pHsDtHsBpUJ2.tV6yOvBqTC$24.qVsTsXrTqJpOsJ7yOuBpU$24.pLrRsVtB2sP7yOxGsLN$25.qDrUsXtNxP3yOyNyLyMyOvBqJ$25.IqFrStRyByCxWxQxKxMxVwVsF$26.IpXvMwEwDvVvPvQwEwVtLU$27.XtJtQtO2tHtSuRtVpN$27.qEqRqUqRqOqXrWtDpQ$32.SqBpC!"
+ },
+ {
+  "code": "P4cp",
+  "name": "Paraptera cavus pedes",
+  "R": 13,
+  "T": 10,
+  "b": [
+   1.0
+  ],
+  "m": 0.3,
+  "s": 0.0454,
+  "cells": "$6.QpXqTrAqTqEpFJ$4.OqTsWuAuFuAtVtOsUrLpSO$3.pSsRvGwDvOuNtTtQuIuSuIsRqRpDG$2.qJtTwXyGxHvEtGsKsPtTvJwFvGtBqWpKL$.pXtLxH2yOxUuSsPrSsKuCwLxWxHvBsMqRpNQB$OrLvJ3yOyIuSsRsHtJvR3yOwNuCsFqWpXVE$OrIvW4yOvEtOtTvGyD3yOyIwDuFsUrNqMpIG$.qExE3yOyLvMuNuSvTxM5yOwVuXtLsFrApSO$.uXxUyL2yOxHuCtJtQuSwLyD4yOyIwDuNtLsPrIpUO$rLwNxMyI2yOvMsHrXsMtLuUwQxW2yLxUvWuP2uAtTsWrIpSO$qRvOxHyI2yOtBqJqMrDsCtDuCuUuXsMrDqWrLsMuAvBuNsRqWpPQB$pIuNwXyGyOwXqJJTpPqMrDrIrAJ3.GrAuFwQwFuCsHrGqHpIJ$GtLwLwVtQqTJ2.BQTL6.pXvJyOxWvMuCtLsUrQqHV$.2sCtLsUrLpNE11.qCxP2yOxHwNwFvGuAsPrApIE$.EpFrGrSrQqWpNL10.sC5yOxUvWuKtOsUrLpSL$3.VqEqWrGrAqMpPQ8.xE5yOwIuA2sWtGtBrVqHVE$4.BpDpXqO2qWqRpPJ5.tD5yOwFsUrAqTrNsWtVtTsMqWpNL$7.JpApNqEqOqJpNQLVsK5yOwFrSpILpAqOsRuSvJuPtGrQqET$10.EpFqHrArDrNtB5yOwFrA4.qEtGwDxHwQvGtTsCqMV$12.OpPqJqWxJxCxHyG2yOrG5.qWvB2yOyIwXvMtVsCqEL$15.uSuIuNvTxRyOuK5.QtGxM3yOyBwSvEtJrNpNB$14.rIrNrLsKuSxMyOV5.rDvBxR4yOxUwDuIsMqML$14.TOpArAuFxHrQpF5.sFvGxP5yOxEvBtDrGpD$17.qHtVqWrIpX4.JsFuXwXyI4yOyLvTtQrQpN$17.pUEpUqTqRpD3.BrQuAvRxEyG4yOwVuCrVpSB$19.LpUqRqJpIB2.qJsHtQvBwNyB4yOuKrSpPB$20.EpKqMqTpSE.BpNqRsCtVwFyI3yOuXrIpI$22.pDqOrGpP4.J.pIuP3yOvGqOQ$23.pArArDT6.tQ3yOuSpIE$24.pNrIqJL4.pFwN3yOsWB$25.qCrGqJpITpDqHuX3yOyLpP$26.qCrD2rLuCwXyOyLyBxMuI$27.pNsPwFxWxPxCwLvTvGpF$27.qHuP2uXuNuCtQtLrN$27.rDrLrNrI2rDrGrN$27.2VQOQpApP!"
+ },
+ {
+  "code": "3GH2n",
+  "name": "Hydrogeminium natans",
+  "R": 18,
+  "T": 10,
+  "b": [
+   0.5,
+   1.0,
+   0.6666666666666666
+  ],
+  "m": 0.26,
+  "s": 0.036,
+  "cells": "37.BEG3JGE$35.JpApPqCqJqOqMqEpUpKpAQG$33.BVqCrLsPtLtVuCtTtJsPrVrDqJpPTB$33.pIrAsRuIvWwXxMxPxHwQvTuStTsUrSqOpFG$32.pKrXuIwFxU6yOyLxJwFvBtVsPrDpNJ$31.TsCvT11yOyIwXvTuNsWrDpKG$31.rIwA14yOxHvWuKsRqTpDB$30.rQwS16yOxHvRuArXpXL$29.tG7yOyL4yOyL6yOwXvBsWqTpDB$28.tT7yOxUwSwIwVxHxJxMxUyI4yOyIwIuArNpNG$27.sW7yOxMvOtQsPtBuIvJwAwQxPyL4yOxPvBsHpXL$26.qTyL4yOxMvMuUtTrXqCpKqErStLuSvRwVyB5yOwFtDqMQ$25.pKuPyD3yOwVpS7.pIrQtJuSwDxPyL4yOxHuCrAV$24.QrXvOyB3yOqH9.pDrLtGvBxCyL4yOyBuSrLpA$23.rItDvMxU3yOtV11.pArGtLwIyI4yOyIvBrQpD$22.BuIwSyI2yOvE14.pNrXvMyG4yOyGvBrQpD$23.tJyD2yOpU15.VrNvEyB4yOxPuKrIpA$22.pItVyL2yO16.pSsRwAyD4yOwQtLqRQ$21.rLvJxW2yOsP16.rLvExPyL4yOvMsKpXG$20.tOxJ3yOwLsMJ15.sWxC5yOyBuCrIpF$20.wDyLyOyGuCsHrLpU15.tQyB5yOwLsPqEO$19.sCwS2yOtTpDLpNqHO14.uCyL5yOuFrApDB$16.JtTwNxCyG2yOtG2.BVG13.qRwF5yOuXrQpIG$16.rL6yOxUpD15.qJvRyB5yOuNrQpF$16.tJ7yOvO15.7yOtVqOV$14.pFrX3yOuXTtT3yOG13.rQ6yOvBpF$12.uI6yOtD2.xEyOxH14.6yOvJQ$9.JqEtB8yO2.JsKqR9.pFqErNuC3yOyLyGyLsU$9.tG4yOyD.rG3yOtO8.qCqE3.qT6yOxEtLB$8.wV5yO3.wS2yOtL7.qRwQuFE2.sU5yOxMtT$7.sCyL4yOwFJ3.xUxR8.vG2yOrS2.2yOuUuXyGxEtQ$4.tTvWuFvT2yO2.vWvMpU10.rA2.sR7yOsWsCvMqO$4.vGwNwLxRyOpI2.pIxWuC9.2yOrN.J7yOqM$4.uPwXxMyIyOV2.EyOuS8.uF2yOwV2.6yOuS$4.uSuUvB2yOqEB.JE9.vG3yOrArV2yOuIuPyOwV$4.sP2vRwXyOyGqJL8.O3.yG6yOrLqMvB$3.pFtT2xM3yOsMJ7.rGtQ3.xH6yO$3.rAvM4yOwIqW8.sFwDtQ2.xE5yOrG$.pPqTsHvOyL2yOwQsKV8.pAtT2uCwDyL4yOuP$rGtBsRsUuPxHyOwSuFqWO9.rIvJyB4yOvJuCpFJ$qJtQtOtBuAuFuUuPtTrQpIGEVvTyOV3.rIxC4yOuAsPrGpPB$.rGsRrGpUqWsCsWtQtGrQqCpPqWvWyOsKB2.uI4yOtJrAV$5.pKrDsFtQvMvTuUtDrQqTsW2uIvOyI4yOuUrL$5.OrLtOvGxWyLyOwVsHpPpNyD7yOvRpI$6.sKxC2yIyLyOxWuPrIuN7yOuUqJ$5.QuNyB2yOyLyIyL7yOyIpK$5.GsUxJ2yOyGwSvWwNxW4yOyLG$6.pKuAxHxUwNuCsRtBuSxCyG2yLsK$8.qJsRsWsCrApXqCsUqWG$10.TqHqMpN$11.QqHpK!"
+ },
+ {
+  "code": "K4d",
+  "name": "Kronium dividuus",
+  "R": 18,
+  "T": 10,
+  "b": [
+   1.0,
+   0.3333333333333333
+  ],
+  "m": 0.24,
+  "s": 0.03,
+  "cells": "8.EO2TQJB$6.VqHrLsCsHsCrSrGqMpPQB$4.LqRtBuPvOvWwAvRvEuNtQsRrNqHVB$3.TsFvMxP5yOyIxMwNvOuPtGrSqCO$2.GsMxE9yOxWxMxCwFuSsWrApA$2.rGxJ5yOyIyBxPxEwQwFwVxWyLxRwAtVrNpD$.LvE4yOxRwFvGuSuCtGsFsHtVwNyL2yOwVuKrNQ$.qT4yOwXtOrXrDqMpSO.LqJtTxE3yOxCuFqRB$.tDyI3yOrST8.rAuXxR3yOwQtBpD$.uXxU2yOuC6.B3.QsFvOyD3yOvGqO$.uXxH2yO5.pDrGrAqMO2.pKtBwL3yOxJsCB$.tGwX2yO4.pDsRpDGpSrG3.qJuFyD3yOtGJ$GrQwQyOtD4.vEO3.rLpD3.sCxM3yOuAL$.qMwAyOrQ3.pSxC4.rNpS3.qExR3yOtTE$.pIvEyLtBV2.xRuA4.uPQ3.T4yOsP$.EuCvEuFrIT.yLrVpNE.EyO4.pX3yOyGqM$2.sUtJuFtQrGrSxMrG2qWqTwXwF4.xE2yOyGuS$2.rDrGsUuItQyOpPGTqCrXyO4.J2yOxRwNqJ$3.LqOtJvEyO4.rLyGJGJpKwSyOxPuUtD$5.rNxWyOpK3.xEuKrGrLrXtVyOxJuCrV$5.pDvWtOrXqJpPqHyOuIuKuCuKvJwStOqEpA$5.pXtLqJrQsHsMyOyLuItJtDtGvJsPV$6.L.VpXqRwLrQqMpUqCqJrG$10.VsH4.pD$10.pDG!"
+ }
+]

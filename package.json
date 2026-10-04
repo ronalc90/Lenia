@@ -1,0 +1,23 @@
+{
+  "name": "bioluma",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Bioluma — an incremental game grown from live Lenia artificial life.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "e2e": "node tests/e2e/smoke.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.63.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.3",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^3.2.7"
+  }
+}
