@@ -338,6 +338,7 @@ export function createStory(deps: StoryDeps): Story {
       flag: (name) => st.flags.has(name),
       stablesNow: () => stablesNow(v),
       signal: (name) => (a ? signals.has(name) : false),
+      ui: (name) => deps.ui?.(name) ?? false,
       endings: () => st.endings,
       lastEndingEra: () => st.lastEndingEra,
     };

@@ -91,9 +91,20 @@ describe('common names (owner: names in Spanish, clearly different)', () => {
       add(n);
       names.push(n.es);
     }
-    expect(names).toEqual(['Trébol rosado', 'Trébol quieto rosado', 'Trébol quieto rosado II', 'Trébol quieto rosado III']);
+    // Twins get plain numbers, never Roman numerals (CLARIDAD J-153).
+    expect(names).toEqual(['Trébol rosado', 'Trébol quieto rosado', 'Trébol quieto rosado 2', 'Trébol quieto rosado 3']);
     const spin = commonName('trefoil', 'spinner', 325, taken);
     expect(spin.es).toBe('Remolino rosado');
+  });
+
+  it('uses words a child knows: a leaf, not a spindle; "que late", not "latiente" (CLARIDAD J-151, J-152)', () => {
+    expect(commonName('spindle', 'still', 200).es.startsWith('Hoja')).toBe(true);
+    expect(commonName('spindle', 'still', 200).en.endsWith('leaf')).toBe(true);
+    // The plain name and the behaviour's noun are both taken: the tie-break says what it does.
+    const taken = ['Trébol rosado', 'Medusa rosada'];
+    const twin = commonName('trefoil', 'pulsing', 325, taken);
+    expect(twin.es).toBe('Trébol rosado que late');
+    expect(twin.es).not.toMatch(/latiente/);
   });
 });
 

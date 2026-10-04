@@ -439,6 +439,9 @@ export const MOMENTS: MomentDef[] = [
       if (c.view().cycle !== 'sessions') return { focus, chips, data: { upgradeId: p.id }, lines: [CLASSIC_UPGRADE_LINES[0], CLASSIC_UPGRADE_LINES[1]] };
       return { focus, chips, data: { upgradeId: p.id } };
     }),
+    // Sessions: the Tree's own sheet says it (before → after, CLARIDAD J-168) at the moment of buying;
+    // this card waited for the next session to start and then told it again, with the Lab's levels.
+    valid: (_d, c) => c.view().cycle !== 'sessions',
     delayMs: 500,
   },
   {

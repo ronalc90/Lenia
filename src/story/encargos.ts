@@ -10,7 +10,7 @@
 import { Bus, type GameEvents } from '../core/bus';
 import type { GameView, Text } from '../core/types';
 import { OBJECTIVES } from '../game/balance';
-import { CHAIN, ENCARGO_BY_ID, SIDE, SIDE_REWARD, resolveEncargo, type Cosmetic, type EncargoDef, type GoalDef, COSMETICS } from './encargoScript';
+import { CHAIN, ENCARGO_BY_ID, SIDE, SIDE_REWARD, TREE_GOALS, afterSessionAsk, resolveEncargo, type Cosmetic, type EncargoDef, type GoalDef, COSMETICS } from './encargoScript';
 import { SPEAKER_NAMES, alborSpeciesFound } from './script';
 import type { Story } from './story';
 import type { LineDef, Mood, Speaker, StorageLike } from './types';
@@ -38,6 +38,10 @@ export interface EncargoReward {
   samples: number;
   cosmetic: Cosmetic | null;
   journal: string | null;
+  /** (sessions) Datos the Encargo adds to the session's summary (GameView research.encargoReward). */
+  datos?: number;
+  /** (sessions) Seconds it adds to the clock. */
+  seconds?: number;
 }
 
 export interface EncargoView {
@@ -161,6 +165,20 @@ function defaultStorage(): StorageLike | null {
   } catch {
     return null;
   }
+}
+
+/** Act I Encargos that mirror one of the game's OBJECTIVES (same id): the game pays and counts those itself. */
+const OBJECTIVE_ENCARGOS: ReadonlySet<string> = new Set(CHAIN.filter((d) => d.reward.objective).map((d) => d.id));
+
+/**
+ * What a finished Encargo tells the game (game.grantEncargo), or null for nothing. An objective's
+ * Encargo was already paid (its Esencia) and, in the sessions cycle, already counted (+time, +Datos)
+ * when the game met the objective: telling it again counted it twice (play-test: «12 × 2 encargos»).
+ */
+export function gameGrantOf(id: string, r: EncargoReward, cycle: 'classic' | 'sessions'): { essence: number; samples: number } | null {
+  const objective = OBJECTIVE_ENCARGOS.has(id);
+  if (objective && cycle === 'sessions') return null;
+  return { essence: objective ? 0 : Math.max(0, r.essence), samples: Math.max(0, r.samples) };
 }
 
 export function createEncargos(deps: EncargosDeps): Encargos {
@@ -314,15 +332,21 @@ export function createEncargos(deps: EncargosDeps): Encargos {
       const sec = v.cycle === 'sessions' ? Math.min(r.essenceSec, SIDE_REWARD.sessionMaxSec) : r.essenceSec;
       essence += Math.max(r.essenceMin ?? 0, Math.round(v.essencePerSec * sec));
     }
+    // Sessions: Datos and clock seconds instead of Samples (CLARIDAD J-37), as the game counts them.
+    const ses = v.cycle === 'sessions' ? v.research?.encargoReward : undefined;
+    if (ses) return { essence, samples: 0, cosmetic: r.cosmetic ?? null, journal: r.journal ?? null, datos: ses.datos, seconds: ses.seconds };
     return { essence, samples: r.samples ?? 0, cosmetic: r.cosmetic ?? null, journal: r.journal ?? null };
   }
 
   function makeView(def: EncargoDef, kind: 'main' | 'side', v: GameView, target: number, base: Counters | null): EncargoView {
     const current = Math.min(value(def.goal, v, base), target);
     const unit = unitOf(def.goal, target);
+    // A Tree request while the clock runs: "Al terminar: …" (the Tree opens between sessions).
+    const later = v.cycle === 'sessions' && v.session?.phase === 'running' && TREE_GOALS.has(def.goal.metric);
     const lang = (l: 'es' | 'en') => {
       const n = fmt(target, l, unit === 'eps' && target < 10 && target % 1 ? 1 : 0);
-      return def.ask[l].replace(/\{n\}/g, n);
+      const a = def.ask[l].replace(/\{n\}/g, n);
+      return later ? afterSessionAsk(a, l) : a;
     };
     const ask: Text = { es: lang('es'), en: lang('en') };
     const count = (l: 'es' | 'en'): string => {

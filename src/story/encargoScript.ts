@@ -59,6 +59,18 @@ export type GoalMetric =
   | 'treeNodes' // research-tree nodes owned (any level)
   | 'sameSpecies'; // most stable creatures of one species at once
 
+/** (sessions) Goals met only in the Tree, which opens between sessions, never while the clock runs. */
+export const TREE_GOALS: ReadonlySet<GoalMetric> = new Set<GoalMetric>(['upgrade', 'extinctions', 'treeNodes', 'node', 'genomeNodes']);
+
+/**
+ * (sessions) A Tree request shown while a session runs says when it can be done ("Al terminar: compra el
+ * Gotero en el Árbol."): the Tree is closed until the clock ends, so a bare "Compra…" reads like a bug.
+ */
+export function afterSessionAsk(ask: string, l: 'es' | 'en'): string {
+  const lower = ask.charAt(0).toLowerCase() + ask.slice(1);
+  return l === 'es' ? `Al terminar: ${lower}` : `After the session: ${lower}`;
+}
+
 export interface GoalDef {
   metric: GoalMetric;
   arg?: string;

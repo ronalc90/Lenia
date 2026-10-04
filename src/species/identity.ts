@@ -312,7 +312,8 @@ const SHAPE_NOUNS: Record<ShapeKind, Noun> = {
   ring: { es: 'Anillo', g: 'm', en: 'ring' },
   trefoil: { es: 'Trébol', g: 'm', en: 'clover' },
   lobes: { es: 'Flor', g: 'f', en: 'flower' },
-  spindle: { es: 'Huso', g: 'm', en: 'spindle' },
+  // A child knows a leaf, not a spindle (CLARIDAD J-151).
+  spindle: { es: 'Hoja', g: 'f', en: 'leaf' },
   tailed: { es: 'Cometa', g: 'm', en: 'comet' },
   shield: { es: 'Escudo', g: 'm', en: 'shield' },
   crescent: { es: 'Media luna', g: 'f', en: 'crescent' },
@@ -338,7 +339,8 @@ const BEHAVIOR_ADJ: Record<Behavior, { m: string; f: string; en: string }> = {
   still: { m: 'quieto', f: 'quieta', en: 'still' },
 };
 
-const ROMAN = ['II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+/** Plain numbers to tell twins apart ("Nadadora celeste 2"), never Roman numerals (CLARIDAD J-153). */
+const TWIN_NUMBERS = ['2', '3', '4', '5', '6', '7', '8', '9', '10'];
 const capFirst = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** The noun of a species' common name. */
@@ -368,11 +370,13 @@ export function commonName(kind: ShapeKind, behavior: Behavior | null, hue: numb
   const a = adj ? (noun.g === 'f' ? adj.f : adj.m) : null;
   const options: Text[] = [{ es: `${noun.es} ${c}`, en: capFirst(`${col.en} ${noun.en}`) }];
   if (a && adj && !(noun === BEHAVIOR_NOUNS[behavior!])) {
-    options.push({ es: `${noun.es} ${a} ${c}`, en: capFirst(`${col.en} ${adj.en} ${noun.en}`) });
+    // "latiente" is not a word a child knows: "Trébol rosado que late" (CLARIDAD J-152).
+    const es = behavior === 'pulsing' ? `${noun.es} ${c} que late` : `${noun.es} ${a} ${c}`;
+    options.push({ es, en: capFirst(`${col.en} ${adj.en} ${noun.en}`) });
   }
   for (const o of options) if (!used.has(o.es.toLowerCase()) && !used.has(o.en.toLowerCase())) return o;
   const base = options[options.length - 1];
-  for (const r of ROMAN) {
+  for (const r of TWIN_NUMBERS) {
     const o = { es: `${base.es} ${r}`, en: `${base.en} ${r}` };
     if (!used.has(o.es.toLowerCase()) && !used.has(o.en.toLowerCase())) return o;
   }

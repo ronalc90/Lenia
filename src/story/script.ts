@@ -368,7 +368,8 @@ export const SCENES: SceneDef[] = [
     priority: 62,
     after: ['t_stable'],
     title: t('El Árbol', 'The Tree'),
-    when: (c) => sessions(c) && (c.v.research?.sessions ?? 0) >= 1 && treeBought(c) === 0 && (c.v.research?.affordable ?? 0) > 0,
+    // Only with the Tree on screen: VELA points at its green nodes (never over the summary).
+    when: (c) => sessions(c) && c.ui('tree') && (c.v.research?.sessions ?? 0) >= 1 && treeBought(c) === 0 && (c.v.research?.affordable ?? 0) > 0,
     lines: [
       vela('happy', 'Esto es el Árbol. Aquí gastas tus Datos.', 'This is the Tree. You spend your Data here.'),
       vela('awed', '¡Ese late en verde! Lo puedes comprar. Tócalo.', 'That one glows green! You can buy it. Tap it.'),
@@ -387,7 +388,12 @@ export const SCENES: SceneDef[] = [
     priority: 57,
     after: ['t_stable'],
     title: t('Otro mundo', 'Another world'),
-    when: (c) => sessions(c) && (c.v.research?.worlds.length ?? 1) >= 2,
+    // In the Tree, right after opening the World (it is picked for the next session); never later
+    // over the dish, when the start card has already shown it.
+    when: (c) => {
+      const r = c.v.research;
+      return sessions(c) && c.ui('tree') && !!r && r.worlds.length >= 2 && r.world === r.worlds[r.worlds.length - 1];
+    },
     lines: [
       vela('awed', '¡Un mundo nuevo! Otras reglas, otras criaturas.', 'A new world! Other rules, other creatures.'),
       vela('happy', 'Te lo dejo elegido para la próxima sesión.', 'I picked it for your next session.'),

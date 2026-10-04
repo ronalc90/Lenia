@@ -3,7 +3,7 @@ import { Bus, type GameEvents } from '../core/bus';
 import type { GameView, Text } from '../core/types';
 import { OBJECTIVES } from '../game/balance';
 import { CHAIN, ENCARGO_BY_ID, MAX_ASK_WORDS, MAX_THANKS_WORDS, MAX_WHY_WORDS, SIDE } from './encargoScript';
-import { ENCARGOS_STORAGE_KEY, createEncargos, type EncargoDone, type EncargoReward, type EncargoView } from './encargos';
+import { ENCARGOS_STORAGE_KEY, createEncargos, gameGrantOf, type EncargoDone, type EncargoReward, type EncargoView } from './encargos';
 import { STORY_JOURNAL } from './script';
 import { createStory } from './story';
 import { creature, makeView, memoryStorage, node, species } from './testUtil';
@@ -127,6 +127,27 @@ describe('encargos: the chain', () => {
     expect(t.enc.cosmetics()).toEqual(['scarf']);
     expect(t.story.journalViews().map((j) => j.id)).toContain('story.e_heat');
     expect(t.done[0].thanks.who).toBe('vela');
+  });
+
+  it('a Tree request says "when the session ends" while the clock runs (the Tree is closed then)', () => {
+    const session = (phase: 'ready' | 'running') =>
+      ({ n: 2, phase, remaining: 90, total: 120, world: 'classic', essence: 0, sprint: null, endedEarly: false }) as unknown as GameView['session'];
+    const t = harness({ cycle: 'sessions', session: session('running') });
+    t.enc.debug.offer('dropper');
+    expect(t.enc.current()!.ask.es).toBe('Al terminar: compra el Gotero en el Árbol.');
+    expect(t.enc.current()!.ask.en).toBe('After the session: buy the Dropper in the Tree.');
+    t.set({ session: session('ready') });
+    expect(t.enc.current()!.ask.es).toBe('Compra el Gotero en el Árbol.');
+  });
+
+  it('an objective Encargo is counted once: the game already counted it when the objective was met', () => {
+    const r: EncargoReward = { essence: 40, samples: 0, cosmetic: null, journal: null, datos: 2, seconds: 5 };
+    // "two" mirrors the game's objective "two": in sessions the game counted it (+time, +Datos) already.
+    expect(gameGrantOf('two', r, 'sessions')).toBeNull();
+    // A story request is not an objective: the game hears about it (Esencia, +time, +Datos).
+    expect(gameGrantOf('genome', r, 'sessions')).toEqual({ essence: 40, samples: 0 });
+    // Classic: the objective paid its Esencia; the Encargo adds only what is its own.
+    expect(gameGrantOf('two', { ...r, samples: 3 }, 'classic')).toEqual({ essence: 0, samples: 3 });
   });
 
   it('opening the Bestiary completes "look"', () => {

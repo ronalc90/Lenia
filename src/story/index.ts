@@ -6,6 +6,7 @@ export * from './types';
 export {
   createEncargos,
   ENCARGOS_STORAGE_KEY,
+  gameGrantOf,
   type Encargos,
   type EncargoView,
   type EncargoReward,

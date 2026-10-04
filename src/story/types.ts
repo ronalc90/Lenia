@@ -156,6 +156,8 @@ export interface StoryCtx {
   stablesNow(): number;
   /** UI signal received since the scene started (only meaningful inside waits). */
   signal(name: string): boolean;
+  /** A screen is open right now (StoryDeps.ui: 'tree'). */
+  ui(name: string): boolean;
   endings(): readonly EndingId[];
   /** Era in which the last ending was reached (0 = none). */
   lastEndingEra(): number;
@@ -337,6 +339,8 @@ export interface StoryDeps {
   isBlocked?: () => boolean;
   /** Integrator hook: skip starting this scene for now (another surface explains the same event). */
   suppress?: (sceneId: string) => boolean;
+  /** Which screen is open right now ('tree' = the research tree): scenes that talk about it wait for it. */
+  ui?: (name: string) => boolean;
 }
 
 /** What the integrator folds into the main save. */
