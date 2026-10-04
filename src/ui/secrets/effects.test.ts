@@ -24,14 +24,14 @@ describe('stroke recorder', () => {
     for (let i = 0; i < 5; i++) rec.point(50, 50 + i);
     rec.end();
     expect(strokes).toEqual([20, 5]);
-    // A far jump starts a new stroke; a toroidal wrap (≈ a whole dish away) does not.
+    // A far jump starts a new stroke (the round dish is walled: nothing wraps).
     rec.point(10, 10);
     rec.point(11, 10);
     rec.point(60, 10);
     rec.point(61, 10);
     rec.point(250, 10);
     rec.end();
-    expect(strokes).toEqual([20, 5, 2, 3]);
+    expect(strokes).toEqual([20, 5, 2, 2]); // the lone last point is no stroke
     rec.cancel();
     vi.useRealTimers();
   });

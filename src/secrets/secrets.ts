@@ -8,7 +8,6 @@
  * Spoilers: docs/SECRETS.md.
  */
 import { Bus, type GameEvents } from '../core/bus';
-import { wrapDelta } from '../core/camera';
 import type { CreatureView, GameView, Text } from '../core/types';
 import {
   ABYSS_UNLOCK,
@@ -58,7 +57,7 @@ import {
   WHISPERS,
   secretDef,
 } from './data';
-import { pointInPolygon, recognize, resample, swipeDirection, unwrapPath } from './gestures';
+import { pointInPolygon, recognize, resample, swipeDirection } from './gestures';
 import { FULL_MOON_ILLUMINATION, moonInfo } from './moon';
 import { CATALOG } from '../sim/catalog';
 import { catalogGroup } from '../species/identity';
@@ -88,8 +87,11 @@ export interface SecretsDeps {
   rng?: () => number;
   /** Poll the view every POLL_MS with setInterval (default true). Tests pass false and call tick(). */
   autoPoll?: boolean;
-  /** Grid size, to unwrap brush strokes that cross the toroidal edge and to measure distances. */
-  grid?: { w: number; h: number };
+  /**
+   * Centre of the round dish in grid cells (where the Conway glider starts). The dish is walled
+   * (ADR-025): strokes and distances are plain, nothing wraps.
+   */
+  center?: { x: number; y: number };
   storageKey?: string;
 }
 
@@ -198,7 +200,7 @@ export function createSecrets(deps: SecretsDeps): Secrets {
   const rng = deps.rng ?? Math.random;
   const storage = deps.storage === undefined ? defaultStorage() : deps.storage;
   const key = deps.storageKey ?? STORAGE_KEY;
-  const grid = deps.grid ?? null;
+  const center = deps.center ?? { x: 96, y: 120 };
 
   let save: SecretsSave = emptySave();
 
@@ -417,11 +419,9 @@ export function createSecrets(deps: SecretsDeps): Secrets {
 
   // ───────────── geometry helpers ─────────────
 
-  /** Delta from a to b, shortest way round the torus when the grid is known. */
+  /** Delta from a to b (the round dish is walled: nothing wraps). */
   function delta(a: GridPt, b: GridPt): GridPt {
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    return grid ? { x: wrapDelta(dx, grid.w), y: wrapDelta(dy, grid.h) } : { x: dx, y: dy };
+    return { x: b.x - a.x, y: b.y - a.y };
   }
 
   /** Three stable creatures in a row, evenly spaced (Orion's belt), or null. */
@@ -667,7 +667,7 @@ export function createSecrets(deps: SecretsDeps): Secrets {
     fx({ kind: 'trace', points: pts, color, duration });
   }
 
-  /** A living creature inside the drawn loop (trying the torus copies when the grid is known). */
+  /** A living creature inside the drawn loop. */
   function enclosedCreature(loop: readonly TimedPt[]): CreatureView | null {
     let v: GameView;
     try {
@@ -681,18 +681,12 @@ export function createSecrets(deps: SecretsDeps): Secrets {
     let best: CreatureView | null = null;
     let bestD = Infinity;
     for (const c of living(v)) {
-      const offsets = grid ? [-1, 0, 1] : [0];
-      for (const ox of offsets)
-        for (const oy of offsets) {
-          const x = c.x + ox * (grid?.w ?? 0);
-          const y = c.y + oy * (grid?.h ?? 0);
-          if (!pointInPolygon(x, y, poly)) continue;
-          const d = Math.hypot(x - cx, y - cy);
-          if (d < bestD) {
-            bestD = d;
-            best = { ...c, x, y };
-          }
-        }
+      if (!pointInPolygon(c.x, c.y, poly)) continue;
+      const d = Math.hypot(c.x - cx, c.y - cy);
+      if (d < bestD) {
+        bestD = d;
+        best = c;
+      }
     }
     return best;
   }
@@ -739,7 +733,7 @@ export function createSecrets(deps: SecretsDeps): Secrets {
 
     onBrushPath(raw: TimedPt[]) {
       if (!Array.isArray(raw) || raw.length < 2) return;
-      const pts = grid ? unwrapPath(raw, grid.w, grid.h) : raw.map((p) => ({ ...p }));
+      const pts = raw.map((p) => ({ ...p }));
       const dir = swipeDirection(pts, 10);
       if (dir) {
         pushSwipe(dir, pts[pts.length - 1].t ?? now().getTime());
@@ -796,7 +790,7 @@ export function createSecrets(deps: SecretsDeps): Secrets {
         return;
       }
       if (hit(CONWAY_NAMES)) {
-        fx({ kind: 'glider', x: grid ? grid.w / 2 : 96, y: grid ? grid.h / 2 : 120, duration: 9 });
+        fx({ kind: 'glider', x: center.x, y: center.y, duration: 9 });
         find('conway');
         return;
       }

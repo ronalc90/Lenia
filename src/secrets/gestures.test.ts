@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GESTURE_NAMES, type GestureName, pointInPolygon, recognize, spiralScore, swipeDirection, templatePoints, unwrapPath } from './gestures';
+import { GESTURE_NAMES, type GestureName, pointInPolygon, recognize, spiralScore, swipeDirection, templatePoints } from './gestures';
 import { curves, GLIDER_PATH, handDrawn, scribble, seededRng, type StrokeOpts } from './testUtil';
 import type { TimedPt } from './types';
 
@@ -122,24 +122,6 @@ describe('stroke helpers', () => {
     expect(swipeDirection(handDrawn((u) => curves.circle(u * 0.5), rng, { size: 20, noise: 0 }))).toBeNull();
   });
 
-  it('unwraps strokes crossing the toroidal edge', () => {
-    const p = unwrapPath(
-      [
-        { x: 188, y: 10 },
-        { x: 191, y: 10 },
-        { x: 2, y: 10 },
-        { x: 6, y: 239 },
-      ],
-      192,
-      240,
-    );
-    expect(p.map((q) => [q.x, q.y])).toEqual([
-      [188, 10],
-      [191, 10],
-      [194, 10],
-      [198, -1],
-    ]);
-  });
 
   it('point in polygon', () => {
     const sq = [

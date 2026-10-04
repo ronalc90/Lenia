@@ -89,7 +89,7 @@ const secrets = createSecrets({
   getView: view,
   now: () => new Date(Date.now() + clockOffset),
   storage: q.get('persist') === '1' ? undefined : { getItem: (k) => memory[k] ?? null, setItem: (k, v) => void (memory[k] = v) },
-  grid: { w: GW, h: GH },
+  center: { x: GW / 2, y: GH / 2 },
 });
 
 // ───────────── layout ─────────────

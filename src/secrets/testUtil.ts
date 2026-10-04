@@ -241,7 +241,7 @@ export function fakeWorld(opts: { start?: string; rng?: () => number; storage?: 
     now: () => new Date(t),
     rng: opts.rng ?? (() => 0.5),
     autoPoll: false,
-    grid: { w: 192, h: 240 },
+    center: { x: 96, y: 120 },
   });
   const log: { [K in keyof SecretEvents]: SecretEvents[K][] } = {
     found: [],

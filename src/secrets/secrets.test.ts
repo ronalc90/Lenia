@@ -139,7 +139,7 @@ describe('strokes on the dish', () => {
     expect(halo && halo.kind === 'halo' && Math.hypot(halo.x - 40, halo.y - 40)).toBeLessThan(1);
   });
 
-  it('a circle drawn across the toroidal edge still encloses the creature there', () => {
+  it('the dish is walled: a loop split across the far edges does not enclose anything (nothing wraps)', () => {
     const w = fakeWorld();
     w.setView({ creatures: [creature(1, 2, 120)] });
     const loop = handDrawn(curves.circle, rng, { cx: 2, cy: 120, size: 16, noise: 0.01, wobble: 0.01 }, true).map((p) => ({
@@ -147,7 +147,7 @@ describe('strokes on the dish', () => {
       x: ((p.x % 192) + 192) % 192,
     }));
     w.secrets.onBrushPath(loop);
-    expect(w.foundIds()).toEqual(['halo']);
+    expect(w.foundIds()).toEqual([]);
   });
 
   it('ordinary sowing strokes and tiny strokes find nothing; wild scribbles almost never do', () => {
@@ -417,12 +417,12 @@ describe('sky', () => {
     expect(w2.log.found).toHaveLength(0);
   });
 
-  it('the belt also forms across the toroidal edge', () => {
+  it('no belt across the glass: the round dish does not wrap', () => {
     const stats = { playTime: 1200, totalEssence: 0, eraEssence: 0, seeds: 0, creaturesBorn: 0 };
     const w = fakeWorld();
     w.setView({ creatures: [creature(1, 170, 50), creature(2, 2, 50), creature(3, 26, 50)], stats });
     w.advance(2);
-    expect(w.foundIds()).toEqual(['orion']);
+    expect(w.foundIds()).toEqual([]);
   });
 });
 

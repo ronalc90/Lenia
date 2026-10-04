@@ -183,7 +183,11 @@ export class EffectsLayer {
       ctx.save();
       if (!r.screen) {
         ctx.beginPath();
-        ctx.rect(dish.x, dish.y, dish.w, dish.h);
+        const round = this.camera.dish;
+        if (round) {
+          const c = this.camera.gridToScreen(round.cx, round.cy);
+          ctx.arc(c.x, c.y, round.radius * this.camera.scale, 0, Math.PI * 2);
+        } else ctx.rect(dish.x, dish.y, dish.w, dish.h);
         ctx.clip();
       }
       this.draw(ctx, r, t, dish);
@@ -200,9 +204,15 @@ export class EffectsLayer {
     this.frame(performance.now());
   }
 
-  /** Dish rectangle in CSS px (letterboxed at zoom 1, the whole canvas when zoomed in). */
+  /** Dish rectangle in CSS px (letterboxed at zoom 1, the whole canvas when zoomed in; the round dish's bounding box). */
   private dishRect(): { x: number; y: number; w: number; h: number } {
     const c = this.camera;
+    const round = c.dish;
+    if (round) {
+      const p = c.gridToScreen(round.cx, round.cy);
+      const r = round.radius * c.scale;
+      return { x: p.x - r, y: p.y - r, w: 2 * r, h: 2 * r };
+    }
     if (c.zoom > 1.001) return { x: 0, y: 0, w: this.w, h: this.h };
     const s = c.scale;
     const w = c.gridW * s;
@@ -340,12 +350,7 @@ export class EffectsLayer {
     for (let i = 0; i < n; i++) {
       const p = pts[i];
       if (i === 0) ctx.moveTo(p.x, p.y);
-      else {
-        // Skip toroidal jumps between consecutive screen points.
-        const q = pts[i - 1];
-        if (Math.abs(p.x - q.x) > this.w / 2 || Math.abs(p.y - q.y) > this.h / 2) ctx.moveTo(p.x, p.y);
-        else ctx.lineTo(p.x, p.y);
-      }
+      else ctx.lineTo(p.x, p.y);
     }
     ctx.stroke();
   }

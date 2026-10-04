@@ -33,7 +33,7 @@ export {
   isNightHour,
 } from './regimes';
 export type { SecretRegime, RegimeParams } from './regimes';
-export { recognize, swipeDirection, templatePoints, unwrapPath, GESTURE_NAMES } from './gestures';
+export { recognize, swipeDirection, templatePoints, GESTURE_NAMES } from './gestures';
 export type { GestureMatch, GestureName } from './gestures';
 export { moonInfo, isFullMoon } from './moon';
 export type { MoonInfo } from './moon';

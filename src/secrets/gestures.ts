@@ -495,29 +495,6 @@ export function swipeDirection(points: readonly TimedPt[], minLen = 10): SwipeDi
   return dy > 0 ? 'down' : 'up';
 }
 
-/**
- * Undo toroidal jumps in a grid path (a stroke that leaves one edge re-enters the other):
- * consecutive points further apart than half the dish are shifted by one dish size.
- */
-export function unwrapPath(points: readonly TimedPt[], gridW: number, gridH: number): TimedPt[] {
-  if (!points.length) return [];
-  const out: TimedPt[] = [{ ...points[0] }];
-  let ox = 0;
-  let oy = 0;
-  for (let i = 1; i < points.length; i++) {
-    const p = points[i];
-    const q = points[i - 1];
-    const dx = p.x - q.x;
-    const dy = p.y - q.y;
-    if (dx > gridW / 2) ox -= gridW;
-    else if (dx < -gridW / 2) ox += gridW;
-    if (dy > gridH / 2) oy -= gridH;
-    else if (dy < -gridH / 2) oy += gridH;
-    out.push({ x: p.x + ox, y: p.y + oy, t: p.t });
-  }
-  return out;
-}
-
 /** Point-in-polygon (even-odd), used to test whether a drawn loop encloses a creature. */
 export function pointInPolygon(x: number, y: number, poly: readonly { x: number; y: number }[]): boolean {
   let inside = false;

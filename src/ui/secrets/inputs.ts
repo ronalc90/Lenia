@@ -173,7 +173,7 @@ export interface StrokeRecorder {
  * Collects brush/eraser points into strokes. A stroke ends on pointerup/pointercancel over
  * `endOn` (the dish element), on end(), or as a fallback `idleMs` after the last point (people
  * pause at the corners of a heart, so this is generous). Points further apart than
- * `breakCells` (and not a toroidal wrap) start a new stroke.
+ * `breakCells` start a new stroke.
  */
 export function createStrokeRecorder(
   secrets: Pick<Secrets, 'onBrushPath'>,
@@ -197,11 +197,8 @@ export function createStrokeRecorder(
   return {
     point(x, y) {
       const last = pts[pts.length - 1];
-      if (last && Math.hypot(x - last.x, y - last.y) > brk) {
-        // Could be a torus wrap (small true distance) — keep it; recognizer unwraps when it knows the grid.
-        const wrapped = Math.abs(x - last.x) > 64 || Math.abs(y - last.y) > 64;
-        if (!wrapped) flush();
-      }
+      // A jump between two points ends the stroke (the round dish is walled: nothing wraps).
+      if (last && Math.hypot(x - last.x, y - last.y) > brk) flush();
       pts.push({ x, y, t: performance.now() });
       clearTimeout(timer);
       timer = setTimeout(flush, idle);
