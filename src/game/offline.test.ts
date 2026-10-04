@@ -13,6 +13,17 @@ describe('offline progress', () => {
     expect(Math.abs(e - 18_000) / 18_000).toBeLessThan(0.01);
   });
 
+  it('averages exactly the last 5 minutes: a few fresh seconds do not drag a full history (QA1)', () => {
+    const full = new Array(30).fill(10);
+    expect(averageEps(full, 0, 0)).toBe(10);
+    // 3 s of a just-loaded, empty dish: the window is 3 s at 0 + 297 s at 10.
+    expect(averageEps(full, 0, 3)).toBeCloseTo((297 * 10) / 300, 10);
+    expect(offlineEssence(averageEps(full, 0, 3), 7200, 7200)).toBeGreaterThan(36_000 - 500);
+    // Only a partial bucket: its own average.
+    expect(averageEps([], 20, 4)).toBe(5);
+    expect(averageEps([], 0, 0)).toBe(0);
+  });
+
   it('respects the Reserva cap and the 24 h hard cap', () => {
     expect(offlineEssence(10, 10 * 3600, 2 * 3600)).toBeCloseTo(10 * 0.5 * 7200, 6);
     expect(offlineEssence(10, 100 * 3600, 1e9)).toBeCloseTo(10 * 0.5 * 24 * 3600, 6);

@@ -6,19 +6,19 @@ import { creature, GYRO_SIG, recordingBus, report, seededRng } from './testUtil'
 
 describe('genome formula', () => {
   const cases: [number, number, number, number][] = [
-    // E_era, new species, new behaviours, expected
+    // E_era, new species, new behaviours, expected (GENOME_PER_SPECIES = 1 since QA3 F6)
     [0, 0, 0, 0],
     [9_999, 0, 0, 0],
     [10_000, 0, 0, 1],
     [39_999, 0, 0, 1],
     [40_000, 0, 0, 2],
     [250_000, 0, 0, 5],
-    [250_000, 3, 2, 13],
-    [1_000_000, 1, 0, 12],
+    [250_000, 3, 2, 10],
+    [1_000_000, 1, 0, 11],
     [1e8, 0, 6, 106],
-    [123_456, 4, 1, 3 + 8 + 1],
-    [2_250_000, 10, 5, 15 + 20 + 5],
-    [99, 7, 0, 14],
+    [123_456, 4, 1, 3 + 4 + 1],
+    [2_250_000, 10, 5, 15 + 10 + 5],
+    [99, 7, 0, 7],
   ];
   it.each(cases)('E=%d S=%d B=%d → %d', (e, sNew, bNew, expected) => {
     expect(genomeGain(e, sNew, bNew)).toBe(expected);
@@ -71,7 +71,7 @@ describe('extinction', () => {
     const statsSeeds = g.state.stats.seeds;
     const v0 = g.view();
     expect(v0.extinction.available).toBe(true);
-    const expectedGain = essenceTerm(300_000) + 2 * 2 + 2; // 5 + 2 species + 2 behaviours
+    const expectedGain = essenceTerm(300_000) + B.GENOME_PER_SPECIES * 2 + 2; // 5 + 2 species + 2 behaviours
     expect(v0.extinction.genomeGain).toBe(expectedGain);
     expect(g.actions.extinguish()).toBe(true);
     const s = g.state;
@@ -117,10 +117,12 @@ describe('extinction', () => {
   it('heritage nodes change the reset', () => {
     const { g, st } = setupRichGame();
     st.genome = 100;
-    for (const id of ['dropperMemory', 'regimesPersist', 'essenceStart', 'persistentSeeder']) expect(g.actions.buyGenomeNode(id)).toBe(true);
-    const spent = 3 + 4 + 6 + 10;
+    // Herencia starts at Arranque con Esencia (QA3 F8); buying out of order fails.
+    expect(g.actions.buyGenomeNode('dropperMemory')).toBe(false);
+    for (const id of ['essenceStart', 'dropperMemory', 'regimesPersist', 'persistentSeeder']) expect(g.actions.buyGenomeNode(id)).toBe(true);
+    const spent = 3 + 3 + 4 + 10;
     expect(g.state.genomeSpent).toBe(spent);
-    expect(g.view().multipliers!.global).toBeGreaterThan(1 + B.GENOME_SPENT_BONUS * spent - 1e-9);
+    expect(g.view().multipliers!.global).toBeGreaterThan((1 + B.GENOME_SPENT_BONUS * spent) * (1 + B.GENOME_UNSPENT_BONUS * g.state.genome) - 1e-9);
     expect(g.actions.extinguish()).toBe(true);
     const s = g.state;
     expect(s.upgrades.dropper).toBe(3);

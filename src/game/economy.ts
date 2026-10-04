@@ -21,6 +21,20 @@ export interface ProductionCtx {
   gridH: number;
 }
 
+/** Why a creature pays what it pays (all multipliers; their product × global = eps). */
+export interface YieldDetail {
+  /** Measured complexity after the cap, × Nutriente (× BORN_PAY while still forming). */
+  complexity: number;
+  /** m_comp × affinity of its behaviour (unclassified pays as still). */
+  behaviorMult: number;
+  /** m_esp: rarity × Catalogación (1 while unregistered). */
+  speciesMult: number;
+  /** 0.85^k: the k-th creature of the same species pays less. */
+  diminishing: number;
+  /** ×1.5 in a symbiotic pair, else 1. */
+  symbiosis: number;
+}
+
 export interface ProductionResult {
   /** Essence per second (before timed buffs). */
   total: number;
@@ -28,6 +42,8 @@ export interface ProductionResult {
   per: Map<number, number>;
   /** Creatures currently in a symbiotic pair. */
   symbiotic: number;
+  /** The factors behind `per`, by creature. */
+  detail: Map<number, YieldDetail>;
 }
 
 /** Toroidal distance between two grid points. */
@@ -41,13 +57,22 @@ export function wrapDist(ax: number, ay: number, bx: number, by: number, w: numb
 
 export function computeProduction(creatures: readonly Creature[], ctx: ProductionCtx): ProductionResult {
   const per = new Map<number, number>();
-  const items: { c: Creature; group: string; yield: number; sym: boolean }[] = [];
+  const detail = new Map<number, YieldDetail>();
+  const items: { c: Creature; group: string; yield: number; sym: boolean; d: YieldDetail }[] = [];
   for (const c of creatures) {
-    if (c.state !== 'stable') continue; // born / exploded / dead pay 0
-    const comp = Math.min(Math.max(0, Number.isFinite(c.complexity) ? c.complexity : 0), B.COMPLEXITY_CAP) * ctx.complexityMult;
-    const sp = ctx.speciesOf(c.id);
-    const y = comp * ctx.behaviorMult(c.behavior) * (sp ? sp.mult : 1);
-    items.push({ c, group: sp ? sp.id : `#${c.id}`, yield: y, sym: false });
+    // Exploded / dead pay 0. A forming ('born') creature pays BORN_PAY once it held together for
+    // BORN_PAY_MIN_AGE steps (0 = off: the hard gate "only stable creatures pay", see balance.ts).
+    let share = 1;
+    if (c.state === 'born') {
+      if (!(B.BORN_PAY > 0) || !(c.age >= B.BORN_PAY_MIN_AGE)) continue;
+      share = B.BORN_PAY;
+    } else if (c.state !== 'stable') continue;
+    const comp = Math.min(Math.max(0, Number.isFinite(c.complexity) ? c.complexity : 0), B.COMPLEXITY_CAP) * ctx.complexityMult * share;
+    const sp = c.state === 'stable' ? ctx.speciesOf(c.id) : null;
+    const bm = ctx.behaviorMult(c.state === 'stable' ? c.behavior : null);
+    const sm = sp ? sp.mult : 1;
+    const d: YieldDetail = { complexity: comp, behaviorMult: bm, speciesMult: sm, diminishing: 1, symbiosis: 1 };
+    items.push({ c, group: sp ? sp.id : `#${c.id}`, yield: comp * bm * sm, sym: false, d });
   }
   // Diminishing returns: within a species the best creature pays full, the next ×0.85, …
   const groups = new Map<string, typeof items>();
@@ -58,7 +83,10 @@ export function computeProduction(creatures: readonly Creature[], ctx: Productio
   }
   for (const g of groups.values()) {
     g.sort((a, b) => b.yield - a.yield);
-    g.forEach((it, k) => (it.yield *= Math.pow(B.SAME_SPECIES_DECAY, k)));
+    g.forEach((it, k) => {
+      it.d.diminishing = Math.pow(B.SAME_SPECIES_DECAY, k);
+      it.yield *= it.d.diminishing;
+    });
   }
   let symbiotic = 0;
   if (ctx.symbiosis) {
@@ -75,9 +103,11 @@ export function computeProduction(creatures: readonly Creature[], ctx: Productio
   let total = 0;
   for (const it of items) {
     if (it.sym) symbiotic++;
-    const v = it.yield * (it.sym ? B.SYMBIOSIS_MULT : 1) * ctx.globalMult;
+    it.d.symbiosis = it.sym ? B.SYMBIOSIS_MULT : 1;
+    const v = it.yield * it.d.symbiosis * ctx.globalMult;
     per.set(it.c.id, v);
+    detail.set(it.c.id, it.d);
     total += v;
   }
-  return { total, per, symbiotic };
+  return { total, per, symbiotic, detail };
 }

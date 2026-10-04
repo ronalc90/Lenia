@@ -140,6 +140,7 @@ const MICROSCOPE_LEVEL_TEXT: Text[] = [
 ];
 
 const arrow = (a: Text, b: Text | null): Text => (b ? t(`${a.es} → ${b.es}`, `${a.en} → ${b.en}`) : a);
+const plural = (n: string, one: string, many: string): string => (n.trim() === '1' ? one : many);
 const same = (s: string): Text => t(s, s);
 
 /** "current → next" effect text for an upgrade at `level`. `v` returns the value text at a level. */
@@ -153,9 +154,13 @@ export function effectText(id: string, level: number, maxLevel: number | null, v
     case 'microscope':
       return arrow(MICROSCOPE_LEVEL_TEXT[level], next !== null ? MICROSCOPE_LEVEL_TEXT[next] : null);
     case 'dish':
+      // QA1 #13: "1 hueco", "3 huecos" — the noun follows the last number shown.
       return next !== null
-        ? t(`${v(level)} huecos → ${v(next)}, +${pct(level * DISH_BONUS)} → +${pct(next * DISH_BONUS)}`, `${v(level)} slots → ${v(next)}, +${pct(level * DISH_BONUS)} → +${pct(next * DISH_BONUS)}`)
-        : t(`${v(level)} huecos, +${pct(level * DISH_BONUS)}`, `${v(level)} slots, +${pct(level * DISH_BONUS)}`);
+        ? t(
+            `${v(level)} → ${v(next)} ${plural(v(next), 'hueco', 'huecos')}, +${pct(level * DISH_BONUS)} → +${pct(next * DISH_BONUS)}`,
+            `${v(level)} → ${v(next)} ${plural(v(next), 'slot', 'slots')}, +${pct(level * DISH_BONUS)} → +${pct(next * DISH_BONUS)}`,
+          )
+        : t(`${v(level)} ${plural(v(level), 'hueco', 'huecos')}, +${pct(level * DISH_BONUS)}`, `${v(level)} ${plural(v(level), 'slot', 'slots')}, +${pct(level * DISH_BONUS)}`);
     case 'marker':
       return level ? t('Marcas activas', 'Markers on') : t('Sin marcas → marcas de color', 'No markers → colour markers');
     default:
@@ -166,49 +171,50 @@ export function effectText(id: string, level: number, maxLevel: number | null, v
 // ───────────────────────────── Genome ──────────────────────────────
 
 export const GENOME_TEXT: Record<string, { name: Text; desc: Text }> = {
+  // Kid-simple copy (QA3 F8, QA2 §5): what it does for you, no "kernel" or "peaks".
   doubleRings: {
     name: t('Anillos dobles', 'Double rings'),
-    desc: t('El kernel admite 2 picos: el Calibrador gana un selector de perfil y aparecen especies multi-anillo.', 'The kernel accepts 2 peaks: the Calibrator gains a profile picker and multi-ring species appear.'),
+    desc: t('Criaturas de doble anillo: más grandes y más raras. Elige el anillo en Calibrar.', 'Double-ring creatures: bigger and rarer. Pick the ring in Calibrate.'),
   },
   tripleRings: {
     name: t('Anillos triples', 'Triple rings'),
-    desc: t('3 picos en el kernel: aparece Hydrogeminium y especies de radio grande.', '3 kernel peaks: Hydrogeminium and large-radius species appear.'),
+    desc: t('Criaturas de triple anillo, como la gran Hydrogeminium.', 'Triple-ring creatures, like the great Hydrogeminium.'),
   },
   secondChannel: {
     name: t('Segundo canal', 'Second channel'),
-    desc: t('Dos sustancias con kernels cruzados. Próximamente.', 'Two substances with crossed kernels. Coming soon.'),
+    desc: t('Dos clases de materia en la misma placa. Próximamente.', 'Two kinds of matter on one dish. Coming soon.'),
   },
   flow: {
     name: t('Flujo', 'Flow'),
-    desc: t('La masa se conserva y las criaturas compiten por materia. Próximamente.', 'Mass is conserved and creatures compete for matter. Coming soon.'),
-  },
-  dropperMemory: {
-    name: t('Memoria del Gotero', 'Dropper memory'),
-    desc: t('Cada Era empieza con el Gotero en el nivel máximo alcanzado menos 1.', 'Each Era starts with the Dropper at its best level minus 1.'),
-  },
-  regimesPersist: {
-    name: t('Regímenes persisten', 'Lasting regimes'),
-    desc: t('Los regímenes guardados sobreviven a la Extinción.', 'Saved regimes survive Extinction.'),
+    desc: t('Las criaturas compiten por la comida. Próximamente.', 'Creatures compete for food. Coming soon.'),
   },
   essenceStart: {
     name: t('Arranque con Esencia', 'Essence head start'),
-    desc: t('Cada Era empieza con 500 × (número de Era) Esencia.', 'Each Era starts with 500 × (Era number) Essence.'),
+    desc: t('Cada noche nueva empieza con Esencia guardada: 500 por cada Era.', 'Every new night starts with saved Essence: 500 per Era.'),
+  },
+  dropperMemory: {
+    name: t('Memoria del Gotero', 'Dropper memory'),
+    desc: t('El Gotero recuerda: empiezas casi con el mejor que tuviste.', 'The Dropper remembers: you start with almost your best one.'),
+  },
+  regimesPersist: {
+    name: t('Recetas guardadas', 'Kept recipes'),
+    desc: t('Tus recetas de Calibrar no se borran al empezar de nuevo.', 'Your Calibrate recipes are not erased when you start over.'),
   },
   persistentSeeder: {
-    name: t('Sembrador persistente', 'Lasting auto-seeder'),
-    desc: t('Cada Era empieza con el Sembrador automático en nivel 3.', 'Each Era starts with the Auto-seeder at level 3.'),
+    name: t('Sembrador fiel', 'Faithful auto-seeder'),
+    desc: t('Cada noche empieza con el Sembrador automático ya trabajando.', 'Every night starts with the Auto-seeder already working.'),
   },
   mutations: {
     name: t('Mutaciones', 'Mutations'),
-    desc: t('El 10 % de las Impresiones muta; si se estabiliza, es una especie nueva "var.".', '10% of Prints mutate; if one stabilises it is a new "var." species.'),
+    desc: t('A veces una copia sale distinta: ¡una criatura nueva "var."!', 'Sometimes a copy comes out different: a new "var." creature!'),
   },
   symbiosis: {
     name: t('Simbiosis', 'Symbiosis'),
-    desc: t('Dos especies distintas a menos de 2 R forman pareja: ×1.5 a ambas.', 'Two different species within 2 R pair up: ×1.5 to both.'),
+    desc: t('Dos criaturas distintas juntas se ayudan: ambas dan ×1,5.', 'Two different creatures side by side help each other: ×1.5 each.'),
   },
   predation: {
     name: t('Depredación', 'Predation'),
-    desc: t('Un canal consume al otro donde se tocan. Próximamente.', 'One channel consumes the other where they touch. Coming soon.'),
+    desc: t('Unas criaturas comen a otras. Próximamente.', 'Some creatures eat others. Coming soon.'),
   },
 };
 
@@ -275,27 +281,28 @@ export const achievementReward = (bonus: number): Text => t(`+${pct(bonus)} Esen
 
 // ───────────────────────────── Objectives ──────────────────────────
 
+/** Objective copy, kid-simple (QA2 §5.1). Ids are stable (balance.OBJECTIVES, saves). */
 const OBJECTIVE_TEXT: Record<string, Text> = {
-  seed: t('Toca la placa para sembrar', 'Tap the dish to sow'),
-  stable: t('Consigue una criatura estable', 'Get a stable creature'),
-  look: t('Mira tu espécimen en el Bestiario', 'Look at your specimen in the Bestiary'),
-  dropper: t('Compra Gotero I en el Laboratorio', 'Buy Dropper I in the Lab'),
-  two: t('Ten 2 criaturas estables a la vez', 'Have 2 stable creatures at once'),
+  seed: t('Toca aquí para crear vida', 'Tap to make life'),
+  stable: t('Cría una criatura viva', 'Grow a living creature'),
+  look: t('Mira tu criatura en el Bestiario', 'Look at your creature in the Bestiary'),
+  dropper: t('Compra el Gotero en el Laboratorio', 'Buy the Dropper in the Lab'),
+  two: t('Ten 2 criaturas vivas', 'Have 2 living creatures'),
   seeder: t('Compra el Sembrador automático', 'Buy the Auto-seeder'),
-  eps3: t('Produce 3 Esencia/s', 'Produce 3 Essence/s'),
-  calib: t('Compra Calibrador I', 'Buy Calibrator I'),
-  move: t('Mueve μ en la pestaña Calibrar', 'Move μ in the Calibrate tab'),
-  species3: t('Registra 3 especies', 'Register 3 species'),
+  eps3: t('Gana 3 Esencia por segundo', 'Earn 3 Essence per second'),
+  calib: t('Compra el Calibrador', 'Buy the Calibrator'),
+  move: t('Mueve un mando en Calibrar', 'Move a knob in Calibrate'),
+  species3: t('Descubre 3 criaturas distintas', 'Discover 3 different creatures'),
   golden: t('Atrapa un Destello dorado', 'Catch a golden Spark'),
-  behaviors2: t('Observa 2 comportamientos distintos', 'Observe 2 different behaviours'),
-  eps10: t('Produce 10 Esencia/s', 'Produce 10 Essence/s'),
+  behaviors2: t('Mira 2 formas de moverse', 'See 2 ways of moving'),
+  eps10: t('Gana 10 Esencia por segundo', 'Earn 10 Essence per second'),
   culture: t('Compra Cultivo', 'Buy Culture'),
-  print: t('Imprime una especie desde el Bestiario', 'Print a species from the Bestiary'),
-  species6: t('Registra 6 especies', 'Register 6 species'),
-  eps50: t('Produce 50 Esencia/s', 'Produce 50 Essence/s'),
-  dish: t('Compra Placa I', 'Buy Dish I'),
-  era100k: t('Gana 100 000 Esencia en esta Era', 'Earn 100,000 Essence this Era'),
-  extinct: t('Provoca tu primera Extinción', 'Trigger your first Extinction'),
+  print: t('Planta otra igual desde el Bestiario', 'Plant another one from the Bestiary'),
+  species6: t('Descubre 6 criaturas distintas', 'Discover 6 different creatures'),
+  eps50: t('Gana 50 Esencia por segundo', 'Earn 50 Essence per second'),
+  dish: t('Compra la Placa', 'Buy the Dish'),
+  era100k: t('Gana 100 000 Esencia en esta noche', 'Earn 100,000 Essence this night'),
+  extinct: t('Empieza una noche nueva (Extinción)', 'Start a new night (Extinction)'),
 };
 
 export function objectiveText(id: string, current: number, target: number): Text {
@@ -323,6 +330,8 @@ export const TEXT = {
   pipetteReady: t('Pipeta de emergencia lista: siembra gratis', 'Emergency pipette ready: free seed'),
   freePrintReady: t('Archivo: Impresión gratis lista', 'Archive: free Print ready'),
   invalidImport: t('Partida no válida', 'Invalid save'),
+  seedTooClose: t('Muy cerca: se fundirían. Siembra en un sitio libre.', 'Too close: they would fuse. Seed in a free spot.'),
+  seedGrowing: t('Espera: ya hay semillas naciendo. Mira cómo crecen.', 'Wait: some seeds are still hatching. Watch them grow.'),
   dishAutoCleaned: t(
     'La placa se desbordó y se limpió sola. Siembra con calma: si chocan muchas criaturas, se forma un laberinto.',
     'The dish overflowed and cleaned itself. Seed calmly: when many creatures collide, they form a maze.',
@@ -330,7 +339,12 @@ export const TEXT = {
   extinctionRequirement: (need: number, have: number) =>
     t(`Gana ${f(need)} Esencia en esta Era (llevas ${f(have)})`, `Earn ${f(need)} Essence this Era (you have ${f(have)})`),
   extinctionGain: (g: number) => t(`Extinguir ahora da ${f(g)} Genoma`, `Extinguishing now gives ${f(g)} Genome`),
-  specimen: (n: number) => t(`Espécimen ${n}`, `Specimen ${n}`),
+  /** Registration number shown under a species name (QA2 §5.3: "Criatura N", not "Espécimen"). */
+  specimen: (n: number) => t(`Criatura ${n}`, `Creature ${n}`),
+  multGenome: t('Genoma', 'Genome'),
+  multCollection: t('Colección', 'Collection'),
+  multBehaviors: t('Comportamientos vistos', 'Behaviours seen'),
+  multAchievements: t('Logros', 'Achievements'),
   variantSuffix: t(' var.', ' var.'),
   offline: (amount: number) => t(`Mientras no estabas: +${f(amount)} Esencia`, `While you were away: +${f(amount)} Essence`),
 };

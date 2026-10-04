@@ -63,6 +63,15 @@ function storage(): StorageLike {
   return memoryStorage;
 }
 
+/**
+ * False when the browser storage is blocked (private window, "block all cookies") and saves only
+ * live in memory for this session: the player must be told (QA1 #3). writeSave() then reports
+ * false so the integrator's "could not save" warning shows.
+ */
+export function isPersistent(): boolean {
+  return storage() !== memoryStorage;
+}
+
 function get(k: string): string | null {
   try {
     return storage().getItem(k);
@@ -220,7 +229,8 @@ export function writeSave(gameStr: string, dish?: Uint8Array, w?: number, h?: nu
   } catch {
     ok = false;
   }
-  return ok;
+  // Kept in memory only (storage blocked): nothing survives closing the tab — not a success.
+  return ok && isPersistent();
 }
 
 /** Remove every Bioluma key (Settings → delete save). */

@@ -29,3 +29,15 @@ export function formatDuration(s: number): string {
   if (m > 0) return `${m} min ${String(sec).padStart(2, '0')} s`;
   return `${sec} s`;
 }
+
+/**
+ * At most `max` user-perceived characters (grapheme clusters), so an emoji, a flag or a ZWJ family
+ * is never cut in half (QA1 #5). Falls back to code points without Intl.Segmenter.
+ */
+export function clipGraphemes(s: string, max: number): string {
+  const Seg = (Intl as unknown as { Segmenter?: new (l?: string, o?: { granularity: string }) => { segment(t: string): Iterable<{ segment: string }> } }).Segmenter;
+  const parts = Seg ? Array.from(new Seg(undefined, { granularity: 'grapheme' }).segment(s), (x) => x.segment) : Array.from(s);
+  if (parts.length <= max) return s;
+  // Without a segmenter, never leave a dangling joiner or variation selector at the end.
+  return parts.slice(0, max).join('').replace(/[‍︎️]+$/u, '');
+}

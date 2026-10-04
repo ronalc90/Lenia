@@ -47,7 +47,7 @@ describe('dish overgrowth (play-test: flood unlocked everything in seconds)', ()
     const game = createGame({ bus, rng: seededRng(13) });
     const n = B.SPECIES_NEW_BURST + 2;
     const far = Array.from({ length: n }, (_, i) =>
-      creature({ id: 10 + i, x: 10 + i * 36, y: 20 + i * 44, signature: [0.5 + i, 0.4, 0.5, 0.3, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1, -1, -1, -1, -1] }),
+      creature({ id: 10 + i, x: 10 + i * 36, y: 20 + i * 44, signature: [0.5 + i, 0.4, 0.5, 0.3, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1, 0.3, 0, 0.01, 0.2] }),
     );
     const rep: DetectorReport = { step: 0, creatures: far, events: [], totalMass: 100 * n, fill: 0.03 };
     run(game, 1, rep);

@@ -5,6 +5,7 @@
  */
 import type { LeniaParams, Pattern } from '../core/types';
 import { CATALOG_REFS } from '../detect/catalogRefs';
+import { catalogGroup } from '../species/identity';
 import { CATALOG, catalogPattern, type CatalogEntry } from '../sim/catalog';
 import * as B from './balance';
 import { base64ToBytes, bytesToBase64, type PortraitData } from './state';
@@ -19,10 +20,6 @@ export function paramDistance(mu1: number, s1: number, mu2: number, s2: number):
 }
 
 /**
- * Catalog species whose (μ, σ) is nearest to the calibration, among those with the same ring
- * profile (falls back to the same ring count, then to everything).
- */
-/**
  * Species that do not survive in our simulation (the detector's calibration marks them: OG2r
  * explodes, SN+ grows until it wraps the dish). Using them as spores floods the dish.
  */
@@ -31,10 +28,20 @@ const NON_VIABLE = new Set(CATALOG_REFS.filter((r) => !r.viable).map((r) => r.co
 /** Catalog entries that are safe to use as spore templates. */
 export const SPORE_CATALOG: readonly CatalogEntry[] = CATALOG.filter((e) => !NON_VIABLE.has(e.code));
 
+/** Entries with the calibration's ring profile (falls back to the same ring count, then to everything). */
+function ringPool(rings: readonly number[], entries: readonly CatalogEntry[]): readonly CatalogEntry[] {
+  let pool: readonly CatalogEntry[] = entries.filter((e) => ringsEqual(e.b, rings));
+  if (!pool.length) pool = entries.filter((e) => e.b.length === rings.length);
+  if (!pool.length) pool = entries;
+  return pool;
+}
+
+/**
+ * Catalog species whose (μ, σ) is nearest to the calibration, among those with the same ring
+ * profile (falls back to the same ring count, then to everything).
+ */
 export function nearestCatalog(p: Pick<LeniaParams, 'mu' | 'sigma' | 'rings'>, entries: readonly CatalogEntry[] = SPORE_CATALOG): CatalogEntry {
-  let pool = entries.filter((e) => ringsEqual(e.b, p.rings));
-  if (!pool.length) pool = entries.filter((e) => e.b.length === p.rings.length);
-  if (!pool.length) pool = [...entries];
+  const pool = ringPool(p.rings, entries);
   let best = pool[0];
   let bestD = Infinity;
   for (const e of pool) {
@@ -45,6 +52,60 @@ export function nearestCatalog(p: Pick<LeniaParams, 'mu' | 'sigma' | 'rings'>, e
     }
   }
   return best;
+}
+
+export interface SporeCandidate {
+  entry: CatalogEntry;
+  /** Normalised (μ, σ) distance to the calibration. */
+  dist: number;
+  /** Probability of being picked (the candidates' weights sum to 1). */
+  weight: number;
+}
+
+/**
+ * Spore templates for the current calibration: the nearest viable catalog species with the same
+ * ring profile always, plus up to SPORE_K − 1 more that are themselves within SPORE_MAX_PARAM_DIST of
+ * the calibration (so they can live here), each weighted by a softmax of its (μ, σ) distance
+ * (SPORE_TEMPERATURE). Seeds then grow into the
+ * different real forms that live around the calibration (Orbium, Synorbium, Gyrorbium…) instead of
+ * noisy copies of one template. The bias/noise mechanics (Gotero, Estabilizador) are unchanged.
+ */
+export function sporeCandidates(
+  p: Pick<LeniaParams, 'mu' | 'sigma' | 'rings'>,
+  entries: readonly CatalogEntry[] = SPORE_CATALOG,
+): SporeCandidate[] {
+  const ranked = ringPool(p.rings, entries)
+    .map((entry) => ({ entry, dist: paramDistance(p.mu, p.sigma, entry.m, entry.s), weight: 0 }))
+    .sort((a, b) => a.dist - b.dist || a.entry.code.localeCompare(b.entry.code));
+  if (!ranked.length) return [];
+  const d0 = ranked[0].dist;
+  const out = ranked.filter((c, i) => i === 0 || c.dist <= B.SPORE_MAX_PARAM_DIST).slice(0, B.SPORE_K);
+  let sum = 0;
+  for (const c of out) sum += c.weight = Math.exp(-(c.dist - d0) / B.SPORE_TEMPERATURE);
+  for (const c of out) c.weight /= sum;
+  return out;
+}
+
+/**
+ * Draw a spore template among `sporeCandidates` with the given uniform [0,1) source. Forms the
+ * player has not discovered yet (`known` = catalog group codes in the bestiary) weigh
+ * SPORE_NOVELTY times more, so the second species is a different body (at the start regime:
+ * Synorbium ignis after Orbium) instead of another Orbium.
+ */
+export function pickSporeTemplate(
+  p: Pick<LeniaParams, 'mu' | 'sigma' | 'rings'>,
+  rng: () => number,
+  known: ReadonlySet<string> = new Set(),
+): CatalogEntry {
+  const cands = sporeCandidates(p);
+  if (!cands.length) return nearestCatalog(p);
+  const w = cands.map((c) => c.weight * (known.has(catalogGroup(c.entry.code)) ? 1 : B.SPORE_NOVELTY));
+  let u = rng() * w.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < cands.length; i++) {
+    u -= w[i];
+    if (u < 0) return cands[i].entry;
+  }
+  return cands[cands.length - 1].entry;
 }
 
 /** Bilinear resample by independent x/y scales. */

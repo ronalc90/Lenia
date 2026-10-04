@@ -24,17 +24,45 @@ describe('progression layer', () => {
   it('objective chain advances and pays its reward', () => {
     const { bus } = recordingBus();
     const g = createGame({ bus, rng: seededRng(2) });
-    expect(g.view().objective!.es).toContain('Toca la placa');
+    expect(g.view().objective!.es).toContain('Toca aquí');
     const e0 = g.view().essence;
     const spec = g.actions.seedAt(10, 10)!;
     expect(spec).not.toBeNull();
-    expect(g.view().essence).toBeCloseTo(e0 - 2 + B.OBJECTIVES[0].reward, 10);
+    // A brand-new game's first seed is free and sure to take (QA2 H-04).
+    expect(spec.bias).toBe(1);
+    expect(g.view().essence).toBeCloseTo(e0 + B.OBJECTIVES[0].reward, 10);
     expect(g.view().objectiveProgress!.target).toBe(1);
     g.tick(0.5, report([creature({ id: 1 })]));
     expect(g.state.objective).toBe(2);
     g.actions.markSpeciesSeen(g.view().species[0].id);
     expect(g.state.objective).toBe(3);
     expect(g.view().species[0].isNew).toBe(false);
+  });
+
+  it('opening the Bestiary counts as looking at the creature; objectives met early are not asked again', () => {
+    const { bus } = recordingBus();
+    const g = createGame({ bus, rng: seededRng(21) });
+    const st = g.state as { essence: number };
+    g.actions.seedAt(10, 10);
+    // Bought before its objective comes up (QA2 H-24).
+    st.essence = 1000;
+    expect(g.actions.buyUpgrade('dropper', 1)).toBe(true);
+    g.tick(0.5, report([creature({ id: 1 })]));
+    expect(g.state.objective).toBe(2); // "look"
+    g.actions.noteTabOpened!('lab');
+    expect(g.state.objective).toBe(2);
+    g.actions.noteTabOpened!('bestiary');
+    // look done, and "buy the Dropper" was already done → straight to "two creatures".
+    expect(B.OBJECTIVES[g.state.objective].id).toBe('two');
+    // A peak met while an earlier objective waited counts too.
+    const g2 = createGame({ bus: recordingBus().bus, rng: seededRng(22) });
+    g2.actions.seedAt(10, 10);
+    g2.tick(0.5, report([creature({ id: 1, x: 20 }), creature({ id: 2, x: 120, signature: GYRO_SIG })]));
+    g2.tick(0.5, report([creature({ id: 1, x: 20 })])); // one of them is gone again
+    g2.actions.noteTabOpened!('bestiary');
+    (g2.state as { essence: number }).essence = 1000;
+    g2.actions.buyUpgrade('dropper', 1);
+    expect(B.OBJECTIVES[g2.state.objective].id).not.toBe('two');
   });
 
   it('tabs appear progressively', () => {
@@ -165,9 +193,15 @@ describe('progression layer', () => {
     g.actions.setSpeed(4);
     expect(g.speed).toBe(4);
     expect(g.view().tools.speeds).toEqual([1, 2, 4]);
-    // Species names follow the language.
+    // Common names and the number follow the language; the scientific (Latin) line does not.
     g.tick(0.5, report([creature({ id: 1, signature: ORBIUM_SIG })]));
-    expect(g.view().species[0].name).toBe('Specimen 1');
+    const en = g.view().species[0];
+    expect(en.name).toMatch(/^[A-Z][a-z]+ [a-z]+$/);
+    expect(en.subtitle).toBe('Creature 1');
+    g.actions.setSetting('lang', 'es');
+    expect(g.view().species[0].name).not.toBe(en.name);
+    expect(g.view().species[0].scientificName).toBe(en.scientificName);
+    expect(g.view().species[0].subtitle).toBe('Criatura 1');
   });
 
   it('species signature: unknown dynamic features (-1) never pollute the running average', () => {
@@ -175,13 +209,19 @@ describe('progression layer', () => {
     const g = createGame({ bus, rng: seededRng(12) });
     const k = ORBIUM_SIG.length - 3;
     const young = ORBIUM_SIG.map((v, i) => (i >= k ? -1 : v));
+    // A young creature (behaviour not known yet) cannot found a species: it waits, paying as unknown.
     g.tick(0.5, report([creature({ id: 1, signature: young })]));
-    expect(g.state.species[0].signature.slice(k)).toEqual([-1, -1, -1]);
+    expect(g.state.species.length).toBe(0);
+    expect(g.view().essencePerSec).toBeGreaterThan(0);
+    // Once its behaviour is known it registers.
     g.tick(0.5, report([creature({ id: 1, signature: ORBIUM_SIG, behavior: 'swimmer' })]));
+    expect(g.state.species.length).toBe(1);
     expect(g.state.species[0].signature.slice(k)).toEqual(ORBIUM_SIG.slice(k));
+    // A young member still matches the species at once, without polluting the dynamic features.
     g.tick(0.5, report([creature({ id: 1, signature: ORBIUM_SIG, behavior: 'swimmer' }), creature({ id: 2, x: 140, signature: young })]));
     expect(g.state.species.length).toBe(1);
     expect(g.state.species[0].timesSeen).toBe(2);
+    expect(g.state.species[0].signature.slice(k)).toEqual(ORBIUM_SIG.slice(k));
     expect(g.state.species[0].signature.every((v) => v >= 0)).toBe(true);
   });
 

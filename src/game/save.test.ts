@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createGame } from './game';
-import { clearSave, decodeDish, encodeDish, loadSave, setStorage, writeSave, type StorageLike } from './save';
+import { clearSave, decodeDish, encodeDish, isPersistent, loadSave, setStorage, writeSave, type StorageLike } from './save';
 import { deserializeState } from './state';
 import { creature, GYRO_SIG, recordingBus, report, seededRng } from './testUtil';
 
@@ -28,7 +28,9 @@ describe('serialize / import', () => {
     expect(g3.importString(exp)).toBe(true);
     expect(JSON.stringify(g3.state)).toBe(JSON.stringify(g.state));
     expect(g3.view().species[1].name).toBe('Remolino ñandú');
-    expect(g3.view().species[0].portrait!.w).toBe(4);
+    // The stored capture survives the roundtrip; the bestiary shows the revealed Orbium's catalog pattern.
+    expect(g3.state.species[0].portrait).toEqual(g.state.species[0].portrait);
+    expect(g3.view().species[0].portrait).not.toBeNull();
     expect(g3.view().settings.lang).toBe('en');
   });
 
@@ -127,7 +129,10 @@ describe('save.ts storage helpers', () => {
     expect(loadSave().game).toBeNull();
     const g = played();
     const dish = new Uint8Array(6 * 4).map((_, i) => (i % 3 === 0 ? 128 : 0));
-    expect(writeSave(g.serialize(), dish, 6, 4, 1_000_000)).toBe(true);
+    // QA1 #3: memory only is NOT a successful save (the player must be warned)…
+    expect(isPersistent()).toBe(false);
+    expect(writeSave(g.serialize(), dish, 6, 4, 1_000_000)).toBe(false);
+    // …but the session still has it.
     const l = loadSave();
     expect(l.game).toBe(g.serialize());
     expect(l.dish).toEqual(dish);

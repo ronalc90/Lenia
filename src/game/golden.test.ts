@@ -74,9 +74,11 @@ describe('golden spark (Destello)', () => {
     for (const [kind, roll] of Object.entries(rolls)) {
       const rec = recordingBus();
       const g = createGame({ bus: rec.bus, rng: scripted([0, 0.5, 0.5, 0.25, roll]) });
+      (g.state as { charges: { free: number; guaranteed: number } }).charges = { free: 0, guaranteed: 0 };
       const rep = report([creature({ id: 1 })]);
       g.tick(0.5, rep);
       run(g, B.GOLDEN_FIRST_DELAY[0] + 0.5, rep, 0.5);
+      if (kind === 'spores') (g.state as { essence: number }).essence = 0; // a poor bank wants seeds
       const e0 = g.view().essence;
       g.actions.collectGolden();
       if (kind === 'lump') expect(g.view().essence - e0).toBeGreaterThanOrEqual(B.LUMP_MIN);
@@ -88,6 +90,37 @@ describe('golden spark (Destello)', () => {
       expect(rec.count('goldenCollected')).toBe(1);
       expect(g.state.stats.golden).toBe(1);
     }
+  });
+
+  it('spore rain turns into Essence when the bank is already rich (QA3 F9)', () => {
+    const W = B.GOLDEN_WEIGHTS;
+    const total = W.bloom + W.lump + W.spores + W.mutagen;
+    const rec = recordingBus();
+    const g = createGame({ bus: rec.bus, rng: scripted([0, 0.5, 0.5, 0.25, (W.bloom + W.lump + W.spores / 2) / total]) });
+    (g.state as { charges: { free: number; guaranteed: number } }).charges = { free: 0, guaranteed: 0 };
+    const rep = report([creature({ id: 1 })]);
+    g.tick(0.5, rep);
+    run(g, B.GOLDEN_FIRST_DELAY[0] + 0.5, rep, 0.5);
+    (g.state as { essence: number }).essence = 1e4;
+    g.actions.collectGolden();
+    expect(rec.count('dishSeed')).toBe(0);
+    expect(g.view().charges!.free).toBe(0);
+    expect(g.view().essence).toBeGreaterThanOrEqual(1e4 + B.LUMP_MIN);
+  });
+
+  it('a paused game ignores taps on the frozen spark (QA1 #9)', () => {
+    const rec = recordingBus();
+    const g = createGame({ bus: rec.bus, rng: seededRng(9) });
+    const rep = report([creature({ id: 1 })]);
+    g.tick(0.5, rep);
+    for (let t = 0; t < B.GOLDEN_FIRST_DELAY[1] + 1 && !g.view().golden; t += 0.5) g.tick(0.5, rep);
+    expect(g.view().golden).not.toBeNull();
+    g.isPaused = true;
+    g.actions.collectGolden();
+    expect(rec.count('goldenCollected')).toBe(0);
+    g.isPaused = false;
+    g.actions.collectGolden();
+    expect(rec.count('goldenCollected')).toBe(1);
   });
 
   it('collect with no spark is a no-op', () => {
