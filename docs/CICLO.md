@@ -18,6 +18,14 @@
 > final de la historia a **~2 h**; **un solo precio de semilla por sesión** (los vivos nunca lo suben; el límite es el
 > **sitio** de la placa); **≥ 2 compras** tras cada sesión; **Abono** dentro de la sesión.
 
+> **Cuarta decisión del dueño (partidas cortas):** *«Como es un incremental las partidas deben ser más cortas… 15
+> segundos o así y cada vez ir aumentando»* y *«ajusta los tiempos de vida… a los tiempos de partida»* → **partida 1 de
+> 0:15**, Reloj hasta **2:30** en 15 niveles pequeños, **cámara rápida ×3** (90 pasos/s, ADR-027 propuesto), una
+> criatura **ya viva** al empezar, **÷30** Esencia por Dato, anillos 2 · 15 · 400 · 12 000 · 80 000, noches en las
+> partidas 4/8/13/20/29/40, final de la historia ≈ 1,7 h. **El diseño, la investigación y la tabla del bot están en
+> [`docs/RITMO.md`](RITMO.md), que manda sobre los números de ritmo de este documento** (§2.2, §2.3, §3.3, §4.2 Reloj,
+> §5, §9, §11 se actualizaron; donde un número de aquí no coincida con `cycleBalance.ts`, vale el código y RITMO).
+
 Todos los números viven en [`src/game/cycleBalance.ts`](../src/game/cycleBalance.ts), reexportado desde `balance.ts`.
 Sustituye al ciclo continuo de la GDD (§5 Muestras/Genoma, §8 Laboratorio, §10 Extinción, Calibrar) — ver el ADR-026
 propuesto en §16. Los textos siguen [`docs/CLARIDAD.md`](CLARIDAD.md) (sin jerga; un test lo vigila).
@@ -110,11 +118,14 @@ congela (`game.speed` = 0) bajo el resumen.
 
 | Fuente | Segundos | De dónde |
 |---|---|---|
-| Duración base | **2:00** | `SESSION_BASE_SECONDS` |
-| ⏱ Más tiempo · Reloj grande · Reloj de arena · Reloj eterno | +15·3, +15·2, +30·2, +15·3 → **5:00** | ruta Reloj |
-| Cada especie **nueva** para el Bestiario (regla base) | +5 s | `SESSION_TIME_PER_SPECIES` |
-| Encargo cumplido | +5 s → +10 → +15 («Encargos con prisa») | `SESSION_TIME_PER_ENCARGO` + nodo |
-| Destello atrapado | +5 s → +10 («Destello del tiempo») | nodo |
+| Duración base | **0:15** (RITMO §3) | `SESSION_BASE_SECONDS` |
+| ⏱ Más tiempo · Reloj grande · Reloj de arena · Reloj eterno | +5·6, +10·3, +15·3, +10·3 → **2:30** | ruta Reloj |
+| Cada especie **nueva** para el Bestiario (regla base) | +3 s | `SESSION_TIME_PER_SPECIES` |
+| Encargo cumplido (desde la partida 2) | +3 s → +6 → +9 («Encargos con prisa») | `SESSION_TIME_PER_ENCARGO` + nodo |
+| Destello atrapado | +2 s → +4 («Destello del tiempo») | nodo |
+
+Los avisos (ámbar, cuenta atrás, Recta final) son **proporcionales** a la partida (RITMO §3.4): ámbar en el último ¼
+(4–30 s), cuenta atrás en el último ⅓ (3–10 s); «¡Último minuto!» solo en partidas de más de 65 s.
 
 ### 2.3 La Esencia durante la sesión
 
@@ -136,13 +147,13 @@ más grande» en el Árbol.»). La regla de separación (no sembrar encima) y la
 Guardería) se quedan. `GameView.seedPrice` trae las partes (`base`, `cheapMult`, `stepMult`, `bought`, `capacity`,
 `full`). La primera semilla de cada sesión vive seguro (`SESSION_SURE_SEEDS`); en la sesión 1, las tres primeras.
 
-**Abono** (`buyBoost`): comida para la placa — **toda la Esencia ×1,25 hasta el final de la sesión**. Cuesta **20 s de
-tu Esencia actual** (mínimo 15) y el siguiente de la misma sesión, **el doble**. Se puede comprar a partir de los 30 s de
+**Abono** (`buyBoost`): comida para la placa — **toda la Esencia ×1,25 hasta el final de la sesión**. Cuesta **8 s de
+tu Esencia actual** (mínimo 10; RITMO §4.4) y el siguiente de la misma sesión, **el doble**. Se puede comprar a partir de los 8 s de
 reloj (`BOOST_FROM_SECONDS`: comprado en el segundo 1, cuando nada produce, costaba solo el mínimo). Es pura ganancia para
 los Datos (cuentan la Esencia ganada). `GameView.boost` = `{ cost, count, mult, nextMult, affordable, wait }`.
 
-**Destello** (desde la sesión 2): llega cada 80–100 s (× Destello frecuente) y regala **30 s de tu Esencia** (36/42/48 s
-con Regalos mejores, mínimo 20) y una semilla segura (3 con Semillas mágicas). Proporcional: una sesión con un Destello
+**Destello** (desde la partida 4; RITMO §4.4): el primero a los 6–12 s, luego cada 40–45 s (× Destello frecuente), vive 8 s en la
+placa y regala **10 s de tu Esencia** (12/14/16 s con Regalos mejores, mínimo 10) y una semilla segura (3 con Semillas mágicas). Proporcional: una sesión con un Destello
 menos no es una sesión peor. La ventana estrecha hace del Destello un ritmo, no una lotería.
 
 ### 2.4 Terminar antes
@@ -175,7 +186,7 @@ solo sitio (`DATOS_NAME`).
 ### 3.3 La conversión, a la vista
 
 ```
-Datos = ⌊ Esencia ganada ÷ 250 ⌋ × noche            (+10 % por noche después de la primera)
+Datos = ⌊ Esencia ganada ÷ 30 ⌋ × noche      (RITMO §5; antes ÷250)            (+10 % por noche después de la primera)
       + especies nuevas × 5 (7, 9, 11 con Cuaderno de campo)
       + maneras de moverse nuevas × 3 (5, 7 con Premio al descubridor)
       + encargos × 2  + destellos × (Destello sabio)  + récords × 1
@@ -249,13 +260,13 @@ de la ruta comprados). Tablas generadas del código: `npx vite-node scripts/tree
 
 | # | Nodo | Anillo · 🌙 | Niveles | Precios (×factor) | Antes → después (de 0 al máximo) |
 |---|---|---|---|---|---|
-| 1 | Más tiempo | 1 · 1 | 3 | 2 · 4 · 8 (×2) | Sesión 2:00 → Sesión 2:15 → Sesión 2:30 → Sesión 2:45 |
-| 2 | Reloj grande | 2 · 1 | 2 | 15 · 30 (×2) | Sesión 2:45 → Sesión 3:00 → Sesión 3:15 |
-| 3 | Nevera | 2 · 1 | 3 | 15 · 30 · 60 (×2) | Ninguna al empezar → 1 criatura viva al empezar → 2 criaturas vivas al empezar → 3 criaturas vivas al empezar |
-| 4 | Recta final | 3 · 2 | 3 | 100 · 200 · 400 (×2) | Últimos 30 s: Esencia ×1 → Últimos 30 s: Esencia ×1,5 → Últimos 30 s: Esencia ×2 → Últimos 30 s: Esencia ×2,5 |
-| 5 | Encargos con prisa | 3 · 2 | 2 | 100 · 200 (×2) | +5 s por encargo → +10 s por encargo → +15 s por encargo |
-| 6 | Reloj de arena | 4 · 3 | 2 | 2000 · 4000 (×2) | Sesión 3:15 → Sesión 3:45 → Sesión 4:15 |
-| 7 | Reloj eterno | 5 · 4 | 3 | 6000 · 12.000 · 24.000 (×2) | Sesión 4:15 → Sesión 4:30 → Sesión 4:45 → Sesión 5:00 |
+| 1 | Más tiempo | 1 · 1 | 6 | 2 · 3 · 5 · 7 · 10 · 15 (×1,5) | Sesión 0:15 → Sesión 0:20 → Sesión 0:25 → Sesión 0:30 → Sesión 0:35 → Sesión 0:40 → Sesión 0:45 |
+| 2 | Reloj grande | 2 · 1 | 3 | 15 · 30 · 60 (×2) | Sesión 0:45 → Sesión 0:55 → Sesión 1:05 → Sesión 1:15 |
+| 3 | Nevera | 2 · 1 | 3 | 15 · 30 · 60 (×2) | 1 criatura viva al empezar → 2 criaturas vivas al empezar → 3 criaturas vivas al empezar → 4 criaturas vivas al empezar |
+| 4 | Recta final | 3 · 2 | 3 | 400 · 800 · 1600 (×2) | Al final: Esencia ×1 → Al final: Esencia ×1,5 → Al final: Esencia ×2 → Al final: Esencia ×2,5 |
+| 5 | Encargos con prisa | 3 · 2 | 2 | 400 · 800 (×2) | +3 s por encargo → +6 s por encargo → +9 s por encargo |
+| 6 | Reloj de arena | 3 · 2 | 3 | 400 · 800 · 1600 (×2) | Sesión 1:15 → Sesión 1:30 → Sesión 1:45 → Sesión 2:00 |
+| 7 | Reloj eterno | 4 · 3 | 3 | 12.000 · 24.000 · 48.000 (×2) | Sesión 2:00 → Sesión 2:10 → Sesión 2:20 → Sesión 2:30 |
 
 **Gotero** — Viven más semillas, y tienes más para sembrar.
 
@@ -263,12 +274,12 @@ de la ruta comprados). Tablas generadas del código: `npx vite-node scripts/tree
 |---|---|---|---|---|---|
 | 1 | Gotero | 1 · 1 | 3 | 2 · 4 · 8 (×2) | Viven 24 de cada 100 → Viven 32 de cada 100 → Viven 45 de cada 100 → Viven 59 de cada 100 |
 | 2 | Esencia de bolsillo | 2 · 1 | 4 | 15 · 30 · 60 · 120 (×2) | Empiezas con 20 de Esencia → Empiezas con 50 de Esencia → Empiezas con 110 de Esencia → Empiezas con 290 de Esencia → Empiezas con 820 de Esencia |
-| 3 | Semillas de regalo | 3 · 2 | 3 | 100 · 200 · 400 (×2) | 1 semilla gratis → 3 semillas gratis → 5 semillas gratis → 7 semillas gratis |
-| 4 | Semillas fuertes | 3 · 2 | 5 | 100 · 150 · 230 · 340 · 510 (×1,5) | Viven 59 de cada 100 → Viven 65 de cada 100 → Viven 71 de cada 100 → Viven 76 de cada 100 → Viven 80 de cada 100 → Viven 84 de cada 100 |
-| 5 | Semilla grande | 3 · 2 | 1 | 100 (×2) | No → Semilla grande (más del doble) |
-| 6 | Sembrador automático | 3 · 2 | 6 | 100 · 150 · 230 · 340 · 510 · 760 (×1,5) | Nunca → Cada 20 s → Cada 16 s → Cada 12 s → Cada 10 s → Cada 8,2 s → Cada 6,6 s |
-| 7 | Semillas baratas | 4 · 3 | 3 | 2000 · 4000 · 8000 (×2) | Precio normal → Semillas −15 % → Semillas −28 % → Semillas −39 % |
-| 8 | Gotero maestro | 5 · 4 | 1 | 6000 (×2) | Viven 84 de cada 100 → Viven 100 de cada 100 |
+| 3 | Semillas de regalo | 3 · 2 | 3 | 400 · 800 · 1600 (×2) | 1 semilla gratis → 3 semillas gratis → 5 semillas gratis → 7 semillas gratis |
+| 4 | Semillas fuertes | 3 · 2 | 5 | 400 · 600 · 900 · 1400 · 2000 (×1,5) | Viven 59 de cada 100 → Viven 65 de cada 100 → Viven 71 de cada 100 → Viven 76 de cada 100 → Viven 80 de cada 100 → Viven 84 de cada 100 |
+| 5 | Semilla grande | 3 · 2 | 1 | 400 (×2) | No → Semilla grande (más del doble) |
+| 6 | Sembrador automático | 3 · 2 | 6 | 400 · 600 · 900 · 1400 · 2000 · 3000 (×1,5) | Nunca → Cada 8 s → Cada 6,4 s → Cada 5,1 s → Cada 4,1 s → Cada 3,3 s → Cada 2,6 s |
+| 7 | Semillas baratas | 4 · 3 | 3 | 12.000 · 24.000 · 48.000 (×2) | Precio normal → Semillas −15 % → Semillas −28 % → Semillas −39 % |
+| 8 | Gotero maestro | 5 · 4 | 1 | 80.000 (×2) | Viven 84 de cada 100 → Viven 100 de cada 100 |
 
 **Placa** — Una placa más grande, con sitio para todas.
 
@@ -276,11 +287,11 @@ de la ruta comprados). Tablas generadas del código: `npx vite-node scripts/tree
 |---|---|---|---|---|---|
 | 1 | Placa más grande | 1 · 1 | 3 | 2 · 6 · 18 (×3) | Sitio para 5 criaturas → Sitio para 7 criaturas → Sitio para 9 criaturas → Sitio para 12 criaturas |
 | 2 | Más sitio | 2 · 1 | 3 | 15 · 30 · 60 (×2) | Sitio para 12 criaturas → Sitio para 13 criaturas → Sitio para 14 criaturas → Sitio para 15 criaturas |
-| 3 | Sin apretujones | 3 · 2 | 2 | 100 · 200 (×2) | Sitio para 15 criaturas → Sitio para 16 criaturas → Sitio para 17 criaturas |
-| 4 | Guardería | 3 · 2 | 1 | 100 (×2) | 3 creciendo a la vez → 5 creciendo a la vez |
-| 5 | Incubadora | 3 · 2 | 2 | 100 · 300 (×3) | Nacen a su ritmo → Nacen ×2 más rápido → Nacen ×3 más rápido |
-| 6 | Placa gigante | 4 · 3 | 1 | 2000 (×2) | Sitio para 17 criaturas → Sitio para 20 criaturas |
-| 7 | Placa variada | 4 · 3 | 2 | 2000 · 4000 (×2) | +0 % por especie viva → +3 % por especie viva → +6 % por especie viva |
+| 3 | Sin apretujones | 3 · 2 | 2 | 400 · 800 (×2) | Sitio para 15 criaturas → Sitio para 16 criaturas → Sitio para 17 criaturas |
+| 4 | Guardería | 3 · 2 | 1 | 400 (×2) | 3 creciendo a la vez → 5 creciendo a la vez |
+| 5 | Incubadora | 3 · 2 | 2 | 400 · 1200 (×3) | Nacen en 4,4 s → Nacen en 3,8 s → Nacen en 3,3 s |
+| 6 | Placa gigante | 4 · 3 | 1 | 12.000 (×2) | Sitio para 17 criaturas → Sitio para 20 criaturas |
+| 7 | Placa variada | 4 · 3 | 2 | 12.000 · 24.000 (×2) | +0 % por especie viva → +3 % por especie viva → +6 % por especie viva |
 
 **Vida** — Cada criatura da más Esencia por segundo.
 
@@ -288,13 +299,13 @@ de la ruta comprados). Tablas generadas del código: `npx vite-node scripts/tree
 |---|---|---|---|---|---|
 | 1 | Cultivo | 1 · 1 | 5 | 2 · 3 · 5 · 7 · 10 (×1,5) | Esencia ×1 → Esencia ×1,15 → Esencia ×1,32 → Esencia ×1,52 → Esencia ×1,75 → Esencia ×2,01 |
 | 2 | Comida extra | 2 · 1 | 3 | 15 · 30 · 60 (×2) | Esencia +0 % → Esencia +8 % → Esencia +16 % → Esencia +24 % |
-| 3 | Superalimento | 3 · 2 | 3 | 100 · 200 · 400 (×2) | Esencia ×1 → Esencia ×1,25 → Esencia ×1,56 → Esencia ×1,95 |
-| 4 | Nadadoras | 3 · 2 | 3 | 100 · 200 · 400 (×2) | Nadadoras +0 % → Nadadoras +15 % → Nadadoras +30 % → Nadadoras +45 % |
-| 5 | Tranquilas | 3 · 2 | 3 | 100 · 200 · 400 (×2) | Quietas +0 % → Quietas +15 % → Quietas +30 % → Quietas +45 % |
-| 6 | Familias | 4 · 3 | 3 | 2000 · 4000 · 8000 (×2) | Colonias +0 % → Colonias +15 % → Colonias +30 % → Colonias +45 % |
-| 7 | Amistad | 4 · 3 | 1 | 2000 (×2) | No → Especies amigas: Esencia ×1,5 |
-| 8 | Vida abundante | 4 · 3 | 1 | 2000 (×2) | Toda la Esencia ×1 → Toda la Esencia ×1,5 |
-| 9 | Vida eterna | 5 · 4 | ∞ | 10.000 · 11.000 · 12.000 · 13.000 · 15.000 · … (×1,1) | Esencia ×1 → Esencia ×1,1 → Esencia ×1,21 → Esencia ×1,33 → Esencia ×1,46 → Esencia ×1,61 → Esencia ×1,77 → … |
+| 3 | Superalimento | 3 · 2 | 3 | 400 · 800 · 1600 (×2) | Esencia ×1 → Esencia ×1,25 → Esencia ×1,56 → Esencia ×1,95 |
+| 4 | Nadadoras | 3 · 2 | 3 | 400 · 800 · 1600 (×2) | Nadadoras +0 % → Nadadoras +15 % → Nadadoras +30 % → Nadadoras +45 % |
+| 5 | Tranquilas | 3 · 2 | 3 | 400 · 800 · 1600 (×2) | Quietas +0 % → Quietas +15 % → Quietas +30 % → Quietas +45 % |
+| 6 | Familias | 4 · 3 | 3 | 12.000 · 24.000 · 48.000 (×2) | Colonias +0 % → Colonias +15 % → Colonias +30 % → Colonias +45 % |
+| 7 | Amistad | 4 · 3 | 1 | 12.000 (×2) | No → Especies amigas: Esencia ×1,5 |
+| 8 | Vida abundante | 4 · 3 | 1 | 12.000 (×2) | Toda la Esencia ×1 → Toda la Esencia ×1,5 |
+| 9 | Vida eterna | 5 · 4 | ∞ | 50.000 · 55.000 · 61.000 · 67.000 · 73.000 · … (×1,1) | Esencia ×1 → Esencia ×1,1 → Esencia ×1,21 → Esencia ×1,33 → Esencia ×1,46 → Esencia ×1,61 → Esencia ×1,77 → … |
 
 **Descubrir** — Más Datos por cada cosa nueva que encuentras.
 
@@ -302,13 +313,13 @@ de la ruta comprados). Tablas generadas del código: `npx vite-node scripts/tree
 |---|---|---|---|---|---|
 | 1 | Cuaderno de campo | 1 · 1 | 3 | 2 · 4 · 8 (×2) | 5 Datos por especie nueva → 7 Datos por especie nueva → 9 Datos por especie nueva → 11 Datos por especie nueva |
 | 2 | Copiadora | 2 · 1 | 1 | 15 (×2) | No → Copias que siempre viven |
-| 3 | Coleccionista | 3 · 2 | 5 | 100 · 150 · 230 · 340 · 510 (×1,5) | Bestiario: Esencia +0 % → Bestiario: Esencia +10 % → Bestiario: Esencia +20 % → Bestiario: Esencia +30 % → Bestiario: Esencia +40 % → Bestiario: Esencia +50 % |
-| 4 | Archivo | 3 · 2 | 2 | 100 · 200 (×2) | Nunca → Copia gratis cada 45 s → Copia gratis cada 20 s |
-| 5 | Microscopio | 3 · 2 | 2 | 100 · 200 (×2) | Ficha simple → Dónde vive y cómo se mueve → Todos los detalles |
-| 6 | Premio al descubridor | 4 · 3 | 2 | 2000 · 4000 (×2) | 3 Datos por manera nueva → 5 Datos por manera nueva → 7 Datos por manera nueva |
-| 7 | Semillas curiosas | 4 · 3 | 1 | 2000 (×2) | No → Buscan especies que no tienes |
-| 8 | Copias sorpresa | 4 · 3 | 1 | 2000 (×2) | No → Copias con sorpresa |
-| 9 | Gran enciclopedia | 5 · 4 | 3 | 6000 · 12.000 · 24.000 (×2) | Datos +0 % → Datos +25 % → Datos +50 % → Datos +75 % |
+| 3 | Coleccionista | 3 · 2 | 5 | 400 · 600 · 900 · 1400 · 2000 (×1,5) | Bestiario: Esencia +0 % → Bestiario: Esencia +10 % → Bestiario: Esencia +20 % → Bestiario: Esencia +30 % → Bestiario: Esencia +40 % → Bestiario: Esencia +50 % |
+| 4 | Archivo | 3 · 2 | 2 | 400 · 800 (×2) | Nunca → Copia gratis cada 15 s → Copia gratis cada 8 s |
+| 5 | Microscopio | 3 · 2 | 2 | 400 · 800 (×2) | Ficha simple → Dónde vive y cómo se mueve → Todos los detalles |
+| 6 | Premio al descubridor | 4 · 3 | 2 | 12.000 · 24.000 (×2) | 3 Datos por manera nueva → 5 Datos por manera nueva → 7 Datos por manera nueva |
+| 7 | Semillas curiosas | 4 · 3 | 1 | 12.000 (×2) | No → Buscan especies que no tienes |
+| 8 | Copias sorpresa | 4 · 3 | 1 | 12.000 (×2) | No → Copias con sorpresa |
+| 9 | Gran enciclopedia | 5 · 4 | 3 | 80.000 · 160.000 · 320.000 (×2) | Datos +0 % → Datos +25 % → Datos +50 % → Datos +75 % |
 
 **Mundos** — Reglas nuevas en las que nacen otras especies.
 
@@ -316,22 +327,22 @@ de la ruta comprados). Tablas generadas del código: `npx vite-node scripts/tree
 |---|---|---|---|---|---|
 | 1 | Mundo 2 · Frío | 1 · 1 | 1 | 2 (×2) | 2 especies para encontrar → 5 especies para encontrar |
 | 2 | Mundo 3 · Remolinos | 2 · 1 | 1 | 15 (×2) | 5 especies para encontrar → 7 especies para encontrar |
-| 3 | Mundo 4 · Escudos | 3 · 2 | 1 | 100 (×2) | 7 especies para encontrar → 11 especies para encontrar |
-| 4 | Mundo 5 · Discos | 3 · 2 | 1 | 100 (×2) | 11 especies para encontrar → 14 especies para encontrar |
-| 5 | Mundo 6 · Patas | 4 · 3 | 1 | 2000 (×2) | 14 especies para encontrar → 16 especies para encontrar |
-| 6 | Mundo 7 · Gigantes | 5 · 4 | 1 | 6000 (×2) | 16 especies para encontrar → 17 especies para encontrar |
+| 3 | Mundo 4 · Escudos | 3 · 2 | 1 | 400 (×2) | 7 especies para encontrar → 11 especies para encontrar |
+| 4 | Mundo 5 · Discos | 3 · 2 | 1 | 400 (×2) | 11 especies para encontrar → 14 especies para encontrar |
+| 5 | Mundo 6 · Patas | 4 · 3 | 1 | 12.000 (×2) | 14 especies para encontrar → 16 especies para encontrar |
+| 6 | Mundo 7 · Gigantes | 5 · 4 | 1 | 80.000 (×2) | 16 especies para encontrar → 17 especies para encontrar |
 
 **Destello** — La chispa dorada viene más y regala más.
 
 | # | Nodo | Anillo · 🌙 | Niveles | Precios (×factor) | Antes → después (de 0 al máximo) |
 |---|---|---|---|---|---|
-| 1 | Destello frecuente | 1 · 1 | 3 | 2 · 4 · 8 (×2) | Llega cada 80–100 s → Llega cada 68–85 s → Llega cada 58–72 s → Llega cada 49–61 s |
-| 2 | Destello lento | 2 · 1 | 2 | 15 · 30 (×2) | Se queda 12 s → Se queda 16 s → Se queda 20 s |
-| 3 | Destello del tiempo | 2 · 1 | 2 | 15 · 30 (×2) | +0 s por chispa → +5 s por chispa → +10 s por chispa |
-| 4 | Primer destello | 3 · 2 | 1 | 100 (×2) | La primera a los 25–50 s → La primera a los 8–15 s |
-| 5 | Regalos mejores | 3 · 2 | 3 | 100 · 200 · 400 (×2) | Regalo: 30 s de Esencia → Regalo: 36 s de Esencia → Regalo: 42 s de Esencia → Regalo: 48 s de Esencia |
-| 6 | Destello sabio | 3 · 2 | 2 | 100 · 200 (×2) | +0 Datos por chispa → +1 Datos por chispa → +2 Datos por chispa |
-| 7 | Semillas mágicas | 4 · 3 | 1 | 2000 (×2) | 1 semilla segura por chispa → 3 semillas seguras por chispa |
+| 1 | Destello frecuente | 1 · 1 | 3 | 2 · 4 · 8 (×2) | Llega cada 40–45 s → Llega cada 34–38 s → Llega cada 29–33 s → Llega cada 25–28 s |
+| 2 | Destello lento | 2 · 1 | 2 | 15 · 30 (×2) | Se queda 8 s → Se queda 11 s → Se queda 14 s |
+| 3 | Destello del tiempo | 2 · 1 | 2 | 15 · 30 (×2) | +0 s por chispa → +2 s por chispa → +4 s por chispa |
+| 4 | Primer destello | 3 · 2 | 1 | 400 (×2) | La primera a los 6–12 s → La primera a los 2–4 s |
+| 5 | Regalos mejores | 3 · 2 | 3 | 400 · 800 · 1600 (×2) | Regalo: 10 s de Esencia → Regalo: 12 s de Esencia → Regalo: 14 s de Esencia → Regalo: 16 s de Esencia |
+| 6 | Destello sabio | 3 · 2 | 2 | 400 · 800 (×2) | +0 Datos por chispa → +1 Dato por chispa → +2 Datos por chispa |
+| 7 | Semillas mágicas | 4 · 3 | 1 | 12.000 (×2) | 1 semilla segura por chispa → 3 semillas seguras por chispa |
 
 Diferencias con la página del plan: **Placa más grande tiene 3 niveles** (sitio para 5 → 7 → 9 → 12; Placa gigante, 15);
 **Más sitio** y **Sin apretujones** dan sitio (+1 criatura por nivel) en lugar de abaratar; **Guardería** deja crecer más
@@ -348,46 +359,46 @@ semillas seguras; las que aún no tienes, 3× más probables; ×2 más con Semil
 revelar **sus** especies del catálogo, por la firma (sin distancia de parámetros: Triscutium vive en Discos a 3,1
 unidades de su punto del catálogo).
 
+**Una especie nueva por mundo, que se vea distinta** (Corrección v1.2, `docs/ESPECIES.md`): cada mundo trae UNA forma
+que un niño distingue de un vistazo de todas las de los mundos anteriores (un agujero, girar, un escudo hueco, patas, una
+escalera, una oruga gigante), con su color propio desde la primera vez. Las formas del catálogo que viven en un mundo
+pero se parecen a una especie ya listada son sus **variantes** (`variants`): no se siembran y nunca son «especie nueva».
+
 Comprobación con la simulación de referencia en CPU (`npx vite-node scripts/world-check.ts`): la plantilla exacta de
-cada especie, en el preajuste del mundo, 700 pasos en un toro de 128²; «vive» si su masa queda entre 0,4× y 2,5× y no
-inunda la placa (< 20 %).
+cada especie, en el preajuste del mundo, en un toro de 128²; «vive» si su masa queda entre 0,4× y 2,5× y no inunda la
+placa (< 20 %), y `--features` comprueba además que **guarda la forma** por la que el juego la revela (firma estática a
+menos de 1,2 de su referencia) y mide cómo se ve.
 
-| Mundo | Nodo (anillo) | Preajuste μ · σ · R · anillos | Especies que viven ahí (Bestiario) | Maneras de moverse (medidas) | Paga por criatura* | Esencia del mundo |
-|---|---|---|---|---|---|---|
-| 1 · Clásico | gratis | 0,15 · 0,015 · 13 · [1] | Orbium (unicaudatus/bicaudatus), Synorbium ignis — **2** | nada | 2,65 | ×1 |
-| 2 · Frío | Mundo 2 (1) | 0,1207 · 0,0105 · 13 · [1] | Orbium ignis, Synorbium solidus, Orbium phantasma — **3** | nada | 2,63 | ×1,1 |
-| 3 · Remolinos | Mundo 3 (2) | 0,16 · 0,0222 · 13 · [1] | Gyrorbium gyrans, Parorbium dividuus — **2** | gira, nada | 4,68 | ×1,2 |
-| 4 · Escudos | Mundo 4 (3) | 0,2865 · 0,0465 · 13 · [1] | Scutium valvatus y solidus, Gyropteron arcus, Paraptera — **4** | nada | 4,32 | ×1,3 |
-| 5 · Discos | Mundo 5 (3) | 0,356 · 0,063 · 13 · [1] | Discutium/Pyroscutium, Circium, Triscutium — **3** | nada, quieta | 4,85 | ×1,4 |
-| 6 · Patas | Mundo 6 (4) | 0,23 · 0,0355 · 13 · [1] | Helicium cavus pedes, Synptera — **2** | gira, nada | 6,25 | ×1,5 |
-| 7 · Gigantes | Mundo 7 (5) | 0,25 · 0,033 · 18 · [½, 1, ⅔] | Hydrogeminium natans — **1** | nada | 9,60 | ×1,6 × **2** (cabe la mitad) |
+| Mundo | Nodo (anillo) | Preajuste μ · σ · R · anillos | Especie (Bestiario) | Variantes | Maneras de moverse (medidas) | Paga por criatura* | Esencia del mundo |
+|---|---|---|---|---|---|---|---|
+| 1 · Clásico | gratis | 0,15 · 0,015 · 13 · [1] | Nadadora (Orbium unicaudatus) | O2b, O4i | nada | 1,76 | ×1 |
+| 2 · Frío | Mundo 2 (1) | 0,38 · 0,07 · 13 · [1] | Anillo (Circium ventilans) | — | quieta, late | 1,84 | ×1,1 |
+| 3 · Remolinos | Mundo 3 (2) | 0,16 · 0,0222 · 13 · [1] | Remolino (Gyrorbium gyrans) | O4d | gira | 3,34 | ×1,2 |
+| 4 · Escudos | Mundo 4 (3) | 0,356 · 0,063 · 13 · [1] | Escudo (Discutium solidus) | PS3am | nada | 3,37 | ×1,3 |
+| 5 · Hélices | Mundo 5 (3) | 0,23 · 0,0355 · 13 · [1] | Bailarina (Helicium cavus pedes) | P3sp | gira | 6,90 | ×1,4 |
+| 6 · Patas | Mundo 6 (4) | 0,29 · 0,0465 · 13 · [1] | Escalera (Paraptera cavus pedes) | S1s | nada | 7,68 | ×1,5 |
+| 7 · Gigantes | Mundo 7 (5) | 0,25 · 0,033 · 18 · [½, 1, ⅔] | Oruga (Hydrogeminium natans) | — | nada | 9,60 | ×1,6 × **2** (cabe la mitad) |
 
-\* Media por especie de complejidad medida × manera de moverse × rareza (`world-check.ts --yield`). **Esencia del
-mundo** (`worldEssenceMult`): cada mundo después del primero, ×(1 + 0,1·(n − 1)) (`WORLD_ESSENCE_STEP`) — abrir un mundo
-tiene que ser pura ganancia (§11: el primer turno en un mundo nuevo espera además a que se registren sus especies). Los
-Gigantes ocupan el doble (R 18): cabe la mitad (`roomMult` ½) y cada uno vale ×2.
+\* Complejidad medida × manera de moverse × rareza (`world-check.ts --yield`). **Esencia del mundo**
+(`worldEssenceMult`): cada mundo después del primero, ×(1 + 0,1·(n − 1)) (`WORLD_ESSENCE_STEP`). Los Gigantes ocupan
+el doble (R 18): cabe la mitad (`roomMult` ½) y cada uno vale ×2.
 
-**Maneras de moverse** (`npx vite-node scripts/world-check.ts --behaviors`, el detector del juego sobre cada especie en
-el preajuste de su mundo, 3 colocaciones × 1 500 pasos; `WORLD_BEHAVIORS`): **nada** en todos; **gira** en Remolinos y
-Patas; **quieta** en Discos. **Ninguna especie de ningún mundo late, se divide o forma colonia** (Synorbium solidus se
-parte de vez en cuando en Frío, pero el detector la sigue leyendo como nadadora). Por eso (CLARIDAD F-09) los Encargos
-`s_heart` y `s_split` no se ofrecen en el ciclo de sesiones, `colony` pide «Ten tres iguales a la vez», el final secreto
-pide solo las maneras que existen (`REACHABLE_BEHAVIORS`) y los logros de latir/dividirse/colonia no se muestran. Las
-siete especies de Albor (final secreto y Encargo `seven`) son una por mundo: Orbium unicaudatus, Orbium unicaudatus
-ignis, Gyrorbium gyrans, Scutium solidus, Circium ventilans, Helicium cavus pedes e Hydrogeminium natans (`ALBOR_SPECIES_CODES`).
+**Maneras de moverse** (`npx vite-node scripts/world-check.ts --behaviors`, 3 colocaciones × 1 500 pasos;
+`WORLD_BEHAVIORS`): **nada** en Clásico, Escudos, Patas y Gigantes; **gira** en Remolinos y Hélices; en Frío el Anillo se
+queda **quieto** y en una colocación de tres **late**. Ninguna especie se divide ni forma colonia (los Encargos
+`s_split` y los logros de dividirse/colonia siguen fuera).
 
-**Lo que la medida cambió respecto a la página:**
+**Lo que la medida cambió** (detalle en `docs/ESPECIES.md` §2):
 
-- **Remolinos**: en el centro (μ 0,165) Gyrorbium gyrans muere; ambas viven en una ventana pequeña alrededor de
-  (0,16 · 0,0222). Se quedan las dos.
-- **Patas**: Parorbium adhaerens inunda la placa en toda la zona; Gyropteron cavus solo comparte puntos al filo
-  (0,232 · 0,0365, no robusto). Se quedan Helicium cavus pedes y Synptera (las de patas).
-- **Hélices → «Discos»**: Helicium solidus y Pentahelicium inundan donde viven los discos (y los discos mueren donde vive
-  Helicium). Se quedan Discutium/Pyroscutium (una sola especie para el Bestiario), Circium y Triscutium.
-- **Gigantes**: un mundo tiene un solo núcleo; Kronium necesita anillos [1, ⅓], donde Hydrogeminium inunda, y muere en
-  los de Hydrogeminium. Se queda **Hydrogeminium natans** (anillos triples, R 18).
-- Total: **17 especies** de Bestiario en los 7 mundos (O2u/O2b y S2s/PS3am son una sola especie para el detector,
-  `CATALOG_GROUPS`). Las caídas siguen en el catálogo para un mundo futuro.
+- El viejo **Frío** (Orbium ignis, Synorbium solidus, phantasma) y la **Pareja** del Clásico (Synorbium ignis) eran
+  Orbium: ahora son variantes de la Nadadora. Frío pasa al punto del catálogo de **Circium** (el anillo).
+- **Escudos**: Scutium solidus/valvatus y Gyropteron arcus eran tres copas iguales a ese preajuste, y Paraptera cambiaba
+  de forma. Ahora Escudos es el **Discutium** (antes en «Discos»); las copas son variantes pequeñas del Escudo.
+- **Discos**: Circium moría ahí y Triscutium cambiaba de forma (se registraba como desconocida). El nodo 5 pasa a
+  **Hélices** (Helicium cavus pedes, su sitio original); Synptera es su variante.
+- **Patas** pasa a **Paraptera cavus pedes** (la Escalera), en 0,29 · 0,0465, donde guarda su forma.
+- Total: **7 especies** de Bestiario, una por mundo (antes 17, la mitad repeticiones). Las siete de Albor
+  (`ALBOR_SPECIES_CODES`) pasan a ser exactamente las siete.
 
 ### 4.4 Qué se ve: reglas de revelado
 
@@ -451,12 +462,14 @@ Acto III = noche 6+. La noche avanza con el **nodo central**, que **no cuesta Da
 
 | Pasar a | Sesiones terminadas | Especies en el Bestiario | o bien (nunca atascado) |
 |---|---|---|---|
-| Noche 2 (abre el anillo 3) | 3 | 2 | 7 sesiones |
-| Noche 3 (anillo 4) | 6 | 4 | 10 |
-| Noche 4 (anillo 5) | 10 | 7 | 14 |
-| Noche 5 | 14 | 10 | 18 |
-| Noche 6 (Acto III) | 19 | 12 | 23 |
-| Noche 7 (la pregunta final) | 24 | 14 | 28 |
+| Noche 2 (abre el anillo 3) | 4 | 2 | 8 sesiones |
+| Noche 3 (anillo 4) | 8 | 4 | 12 |
+| Noche 4 (anillo 5) | 13 | 7 | 17 |
+| Noche 5 | 20 | 10 | 24 |
+| Noche 6 (Acto III) | 29 | 12 | 33 |
+| Noche 7 (la pregunta final) | 40 | 14 | 44 |
+
+(RITMO §5: con partidas de 0:15 a 2:30 la noche 7 llega en la partida 40 ≈ **1,7 h**.)
 
 Con sesiones de 2:00 a 5:00 y ~45 s de resumen y Árbol, la noche 7 llega hacia los **~2 h** (§11). Cada noche da **+10 %
 de Datos** (fila visible en la ecuación) y el ritual de la lámpara (escena `a1_night`: «¡La noche puede avanzar! Mira el
@@ -512,7 +525,8 @@ No hay: la sesión solo corre mientras se juega. `OFFLINE_DATOS = 0` queda prepa
 ## 9. Precios claros
 
 1. **Una regla, siempre la misma, sin azar:** `precio = inicio del anillo × factor^nivel`, redondeado amable (enteros
-   por debajo de 100; dos cifras por encima). Inicio por anillo: **2 · 15 · 100 · 2 000 · 6 000** (página: 3 · 10 · 100 ·
+   por debajo de 100; dos cifras por encima). Inicio por anillo: **2 · 15 · 400 · 12 000 · 80 000** (RITMO §5; Vida
+   eterna 50 000; Más tiempo ×1,5). Historia: **2 · 15 · 100 · 2 000 · 6 000** (página: 3 · 10 · 100 ·
    2 000 · 20 000; el bot pidió anillo 1 más barato para 3–5 compras tras las primeras sesiones, anillo 2 algo más caro
    para que el Mundo 3 no llegara a la vez que todo lo demás, y anillo 5 al alcance de las últimas noches). Factor
    **×2**; **×1,5** en los nodos de 5 o más niveles; **×3** en Placa más grande e Incubadora; **Vida eterna** tiene su
@@ -541,6 +555,10 @@ partículas del color de la ruta, «2/3» flotando, el contador rebota, la líne
 Accesible: cada nodo es un botón con nombre y nivel; teclado (Tab/Enter, flechas, +/−, Esc); 48 px; claro/oscuro; es/en.
 
 ## 11. Ritmo: bot de sesiones
+
+> **Actualizado:** el ritmo actual (partidas de 0:15 → 2:30, cámara rápida) y su tabla del bot están en
+> [RITMO §6](RITMO.md#6-bot-la-tabla-partida-a-partida). Las tablas de abajo son el ritmo anterior (sesiones de 2:00 →
+> 5:00) y quedan como historia.
 
 `npx vite-node scripts/session-bot.ts [sesiones=40] [corridas=3] [--verbose] [--policy=planner|greedy|kid] [--trace=N] [--runs]`.
 Juega el **juego integrado** (`createGame({ cycle: 'sessions' })`): reloj, cartera, precio y sitio de las semillas,

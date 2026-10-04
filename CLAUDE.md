@@ -84,6 +84,7 @@ Headless browsers: use `playwright-core` with `executablePath` found under `/opt
 - Uniform soup yields 0 Essence; the detector never pays for a creature that is not "stable".
 - Detector/bot tests at 64x64 for R = 13 species and **128x128 when R = 18 species are involved** (ADR-011).
 - Frame floor: at least 30 fps in the mobile-emulated Playwright run (60 is the target); no `readPixels` per frame.
+- The 30 fps floor is measured with the session time-lapse on (`SESSION_SIM_PACE`, ADR-027).
 - Bundle at most 2 MB compressed (target 600 KB); no new dependency without an ADR.
 - Every bug found by QA has a regression test; every balance change has a bot report before and after.
 - No API keys or secrets in the repo or in CI. `ci.yml` keeps `permissions: contents: read`.

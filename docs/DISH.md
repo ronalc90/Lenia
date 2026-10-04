@@ -340,6 +340,63 @@ Look (art direction, docs/ARTE.md §8 and §12): done on the sim side.
 - `src/ui/art/devSections.ts` compares the art palette with `MATTER_STOPS` as "today": point it at
   `MATTER_STOPS_V1`.
 
+## 8b. Phase 2b: the round dish is live
+
+What `main.ts` does now (all of §8):
+- **Grids:** `QUALITY_DISH` square grids (low 168² / Ø ≤ 160, medium and high 232² / Ø ≤ 224). The dish starts at
+  the size the tree bought (`dishDiameterFor(effects.dishLevel, maxDiameter)`: Ø96 → «Placa más grande» → «Placa
+  gigante»); when a node is bought the `DishAnimator` eases the rim and the camera out with the growth glow once the
+  tree and the session cards are closed, before the next first tap. The tree sheet of the dish nodes shows the
+  current dish and the next size as a dashed ring.
+- **Every detector report:** `RunawayWatch.update(report, snap, params, dish)` → erase discs, `noteDissolved()` the
+  single announcement; then the deflector on the bodies moved on by the report's lag, `steerable` = not exploded and
+  not a colony; turns → `sim.applyTurns` + `detector.noteTurn`. `detector.setDish` measures fill over the dish's
+  blocks.
+- **Game:** `game.setDish(dish)`: distances without wrap, taps clamped inside (`SEED_RIM_MARGIN`), free spots inside
+  with `AUTOSEED_RIM_MARGIN`, the Spark spawns and bounces inside (`GOLDEN_RIM_MARGIN`); `view.dish`.
+- **Secrets:** no torus logic left (no wrapped strokes or copies; "infinity" secrets rewritten for a round dish).
+- **Look:** the art render style whenever the equipped dish theme is the store default (light theme: the pale
+  bench); species tints from `view.creatures[].hue`, converted from the card's HSL accent to an OKLCH hue
+  (`accentHueToOklch`), so the dish shows the card's colour family (test: body hue within 30° for all 12 families;
+  e2e: `session-play.mjs` samples the dish under every registered creature). The hue is looked up every frame, so
+  a species registered while the dish is paused under its own Momento card is tinted at once (the owner's "Pareja
+  verde" that stayed blue). The tint distance wraps on the torus. Bestiary, summary and start-card portraits use
+  the same tinted row (`renderPattern(p, size, fill, hue)`).
+- **Starter:** the Nevera's first plant of a run lands within `STARTER_SPAWN_R`·R of the centre (§8d): it is
+  incubated `PREINCUBATE_STEPS` under the start card (ADR-027) and must not meet the glass before the deflector
+  has seen it twice.
+- **Camera:** a tall phone panel puts 18 % of the spare height above the dish and the rest below it, where the
+  tools, the seed meter and VELA sit (`Camera.DISH_TOP_SHARE`), so the dish hugs the HUD.
+
+### 8c. Dish validation (runaway-bot `RUNAWAY_DISH`, CPU reference, dish + deflector + watch)
+
+The CPU FFT is periodic: a dish needs a gap > R to the grid edge, so the bot runs Ø96 in 168², Ø160 in 176² and
+Ø224 in 240² (the GPU masks outside the disc, no gap needed).
+
+| scenario | size | runs | control mazes | watched mazes | unjustified flags |
+|---|---|---|---|---|---|
+| normal | Ø96 / Ø160 / Ø224 | 10 / 10 / 10 | 1 / 2 / 3 | **0 / 0 / 0** | 0 |
+| converge | Ø96 / Ø160 / Ø224 | 10 / 10 / 10 | 8 / 1 / 0 | **0 / 0 / 0** | 0 |
+| cluster6w | Ø96 / Ø160 / Ø224 | 10 / 10 / 10 | 0 / 4 / 4 | **0 / 0 / 0** | 0 |
+| budding (σ .021) | Ø96 / Ø160 | 4 / 4 | 2 / 2 | **1** / 0 | 0 |
+
+No stable creature was ever erased. The one escape is the budding calibration in the smallest dish (σ .021 is no
+live World; Gyro is μ .16 σ .0222): the dish fills in budding spores that each stay below the growth trigger. The
+live game also has the lysis backstop (`app/lysis.ts`), which the bot does not model.
+
+### 8d. Survival in the small dish (CPU, deflection on, mean alive share over 3000 steps)
+
+| dish | 1 Orbium | 2 | 3 | 5 |
+|---|---|---|---|---|
+| torus 192×240 | | | 0.45 | 0.35 |
+| Ø96 | 0.75 | 0.51 | 0.26 | 0.04 |
+| Ø128 | | | 0.51 | |
+| Ø160 | | | 0.45 | 0.31 |
+
+A single Orbium in Ø96 spawned within 22 cells of the centre: 8/10 lived 2000 steps (the two others met the
+glass before the deflector's second look); within 8 cells: 10/10. Ø96 is harsh with more than two swimmers (collisions every few hundred steps); its capacity of 5 is generous. For
+the session bot: model Ø96 as crowding at 2 with a doubled collision hazard.
+
 ## 9. ADR-025 draft (for DECISIONS.md; supersedes ADR-004)
 
 **ADR-025: Round walled petri dish that grows; glass deflection instead of wrap**

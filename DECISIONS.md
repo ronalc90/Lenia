@@ -415,3 +415,22 @@ ADR that supersedes the old one.
 - **Consequences:** GDD §14 gets "(Corrección v1.3)" for stroke and number type. CREDITS.md lists Fraunces. The
   integrators swap the art in following ARTE.md §12.
 
+
+## ADR-027: Time-lapse in the session runs and incubation under the start card
+
+- **Status:** Accepted (2026-10-04). Source: the owner ("partidas de ~15 s que crecen, súper fluido"); design in
+  [`docs/RITMO.md`](docs/RITMO.md) §4.
+- **Context:** a seed needs 400 steps to turn stable (13 s at 30 steps/s), so a 15 s run would end before its first
+  creature paid. CLAUDE.md forbids paying for anything that is not stable and "improving" the Lenia rule without an ADR.
+- **Decision:** during a run the dish advances **`SESSION_SIM_PACE` = 3** times more steps per real second (90
+  steps/s; with the Incubadora at most `SIM_PACE_MAX` = 4, 120 steps/s). The update rule, `dt`, kernel, growth, dish
+  topology, the RGBA16F state, the detector (400 steps to "stable", 800 for a new species) and the "only stable pays"
+  gate **do not change**: there are only more steps per second, like a microscope time-lapse. Every run starts with
+  the Nevera's pure-template creature(s) **incubated** for `PREINCUBATE_STEPS` = 420 real simulation steps under the
+  start card (at most 40 steps a frame, the detector reading every 10th step as always, `game.tick(0, report)` so
+  nothing is paid); production starts with the clock. All numbers live in `src/game/cycleBalance.ts`.
+- **Consequences:** (1) the simulation does ~3× more work per second: the 30 fps floor of the mobile-emulated
+  Playwright run is measured **with the time-lapse on** (if a phone cannot hold it, lower the grid quality on mobile,
+  not the time-lapse); one snapshot every 10 steps and no `readPixels` per frame still hold (120 steps/s at 30 fps is
+  4 steps a frame). (2) Creatures move and collide 3× more per real second; the session bot models it per step.
+  (3) Hard gates gain one line: the fps floor is measured at `SESSION_SIM_PACE`.
