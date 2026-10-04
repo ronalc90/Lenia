@@ -4,18 +4,24 @@
  */
 import { bus } from './core/bus';
 import { Camera } from './core/camera';
-import type { DetectorReport, LeniaParams, Quality } from './core/types';
+import type { DetectorReport, GameView, LeniaParams, Quality, Text } from './core/types';
+import { matterLUT } from './core/palette';
 import { createSimulation } from './sim/webgl';
 import { QUALITY_GRID } from './sim/perf';
 import { createDetector, DISH_OVERGROWN_FILL } from './detect/detector';
 import { createGame } from './game/game';
-import { TEXT } from './game/content';
 import { clearSave, loadSave, offlineSeconds, writeSave } from './game/save';
 // Art tokens (--bl-*) before every module stylesheet (docs/ARTE.md §12).
 import './ui/art/art.css';
 import { createUI } from './ui/ui';
 import { createAudio } from './audio/audio';
-import { detectPlatform, endingAchievementId, initPlatform, type Platform } from './platform/platform';
+import { detectPlatform, endingAchievementId, initPlatform, secretAchievementId, type Platform } from './platform/platform';
+import { TEXT as GAME_TEXT } from './game/content';
+import { DATOS_PER_ENCARGO } from './game/cycleBalance';
+import { treeEffects } from './game/tree';
+import { REACHABLE_BEHAVIORS } from './game/worlds';
+import { hexToRgb } from './ui/art/color';
+import { PALETTE } from './ui/art/tokens';
 import { createIntegrity } from './net/integrity';
 import { createLeaderboardClient } from './net/leaderboard';
 import { createPlayerIdentity } from './net/identity';
@@ -25,9 +31,22 @@ import { LYSIS_TOAST_MS, lysisTargets } from './app/lysis';
 import { RunawayWatch } from './sim/runaway';
 import { SUPPORTER_JOURNAL } from './store/catalog';
 import { setPortraitPalette } from './ui/portrait';
-import { createStory } from './story';
-import { createStoryUI, type StoryArchive, type StorySound } from './ui/story';
+import { CHAIN, createEncargos, createStory, ENCARGOS_STORAGE_KEY, type EncargoReward, type EncargoView } from './story';
+import { createEncargoUI, createStoryUI, type StoryArchive, type StorySound } from './ui/story';
 import type { UI, UISound } from './ui/ui';
+import { createMoments, linkStory, type StoryBridge } from './moments';
+import {
+  createMomentsUI,
+  createPriceSheet,
+  createSpeciesCard,
+  speciesInputFromView,
+  type HelpSheet,
+  type MomentsUI,
+  type SpeciesCardInput,
+} from './ui/moments';
+import { COLORMAPS, colormapLUT, createSecretJournal, createSecrets, secretDef } from './secrets';
+import { bigSeedChip, createSeedMeter, seedPriceSheetExplain, type SeedMeter } from './ui/seed-price';
+import { attachSecretInputs, createSecretsUI, createStrokeRecorder, mountBasementEntry, type BasementEntry } from './ui/secrets';
 
 /**
  * Ranking API origin. Set VITE_LEADERBOARD_URL at build time ('' = same origin);
@@ -58,14 +77,37 @@ const KERNEL_DEBOUNCE_MS = 350;
 const IDLE_AFTER_MS = 60_000;
 /** Frame interval while idle (30 fps). */
 const IDLE_FRAME_MS = 1000 / 30;
-/** At most one "refused tap" toast in this many ms (a player tapping fast gets one, not ten). */
-const SEED_BLOCKED_TOAST_MS = 2500;
+/** At most one "why was my tap refused" hint in this many ms (a player tapping fast gets one, not ten). */
+const SEED_BLOCKED_HINT_MS = 2500;
 
 /**
  * Why the dish is frozen. The simulation and the economy stop while any source is active; the UI's
  * pause button only reflects 'user' (moments, cinematics and the extinction ritual pause silently).
  */
 export type PauseSource = 'user' | 'moment' | 'ritual' | 'cinematic';
+
+/** The seed price sheet as main.ts drives it (open from the pill, refresh while open). */
+interface SeedPriceSheet {
+  readonly isOpen: boolean;
+  open(v: GameView): void;
+  update(v: GameView): void;
+  close(): void;
+}
+
+/** Identity of a portrait object (a re-capture is a new object): the species card redraws on change. */
+const portraitIds = new WeakMap<object, number>();
+let portraitSeq = 0;
+/** What a species card shows, rounded: the card only rebuilds when this changes. */
+function speciesCardKey(s: SpeciesCardInput, lang: string): string {
+  let pid = 0;
+  if (s.portrait) {
+    pid = portraitIds.get(s.portrait) ?? 0;
+    if (!pid) portraitIds.set(s.portrait, (pid = ++portraitSeq));
+  }
+  const r = (x: number | null, d: number) => (x === null ? '-' : x.toFixed(d));
+  const boosters = s.boosters.map((b) => `${b.id}:${b.level}:${b.unlocked ? 1 : 0}${b.maxed ? 1 : 0}`).join(',');
+  return [lang, s.name, s.catalogName, s.subtitle, s.hue, s.rarity, s.behavior, r(s.speciesMult, 2), r(s.behaviorMult, 2), r(s.form, 2), r(s.global, 2), r(s.eps, 1), boosters, pid].join('|');
+}
 
 function pickQuality(setting: 'auto' | Quality): Quality {
   if (setting !== 'auto') return setting;
@@ -154,21 +196,121 @@ function boot(): void {
   profileCosmetics = () => cosmetics.profileCosmetics();
   let platformRef: Platform | null = null;
 
-  // ── Story layer (docs/STORY.md §7): dialogue scenes, the story-driven tutorial, endings. ──
+  // ── Momentos (docs/MOMENTOS.md): the first time something important happens, the game stops and explains. ──
   let uiRef: UI | null = null;
+  /** Late-bound: the story needs the moments and the moments need the story (one thing per event, §2). */
+  let bridge: StoryBridge | null = null;
+  /** Late-bound surfaces that own the screen for a moment (sheets, an Encargo celebration, a secret card). */
+  let sheetOpen = (): boolean => false;
+  let encargoShowing = (): boolean => false;
+  let secretShowing = (): boolean => false;
+  const moments = createMoments({
+    bus,
+    getView: () => game.view(),
+    // Splash/modal/ritual (UI), the ritual flag, VELA talking, a price/guide sheet, a celebration.
+    isBlocked: () =>
+      (uiRef?.blocked() ?? true) || ritual || (bridge?.storyShowing() ?? false) || sheetOpen() || encargoShowing() || secretShowing(),
+    downgrade: (id) => bridge?.covered(id) ?? false,
+    // Session 1 has cards only for the basics (seed, life, Essence, shapeless, clock); a new species or
+    // way of moving is a brief label there, its full card comes in session 2 (docs/CLARIDAD.md §3.3).
+    defer: (id) => {
+      if (id !== 'species' && id !== 'secondSpecies' && !id.startsWith('behavior.')) return false;
+      const v = game.view();
+      return v.cycle === 'sessions' && (v.session?.first ?? (v.session?.n ?? 1) <= 1);
+    },
+  });
+
+  // ── Story layer (docs/STORY.md §7): dialogue scenes, the story-driven tutorial, endings. ──
   /** Story scenes another surface is explaining right now (e.g. a "moment"): never two popups per event. */
   const storySuppressed = new Set<string>();
   const story = createStory({
     bus,
     getView: () => game.view(),
-    isBlocked: () => uiRef?.blocked() ?? true,
-    suppress: (id) => storySuppressed.has(id),
+    // Never over a Momento (queued or open), a price / behaviour sheet or a secret's reveal card.
+    isBlocked: () => (uiRef?.blocked() ?? true) || moments.isBusy() || sheetOpen() || secretShowing(),
+    suppress: (id) => storySuppressed.has(id) || (bridge?.suppresses(id) ?? false),
   });
+  bridge = linkStory(moments, story);
   story.on('journal', ({ id, text }) => bus.emit('journalNew', { id, text }));
   extraJournal.addSource(() => story.journalViews());
   let storyArchive: StoryArchive | null = null;
+  let momentsHelp: HelpSheet | null = null;
+  let basementEntry: BasementEntry | null = null;
   /** A story scene or ending is on screen (late-bound: the story UI mounts after the game UI). */
   let storyBusy = (): boolean => false;
+  /** Skipping VELA's tutorial also means "fewer pauses": the Momentos switch to brief labels (no pause). */
+  const storyBoot = story.serialize();
+  let tutorialSkipped = storyBoot.tutorialSkipped;
+  /** VELA's first scene is over (or skipped): before that, nothing else talks (a secret found at boot waits). */
+  let introDone = storyBoot.done.includes('t_intro') || !storyBoot.enabled;
+  story.on('change', () => {
+    const st = story.serialize();
+    if (st.tutorialSkipped && !tutorialSkipped && moments.mode === 'full') moments.setMode('brief');
+    tutorialSkipped = st.tutorialSkipped;
+    introDone = introDone || st.done.includes('t_intro') || !story.enabled;
+  });
+
+  // ── Encargos (docs/STORY.md §10): VELA's requests: what to grow, for what and why. ──
+  /** Act I mirrors the game's OBJECTIVES one to one (same ids, same Essence): the game pays those itself. */
+  const objectivePaid = new Set(CHAIN.filter((d) => d.reward.objective).map((d) => d.id));
+  function grantEncargo(r: EncargoReward, enc: EncargoView): void {
+    const essence = objectivePaid.has(enc.id) ? 0 : Math.max(0, r.essence);
+    const samples = Math.max(0, r.samples);
+    // Always told to the game, even when the objective already paid: in the sessions cycle every
+    // Encargo also adds time to the clock and Datos to the summary.
+    game.grantEncargo({ essence, samples });
+  }
+  const encargos = createEncargos({ bus, getView: () => game.view(), story, grant: grantEncargo });
+  /** The Encargos replace the game's objective line and its "objective complete" toast (one thing per event). */
+  const objectiveDonePrefix = GAME_TEXT.objectiveDone(0);
+
+  // ── Secrets (docs/SECRETS.md, spoilers): easter eggs, +1 % Essence each (max +10 %). ──
+  const secrets = createSecrets({ bus, getView: () => game.view(), grid: { w: gridW, h: gridH } });
+  const secretJournal = createSecretJournal();
+  extraJournal.addSource(() => secretJournal.views());
+  // Older finds (before this wiring) get their Bitácora entry too.
+  for (const sv of secrets.list()) if (sv.found) secretJournal.add(`secret.${sv.id}`, secretDef(sv.id).journal);
+  secrets.on('grantJournal', ({ id, text }) => secretJournal.add(id, text));
+  const SECRET_BONUS_NAME: Text = { es: 'Secretos', en: 'Secrets' };
+  const applySecretBonus = () => game.setBonus('secrets', SECRET_BONUS_NAME, secrets.bonusMultiplier());
+  applySecretBonus();
+  secrets.on('progress', applySecretBonus);
+
+  // Surfaces mounted after the game UI (they need its elements); the UI deps reach them late-bound.
+  let momentsUIRef: MomentsUI | null = null;
+  let priceSheetRef: SeedPriceSheet | null = null;
+  let seedMeterRef: SeedMeter | null = null;
+  let strokesRef: ReturnType<typeof createStrokeRecorder> | null = null;
+  let secretsUIRef: ReturnType<typeof createSecretsUI> | null = null;
+
+  /** The species card (portrait in its colour, shape, behaviour, yield equation, how to boost it) in the species sheet. */
+  function mountSpeciesCard(box: HTMLElement, id: string): { update(v: GameView): void; dispose(): void } | null {
+    const input = speciesInputFromView(game.view(), id);
+    if (!input) return null;
+    const card = createSpeciesCard(box, input, {
+      lang: () => game.view().settings.lang,
+      reduceMotion: () => game.view().settings.reduceMotion,
+      onShowUpgrade: (up) => ui.reveal(`upgrade.${up}`),
+      onBehavior: (b) => momentsUIRef?.openBehaviorGuide(b),
+    });
+    // The card rebuilds on update: only when something it shows changed, at most twice a second.
+    let key = speciesCardKey(input, game.view().settings.lang);
+    let lastAt = performance.now();
+    return {
+      update(v) {
+        const now = performance.now();
+        if (now - lastAt < 500) return;
+        const next = speciesInputFromView(v, id);
+        if (!next) return;
+        const k = speciesCardKey(next, v.settings.lang);
+        if (k === key) return;
+        key = k;
+        lastAt = now;
+        card.update(next);
+      },
+      dispose: () => card.dispose(),
+    };
+  }
 
   const ui = createUI(root, {
     actions: {
@@ -178,7 +320,12 @@ function boot(): void {
         if (id === undefined) {
           extraJournal.markRead();
           story.markJournalRead();
+          secretJournal.markRead();
         }
+      },
+      renameSpecies(id: string, name: string) {
+        game.actions.renameSpecies(id, name);
+        secrets.onSpeciesRenamed(name);
       },
     },
     camera,
@@ -186,16 +333,45 @@ function boot(): void {
     leaderboard,
     // The story tutorial replaces the built-in coach marks (docs/STORY.md §7.4).
     tutorial: false,
-    onRestartTutorial: () => story.restartTutorial(),
+    onRestartTutorial: () => {
+      story.restartTutorial();
+      // "Explain it all again": every Momento comes back, with its pause.
+      moments.forget();
+      moments.setMode('full');
+    },
     onTabOpen: (tab) => {
+      game.actions.noteTabOpened?.(tab);
       story.signal(`tab:${tab}`);
+      encargos.signal(`tab:${tab}`);
       if (tab === 'calibrate') prewarmNearbyKernels();
     },
-    isNarrating: () => storyBusy(),
+    // One message at a time: a story scene, a Momento, an Encargo bubble or a secret card.
+    isNarrating: () => storyBusy() || (momentsUIRef?.busy ?? false) || encargoShowing() || secretShowing(),
     settingsSections: (el) => {
       storyArchive?.dispose();
       storyArchive = storyUI.mountArchive(el);
+      // "¿Qué pasó?": re-watch any Momento, explain mode (full / brief / off) and creature labels.
+      momentsHelp?.dispose();
+      momentsHelp = momentsUIRef?.mountHelp(el) ?? null;
+      basementEntry?.dispose();
+      basementEntry = secretsUIRef
+        ? mountBasementEntry(el, secrets, { lang: () => game.view().settings.lang, createBasement: () => secretsUIRef!.createBasement() })
+        : null;
     },
+    cameraBusy: () => momentsUIRef?.busy ?? false,
+    onBehaviorInfo: (b) => momentsUIRef?.openBehaviorGuide(b ?? null),
+    onSeedPriceInfo: () => priceSheetRef?.open(game.view()),
+    onChargeStart: () => {
+      const v = game.view();
+      const chip = bigSeedChip(v, v.settings.lang);
+      if (chip) seedMeterRef?.flash(chip);
+    },
+    suppressOfflineCard: () => moments.mode === 'full' && (moments.wouldShow('offline') || moments.isActive('offline')),
+    suppressToast: (text: Text) => text.es.startsWith(objectiveDonePrefix.es) || text.en.startsWith(objectiveDonePrefix.en),
+    objectiveOverride: () => true,
+    speciesExtras: (box, id) => mountSpeciesCard(box, id),
+    // A card or a label tells a new species; the toast only when explanations are off (§3.3).
+    speciesTold: () => moments.mode !== 'off',
     openWardrobe: () => cosmetics.openWardrobe(),
     openStore: cosmetics.openStore ? () => cosmetics.openStore?.() : undefined,
     onDishResize(cssW, cssH, dpr) {
@@ -209,15 +385,18 @@ function boot(): void {
     },
     onErase(x, y) {
       sim?.erase(x, y, sim.params.R * 1.2);
+      strokesRef?.point(x, y);
     },
     onBrush(x, y) {
       for (const spec of game.actions.brushAt(x, y)) sim?.seed(spec);
+      strokesRef?.point(x, y);
     },
     onPrint(speciesId, x, y) {
       const spec = game.actions.printAt(speciesId, x, y);
       if (spec) {
         sim?.seed(spec);
         story.notePrint();
+        encargos.notePrint();
       }
     },
     onExtinguish() {
@@ -233,18 +412,27 @@ function boot(): void {
     },
     onPauseToggle() {
       setPause('user', !pauseSources.has('user'));
+      secrets.setPaused(pauseSources.has('user'));
     },
     exportSave: () => game.exportString(),
     importSave(s) {
       integrity.noteImport(s);
       const ok = game.importString(s);
-      if (ok) save();
+      if (ok) {
+        applySecretBonus();
+        save();
+      }
       return ok;
     },
     resetSave() {
       clearSave();
       game.reset();
       story.reset();
+      moments.reset();
+      encargos.reset();
+      secrets.reset();
+      secretJournal.reset();
+      applySecretBonus();
       save();
     },
     onUserGesture() {
@@ -254,6 +442,7 @@ function boot(): void {
   });
 
   uiRef = ui;
+  const MOMENT_SOUND: Record<'open' | 'blip' | 'close' | 'brief', UISound | null> = { open: 'open', close: 'close', brief: 'tap', blip: null };
   const STORY_SOUND: Record<StorySound, UISound | null> = {
     open: 'open',
     blip: null,
@@ -270,12 +459,118 @@ function boot(): void {
     gridToClient: (x, y) => ui.gridToClient(x, y),
     revealTarget: (id) => ui.reveal(id),
     onSound: (kind) => {
+      // Mute the blips while the Momentos bridge consumes a scene it already told.
+      if (bridge?.consuming) return;
       const k = STORY_SOUND[kind];
       if (k) audio.playUI?.(k);
     },
   });
   let storyLang = game.view().settings.lang;
   storyBusy = () => storyUI.busy;
+
+  // Momentos UI (z 46: above the story layer 45, below the splash 60).
+  const momentsUI = createMomentsUI(root, moments, {
+    camera,
+    getDishRect: () => glCanvas.getBoundingClientRect(),
+    lang: () => game.view().settings.lang,
+    reduceMotion: () => game.view().settings.reduceMotion,
+    onPause: (on) => setPause('moment', on),
+    getTargetRect: (id) => ui.targetRect(id),
+    creaturePos: (id) => ui.creaturePos(id),
+    speciesPortrait: (sid) => game.view().species.find((sp) => sp.id === sid)?.portrait ?? null,
+    speciesInfo: (sid) => speciesInputFromView(game.view(), sid),
+    onShowUpgrade: (id) => ui.reveal(`upgrade.${id}`),
+    upgrades: () => game.view().upgrades,
+    seenBehaviors: () => game.view().behaviorsSeen,
+    // The behaviour guide's example species by the name the player knows it (once registered).
+    knownName: (latin) => game.view().species.find((sp) => sp.catalogName === latin)?.name ?? null,
+    // Sessions: no World grows pulsing, dividing or colony creatures (measured): the guide never lists them.
+    reachableBehaviors: () => (game.view().cycle === 'sessions' ? REACHABLE_BEHAVIORS : null),
+    onAction: (a) => {
+      if (a === 'sterilize') game.actions.sterilizeDish?.();
+    },
+    onSound: (k) => {
+      const u = MOMENT_SOUND[k];
+      if (u) audio.playUI?.(u);
+    },
+  });
+  momentsUIRef = momentsUI;
+  let momentsLang = game.view().settings.lang;
+
+  // Seed price: slot dots + "why it changed" chip next to the price, and the sheet behind ONE tap on the
+  // pill. Both read the parts of view.seedPrice that exist (a ×1 or missing factor is not shown).
+  const seedMeter = createSeedMeter(() => game.view().settings.lang);
+  ui.seedMeterSlot.appendChild(seedMeter.el);
+  seedMeterRef = seedMeter;
+  const priceCore = createPriceSheet(root, { reduceMotion: () => game.view().settings.reduceMotion });
+  const explainSeed = (v: GameView) =>
+    seedPriceSheetExplain(v, v.settings.lang, {
+      onSeeDish: () => {
+        priceCore.close();
+        ui.reveal('upgrade.dish');
+      },
+    });
+  const priceSheet: SeedPriceSheet = {
+    get isOpen() {
+      return priceCore.isOpen;
+    },
+    open(v) {
+      const x = explainSeed(v);
+      if (x) priceCore.open(x);
+    },
+    update(v) {
+      if (!priceCore.isOpen) return;
+      const x = explainSeed(v);
+      if (x) priceCore.update(x);
+    },
+    close: () => priceCore.close(),
+  };
+  priceSheetRef = priceSheet;
+  sheetOpen = () => priceSheet.isOpen || !!document.querySelector('.mo-bh-layer:not([hidden])');
+
+  // Encargos: the badge lives in the objective bar; offers and celebrations hang from it.
+  const encUI = createEncargoUI(root, encargos, {
+    lang: () => game.view().settings.lang,
+    reduceMotion: () => game.view().settings.reduceMotion,
+    // Offers tuck away while VELA talks (lines, choice, ending; not a task hint), a Momento is coming/open,
+    // or a sheet / modal covers the screen.
+    busy: () => (bridge?.storyShowing() ?? false) || moments.isBusy() || momentsUI.busy || sheetOpen() || ui.blocked(),
+    getTargetRect: (id) => ui.targetRect(id),
+    onSound: (k) => audio.playUI?.(k === 'done' ? 'confirm' : 'open'),
+    // Sessions: each Encargo also gives Datos and clock time (the Tree's "Encargos" node raises the time).
+    sessionRewards: () => {
+      const v = game.view();
+      return v.cycle === 'sessions' && v.research ? { datos: DATOS_PER_ENCARGO, seconds: treeEffects(v.research.levels).timePerEncargo } : null;
+    },
+  });
+  encUI.mountBadge(ui.objectiveSlot);
+  encargoShowing = () => encUI.busy;
+  let encLang = game.view().settings.lang;
+
+  // Secrets: inputs (keys, logo, long press, shake, strokes), effects over the dish, reveal cards.
+  const secretInputs = attachSecretInputs(secrets, { essence: ui.essenceEl, dish: ui.dishEl });
+  const secretsUI = createSecretsUI(ui.dishEl, secrets, {
+    camera,
+    lang: () => game.view().settings.lang,
+    reduceMotion: () => game.view().settings.reduceMotion,
+    // A reveal card waits while a Momento card is open, VELA is talking (not during a task hint), or a
+    // sheet / modal covers the dish (it would time out unseen behind it).
+    // A secret found at boot (a full moon, the dish's birthday) waits for VELA's first words.
+    hold: () => momentsUI.busy || (bridge?.storyShowing() ?? false) || sheetOpen() || ui.blocked() || !introDone,
+    onSound: (k) => audio.playUI?.(k === 'secret' ? 'confirm' : 'open'),
+    // iOS asks for the motion sensor from a tap (the basement's button): "shake" works there too.
+    requestMotion: secretInputs.requestMotionPermission,
+  });
+  secretsUIRef = secretsUI;
+  secretShowing = () => secretsUI.busy;
+  strokesRef = createStrokeRecorder(secrets, { endOn: ui.dishEl });
+  // The Bioluma logo (Settings → credits) counts knocks on the glass; the wake animation finds it by attribute.
+  root.addEventListener('pointerup', (e) => {
+    const logoEl = (e.target as Element | null)?.closest?.('.set-card.credits > span');
+    if (!logoEl) return;
+    logoEl.setAttribute('data-secret-logo', '');
+    secrets.onLogoTap();
+  });
 
   try {
     // Desktop GPUs handle full floats easily and match the CPU reference exactly;
@@ -317,20 +612,24 @@ function boot(): void {
     const before = game.view().essence;
     game.applyOffline(away);
     const gained = game.view().essence - before;
-    if (gained > 0) ui.showOfflineCard(Math.min(away, 24 * 3600), gained);
+    // Sessions run only while playing (no "while you were away" card; CLARIDAD B-13).
+    if (gained > 0 && game.view().cycle !== 'sessions') ui.showOfflineCard(Math.min(away, 24 * 3600), gained);
     save();
   }
   if (saved.game && saved.savedAt) grantOffline(offlineSeconds(saved.savedAt));
 
   // Dish requests from the game (auto-seeder, rewards, extinction).
   bus.on('dishSeed', ({ specs }) => specs.forEach((s) => sim!.seed(s)));
-  // A refused tap (spacing rule, full nursery) always says why: nothing is charged and nothing lands.
-  let blockedToastAt = -Infinity;
+  // A refused tap (spacing rule, full nursery) always says why; nothing is charged and nothing lands.
+  // 'tooClose': the UI draws a red ring and the reason at the spot. 'growing': the seed pill is grey
+  // ("Espera…") and its reason chip says why, right above the price (no toast, no layout shift).
+  let blockedHintAt = -Infinity;
   bus.on('seedBlocked', ({ reason }) => {
+    if (reason !== 'growing') return;
     const now = performance.now();
-    if (now - blockedToastAt < SEED_BLOCKED_TOAST_MS) return;
-    blockedToastAt = now;
-    bus.emit('toast', { kind: 'info', text: reason === 'tooClose' ? TEXT.seedTooClose : TEXT.seedGrowing });
+    if (now - blockedHintAt < SEED_BLOCKED_HINT_MS) return;
+    blockedHintAt = now;
+    seedMeter.flash({ text: GAME_TEXT.seedGrowing[game.view().settings.lang], dir: 0 });
   });
   function clearDish(): void {
     sim!.clear();
@@ -365,12 +664,53 @@ function boot(): void {
   });
   const doneAchievements = () => game.view().achievements.filter((a) => a.done).map((a) => a.id);
   platform.syncAchievements(doneAchievements());
+  // Secret achievements (hidden on Steam): one per secret + all of them (platforms/steam/achievements.json).
+  const secretAchievements = () => {
+    const found = secrets.list().filter((x) => x.found);
+    const ids = found.map((x) => secretAchievementId(x.id));
+    if (found.length >= secrets.total) ids.push('secretsAll');
+    return ids;
+  };
+  platform.syncAchievements(secretAchievements());
+  secrets.on('found', ({ secret }) => platform.unlockAchievement(secretAchievementId(secret.id)));
+  secrets.on('allFound', () => platform.unlockAchievement('secretsAll'));
 
   // Cosmetics: free ones unlocked by achievements, equipped ones pushed to renderer, overlay,
   // portraits and music. Purely visual/audible (ADR-021).
   cosmetics.syncAchievements(doneAchievements());
+  // Dish palette: the equipped cosmetic, unless a secret palette is picked in the basement (purely visual).
+  let equippedLUT: Uint8Array | null = null;
+  let secretLUT: Uint8Array | null = null;
+  const pushLUT = () => sim?.setMatterLUT(secretLUT ?? equippedLUT ?? matterLUT());
+  const cm = secrets.colormap();
+  if (cm) secretLUT = colormapLUT(COLORMAPS[cm].stops);
+  /**
+   * The dish is always night, but in the light theme it rests on the light steel table of the art
+   * direction (docs/ARTE.md §10: no dark frame nested in a dark card); the dish skin keeps its own colours.
+   */
+  type DishStyle = Parameters<NonNullable<typeof sim>['setRenderStyle']>[0];
+  let dishStyle: DishStyle | null = null;
+  const lightTable = hexToRgb(PALETTE.light.night).map((c) => c / 255) as [number, number, number];
+  function pushDishStyle(): void {
+    if (!sim || !dishStyle) return;
+    sim.setRenderStyle(document.documentElement.dataset.theme === 'light' ? { ...dishStyle, bg: lightTable } : dishStyle);
+  }
+  new MutationObserver(pushDishStyle).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  secrets.on('colormap', ({ colormap }) => {
+    secretLUT = colormap ? colormapLUT(colormap.stops) : null;
+    pushLUT();
+  });
   cosmetics.bind({
-    sim: sim!,
+    sim: {
+      setMatterLUT: (lut) => {
+        equippedLUT = lut;
+        pushLUT();
+      },
+      setRenderStyle: (st) => {
+        dishStyle = st;
+        pushDishStyle();
+      },
+    },
     overlay: ui,
     portraits: { setPalette: (id, stops) => setPortraitPalette(id, stops) },
     audio,
@@ -447,6 +787,13 @@ function boot(): void {
     } catch (err) {
       console.warn('save failed', err);
     }
+    // Encargos keep their own key; snapshot it with every save so event counters ("catch 2 Sparks")
+    // survive a reload between offers (the engine itself writes on offers and completions).
+    try {
+      localStorage.setItem(ENCARGOS_STORAGE_KEY, JSON.stringify(encargos.serialize()));
+    } catch {
+      /* storage blocked: the Encargos still work for this session */
+    }
     if (!ok && !saveWarned) {
       saveWarned = true;
       bus.emit('toast', {
@@ -512,7 +859,7 @@ function boot(): void {
         // Dissolve a maze nucleus while it is still small (src/sim/runaway.ts, docs/DISH.md §5b).
         const caught = runaway.update(report, snap, s.params);
         for (const e of caught.erase) s.erase(e.x, e.y, e.radius);
-        if (caught.started.length) noteDissolved();
+        if (caught.started.length) noteDissolved(caught.started[0]);
         reports.push(report);
       })
       .catch((err) => console.warn('snapshot failed', err))
@@ -525,20 +872,30 @@ function boot(): void {
     const targets = lysisTargets(report, sim!.params.R, DISH_OVERGROWN_FILL);
     if (!targets.length) return;
     for (const t of targets) sim!.erase(t.x, t.y, t.radius);
-    noteDissolved();
+    noteDissolved(targets[0]);
   }
-  /** Tell the player why matter vanished (the first time in a session explains it). */
-  function noteDissolved(): void {
+  /**
+   * The one place where lysis is announced, one message per event: the first time it is the "Materia sin
+   * forma" Momento at that spot (when explanations are on); after that, a short toast now and then.
+   */
+  function noteDissolved(at: { x: number; y: number }): void {
     const now = performance.now();
     if (now - lysisToastAt < LYSIS_TOAST_MS) return;
-    const first = lysisToastAt === -Infinity;
+    // First time: the card (or its brief label) says it, queued now or already on its way. Never also a toast.
+    if (moments.notify('explode', { id: -1, x: at.x, y: at.y }) || moments.wouldShow('explode') || moments.isActive('explode')) {
+      lysisToastAt = now;
+      return;
+    }
+    // The long "why" only when no Momento card already explained shapeless matter (a brief label does not).
+    const told = moments.mode === 'full' && moments.seen('explode');
+    const first = lysisToastAt === -Infinity && !told;
     lysisToastAt = now;
     bus.emit('toast', {
       kind: 'warn',
       text: first
         ? {
-            es: 'Materia sin forma: dos manchas se juntaron y crecían sin control. La disolví para salvar la placa.',
-            en: 'Shapeless matter: two blobs merged and grew out of control. I dissolved it to save the dish.',
+            es: 'Dos semillas se fundieron sin forma. La disolví para salvar la placa.',
+            en: 'Two seeds melted into shapeless matter. I dissolved it to save the dish.',
           }
         : { es: 'Disolví materia sin forma.', en: 'Dissolved shapeless matter.' },
     });
@@ -549,9 +906,11 @@ function boot(): void {
     last = now;
     const s = sim!;
     syncParams(now);
+    // A Momento eases the dish to a stop (1 → 0 in ~0.45 s) and back; at 0 it holds setPause('moment').
+    const ts = momentsUI.timeScale();
 
     if (!isPaused() && !ritual && !document.hidden) {
-      acc += dt * STEPS_PER_SEC * game.speed;
+      acc += dt * STEPS_PER_SEC * game.speed * ts;
       // Never fall into a spiral of death: cap work per frame.
       const whole = Math.floor(acc);
       let n = Math.min(whole, 4 * game.speed);
@@ -567,11 +926,11 @@ function boot(): void {
     const n = reports.length;
     for (let i = 0; i < n; i++) dissolveShapeless(reports[i]);
     for (let i = 0; i < n - 1; i++) game.tick(0, reports[i]);
-    game.tick(dt, n ? reports[n - 1] : null);
+    game.tick(dt * ts, n ? reports[n - 1] : null);
     reports.length = 0;
     if (portraitRequests) for (const r of portraitRequests.call(game)) capturePortrait(r.speciesId, r.x, r.y, r.size, r.creatureId);
 
-    const rate = isPaused() || ritual ? 0 : STEPS_PER_SEC * game.speed;
+    const rate = isPaused() || ritual ? 0 : STEPS_PER_SEC * game.speed * ts;
     if (rate !== lastRate) {
       lastRate = rate;
       (ui as { setSimRate?: (r: number) => void }).setSimRate?.(rate);
@@ -588,10 +947,23 @@ function boot(): void {
     if (now - lastView > 100) {
       lastView = now;
       view = viewWithExtras();
+      // Status pills: on every creature in Era 1 (setting), stepping aside while a Momento speaks (a card
+      // or its brief label: one label at a time on the dish, docs/ARTE.md §10).
+      ui.setCreatureLabels(moments.labelsOnAll(view.era), momentsUI.busy && moments.current() !== null);
       ui.update(view);
+      seedMeter.update(view);
+      priceSheet.update(view);
       if (view.settings.lang !== storyLang) {
         storyLang = view.settings.lang;
         storyUI.relabel();
+      }
+      if (view.settings.lang !== momentsLang) {
+        momentsLang = view.settings.lang;
+        momentsUI.relabel();
+      }
+      if (view.settings.lang !== encLang) {
+        encLang = view.settings.lang;
+        encUI.relabel();
       }
     }
     if (now - lastAudio > 1000) {
@@ -648,7 +1020,24 @@ function boot(): void {
 
   // Debug handle for development and e2e builds only.
   if (import.meta.env.DEV || import.meta.env.VITE_E2E === '1') {
-    integrity.guardDebugHandle(window, 'bioluma', { game, sim, detector, camera, bus, story, cosmetics });
+    integrity.guardDebugHandle(window, 'bioluma', {
+      game,
+      sim,
+      detector,
+      camera,
+      bus,
+      story,
+      cosmetics,
+      ui,
+      storyUI,
+      moments,
+      momentsUI,
+      priceSheet,
+      encargos,
+      encUI,
+      secrets,
+      secretsUI,
+    });
   }
   leaderboard?.startAutoSubmit();
 

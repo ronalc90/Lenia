@@ -80,6 +80,15 @@ try {
       await page.waitForTimeout(400);
     }
 
+    // A first-time explainer (Momento) pauses the game with a card: tap "¡Entendido!" like a player.
+    const gotIt = async () => {
+      const ok = page.locator('.mo-card .mo-ok');
+      for (let k = 0; k < 4 && (await ok.isVisible().catch(() => false)); k++) {
+        await ok.click().catch(() => undefined);
+        await page.waitForTimeout(700);
+      }
+    };
+
     // Seed by tapping the dish a few times (real input path).
     const box = await page.locator('canvas.gl-dish').boundingBox();
     if (!box) throw new Error('dish canvas not found');
@@ -91,6 +100,7 @@ try {
       [0.75, 0.75],
     ];
     for (const [fx, fy] of taps) {
+      await gotIt();
       const x = box.x + box.width * fx;
       const y = box.y + box.height * fy;
       if (vp.hasTouch) await page.touchscreen.tap(x, y);
@@ -101,7 +111,10 @@ try {
     if (shotsDir) await page.screenshot({ path: `${shotsDir}/${vp.name}-1-seeded.png` });
 
     // Let the simulation run; then check the game reacted.
-    await page.waitForTimeout(12000);
+    for (let k = 0; k < 12; k++) {
+      await page.waitForTimeout(1000);
+      await gotIt();
+    }
     const state = await page.evaluate(() => {
       const b = window.bioluma;
       const v = b.game.view();
@@ -122,6 +135,7 @@ try {
     // Visit every visible tab.
     const tabs = await page.locator('[data-tab]').all();
     for (const [i, t] of tabs.entries()) {
+      await gotIt();
       if (await t.isVisible()) {
         await t.click();
         await page.waitForTimeout(300);
