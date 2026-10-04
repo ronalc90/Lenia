@@ -15,6 +15,9 @@
  *  - behaviour is classified after 1000 steps (table per species); swimmers drift and collide;
  *    dividers split when there is room; 3+ of a species close together form a colony;
  *  - creatures die from a small base hazard, collisions and calibration changes that leave their range;
+ *    swimmers sharing a crowded dish die sooner (QA3 F5 measured a median ~27 s life for Orbium when
+ *    3–5 share the dish in early play: MOVER_HAZARD below is a compromise with the CPU species audit,
+ *    where founders in 4-creature dishes mostly lived ≥ 1 000 steps);
  *  - 30 sim steps per real second × Incubadora speed (src/main.ts STEPS_PER_SEC).
  */
 import { Bus, type GameEvents } from '../src/core/bus';
@@ -32,9 +35,14 @@ import catalogSigJson from '../src/detect/catalogSignatures.json';
 const STEPS_PER_SEC = 30;
 const DT = 0.5; // real seconds per bot tick
 const BORN_STEPS = 400;
+/** A spore that will not make it dissolves this fast (QA2: first seeds died at 51–64 steps). */
+const DIE_STEPS = 60;
 const CLASSIFY_STEPS = 1000;
 const VIABLE_D = 0.6;
 const BASE_HAZARD = 1 / 2400; // per real second for a stable creature
+/** Extra hazard per real second for a swimmer/spinner while ≥ MOVER_CROWD movers share the dish. [QA3 F5] */
+const MOVER_HAZARD = 1 / 600;
+const MOVER_CROWD = 3;
 const SWIM_SPEED = 0.8; // cells per real second at ×1
 const COLLIDE_R = 1.5; // in R
 const COLLIDE_KILL = 0.6;
@@ -259,6 +267,7 @@ class Dish {
     const p = this.params();
     const R = p.R;
     const ds = dt * STEPS_PER_SEC * speed;
+    const movers = this.blobs.filter((b) => b.state === 'stable' && (b.behavior === 'swimmer' || b.behavior === 'spinner')).length;
     for (const b of this.blobs) {
       if (b.state === 'dead') continue;
       b.steps += ds;
@@ -266,7 +275,8 @@ class Dish {
         this.kill(b, 'died');
         continue;
       }
-      if (b.state === 'born' && b.steps >= BORN_STEPS) {
+      if (b.state === 'born' && b.fate === 'die' && b.steps >= DIE_STEPS) this.kill(b, 'died');
+      else if (b.state === 'born' && b.steps >= BORN_STEPS) {
         if (b.fate === 'stable') b.state = 'stable';
         else if (b.fate === 'explode') {
           b.state = 'exploded';
@@ -280,7 +290,8 @@ class Dish {
           this.events.push({ type: 'died', id: b.id, x: b.x, y: b.y });
         }
       } else if (b.state === 'stable') {
-        if (this.rng() < BASE_HAZARD * dt) {
+        const mover = b.behavior === 'swimmer' || b.behavior === 'spinner';
+        if (this.rng() < (BASE_HAZARD + (mover && movers >= MOVER_CROWD ? MOVER_HAZARD : 0)) * dt) {
           this.kill(b, 'died');
           continue;
         }
@@ -492,7 +503,7 @@ function runPolicy(policy: PolicyName, minutes: number, seed: number, verbose: b
       // Essence: the globally cheapest option (seeds included), bought when affordable.
       const ess = opts.filter((u) => u.currency === 'essence').sort((a, b) => a.cost - b.cost);
       if (!ess.length) return;
-      if (seedsCompete && v.seedCost * 2.5 < ess[0].cost && freeSpot(2.5)) return; // a seed is cheaper: keep the money
+      if (seedsCompete && !v.seedsGrowing && v.seedCost * 2.5 < ess[0].cost && freeSpot(2.5)) return; // a seed is cheaper (and can be sown now): keep the money
       if (ess[0].cost > v.essence) return;
       if (!game.actions.buyUpgrade(ess[0].id, 1)) return;
     }
