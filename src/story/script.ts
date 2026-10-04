@@ -150,6 +150,7 @@ export const SCENES: SceneDef[] = [
     lines: [
       vela('neutral', 'Espera un poquito. Está decidiendo si vive.', 'Wait a moment. It\'s deciding if it lives.', at('dish')),
       vela('happy', 'Si se queda con forma, ¡es una criatura!', 'If it keeps its shape, it\'s a creature!'),
+      vela('worried', 'No siembres encima: dos manchas juntas se estropean.', 'Don\'t sow on top: two blobs together go wrong.', at('dish')),
     ],
   },
   {
@@ -176,8 +177,9 @@ export const SCENES: SceneDef[] = [
     title: t('Demasiado', 'Too much'),
     when: (c) => c.n('explosions') >= 1,
     lines: [
-      vela('worried', '¡Uy! Creció tanto que ya no es nada.', 'Whoa! It grew so big it\'s nothing now.', at('dish')),
-      vela('neutral', 'Aquí cuenta la forma, no el tamaño.', 'Here, shape matters. Not size.'),
+      vela('worried', '¡Uy! Dos manchas se juntaron y crecieron sin forma.', 'Whoa! Two blobs merged and grew shapeless.', at('dish')),
+      vela('neutral', 'La materia sin forma no da Esencia. Se come la placa.', 'Shapeless matter gives no Essence. It eats the dish.'),
+      vela('happy', 'Por eso la disolví. Siembra lejos de las demás.', 'So I dissolved it. Sow away from the others.', at('dish')),
       vela('happy', 'Anotado. Con letra grande.', 'Noted. In big letters.'),
     ],
   },
@@ -205,8 +207,11 @@ export const SCENES: SceneDef[] = [
     title: t('Esencia', 'Essence'),
     when: () => true,
     lines: [
-      vela('neutral', '¿Ves este número? Es Esencia: luz que da la vida.', 'See this number? That\'s Essence: light made by life.', at('hud.essence')),
-      vela('happy', 'Más criaturas, más Esencia. ¡Anotado!', 'More creatures, more Essence. Noted!', at('hud.essence')),
+      vela('neutral', '¿Ves este número? Es tu Esencia.', 'See this number? That\'s your Essence.', at('hud.essence')),
+      vela('happy', 'Cada criatura con forma te da Esencia cada segundo.', 'Every creature with a shape gives Essence every second.', at('creature', 'dish')),
+      vela('neutral', 'Debajo ves cuánto ganas por segundo: «+1/s».', 'Below it: how much you earn per second, "+1/s".', at('hud.essence')),
+      vela('worried', 'Lo que no tiene forma no da nada.', 'Anything without a shape gives nothing.'),
+      vela('happy', 'Gástala en semillas y mejoras. Más criaturas, más Esencia.', 'Spend it on seeds and upgrades. More creatures, more Essence.', at('hud.essence')),
     ],
   },
   {
