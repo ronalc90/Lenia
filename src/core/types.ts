@@ -149,6 +149,16 @@ export interface Creature {
   /** Morphology/behaviour vector, position/rotation invariant, NOT including mu/sigma. */
   signature: number[];
   parentId: number | null;
+  /**
+   * (detect) Steps since the creature last became stable (0 while not stable). Absent in fake
+   * reports (tests, balance bot): the game then does not gate on it.
+   */
+  stableSteps?: number;
+  /**
+   * (detect) Is the body still changing? Static-signature distance between the last two 400-step
+   * windows (≈0 for a finished form, even a pulsing one); −1 until two windows of history exist.
+   */
+  shapeDrift?: number;
 }
 
 export type DetectorEvent =
@@ -202,6 +212,11 @@ export interface UpgradeView {
   /** Shown greyed when locked. */
   unlockHint: Text;
   maxed: boolean;
+  /**
+   * (game) Seconds until `cost` is affordable at the current production (0 = affordable now,
+   * null = not reachable by waiting: nothing produces, or paid in Muestras). QA3 #13 "en 45 s".
+   */
+  secondsToAfford?: number | null;
 }
 
 export interface GenomeNodeView {
@@ -237,6 +252,39 @@ export interface SpeciesView {
   printCost: number;
   /** Discovered but not yet looked at in the bestiary. */
   isNew: boolean;
+  /**
+   * (species) Accent hue in degrees (115–335: never the warn/danger/gold/good bands), frozen at
+   * registration, well separated from the other species of the bestiary. For halos, card accents,
+   * badges and the matter tint: e.g. `hsl(${hue} 70% 62%)`.
+   */
+  hue?: number;
+  /** (species) Secondary line under the name: "Criatura 3" / "Creature 3" (the registration number). */
+  subtitle?: string;
+  /** (species) What its body looks like, in plain words: "disco con cola", "anillo", "media luna"… */
+  shapeLabel?: Text;
+  /** (species) Stable id of that body kind (pair, ring, trefoil, lobes, spindle, tailed, shield, crescent, cloud, disc). */
+  shapeKind?: string;
+  /**
+   * (game) Why it pays what it pays: averages over its members paying right now (members 0 = none
+   * alive: the factors are what a member would get). eps = their summed Essence/s (before buffs).
+   */
+  production?: YieldView & { members: number; eps: number };
+  /** (game) Upgrades that raise this species' yield (its behaviour's Afinidad, Catalogación, Nutriente). */
+  boostedBy?: { id: string; name: Text }[];
+}
+
+/** (game) The factors of one creature's production (product × global × buffs = Essence/s). */
+export interface YieldView {
+  /** Measured complexity (capped) × Nutriente. */
+  complexity: number;
+  /** Behaviour multiplier × its Afinidad (unclassified pays as still). */
+  behaviorMult: number;
+  /** Species multiplier: rarity × Catalogación (1 while unregistered). */
+  speciesMult: number;
+  /** 0.85^k: the k-th creature of the same species pays less. */
+  diminishing: number;
+  /** ×1.5 in a symbiotic pair. */
+  symbiosis: number;
 }
 
 export interface CalibrationView {
@@ -289,6 +337,10 @@ export interface CreatureView {
   /** Optional velocity in cells per simulation step (overlay extrapolation). */
   vx?: number;
   vy?: number;
+  /** (species) Accent hue of its species in degrees (see SpeciesView.hue); undefined while unregistered. */
+  hue?: number;
+  /** (game) Why it pays what it pays (null while it pays nothing). */
+  yield?: YieldView | null;
 }
 
 export interface GoldenView {
@@ -391,8 +443,47 @@ export interface GameView {
   microscope?: number;
   /** (game) Numeric progress of the current objective. */
   objectiveProgress?: { current: number; target: number; reward: number } | null;
-  /** (game) Production multiplier breakdown for the HUD tooltip. */
-  multipliers?: { global: number; buffs: number };
+  /** (game) Production multiplier breakdown for the HUD tooltip / Stats (QA3 #13). */
+  multipliers?: {
+    global: number;
+    buffs: number;
+    /** The factors of `global` (each a multiplier, their product = global). */
+    parts?: { id: string; name: Text; mult: number }[];
+    /** Mean species multiplier (m_esp) of the paying creatures (1 if none). */
+    species?: number;
+    /** Mean behaviour multiplier (m_comp × affinity) of the paying creatures (1 if none). */
+    behavior?: number;
+  };
+  /**
+   * (game) QA2 H-05: more than SEED_NURSERY_FREE seeds are still forming, so the next seed is
+   * pricier: show "⏳ Espera… / Wait…" in grey instead of a red price.
+   */
+  seedsGrowing?: boolean;
+  /** (game) Turno de laboratorio: the generator that lights the dish during this Era. */
+  shift?: ShiftView;
+}
+
+/** (game) Turno de laboratorio view. When `active` is false the lamp is off: dish and production stop. */
+export interface ShiftView {
+  /** Seconds of shift left (real seconds of running dish). */
+  remaining: number;
+  /** Full shift length in seconds (Generador, Turno doble). */
+  max: number;
+  active: boolean;
+  /** Essence a recharge costs now (0 when the emergency crank is ready). */
+  rechargeCost: number;
+  /** A recharge can be done right now (affordable or free). */
+  canRecharge: boolean;
+  /** The free emergency crank is ready (dark and broke, after a short wait). */
+  emergency: boolean;
+  /** 0..1 progress of the emergency wait while dark and broke. */
+  emergencyProgress: number;
+  /** Paid recharges this Era. */
+  recharges: number;
+  /** The player is idle and the Termo de café is saving fuel. */
+  saving: boolean;
+  /** Seconds of shift per real second the panels add (0 without panels). */
+  panelRate: number;
 }
 
 /** Breakdown of the seed price: base × crowd × saturation (× size for big seeds). */
@@ -449,4 +540,10 @@ export interface GameActions {
   setSeedShape?(shape: SeedShapeChoice): void;
   /** (game) Pick a kernel ring preset from CalibrationView.ringsOptions. */
   setRings?(rings: number[]): void;
+  /** (game) Turno de laboratorio: recharge the generator (Essence, or free when the emergency crank is ready). */
+  rechargeShift?(): boolean;
+  /** (game) Any player input (tap, drag, button): resets the idle clock of the Termo de café. */
+  noteActivity?(): void;
+  /** (game) A panel tab was opened (QA3 F7: opening the Bestiary counts for "look at your creature"). */
+  noteTabOpened?(tab: 'lab' | 'bestiary' | 'calibrate' | 'genome'): void;
 }
