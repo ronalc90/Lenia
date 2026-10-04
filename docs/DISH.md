@@ -140,12 +140,13 @@ ever fires on blobs that are already merging, which die or turn into the maze an
 (σ ≈ .021) is all-or-nothing in these runs; none of the caps produced "a handful of buds" (lysis simply removes
 the budding parent).
 
-## 6. Dish growth (Placa)
+## 6. Dish growth
 
 - Grid allocated once per quality, square, never resampled: **low 168² (dish ≤ 160), medium 232² (≤ 224),
   high 232² (≤ 224, 2 substeps + wider bloom)**. 4 empty cells around the largest dish make clamp-to-edge reads
   exact zero padding, so the step shader needs no wrap and no extra margin of R.
-- Rim diameter by Placa level: **96, 128, 160, 192, 224** cells, capped by quality. Growth only changes the rim
+- Rim diameter by size index (`DISH_DIAMETERS`; the game decides what unlocks each size — today the Placa
+  upgrade, later a research node): **96, 128, 160, 192, 224** cells, capped by quality. Growth only changes the rim
   radius (all matter is kept). Rim and camera ease out over 1.5 s (cubic); the step shader uses the animated
   radius, so nothing ever lives outside the visible glass.
 - Cost: the step shader early-outs outside the disc and the draw is scissored to the dish's bounding box. Max
@@ -154,7 +155,51 @@ the budding parent).
 - R = 18 species (Hydrogeminium ≈ 50 cells across) are cramped below Ø 160; the calibrator could warn when
   R > dish/7.
 
-## 7. Phase-2 integration checklist
+## 7. Public API (Phase 2a) and how the game wires it
+
+| Module | API |
+|---|---|
+| `core/dish.ts` | `DishShape`, `dishForGrid(w, h, diameter)`, `DISH_DIAMETERS` (96…224), `dishDiameterFor(index, maxDiameter)`, `DishAnimator` (`setTarget(shape, animate)`, `update(dt)`, `rim`, `fit`, `glow`, `done`), `dishDist`, `rimDistance`, `insideDish`, `cellInDish`, `clampToDish`, `randomPointInDish`, `dishArea`, `dishCellCount`, `dishMask`, `moveInDish`, `DISH_GRID_MARGIN`, `DISH_GROW_SECONDS` |
+| `core/camera.ts` | `Camera.setDish(shape \| null, fitRadius?)`, `.dish`, `.fitRadius`, `.clamp()`; torus behaviour unchanged without a dish |
+| `sim/perf.ts` | `QUALITY_DISH[quality] = { grid, maxDiameter }` (low 168/160, medium 232/224, high 232/224) |
+| `sim/webgl.ts` | `setDish(shape \| null)`, `dish`, `applyTurns(turns)`, `setLysis(discs)`, `setDishFx({ grow })`, `setCreatureTints(list, amount?)` |
+| `sim/deflect.ts` | `Deflector.update(bodies, dish, step, interval) → Turn[]`, `DEFLECT`; `LysisPlanner.update(targets, step, R) → { discs, started }`, `LYSIS`, `lysisPenalty`, `rotateDiscCpu` |
+| `sim/cpu.ts` | `CpuLenia.setDish`, `applyTurns`, `setLysis` (CPU mirror for tests and bots) |
+| `sim/seed.ts` | `applySeedCpu(…, { dish })`, `applyEraseCpu(…, { dish })` (no wrap, masked) |
+
+Wiring (main, Phase 2b):
+
+```ts
+const q = QUALITY_DISH[quality];
+const sim = createSimulation(canvas, { gridW: q.grid, gridH: q.grid, params });
+const anim = new DishAnimator(dishForGrid(q.grid, q.grid, dishDiameterFor(sizeIndex, q.maxDiameter)));
+sim.setDish(anim.rim); camera.setDish(anim.rim, anim.fit);
+// size change (research node, era reset): anim.setTarget(dishForGrid(...), animate)
+// every frame:
+if (anim.update(dt)) { sim.setDish(anim.rim); camera.setDish(anim.rim, anim.fit); }
+sim.setDishFx({ grow: anim.glow });
+// every detector report (positions extrapolated by v·(sim.stepCount − report.step)):
+sim.applyTurns(deflector.update(bodies, anim.rim, sim.stepCount, DETECT_EVERY));
+const { discs, started } = lysis.update(runawayBlobs, sim.stepCount, params.R);
+sim.setLysis(discs); // started → bus event → Momento "el laboratorio la disolvió"
+// species tints (hue in degrees = SpeciesView.hue): sim.setCreatureTints(creatures.map(c => ({ x: c.x, y: c.y, r: 2 * c.r, hue })))
+```
+
+Caveat for the detector (Phase 2b, measured): a swimmer that bounces in the Ø96 dish turns 60–180° every
+~100 steps, and the detector's rotation tracking then classifies it as **spinner** after ~1000 steps (CPU run:
+stable → spinner at step 1010). The detector must discount the deflection turns (the game can pass the turns
+of each creature id) and `steerable` must not depend on the `spinner` label (the deflector's own heading-curl
+filter already leaves real spinners alone). Also the detector's `exploded` state fires late for a maze nucleus
+(the merged blob splits into worms below 12 R² before the quarter-window ratio exists), so lysis needs an earlier
+"runaway" flag: a component ≥ 3× the median stable creature mass, or one whose mass doubled within ~100 steps.
+
+GPU checks (`node tests/e2e/sim-check.mjs`, SwiftShader): Orbium into the glass GPU vs CPU max|Δ| 1e-5–1e-4
+(f32/u8) and < 0.02 (f16); seeds/erase without wrap 2.5e-4; deflection turn vs `rotateDiscCpu` 2.4e-4; lysis
+vs CPU 7e-4; Orbium bounces 59 times in 2000 steps in the Ø96 GPU dish (mass ×0.96) while the bare-glass control
+dies (×0.08); 232² Ø224 runs at the speed of the old 192×240 torus, Ø96 6× faster. Screenshot:
+`sim-dish.png` (scratchpad).
+
+## 8. Phase-2 integration checklist
 
 GPU step: `inside = |c − centre| < r` (cell centres), outside → 0 and early-out; state textures clamp-to-edge;
 seed/erase/extract without wrap; new rotate pass (mirror of `rotateDiscCpu`); render a round glass dish with rim
@@ -163,7 +208,7 @@ cells. Camera/overlay: fit the circle, clamp pan, no wrapped copies. Game: `dish
 Placa = growth, golden spark bounces (`moveInDish`). main: deflector after each detector report (positions
 extrapolated by v·Δsteps), `steerable` = state stable/born and behaviour not spinner/colony.
 
-## 8. ADR-022 draft (for DECISIONS.md; supersedes ADR-004)
+## 9. ADR-022 draft (for DECISIONS.md; supersedes ADR-004)
 
 **ADR-022: Round walled petri dish that grows; glass deflection instead of wrap**
 
@@ -186,6 +231,9 @@ extrapolated by v·Δsteps), `steerable` = state stable/born and behaviour not s
   - **Glass deflection** (`src/sim/deflect.ts`): after each detector update, swimmers about to reach the rim or
     another swimmer are turned to the mirror direction by rigid rotations of their matter (≤ 60° per update,
     bilinear, identical on GPU and CPU). Spinners, exploded blobs and mazes are never steered.
+  - **Lysis** (same file, `LYSIS`): a blob the detector flags as a runaway gets a local −1 growth disc for
+    60 steps (≤ 8 discs), and the game tells the player why. Overgrown detection + free sterilise stay as the
+    last safety net.
   - The update rule A ← clip(A + dt·G(K∗A)) inside the dish is unchanged (ADR-002 holds).
 - **Consequences:**
   - Orbium survives 99 % of rim impacts (vs 0 % with a bare wall); swimmers bounce like billiard balls; collisions
