@@ -1,0 +1,222 @@
+/* GENERATED from src/ui/art/tokens.ts by tokensCss(); edit the TS file, then run
+   `node --experimental-strip-types --no-warnings src/ui/art/write-css.mjs` (tokens.test.ts fails while they differ). */
+
+:root {
+  --bl-glow-essence: #5bc0eb;
+  --bl-glow-datos: #5ee6c8;
+  --bl-glow-spark: #ffd166;
+  --bl-glow-candle: #ffb86b;
+  --bl-glow-candle-core: #fff3d6;
+  --bl-glow-night: #c9d1ff;
+  --bl-glow-good: #8ae234;
+  --bl-glow-danger: #e4572e;
+  --bl-font-display: Fraunces, 'Fraunces Fallback', Georgia, 'Times New Roman', serif;
+  --bl-font-ui: Inter, 'Inter Fallback', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --bl-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+  --bl-fs-caption: 13px;
+  --bl-lh-caption: 18px;
+  --bl-fw-caption: 600;
+  --bl-fs-small: 14px;
+  --bl-lh-small: 20px;
+  --bl-fw-small: 500;
+  --bl-fs-body: 16px;
+  --bl-lh-body: 24px;
+  --bl-fw-body: 500;
+  --bl-fs-lead: 18px;
+  --bl-lh-lead: 26px;
+  --bl-fw-lead: 600;
+  --bl-fs-title: 22px;
+  --bl-lh-title: 28px;
+  --bl-fw-title: 700;
+  --bl-fs-headline: 28px;
+  --bl-lh-headline: 34px;
+  --bl-fw-headline: 700;
+  --bl-fs-display: 36px;
+  --bl-lh-display: 40px;
+  --bl-fw-display: 700;
+  --bl-fs-hero: 48px;
+  --bl-lh-hero: 52px;
+  --bl-fw-hero: 800;
+  --bl-r-xs: 6px;
+  --bl-r-sm: 8px;
+  --bl-r-md: 12px;
+  --bl-r-lg: 16px;
+  --bl-r-xl: 24px;
+  --bl-r-pill: 999px;
+  --bl-s-xxs: 2px;
+  --bl-s-xs: 4px;
+  --bl-s-sm: 8px;
+  --bl-s-ms: 12px;
+  --bl-s-md: 16px;
+  --bl-s-lg: 24px;
+  --bl-s-xl: 32px;
+  --bl-s-xxl: 48px;
+  --bl-touch: 48px;
+  --bl-z-dish: 0;
+  --bl-z-dish-fx: 5;
+  --bl-z-dish-labels: 10;
+  --bl-z-hud: 20;
+  --bl-z-sheet: 30;
+  --bl-z-toast: 40;
+  --bl-z-dialogue: 50;
+  --bl-z-modal: 60;
+  --bl-z-celebration: 70;
+  --bl-z-cinematic: 80;
+  --bl-t-tap: 90ms;
+  --bl-t-quick: 140ms;
+  --bl-t-base: 200ms;
+  --bl-t-sheet: 260ms;
+  --bl-t-card: 320ms;
+  --bl-t-story: 480ms;
+  --bl-t-celebrate: 700ms;
+  --bl-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --bl-ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --bl-ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --bl-ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --bl-ease-linear: linear;
+  --bl-night: #06090d;
+  --bl-bg: #0b0e12;
+  --bl-surface: #141a21;
+  --bl-surface2: #1b232c;
+  --bl-surface3: #24303c;
+  --bl-line: #28313b;
+  --bl-line2: #3a4652;
+  --bl-text: #e6edf3;
+  --bl-text2: #a7b3bf;
+  --bl-text3: #7d8995;
+  --bl-accent: #5bc0eb;
+  --bl-accent-fill: #5bc0eb;
+  --bl-accent-ink: #04202e;
+  --bl-candle: #ffb86b;
+  --bl-gold: #ffd166;
+  --bl-aurora: #5ee6c8;
+  --bl-moon: #c9d1ff;
+  --bl-good: #8ae234;
+  --bl-warn: #f2a541;
+  --bl-danger: #ff7a5c;
+  --bl-frost: #cfe8f5;
+  --bl-route-time: #5bc0eb;
+  --bl-route-dropper: #36d6c3;
+  --bl-route-dish: #8c9eff;
+  --bl-route-life: #ff7fa8;
+  --bl-route-discovery: #ffa552;
+  --bl-route-worlds: #c792ff;
+  --bl-route-spark: #ffd166;
+  --bl-route-core: #e6edf3;
+  --bl-beh-still: #5bc0eb;
+  --bl-beh-pulsing: #b892ff;
+  --bl-beh-swimmer: #8ae234;
+  --bl-beh-spinner: #ffd166;
+  --bl-beh-divider: #ff8fab;
+  --bl-beh-colony: #f2a541;
+  --bl-shadow-sm: 0 1px 2px rgba(0,0,0,.5);
+  --bl-shadow-md: 0 6px 18px rgba(0,0,0,.45), 0 1px 2px rgba(0,0,0,.5);
+  --bl-shadow-lg: 0 18px 48px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.5);
+  --bl-shadow-glow: 0 0 0 1px rgba(91,192,235,.35), 0 0 24px rgba(91,192,235,.25);
+  --bl-ic-fill: 0.2;
+  color-scheme: dark;
+}
+
+:root[data-theme='light'],
+[data-theme='light'] {
+  --bl-night: #dbe3eb;
+  --bl-bg: #eef2f6;
+  --bl-surface: #ffffff;
+  --bl-surface2: #f5f8fb;
+  --bl-surface3: #e8eef4;
+  --bl-line: #e1e7ed;
+  --bl-line2: #c3ccd5;
+  --bl-text: #0f1720;
+  --bl-text2: #44505d;
+  --bl-text3: #6b7784;
+  --bl-accent: #0a72a6;
+  --bl-accent-fill: #0a72a6;
+  --bl-accent-ink: #ffffff;
+  --bl-candle: #a54f08;
+  --bl-gold: #855600;
+  --bl-aurora: #08745e;
+  --bl-moon: #4a4ea6;
+  --bl-good: #2b7210;
+  --bl-warn: #8f4d00;
+  --bl-danger: #bf3517;
+  --bl-frost: #527d97;
+  --bl-route-time: #0a6f9f;
+  --bl-route-dropper: #087567;
+  --bl-route-dish: #3f4fc4;
+  --bl-route-life: #b1235a;
+  --bl-route-discovery: #a14b06;
+  --bl-route-worlds: #7131c0;
+  --bl-route-spark: #855600;
+  --bl-route-core: #0f1720;
+  --bl-beh-still: #0a6f9f;
+  --bl-beh-pulsing: #6a3fcf;
+  --bl-beh-swimmer: #2b7210;
+  --bl-beh-spinner: #855600;
+  --bl-beh-divider: #b1235a;
+  --bl-beh-colony: #8f4d00;
+  --bl-shadow-sm: 0 1px 2px rgba(24,36,52,.12);
+  --bl-shadow-md: 0 6px 18px rgba(24,36,52,.12), 0 1px 2px rgba(24,36,52,.1);
+  --bl-shadow-lg: 0 18px 48px rgba(24,36,52,.16), 0 2px 6px rgba(24,36,52,.1);
+  --bl-shadow-glow: 0 0 0 1px rgba(10,114,166,.35), 0 0 18px rgba(10,114,166,.18);
+  --bl-ic-fill: 0.14;
+  color-scheme: light;
+}
+
+/* Surfaces that are always night (the dish, the title screen, cinematics). */
+
+.art-force-dark,
+[data-theme='light'] .art-force-dark {
+  --bl-night: #06090d;
+  --bl-bg: #0b0e12;
+  --bl-surface: #141a21;
+  --bl-surface2: #1b232c;
+  --bl-surface3: #24303c;
+  --bl-line: #28313b;
+  --bl-line2: #3a4652;
+  --bl-text: #e6edf3;
+  --bl-text2: #a7b3bf;
+  --bl-text3: #7d8995;
+  --bl-accent: #5bc0eb;
+  --bl-accent-fill: #5bc0eb;
+  --bl-accent-ink: #04202e;
+  --bl-candle: #ffb86b;
+  --bl-gold: #ffd166;
+  --bl-aurora: #5ee6c8;
+  --bl-moon: #c9d1ff;
+  --bl-good: #8ae234;
+  --bl-warn: #f2a541;
+  --bl-danger: #ff7a5c;
+  --bl-frost: #cfe8f5;
+  --bl-route-time: #5bc0eb;
+  --bl-route-dropper: #36d6c3;
+  --bl-route-dish: #8c9eff;
+  --bl-route-life: #ff7fa8;
+  --bl-route-discovery: #ffa552;
+  --bl-route-worlds: #c792ff;
+  --bl-route-spark: #ffd166;
+  --bl-route-core: #e6edf3;
+  --bl-beh-still: #5bc0eb;
+  --bl-beh-pulsing: #b892ff;
+  --bl-beh-swimmer: #8ae234;
+  --bl-beh-spinner: #ffd166;
+  --bl-beh-divider: #ff8fab;
+  --bl-beh-colony: #f2a541;
+  --bl-shadow-sm: 0 1px 2px rgba(0,0,0,.5);
+  --bl-shadow-md: 0 6px 18px rgba(0,0,0,.45), 0 1px 2px rgba(0,0,0,.5);
+  --bl-shadow-lg: 0 18px 48px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.5);
+  --bl-shadow-glow: 0 0 0 1px rgba(91,192,235,.35), 0 0 24px rgba(91,192,235,.25);
+  --bl-ic-fill: 0.2;
+  color-scheme: dark;
+}
+
+/* Icons: duotone fill layer (docs/ARTE.md §5). */
+
+.bl-ic .f {
+  fill: currentColor;
+  stroke: none;
+  opacity: var(--bl-ic-fill);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --bl-t-quick: 1ms; --bl-t-base: 1ms; --bl-t-sheet: 80ms; --bl-t-card: 80ms; --bl-t-story: 80ms; --bl-t-celebrate: 1ms; }
+}
