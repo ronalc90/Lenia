@@ -7,7 +7,8 @@
  * the eye should notice. Reduce motion shows the same diagram as a slow
  * cross-fade between its key frames (no movement).
  */
-import { BEHAVIOR_COLOR, UI, matterColor } from '../../core/palette';
+import { BEHAVIOR_COLOR, UI, matterColor, matterLUT } from '../../core/palette';
+import { accentHueToOklch, tintRow } from '../../sim/tintlut';
 import type { Behavior, Lang, Pattern } from '../../core/types';
 import { BEHAVIOR_MULT } from '../../game/balance';
 import { DATOS_PER_NEW_SPECIES, SEED_PRICE_STEP, SEED_PRICE_STEP_MAX, SESSION_SEED_PRICE } from '../../game/cycleBalance';
@@ -33,6 +34,8 @@ export interface IllusEnv {
   rm: boolean;
   /** Portrait of the species (bestiary capture), if known. */
   portrait?: Pattern | null;
+  /** Its species' accent hue (SpeciesView.hue): the portrait is drawn in that colour. */
+  hue?: number;
   /** Small inline diagram (species card): no text, no badges. */
   mini?: boolean;
   /** Two species for the 'compare' diagram (canvas fallback of the species comparison). */
@@ -369,32 +372,48 @@ function gauge(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, v
 }
 
 /** Sprite of a catalog/bestiary pattern (matter colormap), cached. */
-const patCache = new WeakMap<Pattern, HTMLCanvasElement>();
-function patternCanvas(p: Pattern): HTMLCanvasElement | null {
+const patCache = new WeakMap<Pattern, Map<number, HTMLCanvasElement>>();
+let baseLut: Uint8Array | null = null;
+
+/**
+ * The pattern in matter colours; with `hue`, in its species' tint row (the same colours as on the
+ * dish, sim/tintlut), so a new species wears its own colour from first sight (docs/ESPECIES.md).
+ */
+function patternCanvas(p: Pattern, hue?: number): HTMLCanvasElement | null {
   if (typeof document === 'undefined') return null;
-  let c = patCache.get(p);
+  const key = hue === undefined ? -1 : Math.round(hue);
+  let byHue = patCache.get(p);
+  let c = byHue?.get(key);
   if (c) return c;
   c = document.createElement('canvas');
   c.width = p.w;
   c.height = p.h;
   const ctx = c.getContext('2d');
   if (ctx) {
+    let lut: Uint8Array | null = null;
+    if (hue !== undefined) {
+      baseLut ??= matterLUT();
+      lut = new Uint8Array(256 * 4);
+      tintRow(baseLut, accentHueToOklch(hue), lut, 0);
+    }
     const img = ctx.createImageData(p.w, p.h);
     for (let i = 0; i < p.w * p.h; i++) {
-      const [r, g, b, a] = matterColor(p.data[i]);
-      img.data[i * 4] = r;
-      img.data[i * 4 + 1] = g;
-      img.data[i * 4 + 2] = b;
+      const [r0, g0, b0, a] = matterColor(p.data[i]);
+      const k = Math.max(0, Math.min(255, Math.round(p.data[i] * 255))) * 4;
+      img.data[i * 4] = lut ? lut[k] : r0;
+      img.data[i * 4 + 1] = lut ? lut[k + 1] : g0;
+      img.data[i * 4 + 2] = lut ? lut[k + 2] : b0;
       img.data[i * 4 + 3] = Math.round(a * 255);
     }
     ctx.putImageData(img, 0, 0);
   }
-  patCache.set(p, c);
+  if (!byHue) patCache.set(p, (byHue = new Map()));
+  byHue.set(key, c);
   return c;
 }
 
-function drawPattern(ctx: CanvasRenderingContext2D, p: Pattern, x: number, y: number, size: number, alpha = 1): void {
-  const c = patternCanvas(p);
+function drawPattern(ctx: CanvasRenderingContext2D, p: Pattern, x: number, y: number, size: number, alpha = 1, hue?: number): void {
+  const c = patternCanvas(p, hue);
   if (!c) return;
   const s = size / Math.max(p.w, p.h);
   ctx.save();
@@ -713,7 +732,7 @@ const species: IllusDef = {
     const portrait = env.portrait ?? null;
     ctx.save();
     clipRound(ctx, px, py, S, S);
-    if (portrait) drawPattern(ctx, portrait, cx, cy, 64);
+    if (portrait) drawPattern(ctx, portrait, cx, cy, 64, 1, env.hue);
     else drawClip(ctx, c, (u * 10) % c.total, px, py, S, S, { cells: 40, center: 'centroid' });
     ctx.restore();
     // Viewfinder corners (a photo is being taken).
@@ -768,7 +787,7 @@ const species: IllusDef = {
       ctx.beginPath();
       ctx.roundRect(-19, -25, 38, 38, 4);
       ctx.fill();
-      if (portrait) drawPattern(ctx, portrait, 0, -6, 32);
+      if (portrait) drawPattern(ctx, portrait, 0, -6, 32, 1, env.hue);
       else drawClipSprite(ctx, c, 10, 0, -6, 36, 32);
       ctx.fillStyle = '#2A3440';
       ctx.fillRect(-14, 18, 28, 3);
@@ -1850,7 +1869,7 @@ const compare: IllusDef = {
       ctx.beginPath();
       ctx.arc(cx, cy, 39, 0, TAU);
       ctx.clip();
-      if (sd.portrait) drawPattern(ctx, sd.portrait, cx, cy + Math.sin(u * 2 + i) * 1.5, 62);
+      if (sd.portrait) drawPattern(ctx, sd.portrait, cx, cy + Math.sin(u * 2 + i) * 1.5, 62, 1, sd.hue);
       else {
         const c = clip('swim');
         drawClipSprite(ctx, c, (u * 10 + i * 20) % c.total, cx, cy, 78, 34, i * 2);

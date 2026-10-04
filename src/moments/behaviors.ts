@@ -111,13 +111,13 @@ const TEXT: Record<Behavior, Pick<BehaviorGuide, 'what' | 'see' | 'how' | 'hint'
   still: {
     what: t('No se mueve: se queda siempre en el mismo sitio.', 'It does not move: it always stays in the same spot.'),
     see: t('no se mueve', 'never moves'),
-    how: t('En el Mundo 5 · Discos vive una que no se mueve.', 'In World 5 · Discs lives one that never moves.'),
+    how: t('En el Mundo 2 · Frío vive un anillo que no se mueve.', 'In World 2 · Cold lives a ring that never moves.'),
     hint: t('¿Has visto alguna que no se mueva?', 'Seen one that never moves?'),
   },
   pulsing: {
     what: t('Se hace grande y pequeña una y otra vez, como un corazón.', 'It grows and shrinks again and again, like a heartbeat.'),
     see: t('crece y encoge', 'grows and shrinks'),
-    how: t('Algunas del Mundo 5 · Discos laten como un corazón.', 'Some in World 5 · Discs beat like a heart.'),
+    how: t('El anillo del Mundo 2 · Frío a veces late como un corazón.', 'The ring of World 2 · Cold sometimes beats like a heart.'),
     hint: t('¿Has visto alguna latir como un corazón?', 'Seen one beat like a heart?'),
   },
   swimmer: {

@@ -593,6 +593,7 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
         time: now,
         rm: rm(),
         portrait: m.data.speciesId ? (opts.speciesPortrait?.(m.data.speciesId) ?? null) : null,
+        hue: m.data.speciesId ? opts.speciesInfo?.(m.data.speciesId)?.hue : undefined,
         compare: m.illustration === 'compare' ? compareSides(m) : undefined,
       });
     }

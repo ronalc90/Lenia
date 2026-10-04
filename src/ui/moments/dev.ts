@@ -15,6 +15,7 @@
  *   ?replay=<id>    re-watch a card from the help sheet
  */
 // Art tokens (--bl-*) before every module stylesheet (docs/ARTE.md §12).
+import { featureChips } from '../../species/looks';
 import '../art/art.css';
 import { Bus, type GameEvents } from '../../core/bus';
 import { Camera } from '../../core/camera';
@@ -249,9 +250,11 @@ const demoPrice: SeedPriceView = { base: 2, alive: 2, crowdMult: 1.5, freeSlots:
 const SPECIES: SpeciesView[] = [
   {
     id: 'sp1',
-    name: 'Espécimen 1',
-    subtitle: 'Espécimen 1',
+    name: 'Nadadora celeste',
+    subtitle: 'Criatura 1',
     catalogName: 'Orbium unicaudatus',
+    lookCode: 'O2u',
+    chips: featureChips('O2u').map((c) => ({ id: c.id, label: c.label })),
     rarity: 'common',
     behavior: 'swimmer',
     mult: 1.1,
@@ -262,24 +265,26 @@ const SPECIES: SpeciesView[] = [
     sigmaRange: [0.015, 0.015],
     printCost: 1,
     isNew: false,
-    hue: 196,
+    hue: 198,
   },
   {
     id: 'sp2',
-    name: 'Espécimen 2',
-    subtitle: 'Espécimen 2',
-    catalogName: 'Scutium solidus',
+    name: 'Anillo verde',
+    subtitle: 'Criatura 2',
+    catalogName: 'Circium ventilans',
+    lookCode: 'C0v',
+    chips: featureChips('C0v').map((c) => ({ id: c.id, label: c.label })),
     rarity: 'uncommon',
     behavior: 'still',
     mult: 1.3,
     timesSeen: 1,
     era: 1,
-    portrait: catalogPattern('S1s'),
-    muRange: [0.29, 0.29],
-    sigmaRange: [0.045, 0.045],
+    portrait: catalogPattern('C0v'),
+    muRange: [0.38, 0.38],
+    sigmaRange: [0.07, 0.07],
     printCost: 1,
     isNew: true,
-    hue: 318,
+    hue: 112,
   },
 ];
 
@@ -314,7 +319,7 @@ function creatureViews(): CreatureView[] {
       state: t.age >= 400 ? 'stable' : 'born',
       behavior: t.age >= 400 ? (s2 ? 'still' : 'swimmer') : null,
       speciesId: s2 ? 'sp2' : 'sp1',
-      speciesName: s2 ? 'Scutium solidus' : 'Orbium unicaudatus',
+      speciesName: s2 ? 'Anillo verde' : 'Nadadora celeste',
       eps: t.age >= 400 ? (s2 ? 1.43 : 1.94) : 0,
       age: t.age,
       hue: SPECIES[s2 ? 1 : 0].hue,
@@ -471,10 +476,10 @@ function stage(id: MomentId): unknown {
     case 'division':
       return { id: c.id, x: c.x, y: c.y, amount: 1.2, parentId: c.id };
     case 'species':
-      return { speciesId: 'sp1', name: 'Orbium unicaudatus', rarity: 'common', x: c.x, y: c.y };
+      return { speciesId: 'sp1', name: 'Nadadora celeste', rarity: 'common', x: c.x, y: c.y };
     case 'secondSpecies': {
       const other = tracked[1] ?? c;
-      return { speciesId: 'sp2', name: 'Scutium solidus', rarity: 'uncommon', x: other.x, y: other.y };
+      return { speciesId: 'sp2', name: 'Anillo verde', rarity: 'uncommon', x: other.x, y: other.y };
     }
     default:
       if (id.startsWith('behavior.')) return { behavior: id.slice(9), x: c.x, y: c.y };

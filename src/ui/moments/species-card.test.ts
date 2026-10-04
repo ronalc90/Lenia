@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Pattern, SpeciesView, UpgradeView } from '../../core/types';
 import { creature, makeView } from '../../moments/testUtil';
-import { behaviorMultFor, boostersFor, compareSpecies, shapeLabel, speciesBreakdown, speciesInputFromView, type SpeciesCardInput } from './species-card';
+import { behaviorMultFor, boostersFor, compareSpecies, lookMarks, shapeLabel, speciesBreakdown, speciesInputFromView, type SpeciesCardInput } from './species-card';
 
 function sp(id: string, over: Partial<SpeciesView> = {}): SpeciesView {
   return {
@@ -109,6 +109,32 @@ describe('species card: why it earns what it earns', () => {
 });
 
 describe('species card: telling species apart', () => {
+  it('two species that earn the same are compared by what you SEE, never "they are very alike" (owner, v0.012)', () => {
+    const a = input({ name: 'Anillo verde', lookCode: 'C0v', behavior: 'still', behaviorMult: 1, eps: 2 });
+    const b = input({ id: 'b', name: 'Nadadora celeste', lookCode: 'O2u', behavior: 'swimmer', behaviorMult: 1, eps: 2 });
+    const es = compareSpecies(a, b, 'es');
+    expect(es.reason).toBe('Anillo verde, frente a Nadadora celeste: con un agujero y sin centro brillante.');
+    expect(es.reason).not.toMatch(/se parecen/);
+    expect(es.diffs![0]).toMatchObject({ kind: 'holes', side: 'a' });
+    expect(compareSpecies(a, b, 'en').reason).toBe('Anillo verde, next to Nadadora celeste: with a hole and without a bright centre.');
+  });
+
+  it('marks the differing feature where the portrait really has it (the hole of a ring)', () => {
+    const N = 41;
+    const ring: Pattern = { w: N, h: N, data: new Float32Array(N * N) };
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const d = Math.hypot(x - 20, y - 20);
+      ring.data[y * N + x] = d > 6 && d < 14 ? 0.9 : 0;
+    }
+    const diffs = compareSpecies(input({ lookCode: 'C0v' }), input({ id: 'b', lookCode: 'O2u' }), 'es').diffs!;
+    const m = lookMarks(ring, diffs, 'a');
+    expect(m.length).toBe(1); // the hole is on a; "sin centro brillante" marks b's centre
+    expect(lookMarks(ring, diffs, 'b').length).toBe(1);
+    expect(m[0].x).toBeCloseTo(0.5, 1);
+    expect(m[0].y).toBeCloseTo(0.5, 1);
+    expect(lookMarks(null, diffs, 'a')).toEqual([]);
+  });
+
   it('names the shape from the catalog genus', () => {
     expect(shapeLabel({ catalogName: 'Orbium unicaudatus', portrait: null }, 'es')).toBe('disco con cola');
     expect(shapeLabel({ catalogName: 'Gyrorbium gyrans', portrait: null }, 'en')).toBe('turning disc');

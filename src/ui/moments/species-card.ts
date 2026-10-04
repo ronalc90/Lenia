@@ -25,6 +25,8 @@ import { AFFINITY_OF, LEGACY_AFFINITY } from '../../moments/behaviors';
 import { moIcon } from './icons';
 import { Illustration } from './illustrations';
 import { MS, tr } from './strings';
+import { measureLook } from '../../species/look';
+import { compareLooks, type LookDiff } from '../../species/looks';
 
 // ───────────────────────────── data ─────────────────────────────
 
@@ -64,6 +66,38 @@ export interface SpeciesCardInput {
   /** Essence per second of its best living creature; null = none alive now. */
   eps: number | null;
   boosters: Booster[];
+  /** Canonical catalog code of its look (SpeciesView.lookCode): the comparison names what you SEE. */
+  lookCode?: string;
+  /** 2–3 visual feature chips (SpeciesView.chips), size first. */
+  chips?: { id: string; label: Text }[];
+  /** "variante: pareja"… (SpeciesView.variantNotes). */
+  variantNotes?: Text[];
+  /** Marks drawn on the portrait (set by the comparison): where the differing feature is. */
+  marks?: LookMark[];
+}
+
+/** A mark on a portrait: normalised position (0..1 of the portrait picture) and what it points at. */
+export interface LookMark {
+  x: number;
+  y: number;
+  text: Text;
+}
+
+/**
+ * Where each difference sits on a portrait (pure): the hole, the tip of a long body or legs, or the
+ * centre, measured on the portrait itself (species/look measureLook), so a mark only lands on matter
+ * or holes the creature really has. `side` = which card this portrait belongs to.
+ */
+export function lookMarks(p: Pattern | null, diffs: readonly LookDiff[], side: 'a' | 'b'): LookMark[] {
+  if (!p) return [];
+  const mine = diffs.filter((d) => d.side === side || d.side === 'both');
+  if (!mine.length) return [];
+  // R only sets the smallest hole/body counted: a portrait spans ~4–5 R.
+  const look = measureLook(p, Math.max(p.w, p.h) / 5);
+  return mine.map((d) => {
+    const at = d.anchor === 'holes' ? (look.anchors.holes[0] ?? look.anchors.centre) : d.anchor === 'tip' ? look.anchors.tip : look.anchors.centre;
+    return { x: at[0], y: at[1], text: d.text };
+  });
 }
 
 /** The affinity upgrade of a behaviour in this view: the research-tree node, else the classic Lab's. */
@@ -136,6 +170,9 @@ export function speciesInputFromView(v: GameView, speciesId: string): SpeciesCar
     global,
     eps,
     boosters: boostersFor(behavior, v.upgrades, bonus),
+    ...(sp.lookCode ? { lookCode: sp.lookCode } : {}),
+    ...(sp.chips ? { chips: sp.chips } : {}),
+    ...(sp.variantNotes?.length ? { variantNotes: sp.variantNotes } : {}),
   };
 }
 
@@ -256,8 +293,30 @@ export function speciesBreakdown(s: SpeciesCardInput, lang: Lang): { terms: Brea
   return { terms, total: x(prod), perSec: false };
 }
 
+/**
+ * Which one earns more, and in one sentence why they are different. Two Bestiary species with look
+ * data are compared by what you SEE (a hole, a bright centre, legs, the size: species/looks
+ * compareLooks; docs/ESPECIES.md) — never "they are very alike" — with the yield factor as `detail`.
+ */
+export function compareSpecies(
+  a: SpeciesCardInput,
+  b: SpeciesCardInput,
+  lang: Lang,
+): { winner: 'a' | 'b' | 'tie'; reason: string; detail?: string; diffs?: LookDiff[] } {
+  const y = compareYield(a, b, lang);
+  if (a.lookCode && b.lookCode && a.lookCode !== b.lookCode) {
+    const diffs = compareLooks(a.lookCode, b.lookCode).filter((d) => d.kind !== 'colour').slice(0, 2);
+    if (diffs.length) {
+      const words = diffs.map((d) => d.text[lang]).join(lang === 'es' ? ' y ' : ' and ');
+      const vs = lang === 'es' ? `frente a ${b.name}` : `next to ${b.name}`;
+      return { winner: y.winner, reason: `${a.name}, ${vs}: ${words}.`, detail: y.winner === 'tie' ? undefined : y.reason, diffs };
+    }
+  }
+  return y;
+}
+
 /** Which one earns more, and the one factor that explains most of it, in one sentence. */
-export function compareSpecies(a: SpeciesCardInput, b: SpeciesCardInput, lang: Lang): { winner: 'a' | 'b' | 'tie'; reason: string } {
+function compareYield(a: SpeciesCardInput, b: SpeciesCardInput, lang: Lang): { winner: 'a' | 'b' | 'tie'; reason: string } {
   const val = (s: SpeciesCardInput) => s.eps ?? (s.form ?? 1) * s.behaviorMult * s.speciesMult * s.global;
   const va = val(a);
   const vb = val(b);
@@ -346,6 +405,18 @@ export function paintPortrait(canvas: HTMLCanvasElement, p: Pattern | null, hue:
   ctx.drawImage(src, (W - p.w * s) / 2, (H - p.h * s) / 2, p.w * s, p.h * s);
 }
 
+const MOTION_CHIPS: ReadonlySet<string> = new Set(['spins', 'still', 'swims']);
+
+/** CSS position of a mark on the round portrait (paintPortrait fits the picture to 86 % of the box). */
+function markStyle(p: Pattern | null, m: LookMark): string {
+  const side = p ? Math.max(p.w, p.h) : 1;
+  const fx = p ? p.w / side : 1;
+  const fy = p ? p.h / side : 1;
+  const x = 50 + (m.x - 0.5) * fx * 86;
+  const y = 50 + (m.y - 0.5) * fy * 86;
+  return `left:${x.toFixed(1)}%;top:${y.toFixed(1)}%`;
+}
+
 export interface SpeciesCardOpts {
   lang(): Lang;
   reduceMotion?(): boolean;
@@ -411,7 +482,7 @@ export function createSpeciesCard(container: HTMLElement, input: SpeciesCardInpu
 
   function render(s: SpeciesCardInput): void {
     const L = opts.lang();
-    const key = [L, s.name, s.catalogName, s.scientificName, s.subtitle, s.hue, s.behavior, s.shape?.es, s.boosters.map((x) => `${x.id}:${x.level}:${x.unlocked}:${x.maxed}`).join(',')].join('|');
+    const key = [L, s.name, s.catalogName, s.scientificName, s.subtitle, s.hue, s.behavior, s.shape?.es, (s.chips ?? []).map((c) => c.id).join(','), (s.marks ?? []).map((m) => m.text.es).join(','), (s.variantNotes ?? []).map((n) => n.es).join(','), s.boosters.map((x) => `${x.id}:${x.level}:${x.unlocked}:${x.maxed}`).join(',')].join('|');
     if (key === shapeKey && s.portrait === lastPortrait && patchNumbers(s, L)) return;
     shapeKey = key;
     lastPortrait = s.portrait;
@@ -425,18 +496,29 @@ export function createSpeciesCard(container: HTMLElement, input: SpeciesCardInpu
     const sci = latin && latin !== s.name ? latin : '';
     el.innerHTML = `
       <header class="mo-spc-h">
-        <span class="mo-spc-pt"><canvas width="128" height="128"></canvas></span>
+        <span class="mo-spc-pt"><canvas width="128" height="128"></canvas>${(s.marks ?? [])
+          .map((m, i) => `<span class="mo-spc-mark" style="${markStyle(s.portrait, m)}" aria-hidden="true" data-i="${i + 1}"></span>`)
+          .join('')}</span>
         <div class="mo-spc-n">
           <b>${esc(s.name)}</b>
           ${sci ? `<small class="latin">${esc(sci)}</small>` : s.subtitle ? `<small>${esc(s.subtitle)}</small>` : ''}
           <span class="mo-spc-tags">
-            <span class="mo-spc-tag">${moIcon('drop', 14)}${esc(shapeLabel(s, L))}</span>
+            ${
+              s.chips?.length
+                ? s.chips
+                    .filter((c) => !MOTION_CHIPS.has(c.id)) // the behaviour tag next to them says how it moves
+                    .map((c) => `<span class="mo-spc-tag chip">${esc(c.label[L])}</span>`)
+                    .join('')
+                : `<span class="mo-spc-tag">${moIcon('drop', 14)}${esc(shapeLabel(s, L))}</span>`
+            }
             ${
               opts.onBehavior && s.behavior
                 ? `<button type="button" class="mo-spc-tag beh" data-beh="${s.behavior}" style="--b-c:${bcol}" aria-label="${esc(tr(MS.bhOpen, L))}: ${esc(behaviorName(s.behavior, L))}">${moIcon(s.behavior, 14)}${esc(behaviorName(s.behavior, L))} ${moIcon('info', 12)}</button>`
                 : `<span class="mo-spc-tag beh" style="--b-c:${bcol}">${moIcon(s.behavior ?? 'still', 14)}${esc(behaviorName(s.behavior, L))}</span>`
             }
           </span>
+          ${s.marks?.some((m) => m.text[L]) ? `<span class="mo-spc-diff">${s.marks.filter((m) => m.text[L]).map((m) => `<span>➜ ${esc(m.text[L])}</span>`).join('')}</span>` : ''}
+          ${s.variantNotes?.length ? `<small class="mo-spc-var">${esc(s.variantNotes.map((n) => n[L]).join(' · '))}</small>` : ''}
         </div>
       </header>
       <div class="mo-spc-anim" aria-hidden="true"><canvas></canvas></div>
@@ -511,7 +593,7 @@ export function createSpeciesCompare(
   const cmp = compareSpecies(a, b, L);
   const head = document.createElement('div');
   head.className = 'mo-cmp-h';
-  head.innerHTML = `${opts.title === false ? '' : `<h3>${tr(MS.cmpTitle, L)}</h3>`}<p>${esc(cmp.reason)}</p>`;
+  head.innerHTML = `${opts.title === false ? '' : `<h3>${tr(MS.cmpTitle, L)}</h3>`}<p>${esc(cmp.reason)}</p>${cmp.detail ? `<p class="detail">${esc(cmp.detail)}</p>` : ''}`;
   const cols = document.createElement('div');
   cols.className = 'mo-cmp-cols';
   el.append(head, cols);
@@ -521,7 +603,9 @@ export function createSpeciesCompare(
     col.className = 'mo-cmp-col' + ((cmp.winner === 'a' && i === 0) || (cmp.winner === 'b' && i === 1) ? ' win' : '');
     if (col.classList.contains('win')) col.insertAdjacentHTML('afterbegin', `<span class="mo-cmp-win">${moIcon('up', 14)}${tr(MS.cmpMore, L)}</span>`);
     cols.appendChild(col);
-    return createSpeciesCard(col, s, { ...opts, compact: true });
+    // Rings on both portraits; the words only on the new species' card (they describe it).
+    const marks = (cmp.diffs ? lookMarks(s.portrait, cmp.diffs, i === 0 ? 'a' : 'b') : []).map((m) => (i === 0 ? m : { ...m, text: { es: '', en: '' } }));
+    return createSpeciesCard(col, marks.length ? { ...s, marks } : s, { ...opts, compact: true });
   });
   const vs = document.createElement('span');
   vs.className = 'mo-cmp-vs';

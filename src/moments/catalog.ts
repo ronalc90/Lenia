@@ -13,6 +13,7 @@ import type { Behavior, GameView, Lang, Text } from '../core/types';
 import { GOLDEN_LIFE, OFFLINE_RATE, SAMPLES_NEW_BEHAVIOR, SAMPLES_NEW_SPECIES } from '../game/balance';
 import { DATOS_PER_NEW_BEHAVIOR, DATOS_PER_NEW_SPECIES, SESSION_TIME_PER_SPECIES } from '../game/cycleBalance';
 import { fmt, fmtDuration, fmtRate } from '../ui/format';
+import { closestKnown } from '../species/looks';
 import { behaviorGuide, bonusText } from './behaviors';
 import type {
   Built,
@@ -332,8 +333,9 @@ export const MOMENTS: MomentDef[] = [
     id: 'secondSpecies',
     priority: 84,
     title: t('Dos especies distintas', 'Two different species'),
-    // One line: the two cards and the one-sentence reason below it do the rest.
-    lines: [t('¡Otra especie! Cada forma se mueve distinto y da distinta Esencia.', 'Another species! Each shape moves differently and gives different Essence.')],
+    // One line; the comparison above the two cards names what you SEE is different (a hole, a bright
+    // centre, the size: species/looks, docs/ESPECIES.md) and rings mark it on both portraits.
+    lines: [t('¡Otra especie! Mira qué tiene distinto.', 'Another species! Look at what is different.')],
     brief: t('¡Otra especie!', 'Another species!'),
     illustration: 'compare',
     icon: 'book',
@@ -343,10 +345,17 @@ export const MOMENTS: MomentDef[] = [
     build: from('speciesNew', (p, c) => {
       const v = c.view();
       const near = nearestCreature(v, p.x, p.y);
-      // The other species: preferably one with a creature alive on the dish right now.
       const others = v.species.filter((s) => s.id !== p.speciesId);
-      const alive = v.creatures.find((cr) => cr.state === 'stable' && cr.speciesId && cr.speciesId !== p.speciesId && others.some((o) => o.id === cr.speciesId));
-      const other = alive ? others.find((o) => o.id === alive.speciesId)! : others[0];
+      const me = v.species.find((s) => s.id === p.speciesId);
+      // The other species: the known one that LOOKS most like the new one (the comparison then names
+      // what differs); without look data, one with a creature alive on the dish right now.
+      const knownCodes = others.map((o) => o.lookCode).filter((x): x is string => !!x);
+      const closest = me?.lookCode ? closestKnown(me.lookCode, knownCodes) : null;
+      const byLook = closest ? others.find((o) => o.lookCode === closest) : undefined;
+      const alive = v.creatures.find(
+        (cr) => cr.state === 'stable' && cr.speciesId && cr.speciesId !== p.speciesId && (byLook ? cr.speciesId === byLook.id : others.some((o) => o.id === cr.speciesId)),
+      );
+      const other = byLook ?? (alive ? others.find((o) => o.id === alive.speciesId)! : others[0]);
       const focus = at(p.x, p.y, 2, near?.id ?? null, ['tab.bestiary']);
       if (alive) focus.others = [{ x: alive.x, y: alive.y, id: alive.id }];
       // One name per species: the common one (docs/CLARIDAD.md J-118).
