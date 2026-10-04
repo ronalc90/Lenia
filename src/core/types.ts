@@ -215,6 +215,8 @@ export interface GenomeNodeView {
   available: boolean;
   affordable: boolean;
   requires: string[];
+  /** (game) Shown but not purchasable in this version. */
+  comingSoon?: boolean;
 }
 
 export interface SpeciesView {
@@ -249,6 +251,12 @@ export interface CalibrationView {
   dtRange: [number, number] | null;
   regimes: { name: string; mu: number; sigma: number; R: number; dt: number }[];
   maxRegimes: number;
+  /** (game) Current kernel ring peaks. */
+  rings?: number[];
+  /** (game) Ring presets the player may pick (Genome: Anillos dobles/triples); null = locked. */
+  ringsOptions?: number[][] | null;
+  /** (game) Microscopio III: (μ, σ) of undiscovered catalog species to mark under the sliders. */
+  hints?: { mu: number; sigma: number }[];
 }
 
 export interface JournalEntryView {
@@ -327,6 +335,10 @@ export interface GameView {
     /** Simulation speed multipliers available (Incubadora). */
     speeds: number[];
     speed: number;
+    /** (game) Seed shapes unlocked by the Gotero (always includes 'blob'). */
+    shapes?: SeedShapeChoice[];
+    /** (game) Currently selected seed shape. */
+    shape?: SeedShapeChoice;
   };
   upgrades: UpgradeView[];
   genomeNodes: GenomeNodeView[];
@@ -337,6 +349,8 @@ export interface GameView {
   journal: JournalEntryView[];
   achievements: AchievementView[];
   extinction: {
+    /** (game) 0..1 progress towards availability (essence term). */
+    progress?: number;
     available: boolean;
     genomeGain: number;
     /** Estimated gain if the player waits 10 more minutes. */
@@ -358,7 +372,22 @@ export interface GameView {
     seeds: number;
     creaturesBorn: number;
   };
+  /** (game) Free seeds (Lluvia de esporas) and guaranteed seeds (Mutágeno) waiting to be used. */
+  charges?: { free: number; guaranteed: number };
+  /** (game) Archivo: free print timer; ready = next print costs 0 Muestras. */
+  freePrint?: { active: boolean; ready: boolean; progress: number };
+  /** (game) Marcador owned: draw a behaviour dot on creatures. */
+  markers?: boolean;
+  /** (game) Microscopio level 0..3 (I: μ/σ ranges, II: speed/period/signature, III: slider hints). */
+  microscope?: number;
+  /** (game) Numeric progress of the current objective. */
+  objectiveProgress?: { current: number; target: number; reward: number } | null;
+  /** (game) Production multiplier breakdown for the HUD tooltip. */
+  multipliers?: { global: number; buffs: number };
 }
+
+/** (game) Seed shapes selectable with the Gotero. */
+export type SeedShapeChoice = 'blob' | 'ring' | 'noise';
 
 /** Everything the UI may ask the game to do. */
 export interface GameActions {
@@ -385,4 +414,8 @@ export interface GameActions {
   setSetting<K extends keyof Settings>(key: K, value: Settings[K]): void;
   /** Buy quantity selector shared by upgrade lists. */
   setBuyQty(q: BuyQty): void;
+  /** (game) Pick the Gotero seed shape (only unlocked shapes are accepted). */
+  setSeedShape?(shape: SeedShapeChoice): void;
+  /** (game) Pick a kernel ring preset from CalibrationView.ringsOptions. */
+  setRings?(rings: number[]): void;
 }
