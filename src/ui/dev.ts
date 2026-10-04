@@ -7,6 +7,8 @@
  *             &splash=0 (skip title)  &tutorial=1 (force tutorial; on by default for fresh)
  *             &lb=error|none (leaderboard failure / no leaderboard)
  */
+// Art tokens (--bl-*) before every module stylesheet (docs/ARTE.md §12).
+import './art/art.css';
 import { bus } from '../core/bus';
 import { Camera } from '../core/camera';
 import type { CreatureView } from '../core/types';

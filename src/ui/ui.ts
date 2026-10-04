@@ -8,14 +8,15 @@ import './ui.css';
 import { bus } from '../core/bus';
 import { mod, wrapDelta, type Camera } from '../core/camera';
 import { BEHAVIOR_COLOR } from '../core/palette';
-import type { BuyQty, GameActions, GameView, Lang } from '../core/types';
+import type { Behavior, BuyQty, GameActions, GameView, Lang, Text } from '../core/types';
 import { TABS, type Ctx, type Panel, type TabId, type TextSize, type ThemePref, type ToastKind } from './ctx';
 import { h, ic, loadJSON, reconcile, saveJSON, setAttr, setHTML, setStyle, setText, show, toggle, vibrate } from './dom';
-import { fmt, fmtClock, fmtRate, fmtShort } from './format';
+import { fmt, fmtClock, fmtDuration, fmtRate, fmtShort } from './format';
 import { behaviorName, getLang, setLang, stateName, t, tx, type StrKey } from './i18n';
 import { icon, logo } from './icons';
 import { DishInput } from './input';
 import { emptyState, type EmptyArt } from './empty';
+import { TEXT } from '../game/content';
 import {
   ModalHost,
   openAchievementCard,
@@ -91,6 +92,35 @@ export interface UIDeps {
   tutorial?: boolean;
   /** Optional: the title screen was dismissed (game can start music, timers...). */
   onSplashDone?(): void;
+  /** Optional: something else owns the camera right now (a Momento zoom): "follow" waits. */
+  cameraBusy?(): boolean;
+  /**
+   * Optional: explain behaviours (the Behaviour Guide), scrolled to one when given. Makes behaviour rows,
+   * status pills and the species sheet's behaviour badge tappable, and adds a "Maneras de moverse" button
+   * to the Bestiary.
+   */
+  onBehaviorInfo?(behavior?: Behavior | null): void;
+  /** Optional: the player started holding for a big seed (the price meter says "Semilla grande ×2,25"). */
+  onChargeStart?(): void;
+  /** Optional: return true when another surface explains this offline return (the first-time Momento). */
+  suppressOfflineCard?(seconds: number, essence: number): boolean;
+  /** Optional: return true to drop a game toast that another surface already tells (one thing per event). */
+  suppressToast?(text: Text, kind: string): boolean;
+  /**
+   * Optional: return true when a card or label already announces new species (the Momentos): then
+   * the "¡Especie nueva!" toast is skipped and only the burst on the dish stays (CLARIDAD §3.3).
+   */
+  speciesTold?(): boolean;
+  /**
+   * Optional: while true, the objective bar shows `objectiveSlot` (e.g. the Encargos badge) instead of the
+   * game's built-in objective line. The bar floats over the dish either way (no layout shift).
+   */
+  objectiveOverride?(): boolean;
+  /**
+   * Optional: extra content at the end of the species sheet (e.g. the species card with its yield
+   * equation). Called when the sheet opens; `update` runs with every view, `dispose` on close.
+   */
+  speciesExtras?(container: HTMLElement, speciesId: string): { update(v: GameView): void; dispose(): void } | null;
 }
 
 export type UISound = 'tap' | 'tab' | 'open' | 'close' | 'buy' | 'deny' | 'toggle' | 'hold' | 'confirm';
@@ -126,6 +156,18 @@ export interface UI {
    * creature halos, clipped to the dish; 'top' = above everything on the overlay. Returns a remover.
    */
   addOverlayLayer(fn: OverlayLayer, slot?: OverlayLayerSlot): () => void;
+  /** Live (smoothed) grid position of a creature, or null (Momentos follow it while zooming). */
+  creaturePos(id: number): { x: number; y: number } | null;
+  /** Creature status pills: on the most informative creatures (`onAll`), or hidden while a Momento explains. */
+  setCreatureLabels(onAll: boolean, hidden: boolean): void;
+  /** Slot next to the seed cost for the price meter + reason chip (src/ui/moments SlotMeter). */
+  readonly seedMeterSlot: HTMLElement;
+  /** Content of the objective bar while `objectiveOverride()` (the Encargos badge mounts here). */
+  readonly objectiveSlot: HTMLElement;
+  /** The dish element (the box the Camera views): secrets effects layer, shake and stroke inputs. */
+  readonly dishEl: HTMLElement;
+  /** The HUD essence counter (long press = a secret). */
+  readonly essenceEl: HTMLElement;
 }
 
 export function createUI(root: HTMLElement, deps: UIDeps): UI {
@@ -160,9 +202,28 @@ function sanitizePrefs(raw: unknown): Prefs {
   };
 }
 const THEME_KEY = 'bioluma.theme';
+/** Quiet time with an empty dish before the "tap here again" finger returns (QA2 §5b, CLARIDAD J-164). */
+const TAP_AGAIN_HINT_MS = 8000;
+/** Simulation steps per second at ×1 (main.ts STEPS_PER_SEC): creature age is shown in seconds. */
+const AGE_STEPS_PER_SEC = 30;
 const TAB_LABEL: Record<TabId, StrKey> = { lab: 'tabLab', bestiary: 'tabBestiary', calibrate: 'tabCalibrate', genome: 'tabGenome' };
 const TAB_ICON: Record<TabId, string> = { lab: 'lab', bestiary: 'bestiary', calibrate: 'calibrate', genome: 'genome' };
 const LOCK_HINT: Record<TabId, StrKey> = { lab: 'lockLab', bestiary: 'lockBestiary', calibrate: 'lockCalibrate', genome: 'lockGenome' };
+
+/**
+ * Bring an element into view by scrolling ONLY its nearest vertically scrollable ancestor (a panel, a
+ * sheet). `scrollIntoView` would also scroll overflow:hidden ancestors sideways and shift the whole
+ * layout by a few pixels (measured on desktop: HUD, dish and tabs moved 6 px).
+ */
+export function scrollIntoViewY(el: HTMLElement, margin = 8): void {
+  let sc: HTMLElement | null = el.parentElement;
+  while (sc && !(sc.scrollHeight > sc.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(sc).overflowY))) sc = sc.parentElement;
+  if (!sc) return;
+  const r = el.getBoundingClientRect();
+  const b = sc.getBoundingClientRect();
+  if (r.top < b.top + margin) sc.scrollTop += r.top - b.top - margin;
+  else if (r.bottom > b.bottom - margin) sc.scrollTop += Math.min(r.bottom - b.bottom + margin, r.top - b.top - margin);
+}
 
 /** Restart a one-shot CSS animation class. */
 function retriggerClass(el: HTMLElement, cls: string): void {
@@ -208,6 +269,13 @@ class BiolumaUI implements UI {
   private lastSeedCost = -1;
   /** Slot reserved next to the seed cost for the price meter (src/ui/moments wires it). */
   readonly seedMeterSlot = h('span', { class: 'mp-meter' });
+  /** Objective bar content while deps.objectiveOverride() (the Encargos badge). */
+  readonly objectiveSlot = h('div', { class: 'obj-slot', hidden: true });
+  private objOverride = false;
+  private chargeTimer = 0;
+  private essBtn!: HTMLButtonElement;
+  /** When the essence counter was pressed (a long press must not open the stats sheet). */
+  private essDownAt = 0;
   private overgrownEl!: HTMLElement;
   private modePill!: HTMLElement;
   private modeKey = '';
@@ -260,6 +328,8 @@ class BiolumaUI implements UI {
   private dispEssence = -1;
   private lastFrameAt = 0;
   private firstTapDone = false;
+  /** performance.now() of the last seed tap (0 = none yet): drives the "tap here again" hint. */
+  private lastTapAt = 0;
   private lastBigTap = 0;
   private follow: number | null = null;
   private ctx: Ctx;
@@ -393,7 +463,8 @@ class BiolumaUI implements UI {
       },
       openSpecies: (id) => {
         this.modals.find('species')?.close();
-        openSpecies(this.modals, this.ctx, id);
+        const m = openSpecies(this.modals, this.ctx, id);
+        this.attachSpeciesExtras(m, id);
       },
       enterPrintMode: (id) => this.enterPrint(id),
       fxBurst: (el, color, text) => this.fxBurst(el, color, text),
@@ -428,7 +499,15 @@ class BiolumaUI implements UI {
       ic('essence', 24, 'ess-ic'),
       h('span', { class: 'ess-col' }, this.essVal, this.essRate),
     );
-    essBtn.addEventListener('click', () => this.openJournal('stats'));
+    this.essBtn = essBtn;
+    // A long press is something else (a secret): only a short tap opens the stats.
+    essBtn.addEventListener('pointerdown', () => (this.essDownAt = performance.now()));
+    essBtn.addEventListener('click', () => {
+      const held = this.essDownAt ? performance.now() - this.essDownAt : 0;
+      this.essDownAt = 0;
+      if (held > 700) return;
+      this.openJournal('stats');
+    });
     this.curSamplesVal = h('span', { class: 'mono' }, '0');
     this.curGenomeVal = h('span', { class: 'mono' }, '0');
     this.curSamples = h('div', { class: 'cur cur-samples pending' }, ic('samples', 24), this.curSamplesVal);
@@ -460,10 +539,18 @@ class BiolumaUI implements UI {
     this.objText = h('span', { class: 'obj-text' });
     this.objFill = h('i');
     this.objBar = h('span', { class: 'obj-bar', hidden: true }, this.objFill);
-    this.objEl = h('div', { class: 'bl-objective', hidden: true, role: 'status' }, this.objIcon, this.objLabel, this.objText, this.objBar);
+    this.objEl = h(
+      'div',
+      { class: 'bl-objective', hidden: true, role: 'status' },
+      this.objIcon,
+      this.objLabel,
+      this.objText,
+      this.objBar,
+      this.objectiveSlot,
+    );
 
     // Dish
-    this.dish = h('main', { class: 'bl-dish' });
+    this.dish = h('main', { class: 'bl-dish art-force-dark' });
     const gl = this.deps.glCanvas;
     gl.classList.add('bl-gl');
     this.fabPause = h('button', { type: 'button', class: 'fab fab-pause round' });
@@ -491,6 +578,20 @@ class BiolumaUI implements UI {
       cleanBig,
     );
     this.modePill = h('div', { class: 'mode-pill' });
+    // Seed mode: ONE tap anywhere on the price pill explains the price (docs/MOMENTOS.md §2d).
+    const priceInfo = (e: Event) => {
+      if (!this.modePill.classList.contains('price')) return;
+      e.stopPropagation();
+      this.sound('open');
+      this.deps.onSeedPriceInfo?.();
+    };
+    this.modePill.addEventListener('click', priceInfo);
+    this.modePill.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        priceInfo(e);
+      }
+    });
     this.buffsEl = h('div', { class: 'buffs' });
     this.dishUI = h(
       'div',
@@ -552,8 +653,16 @@ class BiolumaUI implements UI {
           this.renderCardFollow();
         }
       },
-      pressStart: (x, y) => this.overlay.chargeStart(x, y),
-      pressEnd: () => this.overlay.chargeEnd(),
+      pressStart: (x, y) => {
+        this.overlay.chargeStart(x, y);
+        // Same 120 ms grace as the charge ring: a quick tap never flashes "big seed".
+        clearTimeout(this.chargeTimer);
+        if (this.mode === 'seed' && this.deps.onChargeStart) this.chargeTimer = window.setTimeout(() => this.deps.onChargeStart?.(), 150);
+      },
+      pressEnd: () => {
+        clearTimeout(this.chargeTimer);
+        this.overlay.chargeEnd();
+      },
       mode: () => this.mode,
       longPressEnabled: () => !!this.v?.tools.longPress,
       brushEnabled: () => !!this.v?.tools.brush,
@@ -638,8 +747,8 @@ class BiolumaUI implements UI {
 
   frame(timeSec: number, dtSec: number): void {
     this.lastFrameAt = performance.now();
-    // Follow a creature with the camera.
-    if (this.follow !== null) {
+    // Follow a creature with the camera (not while a Momento owns the camera).
+    if (this.follow !== null && !this.deps.cameraBusy?.()) {
       const p = this.overlay.creaturePos(this.follow);
       if (p) {
         const k = 1 - Math.exp(-Math.min(dtSec, 0.1) * 4);
@@ -659,8 +768,8 @@ class BiolumaUI implements UI {
   }
 
   targetRect(id: string): DOMRect | null {
-    const q = (sel: string): DOMRect | null => {
-      const el = this.el.querySelector(sel) as HTMLElement | null;
+    const q = (sel: string, root: ParentNode = this.el): DOMRect | null => {
+      const el = root.querySelector(sel) as HTMLElement | null;
       if (!el || !el.offsetParent) return null;
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0 ? r : null;
@@ -675,6 +784,17 @@ class BiolumaUI implements UI {
     };
     if (id === 'dish') return q('.bl-dish');
     if (id === 'hud.essence') return q('.hud-ess');
+    if (id === 'hud.samples') return q('.cur-samples');
+    if (id === 'hud.genome') return q('.cur-genome');
+    // Session clock and research tree are mounted by their own modules, maybe outside this root.
+    if (id === 'hud.clock') return q('.ss-hud', document);
+    if (id === 'tree.open') return q('.ss-btn[data-act="tree"]', document);
+    if (id === 'tree.center') return q('.rt-node[data-id="lab"]', document);
+    if (id === 'tree.next') return q('.rt-node.can', document);
+    if (id === 'world.picker') return q('.ss-worlds', document) ?? q('.ss-world', document);
+    if (id.startsWith('tree.node.')) return q(`.rt-node[data-id="${CSS.escape(id.slice(10))}"]`, document);
+    if (id === 'seed') return q('.mode-pill');
+    if (id === 'objective') return q('.bl-objective');
     if (id === 'extinguish') return q('.ext-btn');
     if (id.startsWith('tab.')) return q(`.bl-tabs .tab[data-tab="${id.slice(4)}"]`);
     if (id.startsWith('upgrade.')) return q(`[data-up="${id.slice(8)}"] .buy`);
@@ -694,16 +814,19 @@ class BiolumaUI implements UI {
   }
 
   reveal(id: string): void {
+    // An upgrade lives in its own tab (Catalogación is in the Bestiary).
+    const upTab = id.startsWith('upgrade.') ? (this.v?.upgrades.find((u) => u.id === id.slice(8))?.tab as TabId | undefined) : undefined;
     const tab: TabId | null = id.startsWith('tab.')
       ? (id.slice(4) as TabId)
       : id.startsWith('upgrade.')
-        ? 'lab'
+        ? (upTab && TABS.includes(upTab) ? upTab : 'lab')
         : id === 'extinguish'
           ? 'genome'
           : null;
     if (tab && TABS.includes(tab) && this.v?.tabs[tab]) this.switchTab(tab, true);
     const sel = id.startsWith('upgrade.') ? `[data-up="${id.slice(8)}"]` : id === 'extinguish' ? '.ext-btn' : null;
-    if (sel) (this.el.querySelector(sel) as HTMLElement | null)?.scrollIntoView({ block: 'nearest' });
+    const target = sel ? (this.el.querySelector(sel) as HTMLElement | null) : null;
+    if (target) scrollIntoViewY(target);
   }
 
   restartTutorial(): void {
@@ -731,11 +854,30 @@ class BiolumaUI implements UI {
     return this.overlay.addLayer(fn, slot);
   }
 
+  creaturePos(id: number): { x: number; y: number } | null {
+    return this.overlay.creaturePos(id);
+  }
+
+  setCreatureLabels(onAll: boolean, hidden: boolean): void {
+    this.overlay.statusOnAll = onAll;
+    this.overlay.statusHidden = hidden;
+  }
+
+  get dishEl(): HTMLElement {
+    return this.dish;
+  }
+
+  get essenceEl(): HTMLElement {
+    return this.essBtn;
+  }
+
   setSimRate(stepsPerSec: number): void {
     this.overlay.simRate = Number.isFinite(stepsPerSec) && stepsPerSec > 0 ? stepsPerSec : 0;
   }
 
   showOfflineCard(seconds: number, essence: number): void {
+    // The first return is explained by a Momento: no second popup for the same event.
+    if (this.deps.suppressOfflineCard?.(seconds, essence)) return;
     if (this.splash?.visible) {
       this.pendingOffline = { seconds, essence };
       return;
@@ -780,7 +922,7 @@ class BiolumaUI implements UI {
       `+${fmtRate(v.essencePerSec, lang)}${t('perSec')}` + (buffMult > 1 ? `<span class="buffx">×${fmtShort(buffMult, lang)}</span>` : '');
     setHTML(this.essRate, rateHTML);
     toggle(this.essRate, 'zero', v.essencePerSec <= 0);
-    setAttr(this.essVal.parentElement!.parentElement!, 'aria-label', `${t('essence')}: ${fmt(v.essence, lang)}, +${fmtRate(v.essencePerSec, lang)}/s`);
+    setAttr(this.essVal.parentElement!.parentElement!, 'aria-label', t('essAria', { n: fmt(v.essence, lang), r: fmtRate(v.essencePerSec, lang) }));
     // Multiplier breakdown (QA3 F13), when the game exposes it: tooltip on the essence counter.
     const mu = v.multipliers;
     setAttr(
@@ -790,8 +932,10 @@ class BiolumaUI implements UI {
     );
 
     // Fixed slots from the start: a dim "—" until the currency is earned (no pop-in, no reflow).
-    const hasSamples = v.tabs.bestiary || v.samples > 0;
-    const hasGenome = v.tabs.genome || v.genome > 0 || v.era > 1;
+    // The sessions loop has neither (Datos live in the session HUD): their places stay empty.
+    const classic = v.cycle !== 'sessions';
+    const hasSamples = classic && (v.tabs.bestiary || v.samples > 0);
+    const hasGenome = classic && (v.tabs.genome || v.genome > 0 || v.era > 1);
     toggle(this.curSamples, 'pending', !hasSamples);
     toggle(this.curGenome, 'pending', !hasGenome);
     setText(this.curSamplesVal, hasSamples ? fmt(v.samples, lang) : '—');
@@ -840,6 +984,7 @@ class BiolumaUI implements UI {
   // ───────────────────────────── objective ─────────────────────────────
 
   private updateObjective(v: GameView): void {
+    if (this.updateObjectiveOverride()) return;
     const text = v.objective ? tx(v.objective) : null;
     // Progress: explicit optional field, else parsed from "(7/8)" in the text.
     let prog = (v as { objectiveProgress?: number }).objectiveProgress;
@@ -876,6 +1021,41 @@ class BiolumaUI implements UI {
       return;
     }
     this.applyObjective(text);
+  }
+
+  /**
+   * The objective bar shows `objectiveSlot` (the Encargos badge) instead of the built-in line while
+   * deps.objectiveOverride(). The bar is visible while the slot has visible content. Returns true when
+   * the override owns the bar.
+   */
+  private updateObjectiveOverride(): boolean {
+    const on = !!this.deps.objectiveOverride?.();
+    if (on !== this.objOverride) {
+      this.objOverride = on;
+      if (this.objTimer) {
+        clearTimeout(this.objTimer);
+        this.objTimer = 0;
+        this.objEl.classList.remove('done');
+        setHTML(this.objIcon, icon('target'));
+      }
+      this.objShown = null;
+      this.objPending = null;
+      toggle(this.objEl, 'obj-custom', on);
+      show(this.objectiveSlot, on);
+      if (!on) {
+        show(this.objEl, false);
+        toggle(this.el, 'no-objective', true);
+      }
+    }
+    if (!on) return false;
+    let visible = false;
+    for (const c of this.objectiveSlot.children) if (!(c as HTMLElement).hidden) visible = true;
+    if (visible !== !this.objEl.hidden) {
+      show(this.objEl, visible);
+      toggle(this.el, 'no-objective', !visible);
+      if (visible) retriggerClass(this.objEl, 'enter');
+    }
+    return true;
   }
 
   private topInset = '';
@@ -1175,14 +1355,16 @@ class BiolumaUI implements UI {
     // Mode pill
     let key: string;
     const printSp = this.mode === 'print' ? v.species.find((s) => s.id === this.printId) : undefined;
-    if (printSp) key = `print|${printSp.catalogName ?? printSp.name}|${lang}`;
+    if (printSp) key = `print|${printSp.name}|${lang}`;
     else if (this.mode === 'erase') key = `erase|${lang}`;
     else if (v.pipette.active) key = `pip|${Math.floor(v.pipette.progress * 100)}|${lang}`;
-    else key = `seed|${v.canSeed}|${fmtShort(v.seedCost, lang)}|${lang}`;
+    else key = `seed|${v.canSeed}|${fmtShort(v.seedCost, lang)}|${v.seedsGrowing ? 1 : 0}|${lang}`;
     if (key !== this.modeKey) {
       this.modeKey = key;
       const pill = this.modePill;
       pill.textContent = '';
+      pill.removeAttribute('role');
+      pill.removeAttribute('tabindex');
       const xBtn = () => {
         const b = h('button', { type: 'button', class: 'mp-x', 'aria-label': t('cancel'), html: icon('close', 16) });
         b.addEventListener('click', () => this.exitMode());
@@ -1193,7 +1375,7 @@ class BiolumaUI implements UI {
         const [pre, post] = t('printMode').split('{name}');
         pill.append(
           ic('print', 24),
-          h('span', { class: 'mp-text' }, pre, h(printSp.catalogName ? 'em' : 'span', null, printSp.catalogName ?? printSp.name), post ?? ''),
+          h('span', { class: 'mp-text' }, pre, h('b', null, printSp.name), post ?? ''),
           xBtn(),
         );
       } else if (this.mode === 'erase') {
@@ -1205,15 +1387,26 @@ class BiolumaUI implements UI {
         ring.style.setProperty('--p', v.pipette.progress.toFixed(3));
         pill.append(ring, h('span', { class: 'mp-text' }, t('pipette')), h('span', { class: 'mono mp-dim' }, `${Math.floor(v.pipette.progress * 100)}%`));
       } else {
-        pill.className = 'mode-pill' + (v.canSeed ? '' : ' poor') + (this.deps.onSeedPriceInfo ? ' interactive' : '');
-        pill.setAttribute('aria-label', `${t('seed')}: ${fmtShort(v.seedCost, lang)}`);
-        const cost = h('span', { class: 'mp-cost mono', html: `${icon('essence', 15)}${fmtShort(v.seedCost, lang)}` });
-        pill.append(ic('seed', 24), cost, this.seedMeterSlot);
-        if (this.deps.onSeedPriceInfo) {
-          const info = h('button', { type: 'button', class: 'mp-info', 'aria-label': t('seedPriceWhy'), html: icon('info', 16) });
-          info.addEventListener('click', () => this.deps.onSeedPriceInfo?.());
-          pill.append(info);
+        const why = !!this.deps.onSeedPriceInfo;
+        // Seeds still forming (QA2 H-05): a calm grey "Wait…" (stopwatch icon) instead of an alarming red price.
+        const growing = !!v.seedsGrowing;
+        // With the explainer, the whole pill is ONE button (tap the price → why it costs that).
+        pill.className = 'mode-pill' + (growing ? ' growing' : v.canSeed ? '' : ' poor') + (why ? ' interactive price bl-nodish' : '');
+        pill.setAttribute(
+          'aria-label',
+          `${t('seed')}: ${fmtShort(v.seedCost, lang)}${growing ? `. ${t('seedWaitWhy')}` : ''}${why ? `. ${t('seedPriceWhy')}` : ''}`,
+        );
+        if (growing) setAttr(pill, 'title', t('seedWaitWhy'));
+        else pill.removeAttribute('title');
+        if (why) {
+          pill.setAttribute('role', 'button');
+          pill.setAttribute('tabindex', '0');
         }
+        const cost = h('span', { class: 'mp-cost mono', html: `${icon('essence', 15)}${fmtShort(v.seedCost, lang)}` });
+        if (growing) pill.append(ic('seed', 24), h('span', { class: 'mp-wait' }, ic('time', 16), t('seedWait')), cost, this.seedMeterSlot);
+        else pill.append(ic('seed', 24), cost, this.seedMeterSlot);
+        // The "i" is the visible affordance; its click bubbles to the pill's handler.
+        if (why) pill.append(h('span', { class: 'mp-info', 'aria-hidden': 'true', html: icon('info', 16) }));
         // The price moved: say which way instead of jumping silently.
         if (this.lastSeedCost >= 0 && v.seedCost !== this.lastSeedCost) {
           cost.classList.add(v.seedCost < this.lastSeedCost ? 'cheaper' : 'pricier');
@@ -1246,23 +1439,38 @@ class BiolumaUI implements UI {
     );
     for (const id of [...this.buffMax.keys()]) if (!v.buffs.some((b) => b.id === id)) this.buffMax.delete(id);
 
-    // First-run hint: "Toca la placa" until the first tap.
+    // First-run hint: "¡Toca aquí!" until the first tap.
     const wantHint =
       !this.firstTapDone &&
       v.stats.seeds === 0 &&
       v.creatures.length === 0 &&
       !this.overlay.ritualActive &&
       !this.tutorial?.wantsDishTap;
-    if (wantHint && !this.hintEl) {
+    // Everything faded and no tap for a while: the finger comes back, "¡Toca aquí otra vez!" (CLARIDAD J-164).
+    let anyone = false;
+    for (const c of v.creatures) if (c.state !== 'dead') anyone = true;
+    const wantAgain =
+      !wantHint &&
+      this.lastTapAt > 0 &&
+      performance.now() - this.lastTapAt > TAP_AGAIN_HINT_MS &&
+      !anyone &&
+      !v.seedsGrowing &&
+      v.canSeed &&
+      !this.card &&
+      !this.overlay.ritualActive &&
+      !this.tutorial?.wantsDishTap &&
+      !this.deps.isNarrating?.();
+    const want = wantHint || wantAgain;
+    if (want && !this.hintEl) {
       this.hintEl = h(
         'div',
         { class: 'dish-hint' },
         h('div', { class: 'tap-rings' }, h('i'), h('i'), h('b')),
-        h('div', { class: 'h1' }, t('tapDish')),
-        h('div', { class: 'h2' }, t('tapDishSub')),
+        h('div', { class: 'h1' }, t(wantHint ? 'tapDish' : 'tapAgain')),
+        wantHint ? h('div', { class: 'h2' }, t('tapDishSub')) : null,
       );
       this.dishUI.appendChild(this.hintEl);
-    } else if (!wantHint && this.hintEl) this.hideFirstHint();
+    } else if (!want && this.hintEl) this.hideFirstHint();
 
     // Gesture hints the first time a gesture becomes available.
     if (!this.hintEl && !this.gestureHint && !this.card && !this.tutorial?.active && !this.splash?.visible && !this.deps.isNarrating?.()) {
@@ -1336,6 +1544,15 @@ class BiolumaUI implements UI {
       this.vibrate(8);
       return;
     }
+    // A status pill: its behaviour explains itself (Behaviour Guide); never seed under a pill.
+    const pill = this.overlay.statusHit(px, py);
+    if (pill) {
+      if (pill.behavior && this.deps.onBehaviorInfo) {
+        this.sound('open');
+        this.deps.onBehaviorInfo(pill.behavior);
+      } else if (pill.state === 'stable') this.openCard(pill.id);
+      return;
+    }
     const hit = this.overlay.creatureAt(px, py);
     if (hit !== null) {
       this.openCard(hit);
@@ -1345,6 +1562,7 @@ class BiolumaUI implements UI {
       this.closeCard();
       return;
     }
+    this.lastTapAt = performance.now();
     this.hideFirstHint();
     this.deps.onDishTap(g.x, g.y, { big: false });
   }
@@ -1354,6 +1572,7 @@ class BiolumaUI implements UI {
     if (this.hitGolden(px, py)) return;
     if (!this.camera.isOnDish(px, py)) return;
     const g = this.camera.screenToGrid(px, py);
+    this.lastTapAt = performance.now();
     this.hideFirstHint();
     this.closeCard();
     this.lastBigTap = performance.now();
@@ -1370,6 +1589,24 @@ class BiolumaUI implements UI {
     const state = h('span', { class: 'ccard-state' });
     const close = h('button', { type: 'button', class: 'ccard-close', 'aria-label': t('close'), html: icon('close', 18) });
     const beh = h('dd');
+    // The behaviour row explains what "swims" means (Behaviour Guide), when the integrator offers it.
+    if (this.deps.onBehaviorInfo) {
+      beh.classList.add('ccard-beh-link');
+      beh.setAttribute('role', 'button');
+      beh.setAttribute('tabindex', '0');
+      const openGuide = () => {
+        // Not classified yet: the guide opens at the top (every behaviour, as silhouettes until seen).
+        const b = this.v?.creatures.find((c) => c.id === this.card?.id)?.behavior ?? null;
+        this.deps.onBehaviorInfo?.(b);
+      };
+      beh.addEventListener('click', openGuide);
+      beh.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openGuide();
+        }
+      });
+    }
     const eps = h('dd', { class: 'eps mono' });
     const age = h('dd', { class: 'mono' });
     const follow = h('button', { type: 'button', class: 'btn block', style: 'min-height:40px' });
@@ -1448,8 +1685,11 @@ class BiolumaUI implements UI {
     const lang = this.lang;
     const sp = cr.speciesId ? v.species.find((s) => s.id === cr.speciesId) : undefined;
     c.speciesId = cr.speciesId;
-    const nm = sp ? (sp.catalogName ?? sp.name) : (cr.speciesName ?? t('unknownCreature'));
+    // Always the common name (CLARIDAD J-149); the Latin is only its tooltip (and small in the Bestiary).
+    const sci = sp?.scientificName ?? sp?.catalogName ?? null;
+    const nm = sp ? sp.name : (cr.speciesName ?? t('unknownCreature'));
     setText(c.name, nm);
+    setAttr(c.name, 'title', sci && sci !== nm ? sci : null);
     // The species' own colour on the card (border + name), so each species reads as itself.
     const spHex = cr.hue !== undefined ? hueHex(cr.hue) : '';
     if (c.el.dataset.hue !== spHex) {
@@ -1458,14 +1698,14 @@ class BiolumaUI implements UI {
       else c.el.style.removeProperty('--sp');
       toggle(c.el, 'has-sp', !!spHex);
     }
-    toggle(c.name, 'latin', !!sp?.catalogName);
     c.name.style.cursor = sp ? 'pointer' : '';
     setText(c.state, stateName(cr.state));
     c.state.className = `ccard-state s-${cr.state}`;
     const col = cr.behavior ? BEHAVIOR_COLOR[cr.behavior] : '#8B98A5';
     setHTML(c.beh, `<span class="icw" style="color:${col}">${icon(cr.behavior ?? 'unknown', 16)}</span>${behaviorName(cr.behavior)}`);
-    setText(c.eps, `+${fmtRate(cr.eps, lang)}/s`);
-    setText(c.age, `${fmt(cr.age, lang)} ${t('steps')}`);
+    setText(c.eps, t('yieldsValue', { v: fmtRate(cr.eps, lang) }));
+    // Age is counted in simulation steps; on screen it is seconds at ×1 (CLARIDAD J-28).
+    setText(c.age, fmtDuration(cr.age / AGE_STEPS_PER_SEC, lang));
   }
 
   private positionCard(): void {
@@ -1500,6 +1740,48 @@ class BiolumaUI implements UI {
   }
 
   // ───────────────────────────── modals ─────────────────────────────
+
+  /**
+   * Extra content at the end of the species sheet (deps.speciesExtras: the species card). The sheet
+   * rebuilds its body on changes, so the extras' box is re-appended after each render.
+   */
+  private attachSpeciesExtras(m: ReturnType<typeof openSpecies>, id: string): void {
+    if (!this.deps.speciesExtras) return;
+    const box = h('div', { class: 'spc-extras' });
+    let extras: { update(v: GameView): void; dispose(): void } | null = null;
+    try {
+      extras = this.deps.speciesExtras(box, id);
+    } catch (err) {
+      console.warn('[ui] species extras failed', err);
+    }
+    if (!extras) return;
+    const ex = extras;
+    const ensure = () => {
+      if (box.parentElement !== m.body) m.body.appendChild(box);
+    };
+    ensure();
+    const update = m.update?.bind(m);
+    m.update = (v) => {
+      update?.(v);
+      ensure();
+      ex.update(v);
+    };
+    const relabel = m.relabel?.bind(m);
+    m.relabel = () => {
+      relabel?.();
+      ensure();
+      if (this.v) ex.update(this.v);
+    };
+    const close = m.close.bind(m);
+    let closed = false;
+    (m as { close(): void }).close = () => {
+      if (!closed) {
+        closed = true;
+        ex.dispose();
+      }
+      close();
+    };
+  }
 
   private openJournal(tab: 'journal' | 'ach' | 'stats'): void {
     if (!this.v) return;
@@ -1562,7 +1844,7 @@ class BiolumaUI implements UI {
               : null,
         essence: v.stats.eraEssence,
         newSpecies: v.species.filter((s) => s.era === v.era).length,
-        best: best ? { name: bestSp?.catalogName ?? bestSp?.name ?? best.speciesName ?? t('unknownCreature'), eps: best.eps } : null,
+        best: best ? { name: bestSp?.name ?? best.speciesName ?? t('unknownCreature'), eps: best.eps } : null,
       };
     }
     this.overlay.startRitual(() => this.deps.onRitualWhite?.());
@@ -1582,16 +1864,43 @@ class BiolumaUI implements UI {
     bus.on('seed', (e) => {
       const big = e.manual && performance.now() - this.lastBigTap < 150;
       ov.ripple(e.x, e.y, e.manual ? (big ? 'big' : 'seed') : 'auto');
+      // Moved to the nearest spot with room (spacing rule): show where it went.
+      if (e.from) ov.seedMoved(e.from.x, e.from.y, e.x, e.y);
       if (e.manual) {
         this.hideFirstHint();
         this.tutorial?.onSeed();
       }
     });
     bus.on('seedDenied', (e) => {
-      ov.denied(e.x, e.y, fmtShort(e.cost, this.lang));
+      // Why, in Esencia the player can count (CLARIDAD J-161).
+      const v = this.v;
+      const short = v ? Math.max(1, Math.ceil(e.cost - v.essence)) : 0;
+      const waiting = !!v?.creatures.some((c) => c.state === 'stable');
+      ov.denied(e.x, e.y, fmtShort(e.cost, this.lang), short > 0 ? { text: t('deniedShort', { n: fmt(short, this.lang) }), sub: waiting ? t('deniedWait') : '' } : undefined);
       this.modePill.classList.remove('shake');
       void this.modePill.offsetWidth;
       this.modePill.classList.add('shake');
+      this.vibrate([10, 30, 10]);
+    });
+    // A refused tap always shows why, where it happened; nothing was charged (no toast, no layout shift).
+    bus.on('seedBlocked', (e) => {
+      // Refused for free, said on the spot: a red ring and why (first sentence big, the rest small).
+      const room = this.v?.seedPrice?.capacity ?? this.v?.seedPrice?.freeSlots;
+      const msg = e.reason === 'tooClose' ? tx(TEXT.seedTooClose) : e.reason === 'full' && room ? tx(TEXT.dishFull(room)) : '';
+      if (msg) {
+        const cut = msg.search(/[.!] /);
+        ov.seedBlocked(e.x, e.y, cut > 0 ? msg.slice(0, cut + 1) : msg, cut > 0 ? msg.slice(cut + 2) : '');
+      }
+      // A full dish: every creature's place blinks, so "full" is something you can see (CLARIDAD J-160).
+      if (e.reason === 'full' && this.v) {
+        let n = 0;
+        for (const c of this.v.creatures) if (c.state !== 'dead' && n++ < 16) ov.bornRing(c.x, c.y);
+      }
+      // 'growing': the pill already says "Espera…"; a shake points at it (the meter's chip says why).
+      this.modePill.classList.remove('shake');
+      void this.modePill.offsetWidth;
+      this.modePill.classList.add('shake');
+      this.sound('deny');
       this.vibrate([10, 30, 10]);
     });
     bus.on('creatureBorn', (e) => ov.bornRing(e.x, e.y));
@@ -1601,6 +1910,11 @@ class BiolumaUI implements UI {
       if (this.card?.id === e.id) this.closeCard();
     });
     bus.on('creatureExploded', (e) => ov.explodedPulse(e.x, e.y));
+    // Shapeless matter dissolved (lysis, clean-up): it fades like a puff; it was never a creature that died.
+    bus.on('creatureDissolved', (e) => {
+      ov.puff(e.x, e.y);
+      if (this.card?.id === e.id) this.closeCard();
+    });
     bus.on('creatureDivided', (e) => ov.dividedPulse(e.x, e.y));
     bus.on('income', (e) => {
       const gold = !!this.v?.buffs.some((b) => b.mult > 1);
@@ -1608,6 +1922,8 @@ class BiolumaUI implements UI {
     });
     bus.on('speciesNew', (e) => {
       ov.speciesBurst(e.x, e.y, t('newSpecies'), e.name);
+      this.vibrate([20, 40, 20]);
+      if (this.deps.speciesTold?.()) return;
       // Several in a row merge into one counter toast instead of a stream (QA2 H-06/H-09).
       this.toasts.pushGroup(
         'species',
@@ -1616,12 +1932,9 @@ class BiolumaUI implements UI {
         'sparkle',
         () => this.ctx.switchTab('bestiary'),
       );
-      this.vibrate([20, 40, 20]);
     });
-    bus.on('behaviorNew', (e) => {
-      ov.behaviorLabel(e.x, e.y, e.behavior, t('newBehavior'), behaviorName(e.behavior));
-      this.toasts.push(`${t('newBehavior')}: ${behaviorName(e.behavior)}`, 'good', e.behavior);
-    });
+    // One thing per event: the label on the creature (and the Momento card); no toast (CLARIDAD J-58, §3.3).
+    bus.on('behaviorNew', (e) => ov.behaviorLabel(e.x, e.y, e.behavior, t('newBehavior'), behaviorName(e.behavior)));
     bus.on('genomeBought', (e) => (this.panels.genome as GenomePanel | undefined)?.flash(e.id));
     // A short, readable toast; the full note lives in the Journal (QA2 H-10).
     bus.on('journalNew', () => this.toasts.pushGroup('journal', (n) => (n === 1 ? t('journalNote') : t('journalNotes', { n: String(n) })), 'info', 'journal', () => this.openJournal('journal')));
@@ -1644,6 +1957,7 @@ class BiolumaUI implements UI {
         this.dropOvergrownToast = false;
         return;
       }
+      if (this.deps.suppressToast?.(e.text, e.kind)) return;
       this.toasts.push(tx(e.text), e.kind as ToastKind);
     });
     bus.on('offlineReturn', (e) => this.showOfflineCard(e.seconds, e.essence));

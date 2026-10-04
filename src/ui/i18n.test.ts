@@ -16,7 +16,7 @@ describe('i18n', () => {
     expect(t('eraEnd', { n: 3 })).toBe('End of Era 3');
     expect(tx({ es: 'hola', en: 'hello' })).toBe('hello');
     expect(behaviorName('swimmer')).toBe('Swimmer');
-    expect(behaviorName(null)).toBe('Classifying…');
+    expect(behaviorName(null)).toBe('Watching how it moves…');
     setLang('es');
     expect(t('eraEnd', { n: 3 })).toBe('Fin de la Era 3');
     expect(rarityName('veryRare')).toBe('Muy rara');

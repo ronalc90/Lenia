@@ -8,8 +8,9 @@
  */
 import { mod, wrapDelta, type Camera } from '../core/camera';
 import { BEHAVIOR_COLOR, UI as C } from '../core/palette';
-import type { Behavior, CreatureView, GameView } from '../core/types';
+import type { Behavior, CreatureState, CreatureView, GameView, Lang } from '../core/types';
 import { behaviorName, stateName } from './i18n';
+import { StatusLayer } from './moments/status';
 import { defaultItem, type DishTheme, type HaloStyle, type SparkSkin, type TrailStyle } from '../store/catalog';
 import {
   drawHalo,
@@ -56,7 +57,6 @@ export interface OverlayLayerFrame {
 export type OverlayLayer = (f: OverlayLayerFrame) => void;
 export type OverlayLayerSlot = 'creatures' | 'top';
 
-const MONO = '"JetBrains Mono", "JetBrains Mono Fallback", ui-monospace, "SF Mono", Menlo, Consolas, monospace';
 const SANS = 'Inter, "Inter Fallback", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 
 interface Smoothed {
@@ -153,6 +153,20 @@ interface Label {
   glyph: Behavior | null;
 }
 
+/** A seed that landed away from the tap (spacing rule): arrow from the finger to the seed. */
+interface SeedArrow {
+  fx: number;
+  fy: number;
+  tx: number;
+  ty: number;
+  t0: number;
+}
+
+/** How long the "moved here" arrow stays (s). */
+const SEED_ARROW_S = 1.1;
+/** At most one "no room here" label in this many seconds (fast taps get one, not ten). */
+const BLOCKED_LABEL_GAP_S = 1.2;
+
 interface Spot {
   x: number;
   y: number;
@@ -218,7 +232,18 @@ export class Overlay {
   private sparkSkin: SparkSkin | null = null;
   private motesColor: string | null = null;
   private labels: Label[] = [];
+  /**
+   * Boxes already drawn this frame (x0, y0, x1, y1): floating numbers and event labels first, then the
+   * creature names, which hide rather than overlap (docs/ARTE.md §10: one label at a time).
+   */
+  private occ = new Float32Array(4 * 48);
+  private occN = 0;
+  /** Name / status lines asked for by drawCreatures this frame (drawn later, unclipped, without overlaps). */
+  private nameQ: { x: number; y: number; s: Smoothed | null; text: string; color: string }[] = [];
+  private nameN = 0;
   private spots: Spot[] = [];
+  private arrows: SeedArrow[] = [];
+  private lastBlockedLabel = -Infinity;
   private flashes: { x: number; y: number; t0: number; color: string; r: number }[] = [];
   private ritual: { t0: number; whiteAt: number; endAt: number; fired: boolean; onWhite?: () => void } | null =
     null;
@@ -239,6 +264,34 @@ export class Overlay {
   /** Simulation steps per second (0 = paused / unknown → no extrapolation). */
   simRate = 0;
   paused = false;
+  /**
+   * Creature status pills (Momentos, docs/MOMENTOS.md §5.3): "◔ Naciendo 62 %", "✓ Estable +1,2/s ➜"…
+   * `statusOnAll` = pills on the most informative creatures (Era 1 / setting); `statusHidden` = they
+   * step aside while a Momento card explains. The tapped creature has its info card instead of a pill.
+   */
+  statusOnAll = false;
+  statusHidden = false;
+  private statusLayer = new StatusLayer();
+  private cviews: CreatureView[] = [];
+  /** cviews without the creature whose info card is open (rebuilt only when either changes). */
+  private cviewsPill: CreatureView[] = [];
+  private cviewsPillKey: { list: CreatureView[] | null; sel: number | null } = { list: null, sel: null };
+  private lang: Lang = 'es';
+  private pillNowMs = 0;
+  private readonly pillScratch = { x: 0, y: 0, r: 0 };
+  private readonly pillView = { w: 1, h: 1 };
+  /** Screen position of a creature for its pill (same point as its name label), or null. */
+  private readonly pillPos = (c: CreatureView): { x: number; y: number; r: number } | null => {
+    const s = this.creatures.get(c.id);
+    if (!s) return null;
+    const e = this.exactPos(s, this.pillNowMs);
+    const p = this.camera.gridToScreen(e ? e.x : s.x, e ? e.y : s.y);
+    const o = this.pillScratch;
+    o.x = p.x;
+    o.y = p.y;
+    o.r = this.haloRadius(s);
+    return o;
+  };
 
   constructor(private camera: Camera) {
     this.canvas = document.createElement('canvas');
@@ -305,6 +358,8 @@ export class Overlay {
 
   setView(view: GameView): void {
     this.reduceMotion = view.settings.reduceMotion;
+    this.cviews = view.creatures;
+    this.lang = view.settings.lang;
     this.markers = !!(view.tools as { markers?: boolean }).markers;
     const gw = this.camera.gridW;
     const gh = this.camera.gridH;
@@ -412,6 +467,15 @@ export class Overlay {
     return s ? { x: s.x, y: s.y } : null;
   }
 
+  /** Status pill under a CSS-pixel point (≥ 44 px tall hit area), or null. */
+  statusHit(px: number, py: number): { id: number; behavior: Behavior | null; state: CreatureState } | null {
+    return this.pillsShown() ? this.statusLayer.hitTest(px, py) : null;
+  }
+
+  private pillsShown(): boolean {
+    return this.statusOnAll && !this.statusHidden && !this.ritual;
+  }
+
   /** Stable creature under a CSS-pixel point, or null. */
   creatureAt(px: number, py: number): number | null {
     let best: number | null = null;
@@ -457,9 +521,34 @@ export class Overlay {
     }
   }
 
+  /**
+   * A tap with no room (it would fuse with nearby matter): a red "no" ring where the finger was, and the
+   * reason pinned to the spot (one label at a time). Nothing was charged.
+   */
+  seedBlocked(x: number, y: number, text: string, sub: string): void {
+    const base = Math.max(22, 13 * this.camera.scale * 1.25);
+    this.ripples.push({ x, y, t0: this.now, dur: 0.55, color: C.danger, maxR: base * 0.95, rings: 2, width: 2.6 });
+    if (this.ripples.length > 24) this.ripples.shift();
+    if (this.now - this.lastBlockedLabel < BLOCKED_LABEL_GAP_S) return;
+    this.lastBlockedLabel = this.now;
+    this.labels.push({ x, y, t0: this.now, dur: 2.4, text, sub, color: C.danger, glyph: null });
+  }
+
+  /** The seed was moved to the nearest spot with room: a short arrow from the tap to where it landed. */
+  seedMoved(fromX: number, fromY: number, toX: number, toY: number): void {
+    if (this.arrows.length >= 6) this.arrows.shift();
+    this.arrows.push({ fx: fromX, fy: fromY, tx: toX, ty: toY, t0: this.now });
+  }
+
   /** Seed refused: red ripple + cost in red near the finger for 1 s. */
-  denied(x: number, y: number, costText: string): void {
+  denied(x: number, y: number, costText: string, why?: { text: string; sub: string }): void {
     this.ripple(x, y, 'denied');
+    // With a reason (CLARIDAD J-161) the label says it all, pinned to the spot (one label at a time).
+    if (why && this.now - this.lastBlockedLabel >= BLOCKED_LABEL_GAP_S) {
+      this.lastBlockedLabel = this.now;
+      this.labels.push({ x, y, t0: this.now, dur: 2.4, text: why.text, sub: why.sub, color: '#FF7A5C', glyph: null });
+      return;
+    }
     this.pushFloat({ x, y, t0: this.now, dur: 1, text: costText, color: '#FF7A5C', size: 14, rise: 10, drop: true, jitter: 0 });
   }
 
@@ -666,6 +755,8 @@ export class Overlay {
 
   draw(time: number, dt: number): void {
     this.now = time;
+    this.occN = 0;
+    this.nameN = 0;
     const ctx = this.ctx;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, this.w, this.h);
@@ -715,18 +806,46 @@ export class Overlay {
     this.runLayers('creatures', time, dt, rect, scale);
     this.drawFlashes(time);
     this.drawRipples(time);
+    if (this.arrows.length) this.drawArrows(time);
     this.drawParticles(time, dt);
     if (this.skinParticles.length) this.drawSkinParticles(time, dt);
     if (g) this.drawGolden(time, g, rm);
     this.drawFloats(time);
     ctx.restore();
+    // Status pills: unclipped (like the labels) so a creature at the dish edge keeps its pill.
+    if (this.pillsShown()) this.drawStatusPills(time, dt, rm);
     // Labels are drawn unclipped and kept on screen, so a creature at the dish edge never cuts them.
     this.drawLabels(time);
+    // Names last: inside the dish, shortened with "…", and hidden where a number or a label already is.
+    this.drawNames(rect);
 
     if (g) this.drawGoldenIndicator(g);
     this.drawCharge(time);
     this.drawRitual(time, rect);
     this.runLayers('top', time, dt, rect, scale);
+  }
+
+  private drawStatusPills(time: number, dt: number, rm: boolean): void {
+    // The creature with its info card open has the card instead of a pill (both would sit above it).
+    const sel = this.selectedId;
+    const key = this.cviewsPillKey;
+    if (key.list !== this.cviews || key.sel !== sel) {
+      key.list = this.cviews;
+      key.sel = sel;
+      this.cviewsPill = sel === null ? this.cviews : this.cviews.filter((c) => c.id !== sel);
+    }
+    this.pillNowMs = performance.now();
+    this.pillView.w = this.w;
+    this.pillView.h = this.h;
+    this.statusLayer.draw(this.ctx, this.cviewsPill, this.pillPos, {
+      lang: this.lang,
+      time,
+      dt,
+      reduceMotion: rm,
+      onAll: true,
+      selectedId: null,
+      view: this.pillView,
+    });
   }
 
   private drawDishFrame(rect: { x: number; y: number; w: number; h: number }): void {
@@ -851,9 +970,11 @@ export class Overlay {
       this.copies(p.x, p.y, R + 14, rect, (x, y) => {
         if (s.state === 'stable') {
           if (this.markers && s.behavior) this.drawMarker(x + R * 0.71, y - R * 0.71, s, time, rm);
-          if (showLabels) this.drawCreatureName(x, y + R + 4, s);
+          // A bare "Estable" under it would repeat its status pill: the name line waits for a species.
+          if (showLabels && (s.name || s.behavior || !this.pillsShown())) this.queueName(x, y + R + 4, id === this.selectedId ? s : null, this.nameText(s), s.hue !== undefined ? hueHex(s.hue, 78) : '#C9D6E2');
         } else if (s.state === 'born') {
-          if (showLabels) this.drawStatusLabel(x, y + Math.min(R, 28) + 4, `${stateName('born')}…`, '#9FB8CC');
+          // The status pill already says "Naciendo 62 %" when pills are on.
+          if (showLabels && !this.pillsShown()) this.queueName(x, y + Math.min(R, 28) + 4, null, this.bornText, '#9FB8CC');
         } else if (s.state === 'exploded') {
           // Orange tint pulsing from the center.
           const pulse = rm ? 0.6 : 0.55 + 0.45 * Math.sin(time * Math.PI * 2 * 1.1 + s.phase * 6);
@@ -920,41 +1041,105 @@ export class Overlay {
     void scale;
   }
 
-  /** Small status text under a creature that has no species name yet ("Naciendo…"). */
-  private drawStatusLabel(x: number, y: number, text: string, color: string): void {
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.font = `600 12px ${SANS}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    const w = ctx.measureText(text).width;
-    const tx = Math.min(this.w - w / 2 - 4, Math.max(w / 2 + 4, x));
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = 'rgba(8,10,14,0.85)';
-    ctx.strokeText(text, tx, y);
-    ctx.fillStyle = color;
-    ctx.fillText(text, tx, y);
-    ctx.restore();
+  /** "Naciendo…" under a forming creature (cached per language: no string per frame). */
+  private bornKey = '';
+  private bornCache = '';
+  private get bornText(): string {
+    const key = stateName('born');
+    if (key !== this.bornKey) {
+      this.bornKey = key;
+      this.bornCache = `${key}…`;
+    }
+    return this.bornCache;
   }
 
-  /** "Gyrorbium · Nada" under a stable creature ("Estable · …" before its species is known). */
-  private drawCreatureName(x: number, y: number, s: Smoothed): void {
-    const ctx = this.ctx;
+  /** "Nadadora celeste · Nadadora" under a stable creature (cached per creature until it changes). */
+  private nameCache = new WeakMap<Smoothed, { key: string; text: string }>();
+  private nameText(s: Smoothed): string {
     const base = s.name ?? stateName('stable');
-    const text = s.behavior ? `${base} · ${behaviorName(s.behavior)}` : base;
+    const beh = s.behavior ? behaviorName(s.behavior) : '';
+    const key = `${base}|${beh}`;
+    const c = this.nameCache.get(s);
+    if (c && c.key === key) return c.text;
+    const text = beh ? `${base} · ${beh}` : base;
+    this.nameCache.set(s, { key, text });
+    return text;
+  }
+
+  private queueName(x: number, y: number, selected: Smoothed | null, text: string, color: string): void {
+    let q = this.nameQ[this.nameN];
+    if (!q) q = this.nameQ[this.nameN] = { x: 0, y: 0, s: null, text: '', color: '' };
+    q.x = x;
+    q.y = y;
+    q.s = selected;
+    q.text = text;
+    q.color = color;
+    this.nameN++;
+  }
+
+  /** Room for a box (no overlap with anything drawn this frame)? */
+  private roomFor(x0: number, y0: number, x1: number, y1: number): boolean {
+    const o = this.occ;
+    for (let i = 0; i < this.occN; i++) {
+      const k = i * 4;
+      if (x0 < o[k + 2] && x1 > o[k] && y0 < o[k + 3] && y1 > o[k + 1]) return false;
+    }
+    return true;
+  }
+
+  private occupy(x0: number, y0: number, x1: number, y1: number): void {
+    if (this.occN * 4 >= this.occ.length) return;
+    const k = this.occN++ * 4;
+    this.occ[k] = x0;
+    this.occ[k + 1] = y0;
+    this.occ[k + 2] = x1;
+    this.occ[k + 3] = y1;
+  }
+
+  /** Longest prefix of `text` that fits `maxW` with "…" (only allocates when it must shorten). */
+  private fit(text: string, maxW: number): string {
+    const ctx = this.ctx;
+    if (ctx.measureText(text).width <= maxW) return text;
+    let lo = 0;
+    let hi = text.length;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (ctx.measureText(text.slice(0, mid).trimEnd() + '…').width <= maxW) lo = mid;
+      else hi = mid - 1;
+    }
+    return text.slice(0, lo).trimEnd() + '…';
+  }
+
+  /**
+   * The creature lines, after numbers and labels: the selected creature first, then the rest; each kept
+   * inside the dish (moved in, never cut), shortened with "…", and skipped when it would overlap.
+   */
+  private drawNames(rect: { x: number; y: number; w: number; h: number }): void {
+    if (!this.nameN) return;
+    const ctx = this.ctx;
     ctx.save();
     ctx.font = `600 12px ${SANS}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    const w = ctx.measureText(text).width;
-    const tx = Math.min(this.w - w / 2 - 4, Math.max(w / 2 + 4, x));
     ctx.lineJoin = 'round';
     ctx.lineWidth = 3;
     ctx.strokeStyle = 'rgba(8,10,14,0.85)';
-    ctx.strokeText(text, tx, y);
-    ctx.fillStyle = s.hue !== undefined ? hueHex(s.hue, 78) : '#C9D6E2';
-    ctx.fillText(text, tx, y);
+    const maxW = Math.min(150, rect.w - 12);
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 0; i < this.nameN; i++) {
+        const q = this.nameQ[i];
+        if ((pass === 0) !== (q.s !== null)) continue;
+        const text = this.fit(q.text, maxW);
+        const w = ctx.measureText(text).width;
+        const x = Math.min(rect.x + rect.w - w / 2 - 4, Math.max(rect.x + w / 2 + 4, q.x));
+        const y = Math.min(rect.y + rect.h - 18, q.y);
+        if (!this.roomFor(x - w / 2 - 2, y - 1, x + w / 2 + 2, y + 15)) continue;
+        this.occupy(x - w / 2 - 2, y - 1, x + w / 2 + 2, y + 15);
+        ctx.strokeText(text, x, y);
+        ctx.fillStyle = q.color;
+        ctx.fillText(text, x, y);
+      }
+    }
     ctx.restore();
   }
 
@@ -1062,6 +1247,66 @@ export class Overlay {
       ctx.beginPath();
       ctx.arc(p.x, p.y, r * 0.8, 0, Math.PI * 2);
       ctx.stroke();
+    }
+  }
+
+  private drawArrows(time: number): void {
+    const ctx = this.ctx;
+    const gw = this.camera.gridW;
+    const gh = this.camera.gridH;
+    for (let i = this.arrows.length - 1; i >= 0; i--) {
+      const a = this.arrows[i];
+      const t = (time - a.t0) / SEED_ARROW_S;
+      if (t >= 1) {
+        this.arrows.splice(i, 1);
+        continue;
+      }
+      // From the finger to the seed, the short way round the torus.
+      const p = this.camera.gridToScreen(a.fx, a.fy);
+      const s = this.camera.scale;
+      const dx = wrapDelta(a.tx - a.fx, gw) * s;
+      const dy = wrapDelta(a.ty - a.fy, gh) * s;
+      const len = Math.hypot(dx, dy);
+      if (len < 4) continue;
+      const ux = dx / len;
+      const uy = dy / len;
+      // The arrow grows from the finger, then fades (reduce motion: drawn whole, fading).
+      const grow = this.reduceMotion ? 1 : easeOutCubic(Math.min(1, t / 0.35));
+      const alpha = t > 0.6 ? 1 - (t - 0.6) / 0.4 : 1;
+      const ex = p.x + dx * grow;
+      const ey = p.y + dy * grow;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(8,10,14,0.7)';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+      ctx.strokeStyle = C.accent;
+      ctx.lineWidth = 2.4;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Head.
+      const hs = 8;
+      ctx.fillStyle = C.accent;
+      ctx.beginPath();
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(ex - ux * hs - uy * hs * 0.6, ey - uy * hs + ux * hs * 0.6);
+      ctx.lineTo(ex - ux * hs + uy * hs * 0.6, ey - uy * hs - ux * hs * 0.6);
+      ctx.closePath();
+      ctx.fill();
+      // The finger's spot: a small hollow dot.
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
     }
   }
 
@@ -1367,7 +1612,7 @@ export class Overlay {
       const a = t < 0.08 ? t / 0.08 : t > 0.6 ? 1 - (t - 0.6) / 0.4 : 1;
       const pop = this.reduceMotion ? 1 : 1 + 0.3 * Math.max(0, 1 - t / 0.12);
       const size = Math.round(f.size * pop);
-      ctx.font = `700 ${size}px ${MONO}`;
+      ctx.font = `700 ${size}px ${SANS}`;
       const tw = ctx.measureText(f.text).width;
       const dropW = f.drop ? size * 0.75 : 0;
       const tx = x + dropW / 2;
@@ -1379,6 +1624,8 @@ export class Overlay {
       ctx.fillText(f.text, tx, y);
       if (f.drop) this.drawDroplet(tx - tw / 2 - dropW * 0.6, y, size * 0.42, f.color);
       ctx.globalAlpha = 1;
+      // Names stay out of a number's way while it floats.
+      this.occupy(tx - tw / 2 - dropW - 2, y - size / 2 - 2, tx + tw / 2 + 2, y + size / 2 + 2);
     }
   }
 
@@ -1411,18 +1658,28 @@ export class Overlay {
       const pop = this.reduceMotion ? 1 : 1 + 0.18 * Math.max(0, 1 - t / 0.1);
       ctx.save();
       ctx.globalAlpha = a;
+      // Never wider than the screen: long words end in "…" (docs/ARTE.md §10).
+      const maxText = Math.max(60, this.w - 48);
       ctx.font = `700 ${Math.round(14 * pop)}px ${SANS}`;
-      const w1 = ctx.measureText(L.text).width;
-      ctx.font = `italic 500 12px ${SANS}`;
-      const w2 = L.sub ? ctx.measureText(L.sub).width : 0;
+      const text = this.fit(L.text, maxText - (L.glyph ? 18 : 0));
+      const w1 = ctx.measureText(text).width;
+      ctx.font = `500 12px ${SANS}`;
+      const sub = L.sub ? this.fit(L.sub, maxText) : '';
+      const w2 = sub ? ctx.measureText(sub).width : 0;
       const glyphW = L.glyph ? 18 : 0;
       const W = Math.max(w1 + glyphW, w2) + 24;
-      const H = L.sub ? 44 : 28;
+      const H = sub ? 44 : 28;
       // Keep the pill on screen.
       let x = p.x;
       let y = p.y - 40 - lift - H / 2;
       x = Math.min(this.w - W / 2 - 6, Math.max(W / 2 + 6, x));
       if (y - H / 2 < 6) y = p.y + 40 + H / 2;
+      // One label at a time where they would collide: the newest wins, the older one waits.
+      if (!this.roomFor(x - W / 2, y - H / 2, x + W / 2, y + H / 2)) {
+        ctx.restore();
+        continue;
+      }
+      this.occupy(x - W / 2, y - H / 2, x + W / 2, y + H / 2);
       ctx.fillStyle = 'rgba(11,14,18,0.86)';
       ctx.strokeStyle = rgba(L.color, 0.75);
       ctx.lineWidth = 1.5;
@@ -1433,16 +1690,16 @@ export class Overlay {
       ctx.textBaseline = 'middle';
       ctx.font = `700 ${Math.round(14 * pop)}px ${SANS}`;
       ctx.fillStyle = L.color;
-      const ty = L.sub ? y - 8 : y + 0.5;
-      ctx.fillText(L.text, x + glyphW / 2, ty);
+      const ty = sub ? y - 8 : y + 0.5;
+      ctx.fillText(text, x + glyphW / 2, ty);
       if (L.glyph) {
         const fake: Smoothed = { x: 0, y: 0, tx: 0, ty: 0, r: 0, hx: 1, hy: 0, state: 'stable', behavior: L.glyph, seenAt: 0, phase: 0, vx: 0, vy: 0, at: 0, jump: 0, pulseAt: -1, name: null };
         this.drawMarker(x - w1 / 2 - 4 + glyphW / 2 - 6, ty, fake, time, this.reduceMotion);
       }
-      if (L.sub) {
-        ctx.font = `italic 500 12px ${SANS}`;
+      if (sub) {
+        ctx.font = `500 12px ${SANS}`;
         ctx.fillStyle = C.text;
-        ctx.fillText(L.sub, x, y + 10);
+        ctx.fillText(sub, x, y + 10);
       }
       ctx.restore();
     }

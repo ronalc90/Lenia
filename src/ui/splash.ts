@@ -77,7 +77,7 @@ export function createSplash(root: HTMLElement, opts: SplashOptions): Splash {
   controls.addEventListener('keydown', (e) => e.stopPropagation());
   const el = h(
     'div',
-    { class: 'splash', role: 'button', tabindex: '0', 'aria-label': 'Bioluma', 'data-testid': 'splash' },
+    { class: 'splash art-force-dark', role: 'button', tabindex: '0', 'aria-label': 'Bioluma', 'data-testid': 'splash' },
     canvas,
     h('div', { class: 'splash-center' }, word, tag, h('p', { class: 'splash-ver', 'data-testid': 'splash-version' }, VERSION_LABEL)),
     tap,

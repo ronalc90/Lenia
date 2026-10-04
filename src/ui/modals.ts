@@ -8,11 +8,15 @@ import { BEHAVIOR_COLOR } from '../core/palette';
 import type { Ctx } from './ctx';
 import type { UISound } from './ui';
 import { h, ic, setAttr, setText, toggle } from './dom';
-import { fmt, fmtDuration, fmtFixed, fmtRate } from './format';
+import { fmt, fmtDuration, fmtFixed, fmtRate, fmtShort } from './format';
 import { behaviorName, getLang, rarityName, t, tx } from './i18n';
 import { icon, logo } from './icons';
 import { portraitURL } from './portrait';
 import { EXPORT_PREFIX } from '../game/balance';
+import { CATALOG_REFS } from '../detect/catalogRefs';
+import { WORLD_TEXT } from '../game/treeText';
+import { isWorldId, WORLDS, worldOfSpecies, type WorldId } from '../game/worlds';
+import { PRINT_SEEDS_PRICE } from '../game/cycleBalance';
 import { base64ToUtf8, deserializeState } from '../game/state';
 import { BUILD_DATE, VERSION_LABEL } from '../version';
 
@@ -242,6 +246,16 @@ export function openJournal(host: ModalHost, ctx: Ctx, startTab: 'journal' | 'ac
             : []),
         ),
       );
+      // Each factor of the production multiplier (Genoma, mejoras, logros, secretos…), when listed.
+      const parts = v.multipliers?.parts?.filter((p) => Math.abs(p.mult - 1) > 1e-6) ?? [];
+      if (parts.length)
+        content.appendChild(
+          h(
+            'div',
+            { class: 'stats mult-parts', role: 'group', 'aria-label': t('multParts') },
+            ...parts.map((p) => stat(tx(p.name), `×${fmtFixed(p.mult, 2, lang)}`)),
+          ),
+        );
     }
   };
   render(ctx.view);
@@ -644,7 +658,7 @@ export function openSpecies(host: ModalHost, ctx: Ctx, id: string): ModalHandle 
       return;
     }
     const lang = getLang();
-    const k = JSON.stringify([s.name, s.catalogName, s.timesSeen, s.behavior, s.mult, v.samples >= s.printCost, v.calibration.mu, v.calibration.sigma, lang, renaming]);
+    const k = JSON.stringify([s.name, s.catalogName, s.scientificName, s.hue, s.production ? fmtRate(s.production.eps, lang) : '', s.production?.members, s.boostedBy?.map((b) => b.id), s.timesSeen, s.behavior, s.mult, v.samples >= s.printCost, v.cycle === 'sessions' ? v.essence >= Math.round(PRINT_SEEDS_PRICE * v.seedCost) : null, v.seedCost, v.session?.world, v.session?.phase, v.upgrades.find((u) => u.id === 'print')?.level, lang, renaming]);
     if (k === key) return;
     // Do not rebuild under the player's fingers while they type the new name (only the input counts:
     // the pencil keeping focus must not block opening the field, QA1 #2).
@@ -675,6 +689,19 @@ export function openSpecies(host: ModalHost, ctx: Ctx, id: string): ModalHandle 
   return m;
 }
 
+/**
+ * The World a species lives in: the game's `world` when it sends one; else its catalog code's World;
+ * else the World whose rules it was found under (its μ/σ range holds that World's preset).
+ */
+function speciesWorld(s: SpeciesView): WorldId | null {
+  if (s.world !== undefined) return s.world && isWorldId(s.world) ? s.world : null;
+  const ref = s.catalogName ? CATALOG_REFS.find((r) => r.name === s.catalogName) : undefined;
+  if (ref) return worldOfSpecies(ref.code);
+  const eps = 1e-4;
+  const inside = (x: number, r: [number, number]) => x >= r[0] - eps && x <= r[1] + eps;
+  return WORLDS.find((w) => inside(w.params.mu, s.muRange) && inside(w.params.sigma, s.sigmaRange))?.id ?? null;
+}
+
 function speciesBody(
   s: SpeciesView,
   v: GameView,
@@ -685,6 +712,8 @@ function speciesBody(
   print: () => void,
 ): HTMLElement {
   const lang = getLang();
+  /** Species identity is on (the game sends a scientific line): plain name as the title. */
+  const named = s.scientificName !== undefined;
   const portrait = h('div', { class: `portrait r-${s.rarity}` });
   if (s.portrait) portrait.appendChild(h('img', { src: portraitURL(s.portrait), alt: '' }));
   else portrait.appendChild(h('span', { class: 'noimg' }));
@@ -710,17 +739,33 @@ function speciesBody(
   } else {
     const renameBtn = h('button', { type: 'button', class: 'icon-btn', 'aria-label': t('rename'), html: icon('pencil', 20) });
     renameBtn.addEventListener('click', startRename);
-    const main = s.catalogName ?? s.name;
-    title = h('div', { class: 'spc-title' }, h('h2', { class: s.catalogName ? 'latin' : '' }, main), renameBtn);
+    // With species identity (scientificName present) the title is its plain name and the Latin goes below.
+    const main = named ? s.name : (s.catalogName ?? s.name);
+    title = h('div', { class: 'spc-title' }, h('h2', { class: !named && s.catalogName ? 'latin' : '' }, main), renameBtn);
   }
-  const sub = s.catalogName && s.name !== s.catalogName ? h('div', { class: 'spc-sub' }, `“${s.name}”`) : null;
+  const sub = named
+    ? s.scientificName && s.scientificName !== s.name
+      ? h('div', { class: 'spc-sub spc-sci' }, s.scientificName)
+      : null
+    : s.catalogName && s.name !== s.catalogName
+      ? h('div', { class: 'spc-sub' }, `“${s.name}”`)
+      : null;
 
-  const bcol = s.behavior ? BEHAVIOR_COLOR[s.behavior] : '#8B98A5';
+  // The theme's behaviour colour (AA on paper too: no lime on white, docs/ARTE.md §3).
+  const bcol = s.behavior ? `var(--bl-beh-${s.behavior}, ${BEHAVIOR_COLOR[s.behavior]})` : 'var(--dim)';
+  // Its behaviour explains itself (Behaviour Guide) when the integrator offers it.
+  const behBadge = ctx.deps.onBehaviorInfo
+    ? h('button', { type: 'button', class: 'badge badge-link', style: `color:${bcol}`, 'aria-label': `${behaviorName(s.behavior)}: ${t('behaviorGuideAria')}` }, ic(s.behavior ?? 'unknown', 24), behaviorName(s.behavior), ic('info', 24))
+    : h('span', { class: 'badge', style: `color:${bcol}` }, ic(s.behavior ?? 'unknown', 24), behaviorName(s.behavior));
+  if (ctx.deps.onBehaviorInfo) behBadge.addEventListener('click', () => ctx.deps.onBehaviorInfo?.(s.behavior));
   const badges = h(
     'div',
     { class: 'badges' },
+    // Colour family · body shape · behaviour (species identity, optional fields), then rarity and era.
+    s.colorName ? h('span', { class: 'badge badge-color' }, h('i', { class: 'sw', 'aria-hidden': 'true' }), tx(s.colorName)) : null,
+    s.shapeLabel ? h('span', { class: 'badge' }, tx(s.shapeLabel)) : null,
+    behBadge,
     h('span', { class: `badge r-${s.rarity}` }, ic('sparkle', 24), rarityName(s.rarity)),
-    h('span', { class: 'badge', style: `color:${bcol}` }, ic(s.behavior ?? 'unknown', 24), behaviorName(s.behavior)),
     h('span', { class: 'badge' }, `${t('era')} ${s.era}`),
   );
   const stat = (label: string, value: string) =>
@@ -728,44 +773,64 @@ function speciesBody(
   const grid = h(
     'div',
     { class: 'spc-grid' },
-    stat(t('multiplier'), `×${fmtFixed(s.mult, 2, lang)}`),
-    stat(t('timesSeen'), fmt(s.timesSeen, lang)),
+    stat(t('multiplier'), t('multiplierValue', { v: fmtShort(s.mult, lang) })),
+    stat(t('timesSeen'), t('timesSeenValue', { n: fmt(s.timesSeen, lang) })),
+    // What it earns right now, all of its living members together (game: SpeciesView.production).
+    s.production ? stat(t('spcEarnsNow'), `+${fmtRate(s.production.eps, lang)}${t('perSec')}`) : null,
+    s.production ? stat(t('spcAliveNow'), fmt(s.production.members, lang)) : null,
   );
-  // μ/σ ranges are the Microscope's reward (QA2 H-12): hidden before it, so a first card stays simple.
-  if ((v.microscope ?? v.upgrades.find((u) => u.id === 'microscope')?.level ?? 0) >= 1) {
-    grid.append(
-      stat(t('muRange'), `${s.muRange[0].toFixed(3)}–${s.muRange[1].toFixed(3)}`),
-      stat(t('sigmaRange'), `${s.sigmaRange[0].toFixed(4)}–${s.sigmaRange[1].toFixed(4)}`),
-    );
+  // The upgrades that make it earn more (game: SpeciesView.boostedBy).
+  const boosted = s.boostedBy?.length
+    ? h('div', { class: 'spc-boost' }, ic('bolt', 24), h('span', null, `${t('spcBoostedBy')} `, h('b', null, s.boostedBy.map((b) => tx(b.name)).join(' · '))))
+    : null;
+  // Where it lives, in words (CLARIDAD J-09): no μ/σ on screen.
+  const home = speciesWorld(s);
+  const homeName = home ? tx(WORLD_TEXT[home]?.name) : '';
+  if (homeName) grid.append(stat(t('livesIn'), homeName));
+  // Only when this session plays in another World (J-10): a fact, not a threat.
+  const here = v.session?.world;
+  const warn =
+    homeName && here && here !== home
+      ? h('div', { class: 'warnline spc-warn' }, ic('info', 24), h('span', null, t('outOfRegime', { world: homeName })))
+      : null;
+  // Sessions loop (CLARIDAD J-34): a copy costs Esencia (PRINT_SEEDS_PRICE normal seeds, game.ts
+  // printInSession), only with the Copiadora, while a session runs, for a species of this World.
+  const sessionsLoop = v.cycle === 'sessions';
+  const copier = (v.upgrades.find((u) => u.id === 'print')?.level ?? 0) > 0;
+  const running = !!v.session && v.session.phase !== 'over';
+  const showPrint = !sessionsLoop || (copier && running && (!home || home === here));
+  const cost = sessionsLoop ? Math.round(PRINT_SEEDS_PRICE * v.seedCost) : s.printCost;
+  const canPrint = sessionsLoop ? v.essence >= cost : v.samples >= s.printCost;
+  const printBtn = showPrint
+    ? h(
+        'button',
+        { type: 'button', class: 'btn block good' },
+        ic('print', 24),
+        `${t(sessionsLoop ? 'makeCopy' : 'plantAnother')} · `,
+        h('span', { class: 'mono', style: 'display:inline-flex;align-items:center;gap:3px', html: `${icon(sessionsLoop ? 'essence' : 'samples', 16)}${fmt(cost, lang)}` }),
+      )
+    : null;
+  if (printBtn) {
+    printBtn.disabled = !canPrint;
+    printBtn.addEventListener('click', print);
   }
-  const c = v.calibration;
-  const tol = 0.004;
-  const outOf =
-    c.mu < s.muRange[0] - tol || c.mu > s.muRange[1] + tol || c.sigma < s.sigmaRange[0] - tol / 2 || c.sigma > s.sigmaRange[1] + tol / 2;
-  const warn = outOf ? h('div', { class: 'warnline spc-warn' }, ic('warning', 24), h('span', null, t('outOfRegime'))) : null;
-  const canPrint = v.samples >= s.printCost;
-  const printBtn = h(
-    'button',
-    { type: 'button', class: 'btn block good' },
-    ic('print', 24),
-    `${t('plantAnother')} · `,
-    h('span', { class: 'mono', style: 'display:inline-flex;align-items:center;gap:3px', html: `${icon('samples', 16)}${fmt(s.printCost, lang)}` }),
-  );
-  printBtn.disabled = !canPrint;
-  printBtn.addEventListener('click', print);
   void ctx;
-  return h(
+  const root = h(
     'div',
-    { class: 'spc' },
+    { class: s.hue !== undefined ? 'spc has-sp' : 'spc' },
     portrait,
     title,
     sub,
     badges,
     grid,
+    boosted,
     warn,
     printBtn,
-    h('div', { class: 'print-hint' }, t('printHint')),
+    printBtn ? h('div', { class: 'print-hint' }, t(sessionsLoop ? 'copyHint' : 'printHint')) : null,
   );
+  // The species' own colour (accent of its portrait ring, title and colour chip).
+  if (s.hue !== undefined) root.style.setProperty('--sp', `hsl(${Math.round(s.hue)} 70% 60%)`);
+  return root;
 }
 
 // ───────────────────────────── Offline card ─────────────────────────────

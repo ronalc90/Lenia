@@ -717,7 +717,7 @@ export const BADGES: BadgeItem[] = [
   badge('badge.naturalist', t('Naturalista', 'Naturalist'), t('Una hoja junto a tu nombre. Se gana registrando 20 especies.', 'A leaf by your name. Earned by registering 20 species.'), 'common', null, { type: 'achievement', achievement: 'species20' }, {
     svg: BADGE_GLYPHS.leaf, color: '#8AE234', bg: 'rgba(138,226,52,0.14)',
   }),
-  badge('badge.tabula', t('Tabula rasa', 'Tabula rasa'), t('Un brote nuevo: sobreviviste a tu primera Extinción.', 'A new sprout: you survived your first Extinction.'), 'common', null, { type: 'achievement', achievement: 'extinction' }, {
+  badge('badge.tabula', t('Tabula rasa', 'Tabula rasa'), t('Un brote nuevo: tu primera noche nueva.', 'A new sprout: your first new night.'), 'common', null, { type: 'achievement', achievement: 'extinction' }, {
     svg: BADGE_GLYPHS.seedling, color: '#5BC0EB', bg: 'rgba(91,192,235,0.14)',
   }),
   badge('badge.orbium', t('Orbium', 'Orbium'), t('El emblema de la criatura más famosa de Lenia.', 'The emblem of the most famous Lenia creature.'), 'common', 'tier1', { type: 'purchase' }, {
@@ -858,8 +858,8 @@ export const SUPPORTER_JOURNAL = {
 
 /** The promise printed on every purchase surface. */
 export const FAIR_PLAY_NOTE: Text = t(
-  'Solo cosmético. Nada de esta tienda da Esencia, velocidad, Muestras, Genoma, semillas ni atajos de tiempo. Quien no paga juega exactamente el mismo juego.',
-  'Cosmetic only. Nothing in this store gives Essence, speed, Samples, Genome, seeds or time skips. Players who never pay play exactly the same game.',
+  'Solo cosmético. Nada de esta tienda da Esencia, Datos, semillas ni tiempo extra. Quien no paga juega exactamente el mismo juego.',
+  'Cosmetic only. Nothing here gives Essence, Data, seeds or extra time. Players who never pay play exactly the same game.',
 );
 
 // ───────────────────────────── Index & helpers ─────────────────────────────

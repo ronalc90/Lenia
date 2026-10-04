@@ -3,42 +3,47 @@
    Mobile portrait first (360×640 min); ≥ 900 px wide → dish left, panel right.
    ────────────────────────────────────────────────────────────────────────── */
 
-/* Theme tokens. Dark is the default; the dish and the title screen always use
-   the dark set (a microscope view), even inside the light theme. */
+/* Theme tokens. The palette lives in src/ui/art/tokens.ts → art.css (--bl-*, docs/ARTE.md §3, §12): these
+   names point at it, so both themes come from one place. The dish and the title screen are always night
+   (class art-force-dark); they re-declare the names so they resolve against the dark --bl-* set. The rgb
+   triplets (for rgba()) mirror the same tokens. */
 .bl,
 .bl[data-theme='light'] .bl-dish,
-.bl[data-theme='light'] .splash {
+.bl[data-theme='light'] .splash,
+.bl .art-force-dark {
   color-scheme: dark;
-  --bg: #0b0e12;
-  --bg-deep: #07090c;
-  --surface: #141a21;
-  --surface-2: #1b232c;
-  --surface-3: #222c37;
+  --bg: var(--bl-bg);
+  --bg-deep: var(--bl-night);
+  --surface: var(--bl-surface);
+  --surface-2: var(--bl-surface2);
+  --surface-3: var(--bl-surface3);
   --ink-rgb: 230, 237, 243;
   --line: rgba(230, 237, 243, 0.08);
   --line-2: rgba(230, 237, 243, 0.14);
-  --text: #e6edf3;
-  --dim: #8b98a5;
-  --faint: #5d6874;
-  --accent: #5bc0eb;
+  --text: var(--bl-text);
+  --dim: var(--bl-text2);
+  --faint: var(--bl-text3);
+  --accent: var(--bl-accent);
   --accent-rgb: 91, 192, 235;
-  --accent-ink: #062130;
+  --accent-ink: var(--bl-accent-ink);
+  --accent-fill: var(--bl-accent-fill, #5bc0eb);
   --accent-soft: rgba(91, 192, 235, 0.14);
-  --warn: #f2a541;
+  --warn: var(--bl-warn);
   --warn-rgb: 242, 165, 65;
   --warn-text: #f7c98a;
   --danger: #e4572e;
   --danger-rgb: 228, 87, 46;
-  --danger-text: #ff7a5c;
-  --good: #8ae234;
+  --danger-text: var(--bl-danger);
+  --good: var(--bl-good);
   --good-rgb: 138, 226, 52;
   --good-ink: #12260a;
-  --gold: #ffd166;
+  --gold: var(--bl-gold);
   --gold-rgb: 255, 209, 102;
   --gold-fill: #ffd166;
   --violet: #b892ff;
   --violet-rgb: 184, 146, 255;
   --violet-ink: #1d1233;
+  --candle: var(--bl-candle);
   --c-essence: var(--accent);
   --c-samples: var(--good);
   --c-genome: var(--violet);
@@ -56,37 +61,25 @@
   --shine: rgba(255, 255, 255, 0.12);
 }
 
-/* Daylight lab: paper surfaces, ink text, accents deepened for AA contrast. */
+/* Daylight lab: paper surfaces, ink text (the colours come from art.css); only the rgb mirrors and the
+   few local shades are set here. */
 .bl[data-theme='light'] {
   color-scheme: light;
-  --bg: #edf1f5;
-  --surface: #f8fafc;
-  --surface-2: #ffffff;
-  --surface-3: #ffffff;
   --ink-rgb: 15, 23, 32;
   --line: rgba(15, 23, 32, 0.09);
   --line-2: rgba(15, 23, 32, 0.16);
-  --text: #0f1720;
-  --dim: #4e5c6a;
-  --faint: #8391a0;
-  --accent: #0d79ae;
-  --accent-rgb: 13, 121, 174;
-  --accent-ink: #ffffff;
-  --accent-soft: rgba(13, 121, 174, 0.09);
-  --warn: #b25f00;
-  --warn-rgb: 178, 95, 0;
-  --warn-text: #8a4a00;
-  --danger: #c53c1b;
-  --danger-rgb: 197, 60, 27;
-  --danger-text: #c53c1b;
-  --good: #377a10;
-  --good-rgb: 55, 122, 16;
+  --accent-rgb: 10, 114, 166;
+  --accent-soft: rgba(10, 114, 166, 0.09);
+  --warn-rgb: 143, 77, 0;
+  --warn-text: #8f4d00;
+  --danger: #bf3517;
+  --danger-rgb: 191, 53, 23;
+  --good-rgb: 43, 114, 16;
   --good-ink: #ffffff;
-  --gold: #946300;
   --gold-rgb: 196, 140, 10;
   --gold-fill: #ffd166;
-  --violet: #6b42d4;
-  --violet-rgb: 107, 66, 212;
+  --violet: #6a3fcf;
+  --violet-rgb: 106, 63, 207;
   --violet-ink: #ffffff;
   --tint-rgb: 15, 23, 32;
   --shadow-rgb: 24, 36, 52;
@@ -98,18 +91,23 @@
   --bubble-bot: #f5f8fb;
   --track: #d2dae2;
   --knob: #ffffff;
-  --r-common: #4e5c6a;
-  --shine: rgba(13, 121, 174, 0.1);
+  --r-common: #44505d;
+  --shine: rgba(10, 114, 166, 0.1);
 }
 
 .bl {
   --r-sm: 8px;
   --r-md: 12px;
   --r-lg: 16px;
-  --ease: cubic-bezier(0.2, 0, 0, 1);
-  --t-panel: 180ms;
-  --font: Inter, 'Inter Fallback', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --mono: 'JetBrains Mono', 'JetBrains Mono Fallback', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+  --ease: var(--bl-ease-standard, cubic-bezier(0.2, 0, 0, 1));
+  --t-panel: var(--bl-t-base, 200ms);
+  --font: var(--bl-font-ui, Inter, 'Inter Fallback', system-ui, sans-serif);
+  /* Numbers read in Inter with tabular figures (no jumping widths); JetBrains Mono is only for
+     instruments such as the save code (--instrument), docs/ARTE.md §4. */
+  --mono: var(--bl-font-ui, Inter, system-ui, sans-serif);
+  --instrument: var(--bl-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+  --display: var(--bl-font-display, Fraunces, Georgia, serif);
   --sheet-h: 45%;
   --side-w: clamp(380px, 34vw, 500px);
 
@@ -120,6 +118,8 @@
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  /* clip: not even focus() or scrollIntoView can scroll the app sideways (no layout shift). */
+  overflow: clip;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
@@ -390,6 +390,7 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+  overflow: clip;
   background: radial-gradient(ellipse at 50% 45%, #0e131a 0%, var(--bg-deep) 70%);
   touch-action: none;
   cursor: crosshair;
@@ -550,6 +551,7 @@
   box-shadow: 0 0 18px -6px rgba(var(--good-rgb), 0.6);
 }
 .mode-pill.print .mp-text em {
+  font-family: var(--display);
   font-style: italic;
   font-weight: 600;
 }
@@ -817,6 +819,7 @@
   margin: -2px 0 10px;
 }
 .ccard-name.latin {
+  font-family: var(--display);
   font-style: italic;
   font-weight: 600;
 }
@@ -1276,16 +1279,16 @@
   height: 15px;
 }
 .buy.afford {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
   color: var(--accent-ink);
   box-shadow: 0 4px 14px -4px rgba(var(--accent-rgb), 0.65);
 }
 .cur-samples .buy.afford {
-  background: var(--good);
-  border-color: var(--good);
-  color: var(--good-ink);
-  box-shadow: 0 4px 14px -4px rgba(var(--good-rgb), 0.6);
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--accent-ink);
+  box-shadow: 0 4px 14px -4px rgba(var(--accent-rgb), 0.65);
 }
 .buy.afford .b-fill {
   display: none;
@@ -1456,6 +1459,7 @@
   white-space: nowrap;
 }
 .sp-name.latin {
+  font-family: var(--display);
   font-style: italic;
   font-weight: 500;
 }
@@ -1908,20 +1912,14 @@
 .btn.block {
   width: 100%;
 }
-.btn.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
-}
-.btn.good {
-  background: var(--good);
-  border-color: var(--good);
-  color: var(--good-ink);
-}
+/* ONE primary-action colour everywhere (docs/ARTE.md §10): primary, "good" and "violet" buttons all use the
+   accent fill; lime and violet stay for words and small marks, never for a big button. */
+.btn.primary,
+.btn.good,
 .btn.violet {
-  background: var(--violet);
-  border-color: var(--violet);
-  color: var(--violet-ink);
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--accent-ink);
 }
 .btn.ghost {
   background: transparent;
@@ -2054,7 +2052,9 @@
 .bl-modals {
   position: absolute;
   inset: 0;
-  z-index: 20;
+  /* Layers come from the art tokens (docs/ARTE.md §10): every dish effect, toast, VELA bubble and Momento
+     stays below a modal such as Settings. */
+  z-index: var(--bl-z-modal, 60);
   pointer-events: none;
 }
 .modal-wrap {
@@ -2261,7 +2261,7 @@
   border-radius: 10px;
   border: 1px solid var(--line-2);
   background: var(--bg);
-  font-family: var(--mono);
+  font-family: var(--instrument);
   font-size: 0.6875rem;
   line-height: 1.4;
   resize: vertical;
@@ -2454,6 +2454,7 @@
   overflow-wrap: anywhere;
 }
 .spc-title h2.latin {
+  font-family: var(--display);
   font-style: italic;
   font-weight: 600;
 }
@@ -2659,7 +2660,7 @@
 .unsupported {
   position: absolute;
   inset: 0;
-  z-index: 40;
+  z-index: var(--bl-z-cinematic, 80);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2698,7 +2699,7 @@
 .bl-fx {
   position: absolute;
   inset: 0;
-  z-index: 30;
+  z-index: var(--bl-z-celebration, 70);
   pointer-events: none;
   overflow: hidden;
 }
@@ -2986,11 +2987,9 @@
   box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.22), 0 0 26px rgba(var(--accent-rgb), 0.55);
 }
 .btn.good:not(:disabled):active,
+.btn.violet:not(:disabled):active,
 .cur-samples .buy.afford:active {
-  box-shadow: 0 0 0 4px rgba(var(--good-rgb), 0.2), 0 0 26px rgba(var(--good-rgb), 0.5);
-}
-.btn.violet:not(:disabled):active {
-  box-shadow: 0 0 0 4px rgba(var(--violet-rgb), 0.22), 0 0 26px rgba(var(--violet-rgb), 0.55);
+  box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.22), 0 0 26px rgba(var(--accent-rgb), 0.55);
 }
 .buy:not(:disabled):active {
   transform: scale(0.97);
@@ -3164,7 +3163,7 @@
 .splash {
   position: absolute;
   inset: 0;
-  z-index: 60;
+  z-index: var(--bl-z-cinematic, 80);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3893,11 +3892,10 @@
 .cur {
   min-width: 5.2em;
 }
+/* A currency not earned yet keeps its place (no reflow when it arrives) but shows nothing: no cryptic
+   "▯ —" placeholder (docs/ARTE.md §2.11). */
 .cur.pending {
-  opacity: 0.38;
-}
-.cur.pending .icw {
-  filter: grayscale(1);
+  visibility: hidden;
 }
 /* Tabs: always there; locked = dimmed icon + small lock, tapping explains how to unlock. */
 .tab-lock {
@@ -4467,4 +4465,283 @@
 }
 .ccard.has-sp .ccard-name {
   color: var(--sp);
+}
+
+/* ───────────── Integration 2: Encargos badge, price pill, behaviour links, species card, basement ─────────────
+ * Everything here floats or lives in a box that already exists: nothing pops in and pushes the UI around.
+ */
+
+/* The Encargos badge replaces the objective line inside the same floating bar (over the dish). */
+.bl-dish > .bl-objective.obj-custom,
+.bl[data-theme='light'] .bl-dish > .bl-objective.obj-custom {
+  padding: 0;
+  min-height: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  overflow: visible;
+}
+.bl-objective.obj-custom::before,
+.bl-objective.obj-custom > :not(.obj-slot) {
+  display: none;
+}
+.obj-slot {
+  flex: 1;
+  min-width: 0;
+}
+.obj-slot[hidden] {
+  display: none;
+}
+/* The bar lets taps through to the dish; only the badge itself is a button. */
+.obj-slot .enc-badge {
+  pointer-events: auto;
+  min-height: 48px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--c) 16%, transparent), rgba(255, 255, 255, 0.02) 70%), rgba(11, 14, 18, 0.88);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+}
+/* Narrow bar between the pause and speed buttons: a smaller face and "?" leave two full lines for the ask. */
+.obj-slot .enc-badge {
+  gap: 6px;
+  padding: 3px 4px 3px 3px;
+  font-size: 13px;
+}
+.obj-slot .enc-badge .enc-mini {
+  width: 34px;
+  height: 34px;
+}
+.obj-slot .enc-badge-q {
+  width: 28px;
+  height: 28px;
+}
+.bl.rm .obj-slot .enc-badge.cheer {
+  animation: none;
+}
+
+/* Seed price pill: the whole pill is one button (tap the price → why it costs that). */
+.mode-pill.price {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mode-pill.price:hover {
+  border-color: rgba(var(--accent-rgb), 0.55);
+}
+.mode-pill.price:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.mode-pill.price:active {
+  transform: translateX(-50%) scale(0.97);
+}
+.mode-pill.price .mp-info {
+  pointer-events: none;
+}
+/* The meter's reason chip floats centred above the whole pill (never off screen, never resizing it). */
+.mode-pill .mp-meter,
+.mode-pill .mo-meter,
+.mode-pill .mo-ticker {
+  position: static;
+}
+
+/* Creature card: the behaviour explains itself (Behaviour Guide). */
+.ccard-rows dd.ccard-beh-link {
+  cursor: pointer;
+  color: var(--accent);
+  text-decoration: underline dotted rgba(var(--accent-rgb), 0.6);
+  text-underline-offset: 3px;
+  border-radius: 6px;
+}
+.ccard-rows dd.ccard-beh-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Species sheet: the species card (yield equation, how to boost it) under the sheet's own content. */
+.spc-extras {
+  margin-top: 14px;
+}
+.spc-extras:empty {
+  display: none;
+}
+
+/* Bestiary: "Behaviour guide" button in the section header. */
+.sec-h .bh-guide {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  margin: -8px 0;
+  padding: 0 10px;
+  border-radius: 10px;
+  color: var(--accent);
+  font-size: max(0.75rem, 12px);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+.sec-h .bh-guide:hover {
+  background: rgba(var(--accent-rgb), 0.1);
+}
+.sec-h .bh-guide .icw {
+  width: 16px;
+  height: 16px;
+}
+
+/* Settings → "Laboratorio del sótano" entry (appears with 10 secrets). */
+.bls-entry-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 8px 14px;
+}
+.bls-entry-card p {
+  flex: 1;
+  margin: 0;
+  color: var(--dim);
+  font-size: 0.8125rem;
+  font-style: italic;
+}
+.bls-entry-panel:not(:empty) {
+  margin-top: 10px;
+}
+
+/* "Wait…" seed pill (more seeds are still forming): grey, not an alarming red. */
+.mode-pill.growing .mp-cost {
+  color: var(--dim);
+}
+.mode-pill .mp-wait {
+  color: var(--dim);
+  font-weight: 600;
+}
+
+/* Species identity (optional SpeciesView.hue / colorName / scientificName): each species reads as itself. */
+.sp.has-sp .portrait img,
+.spc.has-sp .portrait img {
+  filter: drop-shadow(0 0 5px var(--sp));
+}
+.sp.has-sp .sp-name::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--sp);
+  vertical-align: 1px;
+}
+.spc.has-sp .portrait {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sp) 65%, transparent) inset, 0 0 22px -6px var(--sp);
+}
+.spc-sub.spc-sci {
+  /* Latin names in Fraunces' real italic, not a slanted Inter (docs/ARTE.md §4). */
+  font-family: var(--display);
+  font-style: italic;
+}
+.badge.badge-color .sw {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--sp, var(--accent));
+}
+.badge.badge-link {
+  cursor: pointer;
+  min-height: 36px;
+}
+.badge.badge-link .icw:last-child {
+  width: 14px;
+  height: 14px;
+  opacity: 0.75;
+}
+.badge.badge-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* The species card under the sheet repeats neither the portrait nor the name: only diagram, yield, boosters. */
+.spc-extras .mo-spc-h {
+  display: none;
+}
+.stats.mult-parts {
+  margin-top: 10px;
+}
+/* Bestiary card: the scientific name, small and italic, under the plain one (one line, same height always). */
+.sp-sci {
+  max-width: 100%;
+  min-height: 1.2em;
+  margin-top: -4px;
+  padding: 0 4px;
+  font-size: max(0.75rem, 12px);
+  font-family: var(--display);
+  font-style: italic;
+  color: var(--dim);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Species sheet: the upgrades that help this species (SpeciesView.boostedBy). */
+.spc-boost {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -4px 0 12px;
+  font-size: 0.8125rem;
+  color: var(--dim);
+}
+.spc-boost .icw {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--good);
+}
+.spc-boost b {
+  color: var(--text);
+  font-weight: 650;
+}
+/* Encargo bubble: it hangs over the top of the dish for a few seconds. Taps go THROUGH it to the dish
+   (the first seed must never be swallowed); only its "¿Por qué?" pill opens VELA's dialogue. */
+.enc .enc-bubble {
+  pointer-events: none;
+  cursor: default;
+}
+.enc .enc-bubble .enc-whybtn {
+  pointer-events: auto;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+}
+
+/* Art swap-in (docs/ARTE.md §12): line icons inline with text. */
+.up-eta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+.up-eta .bl-ic,
+.mp-wait .icw {
+  flex: none;
+}
+.mp-wait {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* The room left, in words next to the seed price ("2 sitios" / "Llena"). */
+.mode-pill .mo-dots {
+  gap: 3px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--good);
+  white-space: nowrap;
+}
+.mode-pill .mo-dots.full {
+  color: var(--warn);
+}
+.mode-pill .mo-dots .mo-ic {
+  flex: none;
 }
