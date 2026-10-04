@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { DISH_DIAMETERS } from '../core/dish';
 import * as C from './cycleBalance';
 import {
   BRANCHES,
@@ -122,28 +121,30 @@ describe('always more: "antes → después"', () => {
   });
 
   it('reads like the plan', () => {
-    expect(beforeAfter({}, 'clock')).toMatchObject({ before: { es: 'Sesión 3:00' }, after: { es: 'Sesión 3:30' } });
-    expect(beforeAfter({ clock: 3, clock2: 1 }, 'clock2').after!.es).toBe('Sesión 5:30');
+    expect(beforeAfter({}, 'clock')).toMatchObject({ before: { es: 'Sesión 2:00' }, after: { es: 'Sesión 2:15' } });
+    expect(beforeAfter({ clock: 3, clock2: 1 }, 'clock2').after!.es).toBe('Sesión 3:15');
     expect(beforeAfter({ culture: 1 }, 'culture')).toMatchObject({ before: { es: 'Esencia ×1,15' }, after: { es: 'Esencia ×1,32', en: 'Essence ×1.32' } });
-    expect(beforeAfter({}, 'dish')).toMatchObject({ before: { es: `Placa Ø${DISH_DIAMETERS[0]}` }, after: { es: `Placa Ø${DISH_DIAMETERS[1]}` } });
-    expect(beforeAfter({}, 'sprint').after!.es).toBe('Últimos 30 s ×1,5');
+    expect(beforeAfter({}, 'dish')).toMatchObject({ before: { es: `Sitio para ${C.DISH_CAPACITY[0]} criaturas` }, after: { es: `Sitio para ${C.DISH_CAPACITY[1]} criaturas`, en: `Room for ${C.DISH_CAPACITY[1]} creatures` } });
+    expect(beforeAfter({}, 'slots')).toMatchObject({ before: { es: 'Sitio para 5 criaturas' }, after: { es: 'Sitio para 6 criaturas' } });
+    expect(beforeAfter({}, 'sparkGift')).toMatchObject({ before: { es: 'Regalo: 30 s de Esencia' } });
+    expect(beforeAfter({}, 'sprint').after!.es).toBe('Últimos 30 s: Esencia ×1,5');
     expect(beforeAfter({}, 'cheapSeeds')).toMatchObject({ before: { es: 'Precio normal' }, after: { es: 'Semillas −15 %' } });
     expect(beforeAfter({}, 'autoSeeder')).toMatchObject({ before: { es: 'Nunca' }, after: { es: 'Cada 20 s' } });
-    expect(beforeAfter({}, 'spark')).toMatchObject({ before: { es: 'Llega cada 90–240 s' }, after: { es: 'Llega cada 72–192 s' } });
-    expect(beforeAfter({}, 'worldCold')).toMatchObject({ before: { es: '2 especies posibles' }, after: { es: '5 especies posibles' } });
+    expect(beforeAfter({}, 'spark')).toMatchObject({ before: { es: 'Llega cada 80–100 s' }, after: { es: 'Llega cada 68–85 s' } });
+    expect(beforeAfter({}, 'worldCold')).toMatchObject({ before: { es: '2 especies para encontrar' }, after: { es: '5 especies para encontrar' } });
     expect(beforeAfter({ clock: 3 }, 'clock').after).toBeNull();
   });
 
   it('describes a level as one line, "now → next"', () => {
-    expect(effectLine('clock', 0)).toEqual({ es: 'Sesión 3:00 → Sesión 3:30', en: 'Session 3:00 → Session 3:30' });
-    expect(effectLine('clock', 3).es).toBe('Sesión 4:30');
+    expect(effectLine('clock', 0)).toEqual({ es: 'Sesión 2:00 → Sesión 2:15', en: 'Session 2:00 → Session 2:15' });
+    expect(effectLine('clock', 3).es).toBe('Sesión 2:45');
   });
 
   it('the next three levels and their prices feed the bar chart', () => {
     const rows = costRows('clock', 1);
     expect(rows.map((r) => r.level)).toEqual([2, 3]);
-    expect(rows.map((r) => r.cost)).toEqual([6, 12]);
-    expect(rows.map((r) => r.value.es)).toEqual(['Sesión 4:00', 'Sesión 4:30']);
+    expect(rows.map((r) => r.cost)).toEqual([2 * C.TREE_RING_START[1], 4 * C.TREE_RING_START[1]]);
+    expect(rows.map((r) => r.value.es)).toEqual(['Sesión 2:30', 'Sesión 2:45']);
     expect(costRows('clock', 3)).toEqual([]);
   });
 });
@@ -160,13 +161,13 @@ describe('prices: one rule, nothing hidden', () => {
     for (const n of TREE_NODES) {
       if (n.id === 'lab') continue;
       const r = priceRule(n.id);
-      expect(r.start, n.id).toBe(C.TREE_RING_START[n.ring]);
+      expect(r.start, n.id).toBe(n.id === 'eternalLife' ? C.ETERNAL_LIFE_START : C.TREE_RING_START[n.ring]);
       for (let l = 0; l < Math.min(n.maxLevel, 8); l++) expect(nodeCost(n.id, l), `${n.id}@${l}`).toBe(niceRound(r.start * r.growth ** l));
     }
-    expect(nodeCost('clock', 0)).toBe(3);
-    expect(nodeCost('clock', 2)).toBe(12);
+    expect(nodeCost('clock', 0)).toBe(C.TREE_RING_START[1]);
+    expect(nodeCost('clock', 2)).toBe(4 * C.TREE_RING_START[1]);
     expect(nodeCost('clock', 3)).toBe(Infinity);
-    expect(nodeCost('dish', 2)).toBe(27);
+    expect(nodeCost('dish', 2)).toBe(9 * C.TREE_RING_START[1]);
     expect(nodeCost('stabilizer', 1)).toBe(niceRound(C.TREE_RING_START[3] * 1.5));
   });
 
@@ -192,7 +193,7 @@ describe('prices: one rule, nothing hidden', () => {
 
   it('the first night is cheap: everything of rings 1–2 costs a few sessions of a beginner', () => {
     const night1 = TREE_NODES.filter((n) => n.id !== 'lab' && C.TREE_RING_NIGHT[n.ring] === 1).reduce((a, n) => a + nodeTotalCost(n.id), 0);
-    expect(night1).toBeLessThan(700);
+    expect(night1).toBeLessThan(1000);
   });
 });
 
@@ -212,7 +213,7 @@ describe('reveal rules', () => {
     const r = buyNode(ctx({}, 10), 'clock');
     expect(r.ok).toBe(true);
     expect(r.levels.clock).toBe(1);
-    expect(r.datos).toBe(7);
+    expect(r.datos).toBe(10 - C.TREE_RING_START[1]);
     expect(r.revealed).toEqual(expect.arrayContaining(['clock2', 'fridge']));
     const st = treeStates(ctx(r.levels, r.datos));
     expect(st.get('clock2')!.status).toBe('available');
@@ -234,15 +235,15 @@ describe('reveal rules', () => {
     expect(buyNode(ctx(levels, 100), 'dish').ok).toBe(true);
     expect(levels).toEqual({ lab: 1 });
     expect(canBuy(ctx({ clock: 3 }, 1000), 'clock')).toEqual({ ok: false, block: 'maxed' });
-    expect(canBuy(ctx({}, 2), 'clock')).toEqual({ ok: false, block: 'datos' });
+    expect(canBuy(ctx({}, C.TREE_RING_START[1] - 1), 'clock')).toEqual({ ok: false, block: 'datos' });
     expect(canBuy(ctx({}, 1000), 'clock2')).toEqual({ ok: false, block: 'locked' });
     expect(canBuy(ctx({}, 100), 'nope').block).toBe('unknown');
   });
 
   it('counts what is affordable and the next goal', () => {
     expect(affordableNodes(ctx({}, 0))).toEqual([]);
-    expect(affordableNodes(ctx({}, 3)).sort()).toEqual(BRANCHES.map((b) => routeNodes(b)[0].id).sort());
-    expect(nextGoal(ctx({}, 0))!.cost).toBe(3);
+    expect(affordableNodes(ctx({}, C.TREE_RING_START[1])).sort()).toEqual(BRANCHES.map((b) => routeNodes(b)[0].id).sort());
+    expect(nextGoal(ctx({}, 0))!.cost).toBe(C.TREE_RING_START[1]);
   });
 });
 
@@ -273,9 +274,9 @@ describe('effects', () => {
     expect(baseEffects().worlds).toEqual(['classic']);
   });
 
-  it('the whole Reloj route gives 9:00', () => {
+  it('the whole Reloj route gives 5:00', () => {
     const fx = treeEffects({ clock: 3, clock2: 2, clock3: 2, clock4: 3 });
-    expect(fx.sessionSeconds).toBe(9 * 60);
+    expect(fx.sessionSeconds).toBe(5 * 60);
   });
 
   it('aggregates multipliers, flags and levels', () => {

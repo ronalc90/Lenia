@@ -12,9 +12,10 @@ export interface GameEvents {
   seed: { x: number; y: number; cost: number; manual: boolean; from?: { x: number; y: number } };
   /**
    * (game) A tap was refused, nothing charged: 'tooClose' = no room there (it would fuse with nearby
-   * matter); 'growing' = enough seeds are still forming ("⏳ Espera…", GameView.seedsGrowing).
+   * matter); 'growing' = enough seeds are still forming ("⏳ Espera…", GameView.seedsGrowing);
+   * 'full' = (sessions) the dish has no room left ("Placa llena: mejora la Placa para más sitio").
    */
-  seedBlocked: { x: number; y: number; reason: 'tooClose' | 'growing' };
+  seedBlocked: { x: number; y: number; reason: 'tooClose' | 'growing' | 'full' };
   /** Seeding refused for lack of essence. */
   seedDenied: { x: number; y: number; cost: number };
   creatureBorn: { id: number; x: number; y: number };
@@ -46,6 +47,23 @@ export interface GameEvents {
   dishClear: Record<string, never>;
   /** Ask the dish to apply seeds (auto-seeder, golden reward). */
   dishSeed: { specs: import('./types').SeedSpec[] };
+  // ── (game, sessions cycle: docs/CICLO.md) ──
+  /** A new session is set up on a fresh dish (start card); its clock waits for the first seed. */
+  sessionStart: { n: number; world: string; seconds: number };
+  /** Clock moments: started, last minute, amber warning, each of the last 10 s, sprint. */
+  sessionClock: { type: 'clockStart' | 'lastMinute' | 'warn' | 'countdown' | 'sprint'; seconds?: number };
+  /** Seconds added to the clock ("+5 s"). */
+  sessionExtended: { seconds: number; reason: 'species' | 'encargo' | 'golden' };
+  /** Time is up (or "Terminar ahora"): the Datos are banked; Game.lastSummary holds the end card. */
+  sessionEnd: { n: number; datos: number; essence: number; nightReady: boolean; early: boolean };
+  /** A research-tree level was bought. `revealed` = nodes that became visible (reveal animation). */
+  nodeBought: { id: string; level: number; cost: number; revealed: string[] };
+  /** The tree centre was bought: a new night (story era) begins. */
+  nightStart: { night: number };
+  /** The world of the next session changed. */
+  worldPicked: { world: string };
+  /** An Abono was bought. */
+  boostBought: { count: number; mult: number; cost: number };
 }
 
 type Handler<T> = (payload: T) => void;

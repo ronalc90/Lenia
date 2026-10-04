@@ -284,7 +284,7 @@ describe('summary and banking', () => {
 
 describe('research purchases', () => {
   it('buys a node, remembers it as new for the start card, and refuses what it cannot pay', () => {
-    let r: ResearchState = { ...freshResearch(), datos: 5 };
+    let r: ResearchState = { ...freshResearch(), datos: C.TREE_RING_START[1] + 2 };
     const a = researchBuy(r, 'clock', 0);
     expect(a.result.ok).toBe(true);
     expect(a.state.datos).toBe(2);
@@ -365,13 +365,13 @@ describe('Datos preview before the clock runs out', () => {
     noteSeed(session);
     let p = sessionPreview(r, session, fx, 0);
     expect(p.datos).toBe(C.DATOS_MIN);
-    expect(p.goal).toMatchObject({ cost: 3, missing: 0 });
+    expect(p.goal).toMatchObject({ cost: C.TREE_RING_START[1], missing: 0 });
     noteEssence(session, 9.5 * C.DATOS_ESSENCE_DIV);
     p = sessionPreview(r, session, fx, 0);
     expect(p.datos).toBe(9);
     const rich = { ...r, levels: { lab: 1, clock: 3, dropper: 3, dish: 3, culture: 5, notebook: 3, worldCold: 1, spark: 3 } };
     p = sessionPreview(rich, session, fx, 0);
-    expect(p.goal!.cost).toBe(10);
-    expect(p.goal!.missing).toBe(0);
+    expect(p.goal!.cost).toBe(C.TREE_RING_START[2]);
+    expect(p.goal!.missing).toBe(Math.max(0, C.TREE_RING_START[2] - 1 - 9));
   });
 });

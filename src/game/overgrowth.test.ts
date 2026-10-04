@@ -71,7 +71,7 @@ describe('dish overgrowth (play-test: flood unlocked everything in seconds)', ()
     game.tick(0.5, null); // the integrator clears the dish: no flood in the next reports
     expect(game.view().overgrown).toBe(false);
     const toasts = (log.get('toast') ?? []) as { text: { es: string; en: string } }[];
-    expect(toasts.some((x) => x.text.es.startsWith('La placa se desbordó y se limpió sola'))).toBe(true);
+    expect(toasts.some((x) => x.text.es.startsWith('La placa se desbordó y la limpié'))).toBe(true);
     // A dish that recovers on its own before the delay is never wiped.
     const g2 = createGame({ bus: recordingBus().bus, rng: seededRng(16) });
     run(g2, B.OVERGROWN_AUTO_CLEAN - 5, flood);

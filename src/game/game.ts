@@ -9,6 +9,16 @@
  *  - after every tick: for (const r of game.takePortraitRequests()) game.setSpeciesPortrait(r.speciesId,
  *    sim.capture(r.x, r.y, r.size), r.creatureId) — the game keeps the best capture of each species
  *  - game.setGridSize(sim.gridW, sim.gridH) after creating the dish
+ *
+ * Two loops (GameDeps.cycle, default 'classic'):
+ *  - classic   the continuous Era loop: Laboratorio, Calibrar, Genoma, Extinción.
+ *  - sessions  lab sessions + research tree + worlds (docs/CICLO.md): a timed session on a fresh dish
+ *              earns Esencia (spent on seeds, Abono); when its clock runs out the Esencia earned
+ *              becomes Datos (session.ts), spent on the tree (tree.ts) between sessions. The classic
+ *              upgrade / Genome levels read as 0 there: every effect has an explicit `fx` branch.
+ *              Extra wiring: actions.startSession() after the end card; `speed` is 0 while a
+ *              session is over (the dish freezes under the end card); a new session set up on load
+ *              re-emits dishClear + its Nevera seeds on the first tick (after the dish exists).
  */
 import type { Bus, GameEvents } from '../core/bus';
 import type {
@@ -58,6 +68,7 @@ import * as B from './balance';
 import {
   ACHIEVEMENT_TEXT,
   achievementReward,
+  CLASSIC_ACHIEVEMENT_TEXT,
   effectText,
   GENOME_TEXT,
   JOURNAL,
@@ -81,6 +92,8 @@ import {
 } from './defs';
 import { computeProduction, wrapDist, type YieldDetail } from './economy';
 import { clipGraphemes } from './format';
+import * as C from './cycleBalance';
+import { migrateLegacy, type MigrationReport } from './legacy';
 import { averageEps, offlineEssence } from './offline';
 import {
   cropPattern,
@@ -94,6 +107,62 @@ import {
   ringsEqual,
   scaledTemplate,
 } from './seeding';
+import {
+  applySummary,
+  beginSession,
+  boostCost,
+  boostMult,
+  boostWait,
+  endSession,
+  freshResearch,
+  noteBehavior,
+  noteBest,
+  noteEncargo,
+  noteEssence,
+  noteGolden,
+  noteKeep,
+  noteProduction,
+  noteSeed,
+  noteSpecies,
+  noteSpend,
+  pityDue,
+  recentDatos,
+  researchBuy,
+  researchNight,
+  researchPickWorld,
+  seedStep,
+  sessionPreview,
+  sessionProdMult,
+  sessionProgress,
+  sessionRemaining,
+  summarize,
+  tickSession,
+  treeCtxOf,
+  type ResearchState,
+  type SessionEvent,
+  type SessionStart,
+  type SessionState,
+  type SessionSummary,
+} from './session';
+import {
+  TREE_BY_ID,
+  affordableNodes,
+  effectLine,
+  multText,
+  nightInfo,
+  nodeLevel,
+  nodeText,
+  seedConfig,
+  TREE_NODES,
+  treeEffects,
+  treeStates,
+  type BuyResult,
+  type TreeEffects,
+} from './tree';
+import { isWorldId, REACHABLE_BEHAVIORS, WORLD_BY_ID, WORLDS, worldEssenceMult, worldOfSpecies, worldRoom, worldSpeciesGroups, type WorldId } from './worlds';
+import { NODE_TEXT } from './treeText';
+
+const NODE_TEXT_CATALOGUING = NODE_TEXT.cataloguing.name;
 import {
   baseCalibration,
   base64ToUtf8,
@@ -129,6 +198,12 @@ export interface GameDeps {
   catalogSignatures?: CatalogSignature[];
   /** Dish size in cells until setGridSize is called. */
   grid?: { w: number; h: number };
+  /**
+   * Which loop runs: 'classic' (default: Laboratorio, Calibrar, Genoma, Extinción) or 'sessions'
+   * (lab sessions + research tree + worlds, docs/CICLO.md). A classic save opened in 'sessions' is
+   * migrated with migrateLegacy (Game.migration says what it got).
+   */
+  cycle?: 'classic' | 'sessions';
 }
 
 /** A capture the game wants: the integrator answers with setSpeciesPortrait(speciesId, sim.capture(x, y, size), creatureId). */
@@ -177,6 +252,24 @@ export interface Game {
   setGridSize(w: number, h: number): void;
   /** Read-only access to the raw state (tests, balance bot, debug overlay). */
   readonly state: Readonly<GameState>;
+  /** Pay an Encargo reward (main.ts calls it when present). Sessions: it also counts as an Encargo of the session (+time, +Datos). */
+  grantEncargo(r: { essence: number; samples: number }): void;
+  /** Which loop runs (GameDeps.cycle). */
+  readonly cycle: 'classic' | 'sessions';
+  /** (sessions) Datos, tree levels, night, worlds (null in classic). */
+  readonly research: Readonly<ResearchState> | null;
+  /** (sessions) The session on the dish: 'ready' (start card), 'running' or 'over' (end card). Null in classic. */
+  readonly session: Readonly<SessionState> | null;
+  /** (sessions) What the start card shows for the waiting session (null in classic). */
+  readonly sessionStart: SessionStart | null;
+  /** (sessions) The end card of the last session (kept until the next one is set up). */
+  readonly lastSummary: SessionSummary | null;
+  /** (sessions) What the research tree gives now (null in classic). */
+  readonly effects: Readonly<TreeEffects> | null;
+  /** (sessions) A classic save turned into tree levels + Datos on load (null otherwise). */
+  readonly migration: MigrationReport | null;
+  /** (sessions) Buy one tree level; the full result (revealed nodes for the reveal animation). */
+  buyNode(id: string): BuyResult;
 }
 
 interface Golden {
@@ -185,6 +278,8 @@ interface Golden {
   vx: number;
   vy: number;
   life: number;
+  /** Life it was born with (the view shows life / max). */
+  max: number;
 }
 
 export function createGame(deps: GameDeps, save?: string): Game {
@@ -198,6 +293,20 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
   let s: GameState = (save && loadAny(save)) || defaultState(now());
   let paused = false;
+  const cycle: 'classic' | 'sessions' = deps.cycle === 'sessions' ? 'sessions' : 'classic';
+  /** The sessions cycle runs (lab sessions + research tree + worlds). */
+  const sessions = cycle === 'sessions';
+
+  // ── Sessions cycle (transient) ──
+  /** Research-tree effects for s.research.levels (refreshFx after every change). */
+  let fx: TreeEffects = treeEffects({});
+  let sessionStartInfo: SessionStart | null = null;
+  let lastSummary: SessionSummary | null = null;
+  let migration: MigrationReport | null = null;
+  /** A new session set up on load: re-emit dishClear + its Nevera seeds on the first tick (the dish exists then). */
+  let bootReplant: SeedSpec[] | null = null;
+  /** Tree projections for the view (UpgradeView list, research view), rebuilt when the tree or Datos change. */
+  let treeCache: { key: string; upgrades: UpgradeView[]; affordable: number } | null = null;
 
   // ── Transient (not saved) ──
   let creatures: Creature[] = [];
@@ -284,8 +393,19 @@ export function createGame(deps: GameDeps, save?: string): Game {
     return s.settings.lang;
   }
 
-  const level = (id: string): number => s.upgrades[id] ?? 0;
-  const has = (node: string): boolean => s.nodes.includes(node);
+  // Classic Laboratorio / Genome levels. In the sessions cycle the research tree replaces them (`fx`):
+  // they read as 0 / not owned there, and every effect they drove has an explicit sessions branch.
+  const level = (id: string): number => (sessions ? 0 : (s.upgrades[id] ?? 0));
+  const has = (node: string): boolean => !sessions && s.nodes.includes(node);
+  /** (sessions) The session on the dish, or null (classic). */
+  const ses = (): SessionState | null => (sessions ? (s.session ?? null) : null);
+  /** Production, Sparks and the Sembrador only run while a session's clock runs (always in classic). */
+  const live = (): boolean => !sessions || s.session?.phase === 'running';
+  const worldNow = (): WorldId => s.session?.world ?? s.research?.world ?? 'classic';
+  function refreshFx(): void {
+    fx = treeEffects(s.research?.levels ?? {});
+    treeCache = null;
+  }
   const stableCount = (): number => creatures.reduce((n, c) => n + (c.state === 'stable' ? 1 : 0), 0);
   const aliveCount = (): number => creatures.reduce((n, c) => n + (c.state === 'stable' || c.state === 'born' ? 1 : 0), 0);
   const speciesById = (id: string | undefined): SpeciesState | undefined => (id ? s.species.find((sp) => sp.id === id) : undefined);
@@ -310,16 +430,46 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
   /** The factors of M_global, for the multiplier breakdown (QA3 #13). Their product is globalMult(). */
   function globalParts(): { id: string; name: Text; mult: number }[] {
-    const parts = [
-      { id: 'culture', name: UPGRADE_TEXT.culture.name, mult: Math.pow(1 + B.CULTURE_BONUS, level('culture')) },
-      { id: 'dish', name: UPGRADE_TEXT.dish.name, mult: 1 + B.DISH_BONUS * level('dish') },
-      { id: 'genome', name: TEXT.multGenome, mult: (1 + B.GENOME_SPENT_BONUS * s.genomeSpent) * (1 + B.GENOME_UNSPENT_BONUS * s.genome) },
+    const parts = sessions
+      ? sessionParts()
+      : [
+          { id: 'culture', name: UPGRADE_TEXT.culture.name, mult: Math.pow(1 + B.CULTURE_BONUS, level('culture')) },
+          { id: 'dish', name: UPGRADE_TEXT.dish.name, mult: 1 + B.DISH_BONUS * level('dish') },
+          { id: 'genome', name: TEXT.multGenome, mult: (1 + B.GENOME_SPENT_BONUS * s.genomeSpent) * (1 + B.GENOME_UNSPENT_BONUS * s.genome) },
+        ];
+    parts.push(
       { id: 'collection', name: TEXT.multCollection, mult: 1 + B.SPECIES_MILESTONE_BONUS * Math.floor(s.species.length / B.SPECIES_MILESTONE_STEP) },
       { id: 'behaviors', name: TEXT.multBehaviors, mult: 1 + B.BEHAVIOR_MILESTONE_BONUS * s.behaviorsSeen.length },
       { id: 'achievements', name: TEXT.multAchievements, mult: 1 + achievementBonus() },
-    ];
+    );
     for (const [id, b] of bonuses) parts.push({ id, name: b.name, mult: b.mult });
     return parts;
+  }
+
+  /** Distinct species with a stable member on the dish (Ecosistema). */
+  function speciesAlive(): number {
+    const set = new Set<string>();
+    for (const c of creatures) {
+      const id = c.state === 'stable' ? creatureSpecies.get(c.id) : undefined;
+      if (id) set.add(id);
+    }
+    return set.size;
+  }
+
+  /** (sessions) The tree's Vida route, the world, Ecosistema, Sprint final and Abono. */
+  function sessionParts(): { id: string; name: Text; mult: number }[] {
+    const out = [{ id: 'tree', name: TEXT.multTree, mult: fx.prodMult }];
+    const wm = worldEssenceMult(worldNow());
+    if (wm !== 1) out.push({ id: 'world', name: TEXT.multWorld, mult: wm });
+    if (fx.cataloguing > 0) out.push({ id: 'cataloguing', name: NODE_TEXT_CATALOGUING, mult: 1 + fx.cataloguing });
+    if (fx.ecosystem > 0) out.push({ id: 'ecosystem', name: TEXT.multEcosystem, mult: 1 + fx.ecosystem * speciesAlive() });
+    const se = ses();
+    if (se) {
+      const sprint = sessionProdMult(se, fx);
+      if (sprint > 1) out.push({ id: 'sprint', name: TEXT.multSprint, mult: sprint });
+      if (se.boosts > 0) out.push({ id: 'boost', name: TEXT.boost, mult: boostMult(se) });
+    }
+    return out;
   }
 
   /** M_global: upgrades, Genome (spent and unspent), collection milestones, achievements, outside bonuses. */
@@ -332,11 +482,16 @@ export function createGame(deps: GameDeps, save?: string): Game {
   }
 
   function speciesMult(sp: SpeciesState): number {
-    return B.RARITY_MULT[sp.rarity] * (1 + B.CATALOGUING_BONUS * level('cataloguing'));
+    // Sessions: Coleccionista is a dish-wide part (sessionParts), so a species not registered yet pays it too.
+    return B.RARITY_MULT[sp.rarity] * (sessions ? 1 : 1 + B.CATALOGUING_BONUS * level('cataloguing'));
   }
 
   function behaviorMult(b: Behavior | null): number {
     const base = b ? B.BEHAVIOR_MULT[b] : B.UNCLASSIFIED_MULT;
+    if (sessions) {
+      const a = fx.affinity;
+      return base * (1 + (b === 'swimmer' || b === 'spinner' ? a.swim : b === 'divider' || b === 'colony' ? a.colony : a.still));
+    }
     let aff = 0;
     if (b === 'swimmer' || b === 'spinner') aff = level('swimAffinity');
     else if (b === 'divider' || b === 'colony') aff = level('colonyAffinity');
@@ -364,8 +519,36 @@ export function createGame(deps: GameDeps, save?: string): Game {
    * n_alive = stable + newborn (+ seeds the detector has not seen yet); n_sat ignores the first
    * SEED_NURSERY_FREE newborns, so a short burst is fine but spamming seeds cannot dodge the price.
    */
+  /** (sessions) Living, forming and just-sown creatures: what the dish's room (capacity) counts. */
+  const occupancy = (): number => aliveCount() + pendingSeeds();
+  /** (sessions) The dish has no room left: a tap is refused for free ("Placa llena"). */
+  /** (sessions) Creatures the dish holds in this world (the Gigantes take more room each: worlds.ts roomMult). */
+  const room = (): number => worldRoom(worldNow(), fx.capacity);
+  const dishFull = (): boolean => sessions && occupancy() >= room();
+
   /** The seed price split into its factors (shown to the player by the price explainer). */
   function seedPrice(): SeedPriceView {
+    if (sessions) {
+      // Owner: "never punish growth". One price per session: base × Gotas baratas × a gentle step
+      // per seed bought; living creatures never raise it. The limit is room (capacity), not money.
+      const used = occupancy();
+      const cap = room();
+      return {
+        base: C.SESSION_SEED_PRICE,
+        alive: used,
+        crowdMult: 1,
+        freeSlots: cap,
+        used,
+        satMult: 1,
+        bigMult: C.BIG_SEED_AREA,
+        freeSeeds: s.charges.free,
+        cheapMult: fx.seedCostMult,
+        stepMult: seedStep(ses()),
+        bought: ses()?.bought ?? 0,
+        capacity: cap,
+        full: used >= cap,
+      };
+    }
     const stable = stableCount();
     const young = aliveCount() - stable + pendingSeeds();
     const alive = stable + young;
@@ -384,6 +567,11 @@ export function createGame(deps: GameDeps, save?: string): Game {
   }
 
   function seedCost(radiusFactor = B.SEED_RADIUS): number {
+    if (sessions) {
+      // Whole Esencia (owner: prices a child can read); a big seed is its area, ×2,25.
+      const area = (radiusFactor * radiusFactor) / (B.SEED_RADIUS * B.SEED_RADIUS);
+      return Math.max(1, Math.round(C.SESSION_SEED_PRICE * fx.seedCostMult * seedStep(ses()) * area));
+    }
     const p = seedPrice();
     return B.SEED_C0 * radiusFactor * radiusFactor * p.crowdMult * p.satMult;
   }
@@ -396,12 +584,14 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
   /** Template bias of a random seed of `shape` right now. */
   function seedBias(shape: SeedShape): number {
+    if (sessions) return seedConfig(fx).bias; // Gotero + Estabilizador of the tree (measured SEED_SUCCESS)
     const d = Math.min(level('dropper'), B.SEED_BIAS_GOTERO.length - 1);
     const b = B.SEED_BIAS_BASE + B.SEED_BIAS_GOTERO[d] + B.SEED_BIAS_STABILIZER * level('stabilizer') + helpBias();
     return Math.min(B.SEED_BIAS_MAX, b) * B.SHAPE_FACTORS[shape].bias;
   }
 
   function seedNoise(shape: SeedShape): number {
+    if (sessions) return seedConfig(fx).noise;
     const d = Math.min(level('dropper'), B.SEED_NOISE_GOTERO.length - 1);
     const n = Math.max(B.SEED_NOISE_MIN, B.SEED_NOISE_GOTERO[d] - B.SEED_NOISE_STABILIZER * level('stabilizer'));
     return Math.min(1, n * B.SHAPE_FACTORS[shape].noise);
@@ -415,14 +605,18 @@ export function createGame(deps: GameDeps, save?: string): Game {
     return s.essence < seedCost() && aliveCount() === 0 && s.charges.free === 0 && recentSeeds.length === 0;
   }
 
-  const archiveInterval = (): number => B.ARCHIVE_INTERVAL[Math.min(level('archive'), B.ARCHIVE_INTERVAL.length - 1)];
-  const archiveReady = (): boolean => level('archive') > 0 && s.archiveTimer >= archiveInterval();
+  /** Archivo: free copies on a timer (classic: Bestiario upgrade; sessions: Copiadora + Archivo). */
+  const archiveOn = (): boolean => (sessions ? fx.print && Number.isFinite(fx.archiveInterval) : level('archive') > 0);
+  const archiveInterval = (): number => (sessions ? fx.archiveInterval : B.ARCHIVE_INTERVAL[Math.min(level('archive'), B.ARCHIVE_INTERVAL.length - 1)]);
+  const archiveReady = (): boolean => archiveOn() && s.archiveTimer >= archiveInterval();
 
   function addEssence(x: number, countsForEra = true): void {
     if (!(x > 0)) return;
     s.essence += x;
     s.stats.totalEssence += x;
     if (countsForEra) s.eraEssence += x;
+    const se = ses();
+    if (se) noteEssence(se, x); // earned this session: what becomes Datos
   }
 
   function toast(text: Text, kind: 'info' | 'good' | 'warn' | 'bad' = 'info'): void {
@@ -475,6 +669,9 @@ export function createGame(deps: GameDeps, save?: string): Game {
   }
 
   // ───────────────────────────── calibration ─────────────────────────
+  // PHASE-2B-REMOVE (Calibrar): ranges, ringOptions, calibrationView's knobs and the actions
+  // setCalibration / saveRegime / loadRegime / deleteRegime / setRings go with the Calibrar panel
+  // (ui/panel-calibrate.ts) when main.ts flips to the sessions cycle; worlds replace them.
 
   function ranges() {
     return B.CALIBRATOR_RANGES[Math.min(level('calibrator'), B.CALIBRATOR_RANGES.length - 1)];
@@ -501,6 +698,10 @@ export function createGame(deps: GameDeps, save?: string): Game {
    * (Mutágeno) use the nearest species, the surest one.
    */
   function sporePattern(guaranteed: boolean): Pattern {
+    if (sessions) {
+      const t = worldTemplate(guaranteed);
+      if (t) return t;
+    }
     const known = new Set<string>();
     for (const x of s.species) if (x.catalogCode) known.add(catalogGroup(x.catalogCode));
     // Varied templates only once the first species is in the bestiary: a fresh dish starts with the
@@ -508,6 +709,32 @@ export function createGame(deps: GameDeps, save?: string): Game {
     const varied = !guaranteed && s.species.length >= B.SPORE_VARIETY_AFTER_SPECIES;
     const e = varied ? pickSporeTemplate(s.calib, rng, known) : nearestCatalog(s.calib);
     return scaledTemplate(e, s.calib.R);
+  }
+
+  /**
+   * (sessions) Spore template from the session's world (worlds.ts): its first species for sure seeds
+   * and a fresh game's first seeds, else any of its species, the ones not in the Bestiary yet
+   * SPORE_NOVELTY× likelier (×2 more with Esporas curiosas).
+   */
+  function worldTemplate(guaranteed: boolean): Pattern | null {
+    const codes = WORLD_BY_ID[worldNow()].species;
+    if (!codes.length) return null;
+    let code = codes[0];
+    if (!guaranteed && codes.length > 1 && s.species.length >= B.SPORE_VARIETY_AFTER_SPECIES) {
+      const known = new Set<string>();
+      for (const x of s.species) if (x.catalogCode) known.add(catalogGroup(x.catalogCode));
+      const w = codes.map((c) => (known.has(catalogGroup(c)) ? 1 : B.SPORE_NOVELTY * (fx.rareSpores ? 2 : 1)));
+      let u = rng() * w.reduce((a, b) => a + b, 0);
+      code = codes[codes.length - 1];
+      for (let i = 0; i < codes.length; i++) {
+        if ((u -= w[i]) < 0) {
+          code = codes[i];
+          break;
+        }
+      }
+    }
+    const e = catalogByCode(code);
+    return e ? scaledTemplate(e, s.calib.R) : null;
   }
 
   /** Spores still forming: newborn creatures plus seeds the detector has not reported yet. */
@@ -518,7 +745,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
   }
 
   /** The nursery is full: a new spore would wait (QA2 H-05 "⏳ Espera…"); too many at once fuse into a maze. */
-  const nurseryFull = (): boolean => forming() >= B.SEED_NURSERY_MAX;
+  const nurseryFull = (): boolean => forming() >= (sessions ? fx.nurseryMax : B.SEED_NURSERY_MAX);
 
   function buildSeed(x: number, y: number, radiusFactor: number, shape: SeedShape, guaranteed: boolean): SeedSpec {
     const R = s.calib.R;
@@ -649,10 +876,10 @@ export function createGame(deps: GameDeps, save?: string): Game {
   }
 
   function autoSeed(): void {
-    if (nurseryFull()) return;
+    if (nurseryFull() || dishFull()) return;
     const cost = seedCost();
     if (cost > s.essence * B.AUTOSEED_MAX_SPEND && !(aliveCount() === 0 && cost <= s.essence)) return;
-    const spacing = B.DISH_SPACING[Math.min(level('dish'), B.DISH_SPACING.length - 1)];
+    const spacing = B.DISH_SPACING[Math.min(sessions ? fx.dishLevel : level('dish'), B.DISH_SPACING.length - 1)];
     const spot = findFreeSpot(spacing);
     if (!spot) {
       if (saturatedToastT <= 0) {
@@ -664,6 +891,12 @@ export function createGame(deps: GameDeps, save?: string): Game {
     s.essence -= cost;
     const spec = buildSeed(spot.x, spot.y, B.SEED_RADIUS, s.shape, false);
     recordSeed(spot.x, spot.y, cost, false, true, seedBodyRadius(spec));
+    const se = ses();
+    if (se) {
+      se.bought++;
+      noteSpend(se, cost);
+      sessionEvents(noteSeed(se));
+    }
     bus.emit('dishSeed', { specs: [spec] });
   }
 
@@ -723,10 +956,14 @@ export function createGame(deps: GameDeps, save?: string): Game {
   function matchCatalog(sig: number[]): CatalogSignature | null {
     let best: CatalogSignature | null = null;
     let bestScore = Infinity;
+    // Sessions: a world is a fixed, measured preset — only its own species can be revealed, by
+    // signature alone (Triscutium lives in Discos 3.1 parameter units from its catalog point).
+    const worldGroups = sessions ? new Set(WORLD_BY_ID[worldNow()].species.map(catalogGroup)) : null;
     for (const e of catalogSigs) {
       const entry = catalogByCode(e.code);
       if (entry && !ringsEqual(entry.b, s.calib.rings)) continue;
-      const dp = paramDistance(e.mu, e.sigma, s.calib.mu, s.calib.sigma);
+      if (worldGroups && !worldGroups.has(catalogGroup(e.code))) continue;
+      const dp = worldGroups ? 0 : paramDistance(e.mu, e.sigma, s.calib.mu, s.calib.sigma);
       if (dp > B.CATALOG_REVEAL_MAX_PARAM_DIST) continue;
       const ds = signatureDistance(sig, e.signature);
       if (!(ds < SPECIES_MATCH_THRESHOLD * B.CATALOG_MATCH_FACTOR)) continue;
@@ -746,7 +983,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
       s.flags.firstStable = true;
       unlockJournal('firstStable');
     }
-    if (s.goldenTimer < 0) s.goldenTimer = between(B.GOLDEN_FIRST_DELAY);
+    // Sessions arm the Spark when the clock starts (armGolden).
+    if (!sessions && s.goldenTimer < 0) s.goldenTimer = between(B.GOLDEN_FIRST_DELAY);
     bus.emit('creatureStable', { id: c.id, x: c.x, y: c.y });
     unassigned.add(c.id);
     assignSpecies(c);
@@ -776,6 +1014,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       s.species.map((sp) => sp.signature),
     );
     let sp: SpeciesState | undefined = idx >= 0 ? s.species[idx] : undefined;
+    let isNewSpecies = false;
     const reveal = sp ? null : matchCatalog(sig);
     // Same catalog species (or one the detector cannot tell apart from it), drifted signature.
     if (!sp && reveal) sp = s.species.find((x) => sameCatalogSpecies(x.catalogCode, reveal.code));
@@ -790,9 +1029,12 @@ export function createGame(deps: GameDeps, save?: string): Game {
       if (!finishedForm(c, sig, reveal) || newSpeciesTokens < 1 || crowded(c)) return;
       sp = registerSpecies(c, sig, reveal);
       newSpeciesTokens -= 1;
+      isNewSpecies = true;
     }
     unassigned.delete(c.id);
     creatureSpecies.set(c.id, sp.id);
+    const se = ses();
+    if (se && se.phase !== 'over') sessionEvents(noteSpecies(se, fx, sp.id, isNewSpecies));
     if (c.behavior) onBehavior(c);
   }
 
@@ -904,8 +1146,10 @@ export function createGame(deps: GameDeps, save?: string): Game {
     if (!s.behaviorsSeen.includes(b)) {
       s.behaviorsSeen.push(b);
       s.pendingBehaviors++;
+      const se = ses();
+      if (se) noteBehavior(se, b, true);
+      // One event, one message (CLARIDAD J-58): the UI's label / Momento card says it; no toast here.
       bus.emit('behaviorNew', { behavior: b, x: c.x, y: c.y });
-      toast(TEXT.newBehavior(b), 'good');
       if (b === 'swimmer') unlockJournal('firstSwimmer');
       if (b === 'spinner') unlockJournal('firstSpinner');
       if (b === 'divider') {
@@ -1027,13 +1271,21 @@ export function createGame(deps: GameDeps, save?: string): Game {
     eps = prod.total * bm;
     perCreature = prod.per;
     perDetail = prod.detail;
-    addEssence(eps * dt);
+    const earning = live();
+    if (earning) addEssence(eps * dt);
+    const se = ses();
+    if (se && earning) {
+      noteProduction(se, eps, stableCount());
+      let best: { id: number; v: number } | null = null;
+      for (const [id, v] of perCreature) if (!best || v > best.v) best = { id, v };
+      if (best) noteBest(se, creatureSpecies.get(best.id) ?? null, best.v * bm);
+    }
     if (prod.symbiotic > 0) s.stats.symbiosis = Math.max(s.stats.symbiosis, prod.symbiotic);
     s.stats.epsPeak = Math.max(s.stats.epsPeak, eps);
     if (eps >= B.CULTURE_UNLOCK_EPS) s.flags.eps10 = true;
 
-    // Floating income numbers.
-    for (const c of creatures) {
+    // Floating income numbers (only while the Esencia really comes in).
+    for (const c of earning ? creatures : []) {
       const v = perCreature.get(c.id);
       if (!v) continue;
       let acc = incomeAcc.get(c.id);
@@ -1083,8 +1335,41 @@ export function createGame(deps: GameDeps, save?: string): Game {
     }
   }
 
+  /** OBJECTIVES[i], re-aimed at the tree and the night in the sessions cycle (cycleBalance SESSION_OBJECTIVES). */
+  function objectiveAt(i: number): (typeof B.OBJECTIVES)[number] {
+    const o = B.OBJECTIVES[i];
+    const ov = sessions ? C.SESSION_OBJECTIVES[o.id] : undefined;
+    return ov ? { ...o, metric: ov.metric ?? o.metric, target: ov.target ?? o.target } : o;
+  }
+
+  /** An achievement's goal (sessions: re-aimed at worlds and the tree, cycleBalance SESSION_ACHIEVEMENTS). */
+  function achievementAt(a: (typeof B.ACHIEVEMENTS)[number]): (typeof B.ACHIEVEMENTS)[number] {
+    if (!sessions) return a;
+    const ov = C.SESSION_ACHIEVEMENTS[a.id];
+    if (ov) return { ...a, metric: ov.metric, target: ov.target };
+    // Every way of moving there is: the ones some world grows (worlds.ts, measured; CLARIDAD F-09).
+    if (a.metric === 'behaviors' && a.target > REACHABLE_BEHAVIORS.length) return { ...a, target: REACHABLE_BEHAVIORS.length };
+    return a;
+  }
+
+  /** Sessions: an achievement for a way of moving no world grows is not offered (it would be impossible). */
+  function achievementOffered(a: (typeof B.ACHIEVEMENTS)[number]): boolean {
+    return !sessions || !a.metric.startsWith('behavior:') || REACHABLE_BEHAVIORS.includes(a.metric.slice(9) as Behavior);
+  }
+
+  /** An achievement's name and line (the classic loop keeps its own wording where its goal differs). */
+  function achievementText(id: string): { name: Text; desc: Text } {
+    return (!sessions ? CLASSIC_ACHIEVEMENT_TEXT[id] : undefined) ?? ACHIEVEMENT_TEXT[id] ?? { name: { es: id, en: id }, desc: { es: '', en: '' } };
+  }
+
+  /** What an objective pays: classic fixed amounts; sessions SESSION_OBJECTIVE_SECONDS of current Esencia/s. */
+  function objectiveReward(o: (typeof B.OBJECTIVES)[number]): number {
+    if (!sessions || o.reward <= 0) return o.reward;
+    return Math.max(C.SESSION_OBJECTIVE_MIN, Math.round(C.SESSION_OBJECTIVE_SECONDS * eps));
+  }
+
   function checkProgress(): void {
-    refreshUnlocks();
+    if (!sessions) refreshUnlocks();
     // Tabs (sticky).
     const tabs = computeTabs();
     if (tabs.bestiary && !s.flags.tabBestiary) {
@@ -1096,6 +1381,16 @@ export function createGame(deps: GameDeps, save?: string): Game {
       toast(TEXT.tabUnlocked('Genoma', 'Genome'), 'info');
     }
     if (tabs.lab) s.flags.tabLab = true;
+    // A new night is ready (sessions: replaces "Extinction available").
+    if (sessions && s.research) {
+      const ni = nightInfo(treeCtxOf(s.research, s.species.length));
+      if (ni.ready && ni.next !== null && !s.flags[`nightReady${ni.next}`]) {
+        s.flags[`nightReady${ni.next}`] = true;
+        unlockJournal('nightReady');
+        // The first time the story's scene a1_night says it (CLARIDAD J-177): one event, one message.
+        if (ni.next > 2) toast(TEXT.nightReady(ni.next), 'good');
+      }
+    }
     // Extinction availability.
     if (extinctionAvailable() && !s.flags[`extReady${s.era}`]) {
       s.flags[`extReady${s.era}`] = true;
@@ -1105,27 +1400,43 @@ export function createGame(deps: GameDeps, save?: string): Game {
     // Objectives. A later objective already met by another route (bought early, a peak reached
     // while an earlier step waited) is remembered, so the chain never stalls on it (QA2 H-24).
     for (let i = s.objective; i < B.OBJECTIVES.length; i++) {
-      const o = B.OBJECTIVES[i];
+      const o = objectiveAt(i);
       if (!s.flags[`obj:${o.id}`] && metric(o.metric) >= o.target) s.flags[`obj:${o.id}`] = true;
     }
     while (s.objective < B.OBJECTIVES.length) {
-      const o = B.OBJECTIVES[s.objective];
+      const o = objectiveAt(s.objective);
       if (!s.flags[`obj:${o.id}`] && metric(o.metric) < o.target) break;
       s.objective++;
-      if (o.reward > 0) s.essence += o.reward;
-      toast(TEXT.objectiveDone(o.reward), 'good');
+      const reward = objectiveReward(o);
+      if (sessions) {
+        // An objective is an Encargo of the session: its Esencia (earned) and +time, +Datos.
+        giveSessionEssence(reward);
+        countEncargo();
+      } else if (reward > 0) s.essence += reward;
+      toast(TEXT.objectiveDone(reward), 'good');
     }
     // Achievements.
-    for (const a of B.ACHIEVEMENTS) {
-      if (s.achievements.includes(a.id)) continue;
+    for (const a0 of B.ACHIEVEMENTS) {
+      if (s.achievements.includes(a0.id) || !achievementOffered(a0)) continue;
+      const a = achievementAt(a0);
       if (metric(a.metric) >= a.target) {
         s.achievements.push(a.id);
-        bus.emit('achievement', { id: a.id, name: ACHIEVEMENT_TEXT[a.id]?.name ?? { es: a.id, en: a.id } });
+        bus.emit('achievement', { id: a.id, name: achievementText(a.id).name });
       }
     }
   }
 
   function metric(name: string): number {
+    if (sessions && s.research) {
+      // The tree replaces upgrades and Genome; the night replaces the Era (story / Encargos).
+      if (name.startsWith('upgrade:')) return nodeLevel(s.research.levels, name.slice(8));
+      if (name === 'extinctions') return researchNight(s.research) - 1;
+      if (name === 'genomeNodes') return TREE_NODES.filter((d) => d.id !== 'lab' && nodeLevel(s.research!.levels, d.id) > 0).length;
+      if (name === 'eraEssence') return nightEssence();
+      if (name === 'sessionEssence') return s.session && s.session.phase !== 'over' ? s.session.essence : (s.research.records.essence ?? 0);
+      if (name === 'worldsVisited') return WORLDS.filter((w) => s.flags[`world:${w.id}`]).length;
+      if (name === 'fullWorld') return fullWorlds();
+    }
     if (name.startsWith('upgrade:')) return level(name.slice(8));
     if (name.startsWith('behavior:')) return s.behaviorsSeen.includes(name.slice(9) as Behavior) ? 1 : 0;
     const st = s.stats;
@@ -1188,14 +1499,28 @@ export function createGame(deps: GameDeps, save?: string): Game {
     return r[0] + rng() * (r[1] - r[0]);
   }
 
+  /** Seconds to the next Spark (sessions: shorter, × Destello frecuente). */
+  function goldenInterval(): number {
+    return sessions ? between(C.SESSION_GOLDEN_INTERVAL) * fx.goldenIntervalMult : between(B.GOLDEN_INTERVAL);
+  }
+
+  /** (sessions) The clock started: the first Spark comes within SESSION_GOLDEN_FIRST_DELAY (Primer destello: sooner). */
+  function armGolden(): void {
+    const se = ses();
+    if (se && se.n < C.SPARK_FROM_SESSION) return; // session 1 has no Spark (CLARIDAD §3.3)
+    s.goldenTimer = between(fx.goldenFirstDelay ?? C.SESSION_GOLDEN_FIRST_DELAY);
+  }
+
   function spawnGolden(): void {
     const ang = rng() * Math.PI * 2;
+    const life = B.GOLDEN_LIFE + (sessions ? fx.goldenLifeBonus : 0);
     golden = {
       x: rng() * grid.w,
       y: rng() * grid.h,
       vx: Math.cos(ang) * B.GOLDEN_SPEED,
       vy: Math.sin(ang) * B.GOLDEN_SPEED,
-      life: B.GOLDEN_LIFE,
+      life,
+      max: life,
     };
     bus.emit('goldenSpawn', { x: golden.x, y: golden.y });
   }
@@ -1208,7 +1533,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       if (golden.life <= 0) {
         golden = null;
         s.stats.goldenMissed++;
-        s.goldenTimer = between(B.GOLDEN_INTERVAL);
+        s.goldenTimer = goldenInterval();
         bus.emit('goldenMissed', {});
       }
       return;
@@ -1239,6 +1564,10 @@ export function createGame(deps: GameDeps, save?: string): Game {
     if (!golden || paused) return;
     const g = golden;
     golden = null;
+    if (sessions) {
+      collectSessionGolden(g);
+      return;
+    }
     const W = B.GOLDEN_WEIGHTS;
     let r = rng() * (W.bloom + W.lump + W.spores + W.mutagen);
     let kind: 'bloom' | 'lump' | 'spores' | 'mutagen' =
@@ -1276,9 +1605,34 @@ export function createGame(deps: GameDeps, save?: string): Game {
     checkProgress();
   }
 
+  /**
+   * (sessions) Coordinator, HARD rule: the Spark gives SPARK_GIFT_SECONDS of your current Esencia/s
+   * (× Regalos mejores), never a random ×7, plus the sure seeds of Mutágeno. A session with one Spark
+   * less is never a worse session.
+   */
+  function collectSessionGolden(g: Golden): void {
+    const se = ses();
+    if (!se || se.phase !== 'running') return;
+    const secs = Math.round(C.SPARK_GIFT_SECONDS * fx.goldenRewardMult);
+    const amount = Math.max(C.SPARK_GIFT_MIN, Math.round(secs * eps));
+    addEssence(amount);
+    const sure = fx.mutagenSeeds;
+    if (sure > 0) s.charges.guaranteed += sure;
+    const gift = TEXT.sparkGift(secs, amount);
+    const more = sure > 0 ? TEXT.sparkSure(sure) : null;
+    const reward: Text = more ? { es: `${gift.es} ${more.es}`, en: `${gift.en} ${more.en}` } : gift;
+    s.stats.golden++;
+    s.goldenTimer = goldenInterval();
+    unlockJournal('firstGolden');
+    sessionEvents(noteGolden(se, fx));
+    bus.emit('goldenCollected', { x: g.x, y: g.y, reward });
+    checkProgress();
+  }
+
   // ───────────────────────────── extinction ──────────────────────────
 
   function extinctionAvailable(): boolean {
+    if (sessions) return false; // the night replaces the Extinction (research.nightReady)
     return essenceTerm(s.eraEssence) >= B.EXTINCTION_MIN_ESSENCE_TERM;
   }
 
@@ -1352,9 +1706,314 @@ export function createGame(deps: GameDeps, save?: string): Game {
     return true;
   }
 
+  // ───────────────────────────── sessions (docs/CICLO.md) ────────────
+
+  /** Worlds whose every species (catalog group) is in the Bestiary. */
+  function fullWorlds(): number {
+    const have = new Set<string>();
+    for (const x of s.species) if (x.catalogCode) have.add(catalogGroup(x.catalogCode));
+    return WORLDS.filter((w) => worldSpeciesGroups(w.id).every((g) => have.has(g))).length;
+  }
+
+  /** Esencia earned this night: the banked sessions plus the one on the dish. */
+  function nightEssence(): number {
+    const r = s.research;
+    if (!r) return 0;
+    const se = ses();
+    return r.nightEssence + (se && se.phase !== 'over' ? se.essence : 0);
+  }
+
+  /**
+   * Esencia from an Encargo / objective. While a clock runs it is earned now (→ Datos); otherwise it
+   * waits in `carry` for the next session's wallet (and shows in the waiting wallet at once).
+   */
+  function giveSessionEssence(x: number): void {
+    if (!(x > 0) || !Number.isFinite(x)) return;
+    const se = ses();
+    if (se?.phase === 'running') {
+      addEssence(x);
+      return;
+    }
+    s.carry = { essence: (s.carry?.essence ?? 0) + x, encargos: s.carry?.encargos ?? 0 };
+    if (se?.phase === 'ready') s.essence += x;
+  }
+
+  /** An Encargo / objective finished: +time and +Datos for the session (the next one when none runs). */
+  function countEncargo(): void {
+    const se = ses();
+    if (se?.phase === 'running') {
+      sessionEvents(noteEncargo(se, fx));
+      return;
+    }
+    s.carry = { essence: s.carry?.essence ?? 0, encargos: (s.carry?.encargos ?? 0) + 1 };
+    if (se?.phase === 'ready') sessionEvents(noteEncargo(se, fx));
+  }
+
+  /** Turn the session module's events into bus events (and the end of the session). */
+  function sessionEvents(ev: SessionEvent[]): void {
+    for (const e of ev) {
+      switch (e.type) {
+        case 'clockStart': {
+          armGolden();
+          const se = ses();
+          if (se) s.flags[`world:${se.world}`] = true; // a world played (achievement Viajera)
+          // What waited for this session (Encargos done in the tree) is earned now.
+          if (se && s.carry) noteEssence(se, s.carry.essence);
+          s.carry = undefined;
+          bus.emit('sessionClock', { type: 'clockStart' });
+          break;
+        }
+        case 'countdown':
+          bus.emit('sessionClock', { type: 'countdown', seconds: e.seconds });
+          break;
+        case 'lastMinute':
+        case 'warn':
+        case 'sprint':
+          bus.emit('sessionClock', { type: e.type });
+          break;
+        case 'extended':
+          bus.emit('sessionExtended', { seconds: e.seconds, reason: e.reason });
+          break;
+        case 'timesUp':
+          finishSession();
+          break;
+      }
+    }
+  }
+
+  /** The rules of a world on the dish (a fixed preset; no knobs). Counts as a calibration when it changes the rules. */
+  function applyWorld(world: WorldId, count: boolean): void {
+    const p = WORLD_BY_ID[world].params;
+    const c = s.calib;
+    if (c.mu === p.mu && c.sigma === p.sigma && c.R === p.R && c.dt === p.dt && ringsEqual(c.rings, p.rings)) return;
+    s.calib = { mu: p.mu, sigma: p.sigma, R: p.R, dt: p.dt, rings: [...p.rings] };
+    if (count) s.stats.calibrations++;
+    calibrationChanged();
+  }
+
+  /**
+   * Nevera: the kept species that live in this world come back alive (their pure catalog template),
+   * then this world's own species fill the other slots; never more than the dish holds.
+   */
+  function fridgePlants(start: SessionStart): SeedSpec[] {
+    const n = Math.min(start.fridgeSlots, room());
+    const out: SeedSpec[] = [];
+    if (n <= 0) return out;
+    const codes: string[] = [];
+    for (const id of start.fridge) {
+      const code = speciesById(id)?.catalogCode;
+      if (code && worldOfSpecies(code) === start.world && catalogByCode(code)) codes.push(code);
+    }
+    const own = WORLD_BY_ID[start.world].species;
+    for (let i = 0; codes.length < n && own.length; i++) codes.push(own[i % own.length]);
+    for (const code of codes.slice(0, n)) {
+      const e = catalogByCode(code);
+      if (!e) continue;
+      const pattern = scaledTemplate(e, s.calib.R);
+      const spot = findFreeSpot(2);
+      if (!spot) break;
+      const r = Math.max(pattern.w, pattern.h) / 2;
+      out.push({ x: spot.x, y: spot.y, radius: r, density: 1, noise: 0, shape: 'pattern', pattern, bias: 1, rotation: rng() * Math.PI * 2, rngSeed: Math.floor(rng() * 2147483647) });
+      recentSeeds.push({ x: spot.x, y: spot.y, t: B.RECENT_SEED_MEMORY, r }); // the next plant keeps clear of it
+    }
+    return out;
+  }
+
+  /**
+   * Set up the next session on a fresh dish: the clock waits for the first seed, the wallet holds the
+   * tree's start Esencia, the free seeds wait, the world's rules apply and the Nevera plants its
+   * creatures. A session still waiting ('ready') is set up again with the same number (a node bought
+   * or a world picked on the start card applies at once).
+   */
+  function setupSession(): void {
+    const r = s.research;
+    if (!r) return;
+    const prev = s.session ?? null;
+    const again = prev?.phase === 'ready';
+    const prevFresh = again ? (sessionStartInfo?.fresh ?? []) : [];
+    const b = beginSession(r, fx);
+    s.research = b.research;
+    s.session = b.session;
+    sessionStartInfo = again ? { ...b.start, fresh: [...new Set([...prevFresh, ...b.start.fresh])] } : b.start;
+    lastSummary = null;
+    const se = b.session;
+    const first = se.n === 1;
+    s.essence = fx.startEssence + (s.carry?.essence ?? 0);
+    // Every session's first drop takes (SESSION_SURE_SEEDS); the very first session also gets the
+    // tutorial's free seeds (QA2 H-04).
+    s.charges = { free: first ? Math.max(fx.freeSeeds, B.START_FREE_SEEDS) : fx.freeSeeds, guaranteed: first ? Math.max(B.START_GUARANTEED_SEEDS, C.FIRST_SESSION_SURE_SEEDS) : C.SESSION_SURE_SEEDS };
+    for (let i = 0; i < (s.carry?.encargos ?? 0); i++) noteEncargo(se, fx);
+    s.buffs = [];
+    s.goldenTimer = -1;
+    s.autoSeedTimer = 0;
+    s.pipetteTimer = 0;
+    s.archiveTimer = 0;
+    s.eraTime = 0;
+    s.eraHadStable = false;
+    s.eraStablePeak = 0;
+    s.era = researchNight(s.research);
+    treeCache = null;
+    clearTransient();
+    bus.emit('dishClear', {});
+    applyWorld(se.world, !!prev && prev.world !== se.world);
+    const plants = fridgePlants(sessionStartInfo);
+    if (plants.length) bus.emit('dishSeed', { specs: plants });
+    bus.emit('sessionStart', { n: se.n, world: se.world, seconds: se.limit + se.bonus });
+    if (bootReplant) bootReplant = plants;
+  }
+
+  /** Time is up (or "Terminar ahora"): keep the best species for the Nevera, bank the Datos, freeze the dish. */
+  function finishSession(): void {
+    const se = ses();
+    const r = s.research;
+    if (!se || !r) return;
+    se.phase = 'over';
+    const best = new Map<string, number>();
+    for (const c of creatures) {
+      const id = c.state === 'stable' ? creatureSpecies.get(c.id) : undefined;
+      if (id) best.set(id, Math.max(best.get(id) ?? 0, perCreature.get(c.id) ?? 0));
+    }
+    noteKeep(se, [...best.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]));
+    const sum = summarize(se, r, fx, s.species.length);
+    s.research = applySummary(r, se, sum, fx);
+    lastSummary = sum;
+    golden = null;
+    s.buffs = [];
+    treeCache = null;
+    bus.emit('sessionEnd', { n: se.n, datos: sum.datos.total, essence: se.essence, nightReady: sum.nightReady, early: se.endedEarly });
+    checkProgress();
+  }
+
+  /** Buy one level of a tree node (sessions). */
+  function buyTreeNode(id: string): BuyResult {
+    const r = s.research;
+    if (!sessions || !r) return { ok: false, block: 'unknown', levels: {}, datos: 0, cost: 0, revealed: [] };
+    const { state, result } = researchBuy(r, id, s.species.length);
+    if (!result.ok) return result;
+    s.research = state;
+    refreshFx();
+    const lvl = nodeLevel(state.levels, id);
+    bus.emit('nodeBought', { id, level: lvl, cost: result.cost, revealed: result.revealed });
+    // Encargos and the story listen to upgradeBought: a tree level is the upgrade of this cycle.
+    bus.emit('upgradeBought', { id, level: lvl });
+    if (id === 'lab') {
+      s.era = lvl;
+      unlockJournal('firstNight');
+      bus.emit('nightStart', { night: lvl });
+    }
+    if (TREE_BY_ID[id]?.world) unlockJournal('firstWorld');
+    if (state.world !== r.world) bus.emit('worldPicked', { world: state.world });
+    if (s.session?.phase === 'ready') setupSession(); // the waiting dish gets the new effects now
+    checkProgress();
+    return result;
+  }
+
+  /** Make sure a sessions game has its research state (a classic save is migrated once, generously). */
+  function ensureResearch(): void {
+    if (!sessions || s.research) return;
+    const fresh = s.stats.seeds === 0 && s.species.length === 0 && s.era <= 1 && s.genome === 0 && s.nodes.length === 0;
+    if (fresh) s.research = freshResearch();
+    else {
+      const m = migrateLegacy(s);
+      s.research = m.research;
+      migration = m.report;
+    }
+    s.session = null;
+  }
+
+  /** Tree projections for the view, cached until the tree, the Datos or the Bestiary change. */
+  function treeViews(): { upgrades: UpgradeView[]; affordable: number } {
+    const r = s.research!;
+    const key = `${r.datos}|${r.sessions}|${s.species.length}|${JSON.stringify(r.levels)}`;
+    if (treeCache && treeCache.key === key) return treeCache;
+    const ctx = treeCtxOf(r, s.species.length);
+    const states = treeStates(ctx);
+    const upgrades: UpgradeView[] = [];
+    for (const d of TREE_NODES) {
+      if (d.id === 'lab') continue;
+      const st = states.get(d.id)!;
+      const tx = nodeText(d.id);
+      upgrades.push({
+        id: d.id,
+        tab: 'lab',
+        name: tx.name,
+        desc: tx.desc,
+        effect: effectLine(d.id, st.level, r.levels),
+        level: st.level,
+        maxLevel: d.maxLevel,
+        cost: Number.isFinite(st.cost) ? st.cost : 0,
+        qty: st.maxed ? 0 : 1,
+        currency: 'genome',
+        affordable: st.affordable,
+        unlocked: st.status === 'owned' || st.status === 'available',
+        unlockHint: { es: '', en: '' },
+        maxed: st.maxed,
+        secondsToAfford: null,
+      });
+    }
+    treeCache = { key, upgrades, affordable: affordableNodes(ctx).length };
+    return treeCache;
+  }
+
+  /** The sessions fields of the GameView. */
+  function sessionsView(): Pick<GameView, 'cycle' | 'session' | 'research' | 'sessionPreview' | 'boost'> {
+    const r = s.research!;
+    const se = ses();
+    const species = s.species.length;
+    const ni = nightInfo(treeCtxOf(r, species));
+    const g = ni.gate;
+    const nightProgress = ni.ready ? 1 : g ? Math.min(0.99, (Math.min(1, r.sessions / g.sessions) + Math.min(1, species / Math.max(1, g.species))) / 2) : 1;
+    const sprint = se ? sessionProdMult(se, fx) : 1;
+    const running = se?.phase === 'running';
+    const cost = se ? boostCost(se, eps) : 0;
+    return {
+      cycle: 'sessions',
+      session: se
+        ? {
+            n: se.n,
+            world: se.world,
+            phase: se.phase,
+            limit: se.limit,
+            bonus: se.bonus,
+            elapsed: se.elapsed,
+            remaining: sessionRemaining(se),
+            progress: sessionProgress(se),
+            essence: se.essence,
+            seeds: se.seeds,
+            sprint: sprint > 1 ? sprint : null,
+            newSpecies: se.newSpecies.length,
+            endedEarly: se.endedEarly,
+            first: se.n === 1,
+          }
+        : null,
+      research: {
+        datos: r.datos,
+        datosEarned: r.datosEarned,
+        night: ni.night,
+        nightReady: ni.ready,
+        nightProgress,
+        gate: g ? { ...g } : null,
+        sessions: r.sessions,
+        levels: { ...r.levels },
+        world: r.world,
+        worlds: [...fx.worlds],
+        affordable: treeViews().affordable,
+        capacity: room(),
+        recentDatos: recentDatos(r),
+      },
+      // Session 1 hides the Datos pill: the player does not know what a Dato is yet (CLARIDAD §3.3).
+      sessionPreview: se && se.phase !== 'over' && se.n > 1 ? sessionPreview(r, se, fx, species) : null,
+      boost: se
+        ? { cost, count: se.boosts, mult: boostMult(se), nextMult: boostMult(se) * C.BOOST_MULT, affordable: running && boostWait(se) === 0 && s.essence >= cost, wait: boostWait(se) }
+        : null,
+    };
+  }
+
   // ───────────────────────────── views ───────────────────────────────
 
   function computeTabs() {
+    // Sessions: the tree replaces Laboratorio and Genoma, worlds replace Calibrar (2B removes the tabs).
+    if (sessions) return { lab: false, bestiary: !!s.flags.tabBestiary || s.species.length > 0, calibrate: false, genome: false };
     return {
       lab: !!s.flags.tabLab || s.stats.seeds > 0,
       bestiary: !!s.flags.tabBestiary || s.species.length > 0,
@@ -1580,16 +2239,18 @@ export function createGame(deps: GameDeps, save?: string): Game {
   function view(): GameView {
     const cost = seedCost();
     const free = s.charges.free > 0 || pipetteReady();
-    const obj = s.objective < B.OBJECTIVES.length ? B.OBJECTIVES[s.objective] : null;
+    const obj = s.objective < B.OBJECTIVES.length ? objectiveAt(s.objective) : null;
     const objCur = obj ? metric(obj.metric) : 0;
     const extAvailable = extinctionAvailable();
     const gainNow = currentGenomeGain();
-    const upgrades = UPGRADES.map(upgradeView);
-    upgrades.sort((a, b) => Number(b.unlocked) - Number(a.unlocked));
-    const achievements: AchievementView[] = B.ACHIEVEMENTS.map((a) => ({
+    const sv = sessions && s.research ? sessionsView() : null;
+    // Sessions: the tree's nodes stand in for the upgrades (level = tree level, cost in Datos).
+    const upgrades = sv ? treeViews().upgrades.map((u) => ({ ...u })) : UPGRADES.map(upgradeView);
+    if (!sv) upgrades.sort((a, b) => Number(b.unlocked) - Number(a.unlocked));
+    const achievements: AchievementView[] = B.ACHIEVEMENTS.filter(achievementOffered).map((a) => ({
       id: a.id,
-      name: ACHIEVEMENT_TEXT[a.id]?.name ?? { es: a.id, en: a.id },
-      desc: ACHIEVEMENT_TEXT[a.id]?.desc ?? { es: '', en: '' },
+      name: achievementText(a.id).name,
+      desc: achievementText(a.id).desc,
       done: s.achievements.includes(a.id),
       reward: achievementReward(a.bonus),
     }));
@@ -1600,19 +2261,22 @@ export function createGame(deps: GameDeps, save?: string): Game {
       })
       .filter((x): x is JournalEntryView => x !== null);
     const sp = speeds();
+    const night = sv?.research?.night;
+    const gate = sv?.research?.gate;
+    const nightProgress = sv?.research?.nightProgress ?? 0;
     return {
       essence: s.essence,
       essencePerSec: eps,
       samples: s.samples,
-      genome: s.genome,
-      era: s.era,
+      genome: sv ? (sv.research?.datos ?? 0) : s.genome,
+      era: night ?? s.era,
       seedCost: cost,
       seedPrice: seedPrice(),
       overgrown,
       canSeed: free || s.essence >= cost,
       pipette: { active: pipetteReady() || (pipetteWanted() && s.pipetteTimer > 0), progress: Math.min(1, s.pipetteTimer / pipetteTime()) },
       tools: {
-        longPress: level('dropper') >= 2,
+        longPress: sessions ? fx.bigSeed : level('dropper') >= 2,
         brush: level('dropper') >= 3 && !s.settings.oneTouch,
         eraser: true,
         speeds: [...sp],
@@ -1621,39 +2285,49 @@ export function createGame(deps: GameDeps, save?: string): Game {
         shape: s.shape,
       },
       upgrades,
-      genomeNodes: genomeView(),
+      genomeNodes: sv ? [] : genomeView(),
       species: speciesView(),
       behaviorsSeen: [...s.behaviorsSeen],
       calibration: calibrationView(),
       journal,
       achievements,
-      extinction: {
-        progress: Math.min(1, s.eraEssence / EXTINCTION_ESSENCE_NEEDED),
-        available: extAvailable,
-        genomeGain: gainNow,
-        gainIn10Min: currentGenomeGain(baseEps * 600),
-        requirement: extAvailable ? TEXT.extinctionGain(gainNow) : TEXT.extinctionRequirement(EXTINCTION_ESSENCE_NEEDED, s.eraEssence),
-      },
-      golden: golden ? { x: golden.x, y: golden.y, life: Math.max(0, golden.life / B.GOLDEN_LIFE) } : null,
+      extinction: sv
+        ? {
+            // The night replaces the Extinction (research.nightReady); nothing is ever wiped.
+            progress: nightProgress,
+            available: false,
+            genomeGain: 0,
+            gainIn10Min: 0,
+            requirement: gate && night ? TEXT.nightRequirement(night + 1, gate.sessions, gate.species) : { es: '', en: '' },
+          }
+        : {
+            progress: Math.min(1, s.eraEssence / EXTINCTION_ESSENCE_NEEDED),
+            available: extAvailable,
+            genomeGain: gainNow,
+            gainIn10Min: currentGenomeGain(baseEps * 600),
+            requirement: extAvailable ? TEXT.extinctionGain(gainNow) : TEXT.extinctionRequirement(EXTINCTION_ESSENCE_NEEDED, s.eraEssence),
+          },
+      golden: golden ? { x: golden.x, y: golden.y, life: Math.max(0, golden.life / golden.max) } : null,
       buffs: s.buffs.map((b) => ({ id: b.id, name: TEXT.bloom, remaining: b.remaining, mult: b.mult })),
       creatures: creatureViews(),
-      objective: obj ? objectiveText(obj.id, objCur, obj.target) : null,
-      objectiveProgress: obj ? { current: Math.min(objCur, obj.target), target: obj.target, reward: obj.reward } : null,
+      objective: obj ? objectiveText(obj.id, objCur, obj.target, sessions) : null,
+      objectiveProgress: obj ? { current: Math.min(objCur, obj.target), target: obj.target, reward: objectiveReward(obj) } : null,
       settings: { ...s.settings },
       tabs: computeTabs(),
       stats: {
         playTime: s.stats.playTime,
         totalEssence: s.stats.totalEssence,
-        eraEssence: s.eraEssence,
+        eraEssence: sessions ? nightEssence() : s.eraEssence,
         seeds: s.stats.seeds,
         creaturesBorn: s.stats.creaturesBorn,
       },
       charges: { ...s.charges },
-      freePrint: { active: level('archive') > 0, ready: archiveReady(), progress: level('archive') > 0 ? Math.min(1, s.archiveTimer / archiveInterval()) : 0 },
-      markers: level('marker') > 0,
-      microscope: level('microscope'),
+      freePrint: { active: archiveOn(), ready: archiveReady(), progress: archiveOn() ? Math.min(1, s.archiveTimer / archiveInterval()) : 0 },
+      markers: sessions ? fx.microscope >= 1 : level('marker') > 0,
+      microscope: sessions ? fx.microscope : level('microscope'),
       multipliers: multiplierView(),
       seedsGrowing: nurseryFull(),
+      ...(sv ?? {}),
     };
   }
 
@@ -1674,7 +2348,9 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
   const actions: GameActions = {
     seedAt(x, y, opts) {
-      const big = !!opts?.big && level('dropper') >= 2;
+      const se = ses();
+      if (sessions && (!se || se.phase === 'over')) return null; // the dish is frozen under the end card
+      const big = !!opts?.big && (sessions ? fx.bigSeed : level('dropper') >= 2);
       const rf = B.SEED_RADIUS * (big ? B.SEED_BIG_RADIUS : 1);
       const cost = seedCost(rf);
       const pay = s.charges.free > 0 ? 'free' : pipetteReady() ? 'pipette' : s.essence >= cost ? 'essence' : null;
@@ -1682,11 +2358,17 @@ export function createGame(deps: GameDeps, save?: string): Game {
         bus.emit('seedDenied', { x, y, cost });
         return null;
       }
+      if (dishFull()) {
+        bus.emit('seedBlocked', { x, y, reason: 'full' });
+        return null; // nothing charged: "Placa llena: mejora la Placa para más sitio"
+      }
       if (nurseryFull()) {
         bus.emit('seedBlocked', { x, y, reason: 'growing' });
         return null; // nothing charged: "your seeds are still growing"
       }
-      const guaranteed = s.charges.guaranteed > 0;
+      const charged = s.charges.guaranteed > 0;
+      // Sessions pity: no creature stable after SESSION_PITY_AFTER s of clock → this seed is sure.
+      const guaranteed = charged || (!!se && pityDue(se));
       const spec = buildSeed(x, y, rf, s.shape, guaranteed);
       // Spacing: never stamp a spore onto or right next to other matter (they fuse into a maze).
       const spot = clearSpotNear(x, y, seedBodyRadius(spec));
@@ -1702,18 +2384,23 @@ export function createGame(deps: GameDeps, save?: string): Game {
       } else {
         s.essence -= cost;
         paid = cost;
+        if (se) {
+          se.bought++;
+          noteSpend(se, cost);
+        }
       }
-      if (guaranteed) s.charges.guaranteed--;
+      if (charged) s.charges.guaranteed--;
       const moved = spot.x !== x || spot.y !== y;
       spec.x = spot.x;
       spec.y = spot.y;
       recordSeed(spot.x, spot.y, paid, true, true, seedBodyRadius(spec), moved ? { x, y } : undefined);
+      if (se) sessionEvents(noteSeed(se)); // the first seed starts the clock
       checkProgress();
       return spec;
     },
 
     brushAt(x, y) {
-      if (level('dropper') < 3 || s.settings.oneTouch) return [];
+      if (sessions || level('dropper') < 3 || s.settings.oneTouch) return [];
       const R = s.calib.R;
       const t = now();
       const spacing = B.BRUSH_SPACING * R;
@@ -1757,6 +2444,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     printAt(speciesId, x, y) {
       const sp = speciesById(speciesId);
       if (!sp) return null;
+      if (sessions) return printInSession(sp, x, y);
       let pattern = portraitOf(sp);
       if (pattern && Math.abs(sp.R - s.calib.R) > 0.01) pattern = resamplePattern(pattern, s.calib.R / sp.R);
       if (!pattern && sp.catalogCode) {
@@ -1804,6 +2492,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     },
 
     buyUpgrade(id, qty) {
+      if (sessions) return false; // the research tree replaces the Laboratorio (actions.buyNode)
       const def = UPGRADE_BY_ID[id];
       if (!def || !s.unlocked.includes(id)) return false;
       const lvl = level(id);
@@ -1832,6 +2521,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     },
 
     buyGenomeNode(id) {
+      if (sessions) return false; // the research tree replaces the Genome
       const n = GENOME_BY_ID[id];
       if (!n || n.comingSoon || has(id) || !n.requires.every(has) || s.genome < n.cost) return false;
       s.genome -= n.cost;
@@ -1845,7 +2535,9 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
     extinguish,
 
+    // PHASE-2B-REMOVE (Calibrar): classic only; worlds replace the knobs in the sessions cycle.
     setCalibration(p) {
+      if (sessions) return;
       const r = ranges();
       const c = s.calib;
       let changed = false;
@@ -1869,8 +2561,9 @@ export function createGame(deps: GameDeps, save?: string): Game {
       }
     },
 
+    // PHASE-2B-REMOVE (Calibrar).
     saveRegime(name) {
-      if (level('calibrator') < 2 || s.regimes.length >= B.MAX_REGIMES) return false;
+      if (sessions || level('calibrator') < 2 || s.regimes.length >= B.MAX_REGIMES) return false;
       const clean = sanitizeName(name) || `${lang() === 'es' ? 'Régimen' : 'Regime'} ${s.regimes.length + 1}`;
       const c = s.calib;
       s.regimes.push({ name: clipGraphemes(clean, B.NAME_MAX_CHARS), mu: c.mu, sigma: c.sigma, R: c.R, dt: c.dt, rings: [...c.rings] });
@@ -1879,9 +2572,10 @@ export function createGame(deps: GameDeps, save?: string): Game {
       return true;
     },
 
+    // PHASE-2B-REMOVE (Calibrar).
     loadRegime(index) {
       const g = s.regimes[index];
-      if (!g) return;
+      if (!g || sessions) return;
       const preset = B.RING_PRESETS.find((p) => ringsEqual(p.rings, g.rings));
       if (preset && (preset.node === null || has(preset.node)) && !ringsEqual(s.calib.rings, g.rings)) {
         s.calib.rings = [...g.rings];
@@ -1891,6 +2585,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       actions.setCalibration({ mu: g.mu, sigma: g.sigma, R: g.R, dt: g.dt });
     },
 
+    // PHASE-2B-REMOVE (Calibrar).
     deleteRegime(index) {
       if (index >= 0 && index < s.regimes.length) s.regimes.splice(index, 1);
     },
@@ -1945,7 +2640,9 @@ export function createGame(deps: GameDeps, save?: string): Game {
       if (shapes().includes(shape)) s.shape = shape;
     },
 
+    // PHASE-2B-REMOVE (Calibrar): ring presets are part of the worlds in the sessions cycle.
     setRings(rings) {
+      if (sessions) return;
       const preset = B.RING_PRESETS.find((p) => ringsEqual(p.rings, rings));
       if (!preset || (preset.node !== null && !has(preset.node))) return;
       if (ringsEqual(s.calib.rings, preset.rings)) return;
@@ -1961,7 +2658,112 @@ export function createGame(deps: GameDeps, save?: string): Game {
         checkProgress();
       }
     },
+
+    // ── Sessions cycle (docs/CICLO.md) ──
+
+    startSession() {
+      if (!sessions || !s.research || s.session?.phase === 'running') return false;
+      setupSession();
+      return true;
+    },
+
+    endSessionNow() {
+      const se = ses();
+      if (!se || se.phase !== 'running') return false;
+      sessionEvents(endSession(se));
+      return true;
+    },
+
+    buyNode(id) {
+      return buyTreeNode(id).ok;
+    },
+
+    pickWorld(world) {
+      const r = s.research;
+      if (!sessions || !r || !isWorldId(world)) return false;
+      const next = researchPickWorld(r, world);
+      if (next === r) return false; // not open yet
+      s.research = next;
+      if (next.world === r.world) return true;
+      bus.emit('worldPicked', { world: next.world });
+      if (s.session?.phase === 'ready') setupSession(); // re-plant the waiting dish with the new rules
+      return true;
+    },
+
+    buyBoost() {
+      const se = ses();
+      if (!se || se.phase !== 'running' || boostWait(se) > 0) return false;
+      const cost = boostCost(se, eps);
+      if (!(s.essence >= cost)) return false;
+      s.essence -= cost;
+      noteSpend(se, cost);
+      se.boosts++;
+      const mult = boostMult(se);
+      bus.emit('boostBought', { count: se.boosts, mult, cost });
+      toast(TEXT.boostBought(multText(mult).es, multText(mult).en), 'good');
+      return true;
+    },
   };
+
+  /**
+   * (sessions) Copiadora: plant a pure copy of a Bestiary species of this world for
+   * PRINT_SEEDS_PRICE seeds of Esencia (free when the Archivo is ready). It never counts as a seed
+   * bought (the seed price step) and needs room like any seed.
+   */
+  function printInSession(sp: SpeciesState, x: number, y: number): SeedSpec | null {
+    const se = ses();
+    if (!se || se.phase === 'over' || !fx.print) return null;
+    const home = sp.catalogCode ? worldOfSpecies(sp.catalogCode) : null;
+    const e = sp.catalogCode ? catalogByCode(sp.catalogCode) : undefined;
+    if (!e || home !== se.world) {
+      toast(TEXT.printOtherWorld(home ? WORLD_BY_ID[home].n : 1), 'warn');
+      return null;
+    }
+    let pattern = scaledTemplate(e, s.calib.R);
+    const free = archiveReady();
+    const cost = Math.round(C.PRINT_SEEDS_PRICE * seedCost());
+    if (!free && s.essence < cost) {
+      bus.emit('seedDenied', { x, y, cost });
+      return null;
+    }
+    if (dishFull()) {
+      bus.emit('seedBlocked', { x, y, reason: 'full' });
+      return null;
+    }
+    const bodyR = Math.max(pattern.w, pattern.h) / 2;
+    const spot = clearSpotNear(x, y, bodyR);
+    if (!spot) {
+      bus.emit('seedBlocked', { x, y, reason: 'tooClose' });
+      return null;
+    }
+    const from = spot.x !== x || spot.y !== y ? { x, y } : undefined;
+    if (free) s.archiveTimer = 0;
+    else {
+      s.essence -= cost;
+      noteSpend(se, cost);
+    }
+    const mutate = fx.mutations && rng() < B.MUTATION_CHANCE;
+    if (mutate) {
+      pattern = mutatePattern(pattern, rng);
+      pendingMutations.push({ x: spot.x, y: spot.y, parent: sp.id, t: B.MUTATION_LINK_TIME });
+    }
+    s.stats.prints++;
+    recordSeed(spot.x, spot.y, 0, true, false, bodyR, from);
+    sessionEvents(noteSeed(se));
+    checkProgress();
+    return {
+      x: spot.x,
+      y: spot.y,
+      radius: bodyR,
+      density: 1,
+      noise: mutate ? B.MUTATION_NOISE : 0,
+      shape: 'pattern',
+      pattern,
+      bias: 1,
+      rotation: rng() * Math.PI * 2,
+      rngSeed: Math.floor(rng() * 2147483647),
+    };
+  }
 
   function sanitizeName(name: string): string {
     // eslint-disable-next-line no-control-regex
@@ -1973,8 +2775,17 @@ export function createGame(deps: GameDeps, save?: string): Game {
   function tick(realDt: number, report: DetectorReport | null): void {
     const dt = Number.isFinite(realDt) ? Math.min(Math.max(realDt, 0), B.MAX_TICK_DT) : 0;
     s.stats.playTime += dt;
+    if (bootReplant) {
+      // A session set up while loading: now the dish exists, give it its fresh start.
+      const plants = bootReplant;
+      bootReplant = null;
+      bus.emit('dishClear', {});
+      calibrationChanged();
+      if (plants.length) bus.emit('dishSeed', { specs: plants });
+    }
     if (report) processReport(report);
     if (paused) return;
+    const running = live();
 
     s.eraTime += dt;
     sinceNewSpecies += dt;
@@ -2007,13 +2818,13 @@ export function createGame(deps: GameDeps, save?: string): Game {
       econTick(B.ECON_TICK);
     }
 
-    updateGolden(dt);
+    if (running) updateGolden(dt);
 
     // Sembrador.
-    const as = level('autoSeeder');
-    if (as > 0) {
+    const as = sessions ? fx.autoSeeder : level('autoSeeder');
+    if (as > 0 && running) {
       s.autoSeedTimer += dt;
-      const iv = autoSeedInterval(as);
+      const iv = sessions ? fx.autoSeedInterval : autoSeedInterval(as);
       if (s.autoSeedTimer >= iv) {
         s.autoSeedTimer = Math.min(s.autoSeedTimer - iv, iv);
         autoSeed();
@@ -2021,7 +2832,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     }
 
     // Emergency pipette.
-    if (!pipetteReady()) {
+    if (running && !pipetteReady()) {
       if (pipetteWanted()) {
         s.pipetteTimer += dt;
         if (pipetteReady()) toast(TEXT.pipetteReady, 'info');
@@ -2029,18 +2840,22 @@ export function createGame(deps: GameDeps, save?: string): Game {
     }
 
     // Archivo free print.
-    if (level('archive') > 0 && !archiveReady()) {
+    if (running && archiveOn() && !archiveReady()) {
       s.archiveTimer += dt;
       if (archiveReady()) toast(TEXT.freePrintReady, 'info');
     }
 
     // Doc §11: 20 min without a new species → Microscopio I offered free once.
-    if (sinceNewSpecies > B.FREE_MICROSCOPE_AFTER && s.species.length > 0 && level('microscope') === 0 && !s.flags.freeMicroscope) {
+    if (!sessions && sinceNewSpecies > B.FREE_MICROSCOPE_AFTER && s.species.length > 0 && level('microscope') === 0 && !s.flags.freeMicroscope) {
       s.flags.freeMicroscope = true;
       s.upgrades.microscope = 1;
       if (!s.unlocked.includes('microscope')) s.unlocked.push('microscope');
       bus.emit('upgradeBought', { id: 'microscope', level: 1 });
     }
+
+    // The session clock (runs only while the session runs and the game is not paused).
+    const se = ses();
+    if (se) sessionEvents(tickSession(se, dt, fx));
   }
 
   // ───────────────────────────── save / offline ──────────────────────
@@ -2048,7 +2863,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
   function applyOffline(seconds: number): void {
     const secs = Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
     const cap = B.RESERVE_HOURS[Math.min(level('reserve'), B.RESERVE_HOURS.length - 1)] * 3600;
-    const gain = offlineEssence(averageEps(s.epsHistory, s.bucketSum, s.bucketTime), secs, cap);
+    // Sessions only run while playing ([ciclo §7]: no "experimentos nocturnos" in this version).
+    const gain = sessions ? C.OFFLINE_DATOS : offlineEssence(averageEps(s.epsHistory, s.bucketSum, s.bucketTime), secs, cap);
     addEssence(gain);
     if (secs >= B.OFFLINE_MIN_RETURN) {
       s.flags.returned = true;
@@ -2069,7 +2885,28 @@ export function createGame(deps: GameDeps, save?: string): Game {
     sanitizeLoaded();
     refreshUnlocks(true);
     bus.emit('dishClear', {});
+    if (sessions) {
+      migration = null;
+      lastSummary = null;
+      sessionStartInfo = null;
+      bootSessions();
+    }
     calibrationChanged();
+  }
+
+  /** Sessions: research state present, effects computed, a session on the dish (set one up if none waits or runs). */
+  function bootSessions(): void {
+    ensureResearch();
+    refreshFx();
+    if (s.research) s.era = researchNight(s.research);
+    const se = s.session;
+    if (!se || se.phase === 'over') {
+      s.session = null;
+      setupSession();
+    } else {
+      // A loaded session keeps its clock; its world's rules are on the dish already (s.calib).
+      sessionStartInfo = se.phase === 'ready' ? beginSession(s.research!, fx).start : null;
+    }
   }
 
   const game: Game = {
@@ -2080,7 +2917,11 @@ export function createGame(deps: GameDeps, save?: string): Game {
       return params;
     },
     get speed() {
-      return s.speed;
+      if (!sessions) return s.speed;
+      // The dish freezes under the end card; the Incubadora speeds it up while seeds are forming.
+      const se = s.session;
+      if (se?.phase === 'over') return 0;
+      return forming() > 0 ? fx.matureSpeed : 1;
     },
     setBonus(id, name, mult) {
       if (!(mult > 0) || mult === 1) bonuses.delete(id);
@@ -2142,8 +2983,48 @@ export function createGame(deps: GameDeps, save?: string): Game {
     get state() {
       return s;
     },
+    grantEncargo(r) {
+      const essence = Number.isFinite(r?.essence) ? Math.max(0, r.essence) : 0;
+      const samples = Number.isFinite(r?.samples) ? Math.max(0, r.samples) : 0;
+      s.samples += samples;
+      if (!sessions) {
+        s.essence += essence; // like an objective reward: wallet only (main.ts did this before)
+        return;
+      }
+      giveSessionEssence(essence);
+      countEncargo();
+      checkProgress();
+    },
+    cycle,
+    get research() {
+      return sessions ? (s.research ?? null) : null;
+    },
+    get session() {
+      return ses();
+    },
+    get sessionStart() {
+      return sessions ? sessionStartInfo : null;
+    },
+    get lastSummary() {
+      return lastSummary;
+    },
+    get effects() {
+      return sessions ? fx : null;
+    },
+    get migration() {
+      return migration;
+    },
+    buyNode: (id) => buyTreeNode(id),
   };
   sanitizeLoaded();
+  if (sessions) {
+    // A session loaded mid-way keeps its dish (main.ts restores it); a new one set up now gets its
+    // fresh dish on the first tick (bootReplant), when the simulation exists.
+    const resumed = !!s.session && s.session.phase !== 'over';
+    bootReplant = [];
+    bootSessions();
+    if (resumed) bootReplant = null;
+  }
   params = makeParams();
   refreshUnlocks(true);
   return game;

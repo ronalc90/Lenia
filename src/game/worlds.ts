@@ -9,8 +9,9 @@
  * shared with the others are in `dropped` (see the report in docs/CICLO.md §4.3); they stay in the
  * catalog for later worlds.
  */
-import type { LeniaParams } from '../core/types';
+import type { Behavior, LeniaParams } from '../core/types';
 import { catalogGroup } from '../species/identity';
+import { WORLD_ESSENCE_STEP } from './cycleBalance';
 
 export type WorldId = 'classic' | 'gyro' | 'cold' | 'legs' | 'shields' | 'helix' | 'giants';
 
@@ -33,6 +34,8 @@ export interface WorldDef {
    * so big that half as many fit, so each one is worth ×2 — said on the card and the node.
    */
   essenceMult?: number;
+  /** Share of the dish's room (TreeEffects.capacity) its creatures fit in (default 1; Gigantes ½). */
+  roomMult?: number;
 }
 
 const p = (mu: number, sigma: number, R = 13, rings: number[] = [1]): LeniaParams => ({ mu, sigma, R, rings, dt: 0.1 });
@@ -57,10 +60,23 @@ export const WORLDS: readonly WorldDef[] = [
   // O4a floods everywhere near the others; PG1c only shares knife-edge points with them (not robust).
   { id: 'legs', n: 6, node: 'worldLegs', params: p(0.23, 0.0355), species: ['H3cp', 'P3sp'], dropped: ['O4a', 'PG1c'], hue: 112 },
   // One kernel per world: K4d needs rings [1, 1/3], where 3GH2n floods; K4d dies in 3GH2n's.
-  { id: 'giants', n: 7, node: 'worldGiants', params: p(0.25, 0.033, 18, [0.5, 1, 2 / 3]), species: ['3GH2n'], dropped: ['K4d'], hue: 272, essenceMult: 2 },
+  // R 18 instead of 13: each creature takes (18/13)² ≈ 2× the room, so half as many fit, each ×2.
+  { id: 'giants', n: 7, node: 'worldGiants', params: p(0.25, 0.033, 18, [0.5, 1, 2 / 3]), species: ['3GH2n'], dropped: ['K4d'], hue: 272, essenceMult: 2, roomMult: 0.5 },
 ];
 
 export const WORLD_BY_ID: Readonly<Record<WorldId, WorldDef>> = Object.fromEntries(WORLDS.map((w) => [w.id, w])) as Record<WorldId, WorldDef>;
+
+/** All Esencia while playing in a world: ×(1 + WORLD_ESSENCE_STEP·(n − 1)) × its own essenceMult (Gigantes ×2). */
+export function worldEssenceMult(id: WorldId): number {
+  const w = WORLD_BY_ID[id];
+  return w ? (1 + WORLD_ESSENCE_STEP * (w.n - 1)) * (w.essenceMult ?? 1) : 1;
+}
+
+/** Creatures the dish holds in a world: the tree's room × the world's share (never fewer than 3). */
+export function worldRoom(id: WorldId, capacity: number): number {
+  const m = WORLD_BY_ID[id]?.roomMult ?? 1;
+  return m === 1 ? capacity : Math.max(3, Math.round(capacity * m));
+}
 
 export function isWorldId(x: unknown): x is WorldId {
   return typeof x === 'string' && x in WORLD_BY_ID;
@@ -83,4 +99,30 @@ export function worldOfSpecies(code: string): WorldId | null {
   const g = catalogGroup(code);
   for (const w of WORLDS) if (w.species.some((c) => catalogGroup(c) === g)) return w.id;
   return null;
+}
+
+/**
+ * Ways of moving the game's detector sees in each world, measured with the CPU reference at the
+ * world's preset (`npx vite-node scripts/world-check.ts --behaviors`, 3 placements × 1500 steps per
+ * species): swimmers everywhere; spinners in Remolinos (Gyrorbium) and Patas (Helicium); a still one
+ * in Discos (Circium). No species of any world is classified as pulsing, divider or colony (O4s
+ * splits once in a while in Frío, but is still read as a swimmer). Goals that ask for a way of
+ * moving use REACHABLE_BEHAVIORS so that none is impossible (docs/CLARIDAD.md F-09). [measured]
+ */
+export const WORLD_BEHAVIORS: Readonly<Record<WorldId, readonly Behavior[]>> = {
+  classic: ['swimmer'],
+  cold: ['swimmer'],
+  gyro: ['spinner', 'swimmer'],
+  shields: ['swimmer'],
+  helix: ['swimmer', 'still'],
+  legs: ['spinner', 'swimmer'],
+  giants: ['swimmer'],
+};
+
+/** Every way of moving some world grows (in WORLDS order of first appearance). */
+export const REACHABLE_BEHAVIORS: readonly Behavior[] = [...new Set(WORLDS.flatMap((w) => WORLD_BEHAVIORS[w.id]))];
+
+/** Worlds where a way of moving can be found (empty: none grows it). */
+export function worldsWithBehavior(b: Behavior): WorldId[] {
+  return WORLDS.filter((w) => WORLD_BEHAVIORS[w.id].includes(b)).map((w) => w.id);
 }

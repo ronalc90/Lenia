@@ -22,7 +22,7 @@
  */
 import type { Text } from '../core/types';
 import { DISH_DIAMETERS } from '../core/dish';
-import { GOLDEN_FIRST_DELAY, GOLDEN_INTERVAL, GOLDEN_LIFE, MUTAGEN_SEEDS, SEED_CROWD } from './balance';
+import { GOLDEN_LIFE, SEED_NURSERY_MAX } from './balance';
 import * as C from './cycleBalance';
 import { formatDuration, formatNumber } from './format';
 import { NODE_TEXT, VALUE_TEXT as V, type BranchId } from './treeText';
@@ -70,12 +70,12 @@ export interface TreeEffects {
   // ── 🧫 Dish ──
   /** Round dish size index (core/dish DISH_DIAMETERS: 0 = Ø96 … 4 = Ø224). */
   dishLevel: number;
-  /** Cheap creature slots on top of balance DISH_FREE_SLOTS[dishLevel]. */
+  /** Room on top of cycleBalance DISH_CAPACITY[dishLevel] (Más sitio, Sin apretujones). */
   extraSlots: number;
-  /** Crowding factor of the seed price (replaces balance SEED_CROWD). */
-  crowdFactor: number;
-  /** The first N creatures alive never raise the seed price (Guardería). */
-  nurseryBonus: number;
+  /** Creatures the dish holds: DISH_CAPACITY[dishLevel] + extraSlots (set after folding). */
+  capacity: number;
+  /** Seeds that may be forming at once (balance SEED_NURSERY_MAX + Guardería). */
+  nurseryMax: number;
   /** Seeds become paying creatures this many times faster (Incubadora). */
   matureSpeed: number;
   /** +fraction of production per distinct species alive on the dish (Ecosistema). */
@@ -137,6 +137,8 @@ export interface TreeNodeDef {
   requires: string[];
   /** Price factor per level. */
   growth: number;
+  /** First price when it is not its ring's (TREE_RING_START): the endless Vida eterna. */
+  start?: number;
   /** Shown bigger (the centre). */
   big?: boolean;
   /** The world this node opens (Mundos route). */
@@ -215,7 +217,7 @@ function route(branch: BranchId, specs: NodeSpec[]): TreeNodeDef[] {
 
 const session = (fx: TreeEffects): Text => V.session(clock(fx.sessionSeconds));
 const success = (fx: TreeEffects): Text => V.success(pctNum(seedSuccess(fx)));
-const dishSize = (fx: TreeEffects): Text => V.diameter(DISH_DIAMETERS[Math.min(DISH_DIAMETERS.length - 1, fx.dishLevel)]);
+const dishSize = (fx: TreeEffects): Text => V.room(fx.capacity, DISH_DIAMETERS[Math.min(DISH_DIAMETERS.length - 1, fx.dishLevel)]);
 const plusPct = (x: number, what: (p: string) => Text): Text => what(pctNum(x));
 const range = (a: number, b: number): string => `${Math.round(a)}–${Math.round(b)}`;
 
@@ -278,12 +280,12 @@ export const TREE_NODES: TreeNodeDef[] = [
 
   // ───── 🧫 Placa ─────
   ...route('dish', [
-    { id: 'dish', ring: 1, icon: 'dish', maxLevel: C.DISH_TREE_LEVELS, supersededBy: 'dishXL', growth: C.TREE_GROWTH_STEEP, apply: (fx, l) => void (fx.dishLevel = Math.max(fx.dishLevel, l)), measure: (fx) => fx.dishLevel, show: dishSize },
-    { id: 'slots', ring: 2, icon: 'slots', maxLevel: 3, apply: (fx, l) => void (fx.extraSlots += l * C.SLOTS_PER_LEVEL), measure: (fx) => fx.extraSlots, show: (fx) => V.slots(fx.extraSlots) },
-    { id: 'crowdCost', ring: 3, icon: 'crowdCost', maxLevel: 2, lower: true, apply: (fx, l) => void (fx.crowdFactor = C.CROWD_BY_LEVEL[l] ?? fx.crowdFactor), measure: (fx) => fx.crowdFactor, show: (fx) => (fx.crowdFactor < SEED_CROWD ? V.crowd(pctNum(1 - fx.crowdFactor / SEED_CROWD)) : V.crowdNormal) },
-    { id: 'nursery', ring: 3, icon: 'nursery', maxLevel: 1, apply: (fx) => void (fx.nurseryBonus += C.NURSERY_BONUS), measure: (fx) => fx.nurseryBonus, show: (fx) => (fx.nurseryBonus ? V.nursery(fx.nurseryBonus) : V.no) },
+    { id: 'dish', ring: 1, icon: 'dish', maxLevel: C.DISH_TREE_LEVELS, supersededBy: 'dishXL', growth: C.TREE_GROWTH_STEEP, apply: (fx, l) => void (fx.dishLevel = Math.max(fx.dishLevel, l)), measure: (fx) => fx.capacity, show: dishSize },
+    { id: 'slots', ring: 2, icon: 'slots', maxLevel: 3, apply: (fx, l) => void (fx.extraSlots += l * C.SLOTS_PER_LEVEL), measure: (fx) => fx.capacity, show: (fx) => V.roomOnly(fx.capacity) },
+    { id: 'crowdCost', ring: 3, icon: 'crowdCost', maxLevel: 2, apply: (fx, l) => void (fx.extraSlots += l * C.ROOM_PER_LEVEL), measure: (fx) => fx.capacity, show: (fx) => V.roomOnly(fx.capacity) },
+    { id: 'nursery', ring: 3, icon: 'nursery', maxLevel: 1, apply: (fx) => void (fx.nurseryMax += C.NURSERY_TREE_BONUS), measure: (fx) => fx.nurseryMax, show: (fx) => V.nursery(fx.nurseryMax) },
     { id: 'incubator', ring: 3, icon: 'incubator', maxLevel: 2, growth: C.TREE_GROWTH_STEEP, apply: (fx, l) => void (fx.matureSpeed = C.MATURE_SPEED_BY_LEVEL[l] ?? fx.matureSpeed), measure: (fx) => fx.matureSpeed, show: (fx) => V.mature(multText(fx.matureSpeed)) },
-    { id: 'dishXL', ring: 4, icon: 'dishXL', maxLevel: 1, apply: (fx) => void (fx.dishLevel = Math.max(fx.dishLevel, C.DISH_XL_LEVEL)), measure: (fx) => fx.dishLevel, show: dishSize },
+    { id: 'dishXL', ring: 4, icon: 'dishXL', maxLevel: 1, apply: (fx) => void (fx.dishLevel = Math.max(fx.dishLevel, C.DISH_XL_LEVEL)), measure: (fx) => fx.capacity, show: dishSize },
     { id: 'ecosystem', ring: 4, icon: 'ecosystem', maxLevel: 2, apply: (fx, l) => void (fx.ecosystem += l * C.ECOSYSTEM_PER_SPECIES), measure: (fx) => fx.ecosystem, show: (fx) => plusPct(fx.ecosystem, V.perSpecies) },
   ]),
 
@@ -297,7 +299,7 @@ export const TREE_NODES: TreeNodeDef[] = [
     { id: 'colonyAffinity', ring: 4, icon: 'colonyAffinity', maxLevel: 3, apply: (fx, l) => void (fx.affinity.colony += l * C.AFFINITY_TREE_BONUS), measure: (fx) => fx.affinity.colony, show: (fx) => plusPct(fx.affinity.colony, V.colonies) },
     { id: 'symbiosis', ring: 4, icon: 'symbiosis', maxLevel: 1, apply: (fx) => void (fx.symbiosis = true), measure: (fx) => (fx.symbiosis ? 1 : 0), show: (fx) => (fx.symbiosis ? V.pairs(multText(C.SYMBIOSIS_TREE_MULT)) : V.no) },
     { id: 'abundance', ring: 4, icon: 'abundance', maxLevel: 1, apply: (fx) => void (fx.prodMult *= C.ABUNDANCE_MULT), measure: (_fx, l) => (l ? C.ABUNDANCE_MULT : 1), show: (_fx, l) => V.allEssence(multText(l ? C.ABUNDANCE_MULT : 1)) },
-    { id: 'eternalLife', ring: 5, icon: 'eternalLife', maxLevel: C.ETERNAL_LIFE_MAX, growth: C.ETERNAL_LIFE_GROWTH, apply: (fx, l) => void (fx.prodMult *= Math.pow(C.ETERNAL_LIFE_MULT, l)), measure: (_fx, l) => Math.pow(C.ETERNAL_LIFE_MULT, l), show: (_fx, l) => V.essenceMult(multText(Math.pow(C.ETERNAL_LIFE_MULT, l))) },
+    { id: 'eternalLife', ring: 5, icon: 'eternalLife', maxLevel: C.ETERNAL_LIFE_MAX, growth: C.ETERNAL_LIFE_GROWTH, start: C.ETERNAL_LIFE_START, apply: (fx, l) => void (fx.prodMult *= Math.pow(C.ETERNAL_LIFE_MULT, l)), measure: (_fx, l) => Math.pow(C.ETERNAL_LIFE_MULT, l), show: (_fx, l) => V.essenceMult(multText(Math.pow(C.ETERNAL_LIFE_MULT, l))) },
   ]),
 
   // ───── 🔬 Descubrir ─────
@@ -325,11 +327,11 @@ export const TREE_NODES: TreeNodeDef[] = [
 
   // ───── ✨ Destello ─────
   ...route('spark', [
-    { id: 'spark', ring: 1, icon: 'spark', maxLevel: 3, lower: true, apply: (fx, l) => void (fx.goldenIntervalMult *= Math.pow(C.GOLDEN_INTERVAL_FACTOR, l)), measure: (fx) => fx.goldenIntervalMult, show: (fx) => V.sparkEvery(range(GOLDEN_INTERVAL[0] * fx.goldenIntervalMult, GOLDEN_INTERVAL[1] * fx.goldenIntervalMult)) },
+    { id: 'spark', ring: 1, icon: 'spark', maxLevel: 3, lower: true, apply: (fx, l) => void (fx.goldenIntervalMult *= Math.pow(C.GOLDEN_INTERVAL_FACTOR, l)), measure: (fx) => fx.goldenIntervalMult, show: (fx) => V.sparkEvery(range(C.SESSION_GOLDEN_INTERVAL[0] * fx.goldenIntervalMult, C.SESSION_GOLDEN_INTERVAL[1] * fx.goldenIntervalMult)) },
     { id: 'sparkLife', ring: 2, icon: 'sparkLife', maxLevel: 2, apply: (fx, l) => void (fx.goldenLifeBonus += l * C.GOLDEN_LIFE_BONUS), measure: (fx) => fx.goldenLifeBonus, show: (fx) => V.sparkStays(GOLDEN_LIFE + fx.goldenLifeBonus) },
     { id: 'sparkTime', ring: 2, icon: 'sparkTime', maxLevel: 2, apply: (fx, l) => void (fx.timePerGolden += l * C.TIME_PER_GOLDEN), measure: (fx) => fx.timePerGolden, show: (fx) => V.perSpark(fx.timePerGolden) },
-    { id: 'sparkFirst', ring: 3, icon: 'sparkFirst', maxLevel: 1, apply: (fx) => void (fx.goldenFirstDelay = [...C.GOLDEN_FIRST_FAST]), measure: (fx) => (fx.goldenFirstDelay ? 1 : 0), show: (fx) => V.firstSpark(range(...(fx.goldenFirstDelay ?? GOLDEN_FIRST_DELAY))) },
-    { id: 'sparkGift', ring: 3, icon: 'sparkGift', maxLevel: 3, apply: (fx, l) => void (fx.goldenRewardMult *= 1 + l * C.GOLDEN_GIFT_BONUS), measure: (fx) => fx.goldenRewardMult, show: (fx) => V.gifts(multText(fx.goldenRewardMult)) },
+    { id: 'sparkFirst', ring: 3, icon: 'sparkFirst', maxLevel: 1, apply: (fx) => void (fx.goldenFirstDelay = [...C.GOLDEN_FIRST_FAST]), measure: (fx) => (fx.goldenFirstDelay ? 1 : 0), show: (fx) => V.firstSpark(range(...(fx.goldenFirstDelay ?? C.SESSION_GOLDEN_FIRST_DELAY))) },
+    { id: 'sparkGift', ring: 3, icon: 'sparkGift', maxLevel: 3, apply: (fx, l) => void (fx.goldenRewardMult *= 1 + l * C.GOLDEN_GIFT_BONUS), measure: (fx) => fx.goldenRewardMult, show: (fx) => V.gifts(Math.round(C.SPARK_GIFT_SECONDS * fx.goldenRewardMult)) },
     { id: 'sparkDatos', ring: 3, icon: 'sparkDatos', maxLevel: 2, apply: (fx, l) => void (fx.datosPerGolden += l * C.GOLDEN_DATOS), measure: (fx) => fx.datosPerGolden, show: (fx) => V.datosPerSpark(fx.datosPerGolden) },
     { id: 'sparkMutagen', ring: 4, icon: 'sparkMutagen', maxLevel: 1, apply: (fx) => void (fx.mutagenSeeds = C.MUTAGEN_TREE_SEEDS), measure: (fx) => fx.mutagenSeeds, show: (fx) => V.sureSeeds(fx.mutagenSeeds) },
   ]),
@@ -364,8 +366,8 @@ export function baseEffects(): TreeEffects {
     seedCostMult: 1,
     dishLevel: 0,
     extraSlots: 0,
-    crowdFactor: SEED_CROWD,
-    nurseryBonus: 0,
+    capacity: C.DISH_CAPACITY[0],
+    nurseryMax: SEED_NURSERY_MAX,
     matureSpeed: 1,
     ecosystem: 0,
     prodMult: 1,
@@ -387,7 +389,7 @@ export function baseEffects(): TreeEffects {
     goldenFirstDelay: null,
     goldenRewardMult: 1,
     datosPerGolden: 0,
-    mutagenSeeds: MUTAGEN_SEEDS,
+    mutagenSeeds: C.SPARK_SURE_SEEDS,
     night: 1,
     datosNightMult: 1,
   };
@@ -415,6 +417,7 @@ export function treeEffects(levels: Readonly<Record<string, number>>): TreeEffec
     const l = nodeLevel(levels, def.id);
     if (l > 0 && def.apply) def.apply(fx, l);
   }
+  fx.capacity = C.DISH_CAPACITY[Math.min(C.DISH_CAPACITY.length - 1, fx.dishLevel)] + fx.extraSlots;
   return fx;
 }
 
@@ -451,7 +454,7 @@ export function priceRule(id: string): { start: number; growth: number; single: 
   const def = TREE_BY_ID[id];
   if (!def) return { start: Infinity, growth: 1, single: true };
   if (id === 'lab') return { start: C.NIGHT_START, growth: C.NIGHT_GROWTH, single: false };
-  return { start: C.TREE_RING_START[def.ring] ?? Infinity, growth: def.growth, single: def.maxLevel === 1 };
+  return { start: def.start ?? C.TREE_RING_START[def.ring] ?? Infinity, growth: def.growth, single: def.maxLevel === 1 };
 }
 
 /** Datos for the next level of a node at `level` (Infinity when maxed or unknown). */

@@ -81,9 +81,15 @@ export interface SessionState {
   elapsed: number;
   /** Esencia earned (spent or not): what becomes Datos. */
   essence: number;
-  /** Esencia spent (seeds, copies). */
+  /** Esencia spent (seeds, copies, Abono). */
   spent: number;
   seeds: number;
+  /** Seeds paid with Esencia this session (each makes the next ×SEED_PRICE_STEP). */
+  bought: number;
+  /** Abonos bought this session (production ×BOOST_MULT each). */
+  boosts: number;
+  /** Ended with "Terminar ahora" before the clock ran out (no minimum top-up). */
+  endedEarly: boolean;
   peakEps: number;
   peakCreatures: number;
   /** Distinct species seen (stable members) this session. */
@@ -220,6 +226,9 @@ export function beginSession(r: ResearchState, fx: TreeEffects): { research: Res
     essence: 0,
     spent: 0,
     seeds: 0,
+    bought: 0,
+    boosts: 0,
+    endedEarly: false,
     peakEps: 0,
     peakCreatures: 0,
     species: [],
@@ -303,8 +312,35 @@ export function tickSession(s: SessionState, dt: number, fx: TreeEffects, opts: 
 /** End the session now (time is up, or the player chose "Terminar ahora"). */
 export function endSession(s: SessionState): SessionEvent[] {
   if (s.phase === 'over') return [];
+  if (sessionRemaining(s) > 0) s.endedEarly = true;
   s.phase = 'over';
   return [{ type: 'timesUp' }];
+}
+
+/** Price factor of the next seed: ×SEED_PRICE_STEP per seed bought this session, at most ×SEED_PRICE_STEP_MAX. */
+export function seedStep(s: SessionState | null): number {
+  return Math.min(C.SEED_PRICE_STEP_MAX, Math.pow(C.SEED_PRICE_STEP, s ? s.bought : 0));
+}
+
+/** Abono: the production multiplier it gives right now (1 = none bought). */
+export function boostMult(s: SessionState | null): number {
+  return s ? Math.pow(C.BOOST_MULT, s.boosts) : 1;
+}
+
+/**
+ * Abono: Esencia the next one costs at `eps` Esencia/s ("20 s de tu Esencia", at least
+ * BOOST_MIN_COST), ×2 per Abono already bought this session — the floor doubles too.
+ */
+export function boostCost(s: SessionState | null, eps: number): number {
+  const k = s ? s.boosts : 0;
+  const e = Number.isFinite(eps) && eps > 0 ? eps : 0;
+  return Math.round(Math.max(C.BOOST_MIN_COST, C.BOOST_SECONDS * e) * Math.pow(C.BOOST_GROWTH, k));
+}
+
+/** Seconds until Abono is on sale this session (0 = now; BOOST_FROM_SECONDS of clock first). */
+export function boostWait(s: SessionState | null): number {
+  if (!s || s.phase !== 'running') return C.BOOST_FROM_SECONDS;
+  return Math.max(0, C.BOOST_FROM_SECONDS - s.elapsed);
 }
 
 function extend(s: SessionState, seconds: number, reason: 'species' | 'encargo' | 'golden'): SessionEvent[] {
@@ -470,7 +506,8 @@ export function computeDatos(s: SessionState, fx: TreeEffects, records: number):
   add('records', records, C.DATOS_PER_RECORD);
   const sub = fromEssence + terms.reduce((a, t) => a + t.value, 0);
   const book = Math.floor(sub * bookMult + 1e-9) - sub;
-  const minimum = Math.max(0, C.DATOS_MIN - sub - book);
+  // "Nunca menos de 3" pays a session that ran its clock; one cut short with "Terminar ahora" pays what it earned.
+  const minimum = s.endedEarly ? 0 : Math.max(0, C.DATOS_MIN - sub - book);
   return { essence, div, base, nightMult, fromEssence, terms, sub, bookMult, book, minimum, total: sub + book + minimum };
 }
 
@@ -622,6 +659,9 @@ export function validateSession(x: unknown): SessionState | null {
     essence: num(x.essence),
     spent: num(x.spent),
     seeds: Math.floor(num(x.seeds)),
+    bought: Math.floor(num(x.bought)),
+    boosts: Math.floor(num(x.boosts, 0, 0, 1000)),
+    endedEarly: x.endedEarly === true,
     peakEps: num(x.peakEps),
     peakCreatures: Math.floor(num(x.peakCreatures)),
     species: strs(x.species, 256),

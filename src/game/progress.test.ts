@@ -150,7 +150,7 @@ describe('progression layer', () => {
     g.tick(0.5, report([creature({ id: 1, x: 30, y: 30 }), creature({ id: 2, x: 121, y: 151, signature: GYRO_SIG })]));
     const v = g.view();
     expect(v.species.length).toBe(2);
-    expect(v.species[1].name.endsWith(' var.')).toBe(true);
+    expect(v.species[1].name.endsWith(' (sorpresa)')).toBe(true);
     expect(g.state.stats.variants).toBe(1);
   });
 

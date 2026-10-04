@@ -5,6 +5,8 @@
 import type { Behavior, BuyQty, Lang, Quality, Rarity, Settings, Text } from '../core/types';
 import * as B from './balance';
 import { GENOME_BY_ID, UPGRADE_BY_ID } from './defs';
+import { validateResearch, validateSession, type ResearchState, type SessionState } from './session';
+import { TREE_BY_ID } from './tree';
 
 export type SeedShape = 'blob' | 'ring' | 'noise';
 
@@ -143,6 +145,16 @@ export interface GameState {
   speed: number;
   buyQty: BuyQty;
   shape: SeedShape;
+  /** (sessions cycle, save v2) Datos, research tree, night, worlds. Absent in classic saves. */
+  research?: ResearchState;
+  /** (sessions cycle, save v2) The session on the dish; null/absent = set up a new one. */
+  session?: SessionState | null;
+  /**
+   * (sessions cycle) Encargos and objectives finished while no session runs (in the tree, on the start
+   * card): their Esencia goes into the next session's wallet (and counts as earned there), each one
+   * counts as an Encargo of that session (+time, +Datos). Cleared when its clock starts.
+   */
+  carry?: { essence: number; encargos: number };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -255,7 +267,7 @@ function finiteReplacer(_key: string, v: unknown): unknown {
   return Number.isNaN(v) ? 0 : v > 0 ? Number.MAX_VALUE : -Number.MAX_VALUE;
 }
 
-/** `{"v":1,"sum":"…","data":{…}}`; the checksum covers the serialized data. */
+/** `{"v":2,"sum":"…","data":{…}}`; the checksum covers the serialized data. */
 export function serializeState(s: GameState): string {
   const data = JSON.stringify(s, finiteReplacer);
   return `{"v":${B.SAVE_VERSION},"sum":"${checksum(data)}","data":${data}}`;
@@ -270,7 +282,7 @@ export function deserializeState(str: string): GameState | null {
     return null;
   }
   if (!isObj(outer)) return null;
-  if (outer.v !== B.SAVE_VERSION) return null;
+  if (typeof outer.v !== 'number' || !B.SAVE_VERSIONS_READ.includes(outer.v)) return null;
   if (typeof outer.sum !== 'string' || !isObj(outer.data)) return null;
   if (checksum(JSON.stringify(outer.data)) !== outer.sum) return null;
   return validateState(outer.data);
@@ -482,6 +494,20 @@ export function validateState(x: unknown): GameState | null {
       buyQty,
       shape,
     };
+    // Sessions cycle (v2): lenient — a damaged research state falls back to null (the game migrates
+    // the classic progress again), a damaged session is simply set up anew.
+    if (x.research !== undefined) {
+      const r = validateResearch(x.research, (id) => !!TREE_BY_ID[id]);
+      if (r) state.research = r;
+    }
+    if (x.session !== undefined && x.session !== null) {
+      const ses = validateSession(x.session);
+      if (ses) state.session = ses;
+    }
+    if (isObj(x.carry)) {
+      const carry = { essence: numOr(x.carry.essence, 0), encargos: Math.floor(numOr(x.carry.encargos, 0, 0, 1000)) };
+      if (carry.essence > 0 || carry.encargos > 0) state.carry = carry;
+    }
     return state;
   } catch (e) {
     if (e instanceof Invalid) return null;

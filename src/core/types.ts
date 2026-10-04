@@ -278,6 +278,8 @@ export interface SpeciesView {
   production?: YieldView & { members: number; eps: number };
   /** (game) Upgrades that raise this species' yield (its behaviour's Afinidad, Catalogación, Nutriente). */
   boostedBy?: { id: string; name: Text }[];
+  /** (species, sessions) The World it lives in (game/worlds WorldId); null when no World grows it. */
+  world?: string | null;
 }
 
 /** (game) The factors of one creature's production (product × global × buffs = Essence/s). */
@@ -468,6 +470,99 @@ export interface GameView {
   seedsGrowing?: boolean;
   /** (game) Turno de laboratorio: the generator that lights the dish during this Era. */
   shift?: ShiftView;
+  /**
+   * (game) Which loop runs (createGame option `cycle`): the classic continuous Era loop, or lab
+   * sessions + research tree + worlds (docs/CICLO.md). Absent = 'classic'. In 'sessions' `era` is
+   * the night, `upgrades` lists the research-tree nodes (level = tree level, currency 'genome' =
+   * Datos), `genomeNodes` is empty, `extinction.available` is false and the tabs lab / calibrate /
+   * genome are hidden.
+   */
+  cycle?: 'classic' | 'sessions';
+  /** (game, sessions) The lab session on the dish (null between sessions is never the case: a 'ready' one waits). */
+  session?: SessionClockView | null;
+  /** (game, sessions) Datos, tree, night and worlds: what lasts between sessions. */
+  research?: ResearchView;
+  /** (game, sessions) Datos this session would pay if it ended now, and the cheapest node they reach. */
+  sessionPreview?: { datos: number; goal: { id: string; cost: number; missing: number } | null } | null;
+  /** (game, sessions) Abono: an in-session production boost bought with Esencia (null when no session runs). */
+  boost?: BoostView | null;
+}
+
+/** (game, sessions) The lab session clock (docs/CICLO.md §2). */
+export interface SessionClockView {
+  /** 1-based session number. */
+  n: number;
+  /** World of this session (game/worlds WorldId). */
+  world: string;
+  /** 'ready' = waiting for the first seed (the clock starts with it); 'over' = time is up. */
+  phase: 'ready' | 'running' | 'over';
+  /** Seconds the session was given (Reloj route). */
+  limit: number;
+  /** Seconds added during the session (new species, Encargos, Sparks). */
+  bonus: number;
+  elapsed: number;
+  /** Seconds left (never negative). */
+  remaining: number;
+  /** 0..1 of the clock used. */
+  progress: number;
+  /** Esencia earned this session (spent or not): what becomes Datos. */
+  essence: number;
+  seeds: number;
+  /** Production multiplier of the Sprint final while it runs (null = no sprint now). */
+  sprint: number | null;
+  /** Species registered for the first time ever this session. */
+  newSpecies: number;
+  /** The player ended it with "Terminar ahora" (no minimum Datos). */
+  endedEarly: boolean;
+  /**
+   * Session 1 (CLARIDAD §3.3): it teaches seeds, creatures and Esencia only — no Encargos on screen,
+   * no Datos pill (sessionPreview is null), no Spark.
+   */
+  first?: boolean;
+}
+
+/** (game, sessions) What persists between sessions. */
+export interface ResearchView {
+  /** Unspent Datos. */
+  datos: number;
+  datosEarned: number;
+  /** Story night (the tree centre's level). */
+  night: number;
+  /** The next night's gate is met: the centre can be bought (replaces "Extinction available"). */
+  nightReady: boolean;
+  /** 0..1 towards the next night's gate (sessions and species; replaces extinction progress). */
+  nightProgress: number;
+  /** Gate of the next night (null at the last night). */
+  gate: { sessions: number; species: number } | null;
+  /** Sessions finished. */
+  sessions: number;
+  /** Tree levels by node id. */
+  levels: Readonly<Record<string, number>>;
+  /** World picked for the next session and every world open (game/worlds WorldId, in order). */
+  world: string;
+  worlds: string[];
+  /** Tree nodes the player could buy right now (the "N mejoras listas" badge). */
+  affordable: number;
+  /** Creatures the dish holds (Placa route). */
+  capacity: number;
+  /** Datos of the last sessions (for "unas N sesiones"). */
+  recentDatos: number[];
+}
+
+/** (game, sessions) Abono: production ×mult for the rest of the session. */
+export interface BoostView {
+  /** Esencia the next Abono costs (20 s of current Esencia/s, ×2 per Abono bought this session). */
+  cost: number;
+  /** Abonos bought this session. */
+  count: number;
+  /** Production multiplier they give now (1 = none). */
+  mult: number;
+  /** Multiplier after one more. */
+  nextMult: number;
+  /** A session runs, Abono is on sale and the wallet covers the cost. */
+  affordable: boolean;
+  /** Seconds of clock until Abono is on sale this session (0 = now). */
+  wait?: number;
 }
 
 /** (game) Turno de laboratorio view. When `active` is false the lamp is off: dish and production stop. */
@@ -511,6 +606,20 @@ export interface SeedPriceView {
   bigMult: number;
   /** Free seeds waiting (Lluvia de esporas). */
   freeSeeds: number;
+  /**
+   * (game, sessions) Gotas baratas factor (1 = none). In sessions there is no crowding and no
+   * saturation (crowdMult = satMult = 1, owner: "never punish growth"): the price is
+   * base × cheapMult × stepMult, and the limit is room (capacity).
+   */
+  cheapMult?: number;
+  /** ×SEED_PRICE_STEP per seed bought this session (capped). */
+  stepMult?: number;
+  /** Seeds paid with Esencia this session. */
+  bought?: number;
+  /** Creatures the dish holds; `used` counts the living, forming and just-sown ones. */
+  capacity?: number;
+  /** The dish is full: a tap is refused for free (bus 'seedBlocked' reason 'full'). */
+  full?: boolean;
 }
 
 /** (game) Seed shapes selectable with the Gotero. */
@@ -553,4 +662,14 @@ export interface GameActions {
   noteActivity?(): void;
   /** (game) A panel tab was opened (QA3 F7: opening the Bestiary counts for "look at your creature"). */
   noteTabOpened?(tab: 'lab' | 'bestiary' | 'calibrate' | 'genome'): void;
+  /** (game, sessions) Set up the next session on a fresh dish (after the summary). False while one runs. */
+  startSession?(): boolean;
+  /** (game, sessions) "Terminar ahora": end the running session (no minimum Datos). */
+  endSessionNow?(): boolean;
+  /** (game, sessions) Buy one level of a research-tree node with Datos. */
+  buyNode?(id: string): boolean;
+  /** (game, sessions) Pick the world of the next session (only open worlds; re-plants a waiting dish). */
+  pickWorld?(world: string): boolean;
+  /** (game, sessions) Buy an Abono (production ×BOOST_MULT for the rest of the session). */
+  buyBoost?(): boolean;
 }

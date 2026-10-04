@@ -7,6 +7,9 @@
  */
 import type { Behavior, Rarity } from '../core/types';
 
+// The session + research-tree loop (docs/CICLO.md) keeps its numbers in cycleBalance.ts; one import surface.
+export * from './cycleBalance';
+
 // ───────────────────────────── Economy ─────────────────────────────
 
 /** Seconds of real time between economic ticks. [doc §5] */
@@ -533,8 +536,14 @@ export const DEFAULT_GRID = { w: 192, h: 240 };
 
 // ───────────────────────────── Save ────────────────────────────────
 
-/** Save schema version. [doc §16] */
-export const SAVE_VERSION = 1;
+/**
+ * Save schema version. [doc §16] v2 adds the optional `research` + `session` of the sessions cycle
+ * (docs/CICLO.md); v1 saves still load (they have neither) and are migrated with migrateLegacy when
+ * opened in the sessions cycle.
+ */
+export const SAVE_VERSION = 2;
+/** Save versions this build reads (v1 = before the sessions cycle). */
+export const SAVE_VERSIONS_READ: readonly number[] = [1, 2];
 /** Prefix of exported save strings. [doc §16, renamed] */
 export const EXPORT_PREFIX = 'BIOLUMA1.';
 
