@@ -1,0 +1,482 @@
+/**
+ * Every tunable number of the game lives here, one commented constant per value.
+ * Origin tags: [doc §N] = design doc section, [brief] = approved corrections / fun layer,
+ * [bot] = tuned with scripts/balance-bot.ts, [design] = chosen here, open to tuning.
+ *
+ * Nothing in this file has side effects; tests and the balance bot import it freely.
+ */
+import type { Behavior, Rarity } from '../core/types';
+
+// ───────────────────────────── Economy ─────────────────────────────
+
+/** Seconds of real time between economic ticks. [doc §5] */
+export const ECON_TICK = 0.5;
+/** Creature complexity is capped before multipliers so one huge blob cannot carry the run. [brief] */
+export const COMPLEXITY_CAP = 3;
+/** m_comp by behaviour. [doc §5, §9] */
+export const BEHAVIOR_MULT: Record<Behavior, number> = {
+  still: 1.0,
+  pulsing: 1.3,
+  swimmer: 1.6,
+  spinner: 1.8,
+  divider: 2.2,
+  colony: 2.5,
+};
+/** m_comp of a stable creature not yet classified (pays as 'still'). [brief correction 6] */
+export const UNCLASSIFIED_MULT = 1.0;
+/** k-th creature (k = 0,1,2…) of the same species yields ×DECAY^k. [brief correction 5] */
+export const SAME_SPECIES_DECAY = 0.85;
+/** Minimum seconds between two floating income numbers of the same creature. [brief] */
+export const INCOME_POP_INTERVAL = 1.5;
+/** Longest realDt a single tick() call integrates (a hidden tab must use applyOffline). [design] */
+export const MAX_TICK_DT = 5;
+
+// ───────────────────────────── Species / rarity ─────────────────────
+
+/** m_esp by rarity once registered. [doc §9] */
+export const RARITY_MULT: Record<Rarity, number> = { common: 1.1, uncommon: 1.3, rare: 1.6, veryRare: 2.0 };
+/** Rarity of species that are not in Chan's catalog (player discoveries). [brief] */
+export const DEFAULT_RARITY: Rarity = 'uncommon';
+/**
+ * Hand-assigned rarity of the curated catalog species (by code). [brief] Roughly: how hard the
+ * species is to reach (Calibrador level, narrow σ, multi-ring) and to keep alive.
+ */
+export const RARITY_BY_CODE: Record<string, Rarity> = {
+  O2u: 'common', // Orbium unicaudatus — tutorial creature
+  O2b: 'common', // Orbium bicaudatus — same regime as O2u
+  O4i: 'common', // Synorbium ignis — next to Orbium
+  S1s: 'common', // Scutium solidus — robust producer
+  S2s: 'common', // Discutium solidus
+  OG2g: 'uncommon', // Gyrorbium gyrans — first spinner
+  OG2r: 'uncommon', // Gyrorbium revolvens
+  O2ui: 'uncommon', // Orbium unicaudatus ignis
+  O4s: 'uncommon', // Synorbium solidus
+  S1v: 'uncommon', // Scutium valvatus
+  'SN+': 'uncommon', // Catenoscutium bidirectus
+  P3sp: 'uncommon', // Synptera sinus pedes
+  H3cp: 'uncommon', // Helicium cavus pedes
+  PG1c: 'uncommon', // Gyropteron cavus
+  O4a: 'uncommon', // Parorbium adhaerens
+  O4d: 'rare', // Parorbium dividuus — first divider
+  H3s: 'rare', // Helicium solidus — early rare
+  PG1a: 'rare', // Gyropteron arcus
+  P4cp: 'rare', // Paraptera cavus pedes
+  O2p: 'rare', // Orbium phantasma (T=40, very narrow σ)
+  C0v: 'rare', // Circium ventilans
+  PS3am: 'rare', // Pyroscutium ambiguus
+  H5s: 'veryRare', // Pentahelicium solidus
+  S3s: 'veryRare', // Triscutium solidus
+  '3GH2n': 'veryRare', // Hydrogeminium natans — multi-ring (Genome)
+  K4d: 'veryRare', // Kronium dividuus — multi-ring (Genome)
+};
+/** Muestras for registering a new species, by rarity. [doc §5: +1, +3 if rare] */
+export const SAMPLES_NEW_SPECIES: Record<Rarity, number> = { common: 1, uncommon: 1, rare: 3, veryRare: 5 };
+/** Muestras the first time a species shows a behaviour it never showed before. [doc §5] */
+export const SAMPLES_NEW_BEHAVIOR = 1;
+/** Muestras per Impresión by rarity. [doc §5: 1 common, 2 rare] */
+export const PRINT_COST: Record<Rarity, number> = { common: 1, uncommon: 1, rare: 2, veryRare: 3 };
+/** Running-average weight cap for a species signature (keeps it able to drift slowly). [design] */
+export const SIGNATURE_AVG_CAP = 20;
+/** Catalog reveal accepts a signature match up to threshold × this factor. [design] */
+export const CATALOG_MATCH_FACTOR = 1.2;
+/** Normalisation of μ distance when ranking catalog candidates (reveal / spore template). [design] */
+export const PARAM_MU_SCALE = 0.03;
+/** Normalisation of σ distance when ranking catalog candidates. [design] */
+export const PARAM_SIGMA_SCALE = 0.006;
+/** Catalog reveal ignores candidates whose normalised (μ,σ) distance exceeds this. [design] */
+export const CATALOG_REVEAL_MAX_PARAM_DIST = 3;
+/** Biggest portrait side kept in the save (larger crops are centre-cropped). [doc §9: 64×64] */
+export const PORTRAIT_MAX_SIDE = 96;
+
+// ───────────────────────────── Collection milestones ─────────────────
+
+/** +X to M_global for every SPECIES_MILESTONE_STEP registered species. [doc §8] */
+export const SPECIES_MILESTONE_BONUS = 0.05;
+/** Species per collection milestone. [doc §8] */
+export const SPECIES_MILESTONE_STEP = 5;
+/** +X to M_global per distinct behaviour ever seen. [doc §8] */
+export const BEHAVIOR_MILESTONE_BONUS = 0.1;
+/** +X to M_global per Genome point spent. [doc §10] */
+export const GENOME_SPENT_BONUS = 0.02;
+
+// ───────────────────────────── Seeding ─────────────────────────────
+
+/** Essence at the start of every Era (without Arranque con Esencia). [doc §5] */
+export const START_ESSENCE = 20;
+/** c0 of the seed cost formula c0·(r/R)²·(1 + crowd·n_alive). [doc §5] */
+export const SEED_C0 = 2;
+/** Crowding factor per stable creature in the seed cost. [doc §5] */
+export const SEED_CROWD = 0.25;
+/**
+ * Saturation: every stable creature beyond the free slots (DISH_FREE_SLOTS) multiplies the seed cost
+ * by this. Without it a creature repays its seeds in ~10 s and the dish fills in a minute (bot);
+ * with it population grows with income all Era long. 1 = pure doc formula. [bot]
+ */
+export const SEED_SATURATION_GROWTH = 3;
+/** Newborn (not yet stable) creatures that do not count towards saturation: a short burst of taps is fine. [design] */
+export const SEED_NURSERY_FREE = 2;
+/** Long press seed radius multiplier (cost ×2.25 follows from the formula). [doc §7] */
+export const SEED_BIG_RADIUS = 1.5;
+/** Seed radius in units of R. [doc §4: radio ≈ R] */
+export const SEED_RADIUS = 1.0;
+/** Seed peak density range (uniform). [doc §4: 0.5–0.8; brief 0.6–0.8] */
+export const SEED_DENSITY_MIN = 0.6;
+/** Upper bound of the seed density. [brief] */
+export const SEED_DENSITY_MAX = 0.8;
+/**
+ * Template bias of a plain spore seed with no upgrades. Measured at Orbium params: bias 0.7 ≈ 5 %
+ * survival, bias 1 = 100 %; this value targets ≈25 % (integrator re-tunes with real data). [brief]
+ */
+export const SEED_BIAS_BASE = 0.88;
+/** Extra template bias by Gotero level (index = level, cumulative). Gotero I targets ≈40 %. [brief] */
+export const SEED_BIAS_GOTERO = [0, 0.04, 0.045, 0.05, 0.055, 0.06];
+/** Extra template bias per Estabilizador level ("+3 % success" per level). [doc §8] */
+export const SEED_BIAS_STABILIZER = 0.004;
+/** Hard ceiling of the bias of a random seed (pure template is reserved to Mutágeno/prints). [design] */
+export const SEED_BIAS_MAX = 0.985;
+/** Noise amplitude of a spore seed with no upgrades. [brief] */
+export const SEED_NOISE_BASE = 0.35;
+/** Noise amplitude by Gotero level (index = level). Lower noise = more consistent seeds. [brief] */
+export const SEED_NOISE_GOTERO = [0.35, 0.25, 0.23, 0.21, 0.19, 0.17];
+/** Noise removed per Estabilizador level. [design] */
+export const SEED_NOISE_STABILIZER = 0.006;
+/** Minimum noise of a random seed (correction 1: always some asymmetric noise). [brief] */
+export const SEED_NOISE_MIN = 0.08;
+/** Bias multiplier and noise multiplier by Gotero shape (ring/noise trade success for surprise). [design] */
+export const SHAPE_FACTORS: Record<'blob' | 'ring' | 'noise', { bias: number; noise: number }> = {
+  blob: { bias: 1, noise: 1 },
+  ring: { bias: 0.85, noise: 1.2 },
+  noise: { bias: 0.6, noise: 2.2 },
+};
+/** Invisible help starts after this many active seconds without any stable creature in the Era. [doc §6] */
+export const SEED_HELP_DELAY = 180;
+/** Invisible help: bias added every SEED_HELP_INTERVAL seconds past the delay. [doc §6] */
+export const SEED_HELP_STEP = 0.02;
+/** Invisible help interval in seconds. [design] */
+export const SEED_HELP_INTERVAL = 30;
+/** Invisible help maximum extra bias. [design] */
+export const SEED_HELP_MAX = 0.08;
+/** Mutágeno: number of guaranteed (pure template) seeds. [brief] */
+export const MUTAGEN_SEEDS = 3;
+/** Brush dab radius in units of R. [design] */
+export const BRUSH_RADIUS = 0.45;
+/** Distance between two brush dabs in units of R. [design] */
+export const BRUSH_SPACING = 0.5;
+/** A pause longer than this (ms) between brushAt calls starts a new stroke. [design] */
+export const BRUSH_STROKE_GAP_MS = 250;
+/** Brush dab density. [design] */
+export const BRUSH_DENSITY = 0.75;
+/** Seconds a fresh seed blocks its spot for the auto-seeder (before the detector sees it). [design] */
+export const RECENT_SEED_MEMORY = 12;
+/** A seed younger than this (s) with no detected creature nearby still counts as alive for the seed cost. [design] */
+export const SEED_PENDING_WINDOW = 1;
+
+/** Emergency pipette fill time in seconds, by Pipeta rápida level. [doc §5, §8] */
+export const PIPETTE_TIME = [10, 6, 3, 1.5];
+
+// ───────────────────────────── Auto-seeder (Sembrador) ─────────────
+
+/** Sembrador interval at level 1, seconds. [doc §8] */
+export const AUTOSEED_INTERVAL = 20;
+/** Each extra level multiplies the interval by this (−8 %). [doc §8] */
+export const AUTOSEED_DECAY = 0.92;
+/** Minimum Sembrador interval, seconds. [doc §8] */
+export const AUTOSEED_MIN_INTERVAL = 2;
+/** Free spot = farther than this many R from every creature (wrap-aware). [brief] */
+export const AUTOSEED_SPACING = 3;
+/** Random candidate points tried per auto-seed. [design] */
+export const AUTOSEED_TRIES = 40;
+/** The Sembrador only seeds when the seed costs at most this fraction of the bank. [design] */
+export const AUTOSEED_MAX_SPEND = 0.5;
+
+// ───────────────────────────── Upgrades: Laboratorio ───────────────
+
+/** Gotero fixed costs. [doc §8: 15, 60, 250, 1 200, 6 000; bot: ×~10 after I, income per creature is ~2–3× the doc's] */
+export const DROPPER_COSTS = [15, 150, 1500, 12000, 80000];
+/** Sembrador base cost b. [doc §8: 40; bot: lands at ~6–7 min for greedy] */
+export const AUTOSEEDER_BASE = 750;
+/** Sembrador growth g. [doc §8] */
+export const AUTOSEEDER_GROWTH = 1.25;
+/** Cultivo base cost b. [doc §8: 50; bot] */
+export const CULTURE_BASE = 500;
+/** Cultivo growth g. [doc §8] */
+export const CULTURE_GROWTH = 1.35;
+/** Cultivo: +X to M_global per level, compounding (×1.1^level) so the Era keeps rising. [doc §8; bot] */
+export const CULTURE_BONUS = 0.1;
+/** Cultivo unlocks at this essence/second. [doc §8] */
+export const CULTURE_UNLOCK_EPS = 10;
+/** Calibrador fixed costs. [doc §8: 25, 300, 3 000, 30 000; bot] */
+export const CALIBRATOR_COSTS = [250, 5000, 60000, 600000];
+/** Estabilizador base cost. [doc §8: 80; bot] */
+export const STABILIZER_BASE = 400;
+/** Estabilizador growth. [doc §8: 1.30; bot] */
+export const STABILIZER_GROWTH = 1.35;
+/** Estabilizador max level. [doc §8] */
+export const STABILIZER_MAX = 10;
+/** Estabilizador: success gain per level shown to the player (real effect: SEED_BIAS_STABILIZER). [doc §8] */
+export const STABILIZER_SHOWN_BONUS = 0.03;
+/** Placa fixed costs. [doc §8: 100, 1 000, 10 000, 100 000; bot] */
+export const DISH_COSTS = [3000, 30000, 300000, 3000000];
+/**
+ * Placa: stable creatures that fit before saturation raises the seed cost, by level. The grid is
+ * fixed per quality profile (brief correction 8), so "more room" is economic room. [design, bot]
+ */
+export const DISH_FREE_SLOTS = [1, 2, 3, 4, 5];
+/** Placa: auto-seeder spacing in R by level (creatures can live closer). [design] */
+export const DISH_SPACING = [3, 2.75, 2.5, 2.3, 2.1];
+/** Placa: +X production per level (healthier medium). [design] */
+export const DISH_BONUS = 0.1;
+/** Placa unlocks with this many stable creatures at once. [doc §8] */
+export const DISH_UNLOCK_CREATURES = 4;
+/** Incubadora fixed costs. [doc §8: 200, 2 000; bot] */
+export const INCUBATOR_COSTS = [8000, 80000];
+/** Speeds available by Incubadora level. [doc §7] */
+export const INCUBATOR_SPEEDS = [[1], [1, 2], [1, 2, 4]];
+/** Afinidad nadadora / sésil base cost. [doc §8: 120; bot] */
+export const AFFINITY_BASE = 800;
+/** Afinidad colonial base cost. [doc §8: 300; bot] */
+export const COLONY_AFFINITY_BASE = 2000;
+/** Afinidades growth. [doc §8: 1.35; bot] */
+export const AFFINITY_GROWTH = 1.4;
+/** Afinidades max level. [doc §8] */
+export const AFFINITY_MAX = 10;
+/** Afinidades: +X production per level for their behaviours. [doc §8] */
+export const AFFINITY_BONUS = 0.08;
+/** Reserva fixed costs. [doc §8: 500, 5 000, 50 000; bot] */
+export const RESERVE_COSTS = [5000, 50000, 500000];
+/** Offline cap in hours by Reserva level. [doc §8, §12] */
+export const RESERVE_HOURS = [2, 8, 12, 24];
+/** Pipeta rápida fixed costs. [doc §8] */
+export const FAST_PIPETTE_COSTS = [100, 1000, 10000];
+/** Nutriente base cost. [doc §8: 1 000; bot] */
+export const NUTRIENT_BASE = 50000;
+/** Nutriente growth. [doc §8: 1.5; bot] */
+export const NUTRIENT_GROWTH = 1.6;
+/** Nutriente max level. [doc §8] */
+export const NUTRIENT_MAX = 5;
+/** Nutriente: +X measured complexity per level (applied after the cap). [doc §8] */
+export const NUTRIENT_BONUS = 0.04;
+/** Nutriente unlocks at this Cultivo level. [doc §8] */
+export const NUTRIENT_UNLOCK_CULTURE = 10;
+
+// ───────────────────────────── Upgrades: Bestiario (Muestras) ───────
+
+/** Microscopio costs in Muestras. [doc §8] */
+export const MICROSCOPE_COSTS = [3, 8, 20];
+/** Catalogación costs in Muestras. [doc §8] */
+export const CATALOGUING_COSTS = [5, 8, 12, 18, 27];
+/** Catalogación: +X to m_esp of every registered species per level. [doc §8] */
+export const CATALOGUING_BONUS = 0.1;
+/** Archivo costs in Muestras. [doc §8] */
+export const ARCHIVE_COSTS = [6, 15, 40];
+/** Archivo: seconds between free prints by level (index = level). [doc §8] */
+export const ARCHIVE_INTERVAL = [Infinity, 600, 300, 120];
+/** Marcador cost in Muestras. [doc §8] */
+export const MARKER_COSTS = [10];
+
+// ───────────────────────────── Calibration ─────────────────────────
+
+/** Calibration at the start of every Era. [doc §4, §10] */
+export const BASE_CALIBRATION = { mu: 0.15, sigma: 0.015, R: 13, dt: 0.1, rings: [1] as number[] };
+/**
+ * Slider ranges unlocked by Calibrador level (index = level); null = locked.
+ * Doc §4/§8 disagree (Scutium at μ .29 would be unreachable until III); this merges both. [design]
+ */
+export const CALIBRATOR_RANGES: {
+  mu: [number, number] | null;
+  sigma: [number, number] | null;
+  R: [number, number] | null;
+  dt: [number, number] | null;
+}[] = [
+  { mu: null, sigma: null, R: null, dt: null },
+  { mu: [0.12, 0.18], sigma: [0.01, 0.025], R: null, dt: null },
+  { mu: [0.1, 0.3], sigma: [0.005, 0.05], R: null, dt: null },
+  { mu: [0.1, 0.5], sigma: [0.005, 0.1], R: null, dt: [0.05, 0.5] },
+  { mu: [0.1, 0.5], sigma: [0.005, 0.1], R: [10, 27], dt: [0.05, 0.5] },
+];
+/** Absolute calibration limits accepted from saves/imports. [doc §4] */
+export const CALIBRATION_LIMITS = { mu: [0.05, 0.6], sigma: [0.001, 0.2], R: [5, 40], dt: [0.01, 1] } as const;
+/** Saved regimes allowed once Calibrador II is owned. [doc §7, §8] */
+export const MAX_REGIMES = 8;
+/** Kernel ring presets: always / Anillos dobles / Anillos triples. [brief] */
+export const RING_PRESETS: { rings: number[]; R: number; node: string | null }[] = [
+  { rings: [1], R: 13, node: null },
+  { rings: [0.5, 1], R: 18, node: 'doubleRings' },
+  { rings: [1, 1 / 3], R: 18, node: 'doubleRings' },
+  { rings: [0.5, 1, 2 / 3], R: 18, node: 'tripleRings' },
+];
+/** Microscopio III shows hints for undiscovered catalog species within this normalised (μ,σ) distance. [design] */
+export const HINT_RADIUS = 16;
+/** Doc §11: after this many active seconds without a new species, Microscopio I is given free once. */
+export const FREE_MICROSCOPE_AFTER = 1200;
+/** Seconds between two "dish saturated" toasts from the Sembrador. [design] */
+export const SATURATED_TOAST_COOLDOWN = 120;
+
+// ───────────────────────────── Prestige ────────────────────────────
+
+/** Essence divisor in G = floor(sqrt(E_era / DIV)) + … [doc §5] */
+export const GENOME_ESSENCE_DIV = 1e4;
+/** Genome per species registered for the first time ever. [doc §5, brief correction 3] */
+export const GENOME_PER_SPECIES = 2;
+/** Genome per behaviour seen for the first time ever. [doc §5] */
+export const GENOME_PER_BEHAVIOR = 1;
+/** Extinction is available when the essence term alone reaches this. [doc §10, brief correction 3] */
+export const EXTINCTION_MIN_ESSENCE_TERM = 5;
+/** Genome tab appears when E_era reaches this fraction of the extinction requirement. [design] */
+export const GENOME_TAB_REVEAL = 0.35;
+/** Arranque con Esencia: Era starts with this × Era number. [doc §10] */
+export const ESSENCE_START_PER_ERA = 500;
+/** Sembrador persistente: Era starts with this Sembrador level. [doc §10] */
+export const PERSISTENT_SEEDER_LEVEL = 3;
+/** Mutaciones: chance that a print mutates. [doc §10] */
+export const MUTATION_CHANCE = 0.1;
+/** Mutaciones: maximum relative scale change of a mutated print. [design] */
+export const MUTATION_SCALE = 0.12;
+/** Mutaciones: noise amplitude of a mutated print. [design] */
+export const MUTATION_NOISE = 0.15;
+/** A new species stabilising within this many R of a mutated print, this many s later, is a "var.". [design] */
+export const MUTATION_LINK_DIST = 2.5;
+/** Seconds a mutated print stays linkable. [design] */
+export const MUTATION_LINK_TIME = 90;
+/** Simbiosis: distance in R between two different species. [doc §10] */
+export const SYMBIOSIS_DIST = 2;
+/** Simbiosis multiplier for both members. [doc §10] */
+export const SYMBIOSIS_MULT = 1.5;
+/** Genome node costs. [doc §10] */
+export const GENOME_COSTS: Record<string, number> = {
+  doubleRings: 5,
+  tripleRings: 12,
+  secondChannel: 20,
+  flow: 40,
+  dropperMemory: 3,
+  regimesPersist: 4,
+  essenceStart: 6,
+  persistentSeeder: 10,
+  mutations: 8,
+  symbiosis: 15,
+  predation: 25,
+};
+
+// ───────────────────────────── Offline ─────────────────────────────
+
+/** Fraction of the recent average production paid while away. [doc §12] */
+export const OFFLINE_RATE = 0.5;
+/** Seconds of active play averaged for offline. [doc §12: last 5 min] */
+export const OFFLINE_WINDOW = 300;
+/** Bucket size (s) of the stored production history. [design] */
+export const EPS_BUCKET = 10;
+/** Absolute offline cap in seconds regardless of Reserva (clock-skew rule). [doc §12] */
+export const OFFLINE_HARD_CAP = 24 * 3600;
+/** Away time below this is not "a return" (no card, no Reserva unlock). [design] */
+export const OFFLINE_MIN_RETURN = 60;
+
+// ───────────────────────────── Golden spark (Destello) ─────────────
+
+/** Spawn interval range in seconds. [brief] */
+export const GOLDEN_INTERVAL: [number, number] = [90, 240];
+/** First spark after the first stable creature, range in seconds. [design] */
+export const GOLDEN_FIRST_DELAY: [number, number] = [150, 240];
+/** Lifetime in seconds. [brief] */
+export const GOLDEN_LIFE = 12;
+/** Drift speed in grid cells per second. [design] */
+export const GOLDEN_SPEED = 5;
+/** Floración: production multiplier. [brief] */
+export const BLOOM_MULT = 7;
+/** Floración: duration in seconds. [brief] */
+export const BLOOM_TIME = 30;
+/** Lump reward = this many seconds of current production… [brief] */
+export const LUMP_SECONDS = 90;
+/** …but at least this much essence. [design] */
+export const LUMP_MIN = 25;
+/** Lluvia de esporas: number of free seeds. [brief] */
+export const SPORE_RAIN_SEEDS = 5;
+/** Reward weights (bloom is rerolled when nothing produces). [design] */
+export const GOLDEN_WEIGHTS = { bloom: 0.38, lump: 0.32, spores: 0.18, mutagen: 0.12 };
+
+// ───────────────────────────── Default dish size ───────────────────
+
+/** Grid used until the integrator calls setGridSize (medium profile). [brief correction 8] */
+export const DEFAULT_GRID = { w: 192, h: 240 };
+
+// ───────────────────────────── Save ────────────────────────────────
+
+/** Save schema version. [doc §16] */
+export const SAVE_VERSION = 1;
+/** Prefix of exported save strings. [doc §16, renamed] */
+export const EXPORT_PREFIX = 'BIOLUMA1.';
+
+// ───────────────────────────── Objectives (first hour) ─────────────
+
+/**
+ * Metric names understood by the game (see game.ts `metric()`):
+ * seeds, stable (stable creatures right now), species, speciesSeen (looked at in bestiary),
+ * upgrade:<id> (level), eps, calibrations, golden, behaviors, prints, eraEssence, extinctions.
+ */
+export interface MetricGoal {
+  id: string;
+  metric: string;
+  target: number;
+}
+/** Objective chain shown under the HUD; reward = essence paid on completion. [brief, bot] */
+export const OBJECTIVES: (MetricGoal & { reward: number })[] = [
+  { id: 'seed', metric: 'seeds', target: 1, reward: 4 },
+  { id: 'stable', metric: 'stable', target: 1, reward: 8 },
+  { id: 'look', metric: 'speciesSeen', target: 1, reward: 10 },
+  { id: 'dropper', metric: 'upgrade:dropper', target: 1, reward: 15 },
+  { id: 'two', metric: 'stable', target: 2, reward: 30 },
+  { id: 'eps3', metric: 'eps', target: 3, reward: 50 },
+  { id: 'calib', metric: 'upgrade:calibrator', target: 1, reward: 80 },
+  { id: 'move', metric: 'calibrations', target: 1, reward: 80 },
+  { id: 'seeder', metric: 'upgrade:autoSeeder', target: 1, reward: 150 },
+  { id: 'species3', metric: 'species', target: 3, reward: 200 },
+  { id: 'golden', metric: 'golden', target: 1, reward: 150 },
+  { id: 'behaviors2', metric: 'behaviors', target: 2, reward: 250 },
+  { id: 'eps10', metric: 'eps', target: 10, reward: 300 },
+  { id: 'culture', metric: 'upgrade:culture', target: 1, reward: 300 },
+  { id: 'print', metric: 'prints', target: 1, reward: 400 },
+  { id: 'species6', metric: 'species', target: 6, reward: 1000 },
+  { id: 'eps50', metric: 'eps', target: 50, reward: 2000 },
+  { id: 'dish', metric: 'upgrade:dish', target: 1, reward: 3000 },
+  { id: 'era100k', metric: 'eraEssence', target: 100000, reward: 10000 },
+  { id: 'extinct', metric: 'extinctions', target: 1, reward: 0 },
+];
+
+// ───────────────────────────── Achievements ────────────────────────
+
+/** Achievements: permanent +bonus to M_global when reached (lifetime metrics). [brief] */
+export const ACHIEVEMENTS: (MetricGoal & { bonus: number })[] = [
+  { id: 'firstSeed', metric: 'seeds', target: 1, bonus: 0.01 },
+  { id: 'firstLife', metric: 'stableEver', target: 1, bonus: 0.02 },
+  { id: 'seeds100', metric: 'seeds', target: 100, bonus: 0.02 },
+  { id: 'seeds1000', metric: 'seeds', target: 1000, bonus: 0.03 },
+  { id: 'species3', metric: 'species', target: 3, bonus: 0.02 },
+  { id: 'species10', metric: 'species', target: 10, bonus: 0.03 },
+  { id: 'species20', metric: 'species', target: 20, bonus: 0.05 },
+  { id: 'swimmer', metric: 'behavior:swimmer', target: 1, bonus: 0.02 },
+  { id: 'spinner', metric: 'behavior:spinner', target: 1, bonus: 0.02 },
+  { id: 'pulsing', metric: 'behavior:pulsing', target: 1, bonus: 0.02 },
+  { id: 'divider', metric: 'behavior:divider', target: 1, bonus: 0.03 },
+  { id: 'colony', metric: 'behavior:colony', target: 1, bonus: 0.03 },
+  { id: 'allBehaviors', metric: 'behaviors', target: 6, bonus: 0.05 },
+  { id: 'eps10', metric: 'epsPeak', target: 10, bonus: 0.02 },
+  { id: 'eps100', metric: 'epsPeak', target: 100, bonus: 0.03 },
+  { id: 'eps1000', metric: 'epsPeak', target: 1000, bonus: 0.05 },
+  { id: 'essence1e4', metric: 'totalEssence', target: 1e4, bonus: 0.02 },
+  { id: 'essence1e6', metric: 'totalEssence', target: 1e6, bonus: 0.03 },
+  { id: 'golden1', metric: 'golden', target: 1, bonus: 0.01 },
+  { id: 'golden10', metric: 'golden', target: 10, bonus: 0.03 },
+  { id: 'golden50', metric: 'golden', target: 50, bonus: 0.05 },
+  { id: 'rare', metric: 'rare', target: 1, bonus: 0.03 },
+  { id: 'veryRare', metric: 'veryRare', target: 1, bonus: 0.05 },
+  { id: 'crowd5', metric: 'stablePeak', target: 5, bonus: 0.02 },
+  { id: 'crowd10', metric: 'stablePeak', target: 10, bonus: 0.03 },
+  { id: 'printer', metric: 'prints', target: 1, bonus: 0.01 },
+  { id: 'tinkerer', metric: 'calibrations', target: 1, bonus: 0.01 },
+  { id: 'regime', metric: 'regimesSaved', target: 1, bonus: 0.01 },
+  { id: 'extinction', metric: 'extinctions', target: 1, bonus: 0.05 },
+  { id: 'heritage', metric: 'genomeNodes', target: 1, bonus: 0.02 },
+  { id: 'variant', metric: 'variants', target: 1, bonus: 0.03 },
+  { id: 'symbiosis', metric: 'symbiosis', target: 1, bonus: 0.03 },
+  { id: 'returned', metric: 'returns', target: 1, bonus: 0.01 },
+  { id: 'hour', metric: 'playTime', target: 3600, bonus: 0.02 },
+];
