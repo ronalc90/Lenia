@@ -1,5 +1,5 @@
 /**
- * Tiny always-on version label (bottom-left corner) so testers can confirm which
+ * Tiny always-on version label (top centre) so testers can confirm which
  * build is deployed. Independent of the game UI; tap it to see the build date.
  */
 import { BUILD_DATE, VERSION_LABEL } from './version';
@@ -12,11 +12,14 @@ function mount(): void {
   el.setAttribute('aria-label', `Versión ${VERSION_LABEL}`);
   Object.assign(el.style, {
     position: 'fixed',
-    left: 'calc(6px + env(safe-area-inset-left, 0px))',
-    bottom: 'calc(4px + env(safe-area-inset-bottom, 0px))',
+    // Top centre, above the HUD counters: it never covers a button or a panel card.
+    left: '50%',
+    top: 'calc(1px + env(safe-area-inset-top, 0px))',
+    transform: 'translateX(-50%)',
     zIndex: '70',
-    font: '500 10px/1.2 "JetBrains Mono", ui-monospace, monospace',
-    color: 'rgba(139, 152, 165, 0.75)',
+    font: '500 9px/1.2 "JetBrains Mono", ui-monospace, monospace',
+    color: 'rgba(139, 152, 165, 0.7)',
+    whiteSpace: 'nowrap',
     letterSpacing: '0.02em',
     pointerEvents: 'auto',
     userSelect: 'text',
