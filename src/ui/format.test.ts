@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fmt, fmtClock, fmtDuration, fmtParam, fmtRate, fmtShort, NNBSP } from './format';
+import { fmt, fmtClock, fmtDuration, fmtParam, fmtRate, fmtShort } from './format';
 
 describe('fmt (currency)', () => {
   it('uses thousands separators up to 999,999', () => {
@@ -48,7 +48,8 @@ describe('fmt (currency)', () => {
   });
 
   it('uses Spanish separators', () => {
-    expect(fmt(12400, 'es')).toBe(`12${NNBSP}400`);
+    expect(fmt(12400, 'es')).toBe('12.400');
+    expect(fmt(999_999, 'es')).toBe('999.999');
     expect(fmt(1_234_567, 'es')).toBe('1,23M');
     expect(fmt(2.5, 'es')).toBe('2,5');
   });

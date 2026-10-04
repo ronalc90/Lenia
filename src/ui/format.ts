@@ -9,15 +9,13 @@
  *  - Values are FLOORED, never rounded up: the UI must never show more than
  *    the player actually has.
  *
- * Locale: English uses "," for thousands and "." for decimals. Spanish uses a
- * narrow no-break space for thousands ("12 400", as in the design doc) and
- * "," for decimals.
+ * Locale: English uses "," for thousands and "." for decimals; Spanish uses
+ * "." for thousands and "," for decimals ("12.400", "1,23M"). A thin space
+ * would be the RAE choice, but it renders full-width in monospace fonts.
  */
 import type { Lang } from '../core/types';
 
 const SUFFIXES = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi'];
-/** Narrow no-break space (U+202F): thousands separator in Spanish. */
-export const NNBSP = ' ';
 
 interface Sep {
   thousands: string;
@@ -25,7 +23,7 @@ interface Sep {
 }
 
 function seps(lang: Lang): Sep {
-  return lang === 'es' ? { thousands: NNBSP, decimal: ',' } : { thousands: ',', decimal: '.' };
+  return lang === 'es' ? { thousands: '.', decimal: ',' } : { thousands: ',', decimal: '.' };
 }
 
 /** Floor with a small epsilon so 0.29*100 does not become 28. */
