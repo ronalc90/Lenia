@@ -144,7 +144,7 @@ const offlineShare: Text =
 /** Titles and moods; what each behaviour IS comes from src/moments/behaviors.ts (one source for every surface). */
 const BEHAVIOR_TEXT: Record<Behavior, { title: Text; brief: Text; mood: MomentDef['mood'] }> = {
   still: { title: t('Una criatura quieta', 'A still creature'), brief: t('Quieta', 'Still'), mood: 'happy' },
-  pulsing: { title: t('¡Late como un corazón!', 'It beats like a heart!'), brief: t('¡Pulsante!', 'It pulses!'), mood: 'awed' },
+  pulsing: { title: t('¡Late!', 'It pulses!'), brief: t('¡Pulsante!', 'It pulses!'), mood: 'awed' },
   swimmer: { title: t('¡Una nadadora!', 'A swimmer!'), brief: t('¡Nadadora!', 'Swimmer!'), mood: 'awed' },
   spinner: { title: t('¡Gira!', 'It spins!'), brief: t('¡Gira!', 'It spins!'), mood: 'awed' },
   divider: { title: t('¡Se divide!', 'It splits!'), brief: t('¡Se divide!', 'It splits!'), mood: 'awed' },
