@@ -1,0 +1,1 @@
+Bioluma · Lenia © Bert Chan (MIT) · Código MIT / Code MIT · [Repositorio / Repository](https://github.com/ronalc90/Lenia) · [Reportar un error / Report a bug](https://github.com/ronalc90/Lenia/issues)

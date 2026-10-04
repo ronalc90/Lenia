@@ -1,0 +1,99 @@
+name: Wiki sync
+
+# Publishes docs/wiki/ (the source of truth) to the GitHub wiki of this repository.
+#   - Runs on every push to main that touches docs/wiki/**, and by hand (Actions -> Wiki sync -> Run workflow).
+#   - {{GAME_URL}} in the pages is replaced by the repository variable GAME_URL
+#     (Settings -> Secrets and variables -> Actions -> Variables). If it is not set, the link falls back to
+#     the repository page and a warning is printed.
+#   - The wiki must be initialised once by hand: Settings -> Features -> Wikis, then open the Wiki tab and
+#     press "Create the first page". Until then this workflow skips with a clear notice and stays green.
+#   - Pages that exist only in the wiki are removed: edit docs/wiki/ in the repository, not in the web editor.
+# No secrets and no AI keys: it only uses the built-in GITHUB_TOKEN (CLAUDE.md rule 7, ADR-020).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/wiki/**'
+  workflow_dispatch:
+
+# One sync at a time; never cancel a push to the wiki halfway.
+concurrency:
+  group: wiki-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Publish docs/wiki to the wiki
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Sync
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          GAME_URL: ${{ vars.GAME_URL || 'https://bioluma-xi.vercel.app' }}
+        run: |
+          set -euo pipefail
+
+          if [ ! -f docs/wiki/Home.md ]; then
+            echo "::error::docs/wiki/Home.md not found: nothing to publish."
+            exit 1
+          fi
+
+          WIKI_DIR="$RUNNER_TEMP/wiki"
+          rm -rf "$WIKI_DIR"
+
+          # A wiki repository exists only after its first page has been created in the web UI.
+          # (The token is masked by Actions; its URL is never printed.)
+          if ! CLONE_LOG=$(git clone --quiet "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.wiki.git" "$WIKI_DIR" 2>&1); then
+            echo "git said: ${CLONE_LOG}"
+            echo "::warning title=Wiki not initialised::Could not clone the wiki of ${REPO}. Skipping."
+            {
+              echo "### Wiki sync skipped"
+              echo
+              echo "The wiki of \`${REPO}\` is not initialised yet (or Wikis are disabled)."
+              echo
+              echo "1. Repository **Settings -> General -> Features -> Wikis** (tick it)."
+              echo "2. Open the **Wiki** tab and press **Create the first page**, then **Save page** (any text)."
+              echo "3. Run this workflow again (**Actions -> Wiki sync -> Run workflow**)."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # Mirror docs/wiki/ into the wiki checkout (keeps .git, removes pages that no longer exist).
+          rsync -a --delete --exclude '.git' --exclude 'README.md' docs/wiki/ "$WIKI_DIR/"
+
+          # {{GAME_URL}} -> the repository variable (fallback: the repository page).
+          if [ -z "${GAME_URL:-}" ]; then
+            echo "::warning title=GAME_URL not set::Set the repository variable GAME_URL (Settings -> Secrets and variables -> Actions -> Variables). Using the repository page for now."
+            GAME_URL="https://github.com/${REPO}"
+          fi
+          export GAME_URL
+          { grep -rl --include='*.md' '{{GAME_URL}}' "$WIKI_DIR" || true; } | xargs -r perl -pi -e 's/\{\{GAME_URL\}\}/$ENV{GAME_URL}/g'
+
+          cd "$WIKI_DIR"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "The wiki is already up to date."
+            echo "### Wiki already up to date" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git commit --quiet -m "Sync wiki from docs/wiki@${SHA::7}"
+
+          # One retry if somebody edited the wiki in the meantime.
+          if ! git push --quiet origin HEAD; then
+            git pull --quiet --rebase origin HEAD
+            git push --quiet origin HEAD
+          fi
+          echo "### Wiki updated from \`${SHA::7}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published: https://github.com/${REPO}/wiki" >> "$GITHUB_STEP_SUMMARY"
