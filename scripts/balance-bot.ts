@@ -15,7 +15,7 @@
  *  - behaviour is classified after 1000 steps (table per species); swimmers drift and collide;
  *    dividers split when there is room; 3+ of a species close together form a colony;
  *  - creatures die from a small base hazard, collisions and calibration changes that leave their range;
- *  - 60 sim steps per real second × Incubadora speed.
+ *  - 30 sim steps per real second × Incubadora speed (src/main.ts STEPS_PER_SEC).
  */
 import { Bus, type GameEvents } from '../src/core/bus';
 import type { Behavior, Creature, DetectorEvent, LeniaParams, SeedSpec } from '../src/core/types';
@@ -28,7 +28,8 @@ import catalogSigJson from '../src/detect/catalogSignatures.json';
 
 // ───────────────────────────── model constants ─────────────────────
 
-const STEPS_PER_SEC = 60;
+/** Must match STEPS_PER_SEC in src/main.ts (sim steps per real second at speed ×1). */
+const STEPS_PER_SEC = 30;
 const DT = 0.5; // real seconds per bot tick
 const BORN_STEPS = 400;
 const CLASSIFY_STEPS = 1000;
@@ -550,7 +551,7 @@ function runPolicy(policy: PolicyName, minutes: number, seed: number, verbose: b
     } else if (t - lastManualSeed >= 1.5 && v.canSeed) {
       // A seed is one more purchase: take it when it is the cheapest essence option.
       const cheapestUpgrade = v.upgrades
-        .filter((u) => u.unlocked && !u.maxed && u.currency === 'essence' && (policy !== 'explorer' || u.id !== 'calibrator' || true))
+        .filter((u) => u.unlocked && !u.maxed && u.currency === 'essence')
         .reduce((m, u) => Math.min(m, u.cost), Infinity);
       const free = (v.charges?.free ?? 0) > 0 || v.pipette.progress >= 1;
       // Expected cost per creature ≈ 2.5 seeds: only seed when that beats the cheapest upgrade.
