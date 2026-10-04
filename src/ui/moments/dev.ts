@@ -14,6 +14,8 @@
  *   ?status=1       creature status pills on every creature
  *   ?replay=<id>    re-watch a card from the help sheet
  */
+// Art tokens (--bl-*) before every module stylesheet (docs/ARTE.md §12).
+import '../art/art.css';
 import { Bus, type GameEvents } from '../../core/bus';
 import { Camera } from '../../core/camera';
 import { matterLUT } from '../../core/palette';

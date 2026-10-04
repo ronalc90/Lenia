@@ -15,14 +15,15 @@
  *                                    Bestiary header, a status pill or a species card
  */
 import type { Behavior, Lang, Text, UpgradeView } from '../../core/types';
-import { UPGRADE_TEXT } from '../../game/content';
+import { NODE_TEXT } from '../../game/treeText';
 import {
   BEHAVIOR_ORDER,
+  LEGACY_AFFINITY,
   affinityStepText,
   baselineText,
   behaviorGuide,
   bonusText,
-  exampleParamsText,
+  exampleWorldText,
 } from '../../moments/behaviors';
 import { BEHAVIOR_COLOR } from '../../core/palette';
 import { moIcon } from './icons';
@@ -48,6 +49,8 @@ export interface BehaviorRowsCtx {
   /** Jump buttons ("Ver") next to boosters. */
   canJump?: boolean;
   extra?: readonly ExtraBooster[];
+  /** The player's name for a catalog species once it is in the Bestiary (null: not found yet → "?"). */
+  knownName?(latin: string): string | null;
 }
 
 function esc(s: string): string {
@@ -67,18 +70,26 @@ export function behaviorRowsHtml(b: Behavior, c: BehaviorRowsCtx): string {
   else if (c.showWhat) out.push(row('eye', tr(MS.bhWhat, L), `<p>${esc(g.what[L])}</p>`, 'what'));
   const cmp = b === 'still' ? tr(MS.bhBase, L) : baselineText(L);
   out.push(
-    row('up', tr(MS.bhChange, L), `<p><b class="mo-bh-big" style="--b-c:${BEHAVIOR_COLOR[b]}">${esc(bonusText(b, L))}</b><span class="mo-bh-cmp">${esc(cmp)}</span></p>`, 'bonus'),
+    row('up', tr(MS.bhChange, L), `<p><b class="mo-bh-big" style="--b-c:var(--bl-beh-${b}, ${BEHAVIOR_COLOR[b]})">${esc(bonusText(b, L))}</b><span class="mo-bh-cmp">${esc(cmp)}</span></p>`, 'bonus'),
   );
-  const ex = g.example
-    ? `<span class="mo-bh-ex"><i>${esc(g.example.name)}</i> · ${esc(exampleParamsText(g.example, L))}</span>`
-    : '';
+  // Where to find it: the species by its Bestiary name once found (else a "?"), and its World.
+  let ex = '';
+  if (g.example) {
+    let known: string | null = null;
+    try {
+      known = c.knownName?.(g.example.name) ?? null;
+    } catch {
+      known = null;
+    }
+    ex = `<span class="mo-bh-ex">${known ? `<b>${esc(known)}</b>` : '<b class="mo-bh-q" aria-hidden="true">?</b>'} · ${esc(exampleWorldText(g.example, L))}</span>`;
+  }
   out.push(row('sliders', tr(MS.bhGet, L), `<p>${esc(g.how[L])}</p>${ex}`, 'how'));
-  // Boosters: its Afinidad, then extra ones (tree nodes).
-  const u = c.upgrades?.find((x) => x.id === g.affinity);
-  const name = u?.name ?? UPGRADE_TEXT[g.affinity]?.name ?? { es: g.affinity, en: g.affinity };
+  // Boosters: its research-tree node (the classic Lab's Afinidad when there is no tree), then extra ones.
+  const u = c.upgrades?.find((x) => x.id === g.affinity) ?? c.upgrades?.find((x) => x.id === LEGACY_AFFINITY[g.affinity]);
+  const name = NODE_TEXT[g.affinity]?.name ?? u?.name ?? { es: g.affinity, en: g.affinity };
   const lvl = u && u.level > 0 ? ` · ${tr(MS.bhLevel, L, { n: u.level })}` : '';
   const locked = u && !u.unlocked ? `<span class="mo-bh-lock">${moIcon('lock', 12)}${esc(tr(MS.bhLocked, L, { hint: u.unlockHint[L] }))}</span>` : '';
-  const jump = c.canJump && (!u || u.unlocked) ? `<button type="button" class="mo-bh-go" data-up="${g.affinity}">${esc(tr(MS.see, L))}</button>` : '';
+  const jump = c.canJump && (!u || u.unlocked) ? `<button type="button" class="mo-bh-go" data-up="${u?.id ?? g.affinity}">${esc(tr(MS.see, L))}</button>` : '';
   let boost = `<p><b>${esc(name[L])}</b>${esc(lvl)} · ${esc(affinityStepText(L))}</p>${locked}`;
   for (const e of c.extra ?? []) boost += `<p class="mo-bh-extra"><b>${esc(e.name[L])}</b> · ${esc(e.why[L])}</p>`;
   out.push(row('upgrade', tr(MS.bhBoost, L), boost, 'boost', jump));
@@ -97,6 +108,13 @@ export interface BehaviorGuideOpts {
   /** "Ver" next to a booster: open the Lab on that upgrade. Hidden when not given. */
   onShowUpgrade?(upgradeId: string): void;
   extraBoosters?(b: Behavior): readonly ExtraBooster[];
+  /** The player's name for a catalog species once found (the example shows it instead of "?"). */
+  knownName?(latin: string): string | null;
+  /**
+   * The ways of moving this game can actually grow (sessions cycle: game/worlds REACHABLE_BEHAVIORS).
+   * The others are not listed at all: never a "?" the player can never fill. Default: all six.
+   */
+  reachable?(): readonly Behavior[] | null;
 }
 
 export interface BehaviorGuide {
@@ -135,28 +153,30 @@ export function createBehaviorGuide(container: HTMLElement, opts: BehaviorGuideO
     const L = opts.lang();
     const seen = opts.seen?.() ?? BEHAVIOR_ORDER;
     const ups = opts.upgrades?.() ?? [];
-    const key = JSON.stringify([L, seen, ups.map((u) => [u.id, u.level, u.unlocked])]);
+    const can = opts.reachable?.() ?? null;
+    const order = can ? BEHAVIOR_ORDER.filter((b) => can.includes(b) || seen.includes(b)) : BEHAVIOR_ORDER;
+    const key = JSON.stringify([L, seen, order, ups.map((u) => [u.id, u.level, u.unlocked])]);
     if (!force && key === lastKey) return;
     lastKey = key;
     for (const m of mine) running.delete(m);
     mine = [];
-    const n = BEHAVIOR_ORDER.filter((b) => seen.includes(b)).length;
+    const n = order.filter((b) => seen.includes(b)).length;
     el.innerHTML = `
       <header class="mo-bh-h">
         <span class="mo-bh-hi">${moIcon('behavior', 22)}</span>
         <div><h3>${esc(tr(MS.bhGuide, L))}</h3><p>${esc(tr(MS.bhIntro, L))}</p></div>
-        <span class="mo-bh-n">${esc(tr(MS.bhSeen, L, { n, total: BEHAVIOR_ORDER.length }))}</span>
+        <span class="mo-bh-n">${esc(tr(MS.bhSeen, L, { n, total: order.length }))}</span>
       </header>
       <div class="mo-bh-grid">
-        ${BEHAVIOR_ORDER.map((b) => {
+        ${order.map((b) => {
           const g = behaviorGuide(b);
           const unseen = !seen.includes(b);
-          return `<article class="mo-bh-e${unseen ? ' unseen' : ''}" data-b="${b}" style="--b-c:${BEHAVIOR_COLOR[b]}" tabindex="-1">
+          return `<article class="mo-bh-e${unseen ? ' unseen' : ''}" data-b="${b}" style="--b-c:var(--bl-beh-${b}, ${BEHAVIOR_COLOR[b]})" tabindex="-1">
             <div class="mo-bh-eh"><span class="mo-bh-glyph">${moIcon(b, 20)}</span><b>${esc(g.name[L])}</b>${
               unseen ? `<span class="mo-bh-q">?</span>` : `<small>${esc(g.see[L])}</small>`
             }</div>
             <div class="mo-bh-anim"><canvas></canvas>${unseen ? '<span class="mo-bh-sil">?</span>' : ''}</div>
-            ${behaviorRowsHtml(b, { lang: L, upgrades: ups, showWhat: true, unseen, canJump: !!opts.onShowUpgrade, extra: opts.extraBoosters?.(b) })}
+            ${behaviorRowsHtml(b, { lang: L, upgrades: ups, showWhat: true, unseen, canJump: !!opts.onShowUpgrade, extra: opts.extraBoosters?.(b), knownName: opts.knownName })}
           </article>`;
         }).join('')}
       </div>`;
@@ -184,7 +204,10 @@ export function createBehaviorGuide(container: HTMLElement, opts: BehaviorGuideO
       if (!art) return;
       for (const a of el.querySelectorAll('.mo-bh-e.focus')) a.classList.remove('focus');
       art.classList.add('focus');
-      art.scrollIntoView({ block: 'start', behavior: opts.reduceMotion?.() ? 'auto' : 'smooth' });
+      // Scroll only the guide's own list (scrollIntoView would also scroll the page's clipped boxes).
+      let sc: HTMLElement | null = art.parentElement;
+      while (sc && !(sc.scrollHeight > sc.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(sc).overflowY))) sc = sc.parentElement;
+      if (sc) sc.scrollTo({ top: sc.scrollTop + art.getBoundingClientRect().top - sc.getBoundingClientRect().top - 8, behavior: opts.reduceMotion?.() ? 'auto' : 'smooth' });
       art.focus({ preventScroll: true });
     },
     refresh: () => render(),

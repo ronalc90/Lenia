@@ -7,11 +7,11 @@
  *   Qué es               what you see ("se desliza sin parar")
  *   Qué cambia           the exact bonus, read from src/game/balance.ts BEHAVIOR_MULT
  *                        ("Nadadora: ×1,6 Esencia", compared with "Quieta: ×1")
- *   Cómo conseguir más   which rules/shapes tend to do it; the catalog example is
- *                        the viable species with that behaviour (as the detector
- *                        measures it, src/detect/catalogSignatures.json) nearest
- *                        to the starting rules
- *   Cómo mejorarla       its Afinidad upgrade (src/game/defs.ts) and, later, tree nodes
+ *   Dónde encontrarla    which World grows it (src/game/worlds.ts): the example is a
+ *                        species that lives in a world and shows that behaviour (no
+ *                        rules or numbers: the player picks worlds, not parameters)
+ *   Cómo mejorarla       its research-tree node (src/game/tree.ts: Nadadoras,
+ *                        Tranquilas, Familias), +15 % per level (cycleBalance.ts)
  *
  * plus an honest note where it matters (dividers can overflow the dish; what
  * "close together" means for a colony) and a hint for the silhouettes of the
@@ -20,28 +20,38 @@
  */
 import type { Behavior, Lang, Text } from '../core/types';
 import { CATALOG_REFS } from '../detect/catalogRefs';
-import { AFFINITY_BONUS, BASE_CALIBRATION, BEHAVIOR_MULT } from '../game/balance';
+import { BEHAVIOR_MULT } from '../game/balance';
+import { AFFINITY_TREE_BONUS } from '../game/cycleBalance';
 import { BEHAVIOR_NAMES } from '../game/content';
+import { WORLD_TEXT } from '../game/treeText';
+import { WORLD_BY_ID, type WorldId } from '../game/worlds';
 
 const t = (es: string, en: string): Text => ({ es, en });
 
 export const BEHAVIOR_ORDER: readonly Behavior[] = ['still', 'pulsing', 'swimmer', 'spinner', 'divider', 'colony'];
 
-export type AffinityId = 'swimAffinity' | 'sessileAffinity' | 'colonyAffinity';
+export type AffinityId = 'swimAffinity' | 'stillAffinity' | 'colonyAffinity';
 
 /**
- * Which Afinidad boosts which behaviour. Mirrors src/game/game.ts behaviorMult
- * (swimmer/spinner → swim, divider/colony → colony, still/pulsing/unclassified →
- * sessile); a test checks the upgrades exist and their texts name these behaviours.
+ * Which research-tree node boosts which behaviour (src/game/tree.ts affinity: swim / still / colony;
+ * the game's behaviorMult: swimmer/spinner → swim, divider/colony → colony, still/pulsing/unclassified
+ * → still). A test checks the nodes exist and their texts name these behaviours.
  */
 export const AFFINITY_OF: Record<Behavior | 'none', AffinityId> = {
   swimmer: 'swimAffinity',
   spinner: 'swimAffinity',
   divider: 'colonyAffinity',
   colony: 'colonyAffinity',
-  still: 'sessileAffinity',
-  pulsing: 'sessileAffinity',
-  none: 'sessileAffinity',
+  still: 'stillAffinity',
+  pulsing: 'stillAffinity',
+  none: 'stillAffinity',
+};
+
+/** The same booster in the classic Lab (before the research tree): looked up when the tree node is absent. */
+export const LEGACY_AFFINITY: Record<AffinityId, string> = {
+  swimAffinity: 'swimAffinity',
+  stillAffinity: 'sessileAffinity',
+  colonyAffinity: 'colonyAffinity',
 };
 
 /**
@@ -53,11 +63,26 @@ export const COLONY_MIN = 3;
 export const COLONY_DIST_R = 3;
 
 export interface BehaviorExample {
+  /** Catalog code and Latin name of a species that does it (the Bestiary shows its common name once found). */
   code: string;
   name: string;
-  mu: number;
-  sigma: number;
+  /** The World that grows it. */
+  world: WorldId;
 }
+
+/**
+ * Where to find each behaviour (docs/CLARIDAD.md J-01…J-05): the world named in the "how" line, and a
+ * species of that world. Still/pulsing: Circium ventilans (Mundo 5, it breathes in place); spinner:
+ * Gyrorbium gyrans (Mundo 3); divider: Parorbium dividuus (Mundo 3); swimmer: Orbium (Mundo 1).
+ * Colony is three alike together: any species.
+ */
+const EXAMPLE_OF: Partial<Record<Behavior, { code: string; world: WorldId }>> = {
+  still: { code: 'C0v', world: 'helix' },
+  pulsing: { code: 'C0v', world: 'helix' },
+  swimmer: { code: 'O2u', world: 'classic' },
+  spinner: { code: 'OG2g', world: 'gyro' },
+  divider: { code: 'O4d', world: 'gyro' },
+};
 
 export interface BehaviorGuide {
   behavior: Behavior;
@@ -86,67 +111,56 @@ const TEXT: Record<Behavior, Pick<BehaviorGuide, 'what' | 'see' | 'how' | 'hint'
   still: {
     what: t('No se mueve: se queda siempre en el mismo sitio.', 'It does not move: it always stays in the same spot.'),
     see: t('no se mueve', 'never moves'),
-    how: t('Con μ y σ altos salen formas que no se mueven.', 'High μ and σ give shapes that do not move.'),
+    how: t('En el Mundo 5 · Discos vive una que no se mueve.', 'In World 5 · Discs lives one that never moves.'),
     hint: t('¿Has visto alguna que no se mueva?', 'Seen one that never moves?'),
   },
   pulsing: {
     what: t('Se hace grande y pequeña una y otra vez, como un corazón.', 'It grows and shrinks again and again, like a heartbeat.'),
     see: t('crece y encoge', 'grows and shrinks'),
-    how: t('Formas redondas que respiran: búscalas con μ y σ altos.', 'Round shapes that breathe: look for them with high μ and σ.'),
+    how: t('Algunas del Mundo 5 · Discos laten como un corazón.', 'Some in World 5 · Discs beat like a heart.'),
     hint: t('¿Has visto alguna latir como un corazón?', 'Seen one beat like a heart?'),
   },
   swimmer: {
     what: t('Se desliza por la placa sin parar, siempre hacia delante.', 'It glides across the dish nonstop, always forward.'),
     see: t('se desliza sin parar', 'glides nonstop'),
-    how: t('Formas de disco con cola, con las reglas del principio.', 'Disc-with-a-tail shapes, with the starting rules.'),
+    how: t('Casi todas nadan. Empieza en el Mundo 1 · Clásico.', 'Most of them swim. Start in World 1 · Classic.'),
     hint: t('¿Has visto alguna nadar?', 'Seen one swim?'),
   },
   spinner: {
     what: t('Da vueltas y vueltas en círculo, casi sin salir de su sitio.', 'It goes round and round in circles, almost in place.'),
     see: t('da vueltas', 'goes round'),
-    how: t('Sube σ un poquito: algunos discos empiezan a girar.', 'Raise σ a little: some discs start to spin.'),
+    how: t('En el Mundo 3 · Remolinos nace una que gira.', 'In World 3 · Whirls one is born that spins.'),
     hint: t('¿Has visto alguna girar?', 'Seen one spin?'),
   },
   divider: {
     what: t('Se parte en dos, y cada hija vuelve a partirse.', 'It splits in two, and each child splits again.'),
     see: t('se parte en dos', 'splits in two'),
-    how: t('Con σ algo alto, algunas crecen y se parten en dos.', 'With a fairly high σ, some grow and split in two.'),
+    how: t('En el Mundo 3 · Remolinos vive una que se parte en dos.', 'In World 3 · Whirls lives one that splits in two.'),
     hint: t('¿Has visto alguna partirse en dos?', 'Seen one split in two?'),
     note: {
       kind: 'risk',
-      text: t('Si se dividen demasiado, la placa se desborda y deja de producir.', 'If they split too much, the dish overflows and stops producing.'),
+      text: t('Si se dividen demasiado, la placa se desborda y deja de dar Esencia.', 'If they split too much, the dish overflows and stops giving Essence.'),
     },
   },
   colony: {
     what: t('Varias iguales viven muy juntas y ganan más en equipo.', 'Several alike live close together and earn more as a team.'),
     see: t('iguales y juntas', 'alike and together'),
-    how: t('Siembra o imprime varias de la misma especie muy juntas.', 'Sow or print several of the same species close together.'),
+    how: t('Siembra o copia tres iguales muy juntas.', 'Sow or copy three alike, close together.'),
     hint: t('¿Has juntado tres iguales?', 'Put three alike together?'),
     note: {
       kind: 'rule',
-      text: t(
-        `${COLONY_MIN} o más de la misma especie, a menos de ${COLONY_DIST_R} R entre sí.`,
-        `${COLONY_MIN} or more of one species, within ${COLONY_DIST_R} R of each other.`,
-      ),
+      // COLONY_DIST_R × R between centres ≈ less than two bodies apart (a body is about 1.5 R wide).
+      text: t(`${COLONY_MIN} o más de la misma especie, a menos de dos cuerpos.`, `${COLONY_MIN} or more of one species, less than two bodies apart.`),
     },
   },
 };
 
-/** Viable catalog species the detector classes as `b`, nearest to the starting rules. */
+/** A species that does `b` and the World that grows it (only species some world can grow). */
 export function behaviorExample(b: Behavior): BehaviorExample | null {
-  const base = BASE_CALIBRATION;
-  let best: BehaviorExample | null = null;
-  let bd = Infinity;
-  for (const r of CATALOG_REFS) {
-    if (!r.viable || r.behavior !== b) continue;
-    // Distance in "slider steps": μ and σ relative to their starting values.
-    const d = Math.hypot((r.mu - base.mu) / base.mu, (r.sigma - base.sigma) / base.sigma) + Math.abs(r.R - base.R);
-    if (d < bd) {
-      bd = d;
-      best = { code: r.code, name: r.name, mu: r.mu, sigma: r.sigma };
-    }
-  }
-  return best;
+  const e = EXAMPLE_OF[b];
+  if (!e || !WORLD_BY_ID[e.world]?.species.includes(e.code)) return null;
+  const r = CATALOG_REFS.find((x) => x.code === e.code);
+  return r ? { code: r.code, name: r.name, world: e.world } : null;
 }
 
 const cache = new Map<Behavior, BehaviorGuide>();
@@ -189,17 +203,13 @@ export function baselineText(lang: Lang): string {
   return lang === 'es' ? `comparada con una quieta ${m}` : `compared with a still one ${m}`;
 }
 
-/** "+8 % por nivel" / "+8% per level" (Afinidad bonus from balance). */
+/** "+15 % por nivel" / "+15% per level" (the research-tree affinity nodes, cycleBalance.ts). */
 export function affinityStepText(lang: Lang): string {
-  const p = Math.round(AFFINITY_BONUS * 100);
+  const p = Math.round(AFFINITY_TREE_BONUS * 100);
   return lang === 'es' ? `+${p} % por nivel` : `+${p}% per level`;
 }
 
-/** "μ 0,15 · σ 0,015" (the slider values to try; trailing zeros trimmed). */
-export function exampleParamsText(e: BehaviorExample, lang: Lang): string {
-  const f = (v: number, d: number) => {
-    const s = v.toFixed(d).replace(/0+$/, '').replace(/\.$/, '');
-    return lang === 'es' ? s.replace('.', ',') : s;
-  };
-  return `μ ${f(e.mu, 3)} · σ ${f(e.sigma, 4)}`;
+/** "Mundo 1 · Clásico" / "World 1 · Classic": where the example lives. */
+export function exampleWorldText(e: BehaviorExample, lang: Lang): string {
+  return WORLD_TEXT[e.world]?.name[lang] ?? '';
 }

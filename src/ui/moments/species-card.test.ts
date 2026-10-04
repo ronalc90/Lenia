@@ -132,20 +132,21 @@ describe('species card: telling species apart', () => {
   });
 
   it('"¿Por qué esta rinde más?": the biggest difference, in one sentence', () => {
-    const a = input({ catalogName: 'Orbium', behavior: 'swimmer', behaviorMult: 1.6, eps: 2.5 });
-    const b = input({ id: 'b', catalogName: 'Scutium', behavior: 'still', behaviorMult: 1.0, eps: 1.5 });
+    // One name per species: the common one, never the Latin (docs/CLARIDAD.md J-148).
+    const a = input({ name: 'Nadadora celeste', catalogName: 'Orbium unicaudatus', behavior: 'swimmer', behaviorMult: 1.6, eps: 2.5 });
+    const b = input({ id: 'b', name: 'Escudo jade', catalogName: 'Scutium solidus', behavior: 'still', behaviorMult: 1.0, eps: 1.5 });
     const es = compareSpecies(a, b, 'es');
     expect(es.winner).toBe('a');
-    expect(es.reason).toBe('Orbium nada (×1,6) y Scutium se queda quieta (×1).');
+    expect(es.reason).toBe('Nadadora celeste nada (×1,6) y Escudo jade se queda quieta (×1).');
     const en = compareSpecies(a, b, 'en');
-    expect(en.reason).toBe('Orbium swims (×1.6) and Scutium stays still (×1).');
+    expect(en.reason).toBe('Nadadora celeste swims (×1.6) and Escudo jade stays still (×1).');
   });
 
   it('rarity or shape when they move alike; a tie when they are alike', () => {
-    const a = input({ catalogName: 'A', speciesMult: 1.6, eps: 3 });
-    const b = input({ id: 'b', catalogName: 'B', speciesMult: 1.1, eps: 2 });
+    const a = input({ name: 'A', speciesMult: 1.6, eps: 3 });
+    const b = input({ id: 'b', name: 'B', speciesMult: 1.1, eps: 2 });
     expect(compareSpecies(a, b, 'es').reason).toBe('A es más rara (×1,6) que B (×1,1).');
-    const c = input({ catalogName: 'C', form: 1.5, speciesMult: 1.1, eps: 3 });
+    const c = input({ name: 'C', form: 1.5, speciesMult: 1.1, eps: 3 });
     expect(compareSpecies(b, c, 'en')).toEqual({ winner: 'b', reason: 'C has more shape: more edge, more Essence (×1.5 vs ×1.2).' });
     expect(compareSpecies(a, { ...a, id: 'z' }, 'es').winner).toBe('tie');
   });

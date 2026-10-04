@@ -20,7 +20,8 @@
 import { UI } from '../../core/palette';
 import type { GameView, Lang, SeedPriceView } from '../../core/types';
 import { fmt, fmtFixed } from '../format';
-import { createPriceSheet, dotsHtml, PriceTicker, type PriceExplain, type PriceReason, type PriceRowView } from './price';
+import { seedPriceChange, seedPriceSheetExplain, seedPriceSnap, type SeedPriceSnap } from '../seed-price';
+import { createPriceSheet, dotsHtml, PriceTicker, type PriceExplain, type PriceReason } from './price';
 import { MS, tr } from './strings';
 
 export interface PriceTerm {
@@ -90,7 +91,7 @@ export function seedPriceToday(p: SeedPriceView, cost: number, lang: Lang): stri
   const over = p.used > p.freeSlots;
   if (p.freeSeeds > 0)
     return lang === 'es'
-      ? `Tienes ${p.freeSeeds} ${p.freeSeeds === 1 ? 'siembra gratis' : 'siembras gratis'}: la próxima no cuesta nada.`
+      ? `Tienes ${p.freeSeeds} ${p.freeSeeds === 1 ? 'semilla gratis' : 'semillas gratis'}: la próxima no cuesta nada.`
       : `You have ${p.freeSeeds} free ${p.freeSeeds === 1 ? 'seed' : 'seeds'}: the next one costs nothing.`;
   if (p.alive <= 0)
     return lang === 'es' ? `Hoy cuesta ${total}: el mínimo, la placa está vacía.` : `It costs ${total} now: the minimum, the dish is empty.`;
@@ -105,38 +106,13 @@ export function seedPriceToday(p: SeedPriceView, cost: number, lang: Lang): stri
   return lang === 'es' ? `Hoy cuesta ${total} porque ${alive}${over ? full : ''}.` : `It costs ${total} now because ${alive}${over ? full : ''}.`;
 }
 
-/** The seed price as a generic PriceExplain (equation, slots, free seeds, big seed, rule, today). */
-export function seedPriceExplain(v: GameView, lang: Lang, o: { onSeeDish?(): void } = {}): PriceExplain | null {
-  const p = v.seedPrice;
-  if (!p) return null;
-  const b = priceTerms(p, v.seedCost, lang);
-  const rows: PriceRowView[] = [
-    {
-      icon: 'slot',
-      label: tr(MS.spSlots, lang),
-      dots: b.slots,
-      text:
-        b.slots.over > 0
-          ? tr(MS.spSlotsOver, lang, { n: b.slots.over, s: mult(p.satMult > 1 ? Math.pow(p.satMult, 1 / b.slots.over) : 3, lang) })
-          : tr(MS.spSlotsFree, lang, { n: Math.max(0, b.slots.free - b.slots.used) }),
-      tone: b.slots.over > 0 ? 'warn' : undefined,
-    },
-  ];
-  if (b.freeSeeds > 0) rows.push({ icon: 'gift', text: b.freeSeeds === 1 ? tr(MS.spFree1, lang) : tr(MS.spFree, lang, { n: b.freeSeeds }), tone: 'good' });
-  rows.push({ icon: 'big', text: tr(MS.spBig, lang, { m: b.bigMult }) });
-  return {
-    title: tr(MS.spTitle, lang),
-    icon: 'tag',
-    total: b.total,
-    totalLabel: tr(MS.spTotal, lang),
-    totalIcon: 'essence',
-    terms: b.terms.map((t) => ({ icon: ICON_OF[t.kind], value: t.value, label: t.label, active: t.active, tone: t.kind === 'sat' && t.active ? 'warn' : undefined })),
-    rows,
-    rule: tr(MS.spRule, lang),
-    advice: seedPriceToday(p, v.seedCost, lang),
-    action: b.adviseDish && o.onSeeDish ? { label: tr(MS.spDish, lang), run: o.onSeeDish } : undefined,
-    closeLabel: tr(MS.close, lang),
-  };
+/**
+ * The seed price sheet's content. One rule, one place (docs/CLARIDAD.md B-14): the generic explainer
+ * of src/ui/seed-price.ts, which shows only the factors the game sends (sessions: one price per
+ * session plus a small step per seed, room from the Tree; classic: crowding and a full dish).
+ */
+export function seedPriceExplain(v: GameView, lang: Lang, o: { onSeeDish?(): void; onSeeTree?(): void } = {}): PriceExplain | null {
+  return seedPriceSheetExplain(v, lang, o);
 }
 
 // ───────────────────────────── why it changed ─────────────────────────────
@@ -170,7 +146,8 @@ export function seedPriceReason(prev: PriceSnap, next: PriceSnap, lang: Lang): P
     };
   const d = next.alive - prev.alive;
   if (d > 0) return { text: tr(d === 1 ? MS.rsAlive1 : MS.rsAliveN, lang, { n: d, m: mult(next.crowdMult, lang) }), dir: 1 };
-  if (d < 0) return { text: tr(d === -1 ? MS.rsDied1 : MS.rsDiedN, lang, { n: -d }), dir: -1 };
+  // Fewer creatures: say there is room, never that one died (nothing cheers a death).
+  if (d < 0) return { text: tr(MS.rsLess, lang), dir: -1 };
   if (Math.abs(next.base - prev.base) > eps) return { text: tr(MS.rsBase, lang, { b: fmt(next.base, lang) }), dir };
   return dir ? { text: tr(MS.rsOther, lang), dir } : null;
 }
@@ -200,7 +177,6 @@ export interface SeedPriceSheet {
   dispose(): void;
 }
 
-const ICON_OF: Record<PriceTerm['kind'], 'drop' | 'creatures' | 'slot'> = { base: 'drop', crowd: 'creatures', sat: 'slot' };
 
 /** The seed price sheet: createPriceSheet fed by seedPriceExplain. Open it with ONE tap on the price. */
 export function createSeedPriceSheet(root: HTMLElement, opts: SeedPriceSheetOpts): SeedPriceSheet {
@@ -236,7 +212,7 @@ export class SlotMeter {
   readonly el: HTMLElement;
   private dots: HTMLElement;
   private ticker = new PriceTicker();
-  private last: PriceSnap | null = null;
+  private last: SeedPriceSnap | null = null;
   private lastKey = '';
 
   constructor(private lang: () => Lang) {
@@ -266,9 +242,10 @@ export class SlotMeter {
         over > 0 ? tr(MS.spSlotsOver, L, { n: over, s: mult(Math.pow(p.satMult, 1 / over), L) }) : tr(MS.spSlotsFree, L, { n: Math.max(0, p.freeSlots - p.used) }),
       );
     }
-    const snap = snapOf(view)!;
-    if (this.last) {
-      const r = seedPriceReason(this.last, snap, this.lang());
+    // Why it moved: the same generic reasons as the seed pill (src/ui/seed-price.ts).
+    const snap = seedPriceSnap(view);
+    if (this.last && snap) {
+      const r = seedPriceChange(this.last, snap, this.lang());
       if (r) this.ticker.show(r);
     }
     this.last = snap;

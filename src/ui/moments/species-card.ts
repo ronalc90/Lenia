@@ -19,8 +19,9 @@
 import { BEHAVIOR_COLOR } from '../../core/palette';
 import type { Behavior, GameView, Lang, Pattern, Rarity, Text, UpgradeView } from '../../core/types';
 import { AFFINITY_BONUS, BEHAVIOR_MULT, UNCLASSIFIED_MULT } from '../../game/balance';
+import { AFFINITY_TREE_BONUS } from '../../game/cycleBalance';
 import { fmtFixed, fmtRate } from '../format';
-import { AFFINITY_OF } from '../../moments/behaviors';
+import { AFFINITY_OF, LEGACY_AFFINITY } from '../../moments/behaviors';
 import { moIcon } from './icons';
 import { Illustration } from './illustrations';
 import { MS, tr } from './strings';
@@ -39,8 +40,13 @@ export interface Booster {
 
 export interface SpeciesCardInput {
   id: string;
+  /** Its one name everywhere (the Bestiary's common name, or the player's). */
   name: string;
   catalogName: string | null;
+  /** Small italic Latin line (SpeciesView.scientificName; the catalog name when absent). */
+  scientificName?: string | null;
+  /** What its body looks like in plain words (SpeciesView.shapeLabel), when the game says it. */
+  shape?: Text;
   subtitle?: string;
   /** Accent hue in degrees (SpeciesView.hue); undefined → the game's cyan. */
   hue?: number;
@@ -60,19 +66,29 @@ export interface SpeciesCardInput {
   boosters: Booster[];
 }
 
-/** Upgrades that make this species earn more (present in the view). */
-export function boostersFor(behavior: Behavior | null, upgrades: readonly UpgradeView[]): Booster[] {
-  const pct = Math.round(AFFINITY_BONUS * 100);
+/** The affinity upgrade of a behaviour in this view: the research-tree node, else the classic Lab's. */
+function affinityUpgrade(b: Behavior | null, upgrades: readonly UpgradeView[]): UpgradeView | undefined {
+  const id = AFFINITY_OF[b ?? 'none'];
+  return upgrades.find((x) => x.id === id) ?? upgrades.find((x) => x.id === LEGACY_AFFINITY[id]);
+}
+
+/**
+ * Upgrades that make this species earn more (present in the view). `bonus` = the affinity step per
+ * level (classic Lab AFFINITY_BONUS; the research tree's AFFINITY_TREE_BONUS in sessions).
+ */
+export function boostersFor(behavior: Behavior | null, upgrades: readonly UpgradeView[], bonus = AFFINITY_BONUS): Booster[] {
+  const pct = Math.round(bonus * 100);
+  const aff = affinityUpgrade(behavior, upgrades);
   const want: { id: string; why: Text }[] = [
     {
-      id: AFFINITY_OF[behavior ?? 'none'],
+      id: aff?.id ?? AFFINITY_OF[behavior ?? 'none'],
       why: {
-        es: `+${pct} % por nivel a las ${behaviorName(behavior, 'es', true)}`,
+        es: `+${pct} % por nivel para ${behaviorName(behavior, 'es', true)}`,
         en: `+${pct}% per level for ${behaviorName(behavior, 'en', true)}`,
       },
     },
-    { id: 'cataloguing', why: { es: 'Sube a todas las especies registradas', en: 'Raises every registered species' } },
-    { id: 'nutrient', why: { es: 'Más forma medida: más Esencia', en: 'More measured shape: more Essence' } },
+    { id: 'cataloguing', why: { es: 'Sube a todas las especies descubiertas', en: 'Raises every species you found' } },
+    { id: 'nutrient', why: { es: 'Criaturas con más forma dan más Esencia.', en: 'Creatures with more shape give more Essence.' } },
   ];
   const out: Booster[] = [];
   for (const w of want) {
@@ -84,10 +100,10 @@ export function boostersFor(behavior: Behavior | null, upgrades: readonly Upgrad
 }
 
 /** m_comp × affinity, as the game computes it (src/game/game.ts behaviorMult). */
-export function behaviorMultFor(b: Behavior | null, upgrades: readonly UpgradeView[]): number {
+export function behaviorMultFor(b: Behavior | null, upgrades: readonly UpgradeView[], bonus = AFFINITY_BONUS): number {
   const base = b ? BEHAVIOR_MULT[b] : UNCLASSIFIED_MULT;
-  const lvl = upgrades.find((u) => u.id === AFFINITY_OF[b ?? 'none'])?.level ?? 0;
-  return base * (1 + AFFINITY_BONUS * lvl);
+  const lvl = affinityUpgrade(b, upgrades)?.level ?? 0;
+  return base * (1 + bonus * lvl);
 }
 
 /** Build the card input from the game view (best living creature of the species, if any). */
@@ -97,7 +113,9 @@ export function speciesInputFromView(v: GameView, speciesId: string): SpeciesCar
   const mine = v.creatures.filter((c) => c.speciesId === speciesId && c.state === 'stable');
   const best = mine.reduce<(typeof mine)[number] | null>((a, c) => (!a || c.eps > a.eps ? c : a), null);
   const behavior = best?.behavior ?? sp.behavior;
-  const bm = behaviorMultFor(behavior, v.upgrades);
+  // Sessions mode: the research tree's affinity step; the game's own figure when it sends one.
+  const bonus = (v as { cycle?: string }).cycle === 'sessions' ? AFFINITY_TREE_BONUS : AFFINITY_BONUS;
+  const bm = sp.production?.behaviorMult ?? behaviorMultFor(behavior, v.upgrades, bonus);
   const global = (v.multipliers?.global ?? 1) * (v.multipliers?.buffs ?? 1);
   const eps = best && best.eps > 0 ? best.eps : null;
   const form = eps !== null ? eps / Math.max(1e-9, bm * sp.mult * global) : null;
@@ -105,6 +123,8 @@ export function speciesInputFromView(v: GameView, speciesId: string): SpeciesCar
     id: sp.id,
     name: sp.name,
     catalogName: sp.catalogName,
+    scientificName: sp.scientificName,
+    shape: sp.shapeLabel,
     subtitle: sp.subtitle,
     hue: sp.hue ?? best?.hue,
     rarity: sp.rarity,
@@ -115,21 +135,21 @@ export function speciesInputFromView(v: GameView, speciesId: string): SpeciesCar
     form,
     global,
     eps,
-    boosters: boostersFor(behavior, v.upgrades),
+    boosters: boostersFor(behavior, v.upgrades, bonus),
   };
 }
 
 // ───────────────────────────── words ─────────────────────────────
 
+/** One word per way of moving (docs/CLARIDAD.md J-147): [singular, "for the …" plural]. */
 const BEHAVIOR_NAME: Record<Behavior | 'none', [Text, Text]> = {
-  // [singular, plural]
-  still: [{ es: 'quieta', en: 'still' }, { es: 'quietas', en: 'still ones' }],
-  pulsing: [{ es: 'pulsante', en: 'pulsing' }, { es: 'pulsantes', en: 'pulsing ones' }],
-  swimmer: [{ es: 'nadadora', en: 'swimmer' }, { es: 'nadadoras', en: 'swimmers' }],
-  spinner: [{ es: 'giratoria', en: 'spinner' }, { es: 'giratorias', en: 'spinners' }],
-  divider: [{ es: 'divisora', en: 'divider' }, { es: 'divisoras', en: 'dividers' }],
-  colony: [{ es: 'colonia', en: 'colony' }, { es: 'colonias', en: 'colonies' }],
-  none: [{ es: 'aún sin clasificar', en: 'not sorted yet' }, { es: 'quietas', en: 'still ones' }],
+  still: [{ es: 'quieta', en: 'still' }, { es: 'las quietas', en: 'still ones' }],
+  pulsing: [{ es: 'late', en: 'pulses' }, { es: 'las que laten', en: 'the ones that pulse' }],
+  swimmer: [{ es: 'nadadora', en: 'swimmer' }, { es: 'las nadadoras', en: 'swimmers' }],
+  spinner: [{ es: 'gira', en: 'spins' }, { es: 'las que giran', en: 'the ones that spin' }],
+  divider: [{ es: 'se divide', en: 'splits' }, { es: 'las que se dividen', en: 'the ones that split' }],
+  colony: [{ es: 'colonia', en: 'colony' }, { es: 'las colonias', en: 'colonies' }],
+  none: [{ es: 'aún no sabemos cómo se mueve', en: 'not sure how it moves yet' }, { es: 'las quietas', en: 'still ones' }],
 };
 
 const BEHAVIOR_VERB: Record<Behavior | 'none', Text> = {
@@ -159,7 +179,7 @@ const GENUS_SHAPE: [RegExp, Text][] = [
   [/^(Synorbium|Parorbium)/i, { es: 'disco doble', en: 'double disc' }],
   [/^Orbium/i, { es: 'disco con cola', en: 'disc with a tail' }],
   [/^Pentahelicium/i, { es: 'estrella de 5 brazos', en: '5-armed star' }],
-  [/^Helicium/i, { es: 'hélice', en: 'propeller' }],
+  [/^Helicium/i, { es: 'molinillo', en: 'pinwheel' }],
   [/^(Gyropteron|Synptera|Paraptera)/i, { es: 'con alas', en: 'winged' }],
   [/^Catenoscutium/i, { es: 'cadena de escudos', en: 'chain of shields' }],
   [/^Triscutium/i, { es: 'triple escudo', en: 'triple shield' }],
@@ -169,8 +189,9 @@ const GENUS_SHAPE: [RegExp, Text][] = [
   [/^Kronium/i, { es: 'corona', en: 'crown' }],
 ];
 
-/** "disco con cola", "anillo"…: from the catalog genus, else measured on the portrait. */
-export function shapeLabel(sp: { catalogName: string | null; portrait: Pattern | null }, lang: Lang): string {
+/** "disco con cola", "anillo"…: the game's word when it sends one, else the catalog genus, else the portrait. */
+export function shapeLabel(sp: { catalogName: string | null; portrait: Pattern | null; shape?: Text }, lang: Lang): string {
+  if (sp.shape) return sp.shape[lang];
   if (sp.catalogName) for (const [re, t] of GENUS_SHAPE) if (re.test(sp.catalogName)) return t[lang];
   const p = sp.portrait;
   if (p) {
@@ -241,8 +262,9 @@ export function compareSpecies(a: SpeciesCardInput, b: SpeciesCardInput, lang: L
   const va = val(a);
   const vb = val(b);
   const winner = Math.abs(va - vb) / Math.max(1e-9, Math.max(va, vb)) < 0.03 ? 'tie' : va > vb ? 'a' : 'b';
-  const na = a.catalogName ?? a.name;
-  const nb = b.catalogName ?? b.name;
+  // One name per species everywhere: the common one (docs/CLARIDAD.md J-148).
+  const na = a.name;
+  const nb = b.name;
   const x = (m: number) => `×${fmtFixed(m, 2, lang).replace(/[.,]?0+$/, '')}`;
   const factors = [
     { kind: 'behavior', ra: a.behaviorMult, rb: b.behaviorMult },
@@ -375,12 +397,15 @@ export function createSpeciesCard(container: HTMLElement, input: SpeciesCardInpu
     const b = speciesBreakdown(s, L);
     const bcol = BEHAVIOR_COLOR[s.behavior ?? 'still'] ?? col;
     const boosters = s.boosters.filter((x) => x.unlocked && !x.maxed);
+    // Its one name is the title; the Latin goes small underneath (when it says something new).
+    const latin = s.scientificName === undefined ? s.catalogName : s.scientificName;
+    const sci = latin && latin !== s.name ? latin : '';
     el.innerHTML = `
       <header class="mo-spc-h">
         <span class="mo-spc-pt"><canvas width="128" height="128"></canvas></span>
         <div class="mo-spc-n">
-          <b class="${s.catalogName ? 'latin' : ''}">${esc(s.catalogName ?? s.name)}</b>
-          ${s.subtitle || s.catalogName ? `<small>${esc(s.subtitle ?? s.name)}</small>` : ''}
+          <b>${esc(s.name)}</b>
+          ${sci ? `<small class="latin">${esc(sci)}</small>` : s.subtitle ? `<small>${esc(s.subtitle)}</small>` : ''}
           <span class="mo-spc-tags">
             <span class="mo-spc-tag">${moIcon('drop', 14)}${esc(shapeLabel(s, L))}</span>
             ${

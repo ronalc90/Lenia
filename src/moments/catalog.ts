@@ -11,7 +11,8 @@ import type { GameEvents } from '../core/bus';
 import { BEHAVIOR_COLOR, UI } from '../core/palette';
 import type { Behavior, GameView, Lang, Text } from '../core/types';
 import { GOLDEN_LIFE, OFFLINE_RATE, SAMPLES_NEW_BEHAVIOR, SAMPLES_NEW_SPECIES } from '../game/balance';
-import { fmt, fmtDuration, fmtFixed, fmtRate } from '../ui/format';
+import { DATOS_PER_NEW_BEHAVIOR, DATOS_PER_NEW_SPECIES, SESSION_TIME_PER_SPECIES } from '../game/cycleBalance';
+import { fmt, fmtDuration, fmtRate } from '../ui/format';
 import { behaviorGuide, bonusText } from './behaviors';
 import type {
   Built,
@@ -73,32 +74,19 @@ const essenceChip = (n: number, sign: '+' | '−', perSec = false): Chip =>
 const behaviorBonusChip = (b: Behavior): Chip => chip(both((l) => bonusText(b, l)), 'good', 'up');
 const samplesChip = (n: number): Chip =>
   chip(both((l) => `+${n} ${l === 'es' ? (n === 1 ? 'Muestra' : 'Muestras') : n === 1 ? 'Sample' : 'Samples'}`), 'good', 'sample');
+/** Sessions loop (docs/CICLO.md): discoveries pay Datos at the end of the session (CLARIDAD J-31, J-32). */
+const datosChip = (n: number): Chip => chip(both((l) => `+${n} ${l === 'es' ? 'Datos' : 'Data'}`), 'good', 'gift');
+const secondsChip = (n: number): Chip => chip(both(() => `+${n} s`), 'good', 'clock');
+const sessionsLoop = (v: GameView): boolean => v.cycle === 'sessions';
 const genomeChip = (n: number): Chip => chip(both((l) => `+${fmt(n, l)} ${l === 'es' ? 'Genoma' : 'Genome'}`), 'violet', 'genome');
 const zeroChip = chip(t('0 Esencia/s', '0 Essence/s'), 'grey', 'x');
 
-const CALIB_KEYS = ['mu', 'sigma', 'R', 'dt'] as const;
-const CALIB_LABEL: Record<(typeof CALIB_KEYS)[number], string> = { mu: 'μ', sigma: 'σ', R: 'R', dt: 'dt' };
-const CALIB_DIGITS: Record<(typeof CALIB_KEYS)[number], number> = { mu: 3, sigma: 4, R: 0, dt: 2 };
-
-/** "μ 0,150 → 0,160": the parameter that moved the most (relative). */
-export function calibChip(from: MomentData['calibFrom'], to: MomentData['calibTo']): Chip | null {
-  if (!from || !to) return null;
-  let key: (typeof CALIB_KEYS)[number] | null = null;
-  let most = 0;
-  for (const k of CALIB_KEYS) {
-    const rel = Math.abs(to[k] - from[k]) / Math.max(1e-9, Math.abs(from[k]));
-    if (rel > most + 1e-12) {
-      most = rel;
-      key = k;
-    }
-  }
-  if (!key) return null;
-  const k = key;
-  return chip(
-    both((l) => `${CALIB_LABEL[k]} ${fmtFixed(from[k], CALIB_DIGITS[k], l)} → ${fmtFixed(to[k], CALIB_DIGITS[k], l)}`),
-    'info',
-    'slot',
-  );
+/** Seconds left on the session clock when its Momento explains it (the HUD's "¡Último minuto!"). */
+const CLOCK_MOMENT_S = 60;
+/** The lab session in the view (sessions loop; absent in the classic loop). */
+function sessionOf(v: GameView): { phase: string; remaining: number } | null {
+  const s = (v as { session?: { phase: string; remaining: number } | null }).session;
+  return s ?? null;
 }
 
 /** The seed price split the way the player sees it. */
@@ -117,18 +105,32 @@ export function priceData(v: GameView): MomentData['price'] | undefined {
 }
 
 /**
- * The seed price went above the empty-dish price for the first time: any
- * multiplier > 1 (crowding by living creatures, or the dish over its cheap
- * slots). Owner: "no price ever changes without a visible reason".
+ * The seed price went up for the first time (sessions loop, docs/CICLO.md): a seed bought today made
+ * the next one dearer, in whole Esencia. Living creatures never raise it any more (owner: "never punish
+ * growth"; CLARIDAD J-121), so crowding and a full dish do not open this card: the price pill and its
+ * sheet explain them in the classic loop. Owner: "no price ever changes without a visible reason".
  */
 export function priceRose(v: GameView): boolean {
   const p = v.seedPrice;
-  if (!p) return false;
-  return p.crowdMult > 1 + 1e-9 || p.satMult > 1 + 1e-9;
+  if (!p || typeof p.stepMult !== 'number' || !(p.stepMult > 1 + 1e-9)) return false;
+  const cheap = typeof p.cheapMult === 'number' && p.cheapMult > 0 ? p.cheapMult : 1;
+  return v.seedCost > Math.max(1, Math.round(p.base * cheap)) + 1e-9;
 }
 
 /** Back-compat name. */
 export const priceIsHigh = priceRose;
+
+/** The first purchase in the classic loop (Lab upgrades: at once; an Extinction resets them). */
+const CLASSIC_UPGRADE_LINES: readonly [Text, Text] = [
+  t('Tu mejora ya funciona.', 'Your upgrade works already.'),
+  t('Mira la placa: lo vas a notar.', 'Watch the dish: you will notice it.'),
+];
+
+/** The species card in the classic loop (Samples still exist there). */
+const CLASSIC_SPECIES_LINES: readonly [Text, Text] = [
+  t('Nadie la había visto aquí. Se guarda en tu Bestiario.', 'Nobody had seen it here. It goes into your Bestiary.'),
+  t('Cada especie nueva te da Muestras para el Bestiario.', 'Every new species gives you Samples for the Bestiary.'),
+];
 
 const offlineShare: Text =
   OFFLINE_RATE === 0.5
@@ -144,7 +146,7 @@ const offlineShare: Text =
 /** Titles and moods; what each behaviour IS comes from src/moments/behaviors.ts (one source for every surface). */
 const BEHAVIOR_TEXT: Record<Behavior, { title: Text; brief: Text; mood: MomentDef['mood'] }> = {
   still: { title: t('Una criatura quieta', 'A still creature'), brief: t('Quieta', 'Still'), mood: 'happy' },
-  pulsing: { title: t('¡Late!', 'It pulses!'), brief: t('¡Pulsante!', 'It pulses!'), mood: 'awed' },
+  pulsing: { title: t('¡Late!', 'It pulses!'), brief: t('¡Late!', 'It pulses!'), mood: 'awed' },
   swimmer: { title: t('¡Una nadadora!', 'A swimmer!'), brief: t('¡Nadadora!', 'Swimmer!'), mood: 'awed' },
   spinner: { title: t('¡Gira!', 'It spins!'), brief: t('¡Gira!', 'It spins!'), mood: 'awed' },
   divider: { title: t('¡Se divide!', 'It splits!'), brief: t('¡Se divide!', 'It splits!'), mood: 'awed' },
@@ -169,7 +171,7 @@ function behaviorMoment(b: Behavior, priority: number): MomentDef {
       const near = nearestCreature(c.view(), p.x, p.y);
       return {
         focus: at(p.x, p.y, b === 'colony' ? 1.5 : 2.2, near?.id ?? null),
-        chips: [behaviorBonusChip(b), samplesChip(SAMPLES_NEW_BEHAVIOR)],
+        chips: [behaviorBonusChip(b), sessionsLoop(c.view()) ? datosChip(DATOS_PER_NEW_BEHAVIOR) : samplesChip(SAMPLES_NEW_BEHAVIOR)],
         data: { behavior: b },
       };
     }),
@@ -184,12 +186,12 @@ export const MOMENTS: MomentDef[] = [
   {
     id: 'seed',
     priority: 94,
-    title: t('Sembraste materia', 'You sowed matter'),
+    title: t('¡Una semilla!', 'A seed!'),
     lines: [
-      t('Cada toque pone materia: una gotita de luz viva.', 'Each tap drops matter: a tiny blob of living light.'),
-      t('Ahora mira: se apaga, lo inunda todo… ¡o cobra vida!', 'Now watch: it fades, it floods… or it comes alive!'),
+      t('Cada toque pone una semilla de luz. ¿Vivirá?', 'Each tap drops a seed of light. Will it live?'),
+      t('Si se queda con forma, ¡es una criatura!', 'If it keeps its shape, it is a creature!'),
     ],
-    brief: t('Materia sembrada', 'Matter sown'),
+    brief: t('¡Semilla!', 'A seed!'),
     illustration: 'seed',
     icon: 'drop',
     mood: 'happy',
@@ -197,7 +199,8 @@ export const MOMENTS: MomentDef[] = [
     trigger: onEvent('seed', (p) => p.manual),
     build: from('seed', (p) => ({
       focus: at(p.x, p.y, 2.4),
-      chips: [essenceChip(p.cost, '−')],
+      // The first seeds are free: say "¡Gratis!", never "−0 Esencia".
+      chips: [p.cost > 0 ? essenceChip(p.cost, '−') : chip(t('¡Gratis!', 'Free!'), 'good', 'gift')],
       data: { amount: p.cost },
     })),
     delayMs: 900,
@@ -206,12 +209,12 @@ export const MOMENTS: MomentDef[] = [
   {
     id: 'dissolve',
     priority: 96,
-    title: t('Se disolvió', 'It faded away'),
+    title: t('Se apagó', 'It faded'),
     lines: [
-      t('Muy poquita materia, o mal repartida: se apagó.', 'Too little matter, or badly spread out: it went dark.'),
-      t('No pasa nada. Sembrar es barato: ¡prueba otra vez!', 'That is okay. Sowing is cheap: try again!'),
+      t('Era muy poquita y se apagó. ¡Pasa mucho!', 'It was too little and faded. That happens a lot!'),
+      t('Sembrar es barato: prueba en otro sitio.', 'Seeds are cheap: try another spot.'),
     ],
-    brief: t('Se disolvió', 'It faded away'),
+    brief: t('Se apagó', 'It faded'),
     illustration: 'dissolve',
     icon: 'fade',
     mood: 'worried',
@@ -224,12 +227,12 @@ export const MOMENTS: MomentDef[] = [
   {
     id: 'explode',
     priority: 95,
-    title: t('¡Explotó!', 'It exploded!'),
+    title: t('Materia sin forma', 'Shapeless matter'),
     lines: [
-      t('Demasiada materia: lo llena todo y pierde la forma.', 'Too much matter: it fills everything and loses its shape.'),
-      t('Sin forma no hay criatura, y no da Esencia.', 'No shape means no creature, and no Essence.'),
+      t('Dos semillas se tocaron y se fundieron: ya no tienen forma.', 'Two seeds touched and melted together: no shape any more.'),
+      t('Sin forma no da Esencia. La disuelvo para salvar la placa.', 'No shape, no Essence. I dissolve it to save the dish.'),
     ],
-    brief: t('¡Explotó!', 'It exploded!'),
+    brief: t('¡Sin forma!', 'No shape!'),
     illustration: 'explode',
     icon: 'burst',
     mood: 'worried',
@@ -245,7 +248,7 @@ export const MOMENTS: MomentDef[] = [
     title: t('¡VIDA!', 'LIFE!'),
     lines: [
       t('Esta forma se mantiene sola: ¡es una criatura!', 'This shape holds itself together: it is a creature!'),
-      t('Ni muy poca materia ni demasiada: justo lo necesario.', 'Not too little matter, not too much: just right.'),
+      t('Ni poca luz ni demasiada: justo la que necesita.', 'Not too little light, not too much: just what it needs.'),
     ],
     brief: t('¡VIDA!', 'LIFE!'),
     illustration: 'stable',
@@ -267,8 +270,8 @@ export const MOMENTS: MomentDef[] = [
     priority: 90,
     title: t('Esto es Esencia', 'This is Essence'),
     lines: [
-      t('Las criaturas estables fabrican Esencia, tu moneda.', 'Stable creatures make Essence, your money.'),
-      t('Más forma, más Esencia. Úsala para sembrar y mejorar.', 'More shape, more Essence. Spend it on seeds and upgrades.'),
+      t('Cada criatura con forma te da Esencia cada segundo.', 'Every creature with a shape gives you Essence every second.'),
+      t('Arriba: «+1/s» quiere decir 1 de Esencia cada segundo.', 'Up top: “+1/s” means 1 Essence every second.'),
     ],
     brief: t('+Esencia', '+Essence'),
     illustration: 'essence',
@@ -293,7 +296,10 @@ export const MOMENTS: MomentDef[] = [
     title: t('¡Especie nueva!', 'New species!'),
     lines: [
       t('Nadie la había visto aquí. Se guarda en tu Bestiario.', 'Nobody had seen it here. It goes into your Bestiary.'),
-      t('Cada especie nueva te da Muestras para el Bestiario.', 'Every new species gives you Samples for the Bestiary.'),
+      t(
+        `Cada especie nueva te da ${DATOS_PER_NEW_SPECIES} Datos y ${SESSION_TIME_PER_SPECIES} segundos más.`,
+        `Every new species gives you ${DATOS_PER_NEW_SPECIES} Data and ${SESSION_TIME_PER_SPECIES} more seconds.`,
+      ),
     ],
     brief: t('¡Especie nueva!', 'New species!'),
     illustration: 'species',
@@ -302,11 +308,21 @@ export const MOMENTS: MomentDef[] = [
     color: UI.good,
     trigger: onEvent('speciesNew'),
     build: from('speciesNew', (p, c) => {
-      const near = nearestCreature(c.view(), p.x, p.y);
+      const v = c.view();
+      const near = nearestCreature(v, p.x, p.y);
+      const name = chip(t(p.name, p.name), 'info', 'check');
+      if (sessionsLoop(v))
+        return {
+          focus: at(p.x, p.y, 2.2, near?.id ?? null, ['tab.bestiary']),
+          chips: [datosChip(DATOS_PER_NEW_SPECIES), secondsChip(SESSION_TIME_PER_SPECIES), name],
+          data: { speciesId: p.speciesId, speciesName: p.name },
+        };
+      // Classic loop: a new species still pays Samples.
       return {
         focus: at(p.x, p.y, 2.2, near?.id ?? null, ['tab.bestiary']),
-        chips: [samplesChip(SAMPLES_NEW_SPECIES[p.rarity]), chip(t(p.name, p.name), 'info', 'check')],
+        chips: [samplesChip(SAMPLES_NEW_SPECIES[p.rarity]), name],
         data: { speciesId: p.speciesId, speciesName: p.name },
+        lines: [CLASSIC_SPECIES_LINES[0], CLASSIC_SPECIES_LINES[1]],
       };
     }),
     delayMs: 300,
@@ -317,7 +333,7 @@ export const MOMENTS: MomentDef[] = [
     priority: 84,
     title: t('Dos especies distintas', 'Two different species'),
     // One line: the two cards and the one-sentence reason below it do the rest.
-    lines: [t('¡Otra especie! Cada forma se mueve distinto y rinde distinto.', 'Another species! Each shape moves and earns differently.')],
+    lines: [t('¡Otra especie! Cada forma se mueve distinto y da distinta Esencia.', 'Another species! Each shape moves differently and gives different Essence.')],
     brief: t('¡Otra especie!', 'Another species!'),
     illustration: 'compare',
     icon: 'book',
@@ -333,7 +349,8 @@ export const MOMENTS: MomentDef[] = [
       const other = alive ? others.find((o) => o.id === alive.speciesId)! : others[0];
       const focus = at(p.x, p.y, 2, near?.id ?? null, ['tab.bestiary']);
       if (alive) focus.others = [{ x: alive.x, y: alive.y, id: alive.id }];
-      const nameOf = (s: { catalogName: string | null; name: string }) => s.catalogName ?? s.name;
+      // One name per species: the common one (docs/CLARIDAD.md J-118).
+      const nameOf = (s: { name: string }) => s.name;
       return {
         focus,
         // Names only matter for the brief label; the card shows both species cards.
@@ -377,7 +394,7 @@ export const MOMENTS: MomentDef[] = [
     title: t('¡Un Destello!', 'A Spark!'),
     lines: [
       t('Una chispa dorada cruza la placa. ¡Tócala rápido!', 'A golden spark drifts across the dish. Tap it, quick!'),
-      t('Si la atrapas, te deja un regalo sorpresa.', 'Catch it and it leaves you a surprise gift.'),
+      t('Si la atrapas, te regala 30 segundos de tu Esencia.', 'Catch it and it gives you 30 seconds of your Essence.'),
     ],
     brief: t('¡Toca el Destello!', 'Tap the Spark!'),
     illustration: 'golden',
@@ -387,7 +404,7 @@ export const MOMENTS: MomentDef[] = [
     trigger: onEvent('goldenSpawn'),
     build: from('goldenSpawn', (p) => ({
       focus: at(p.x, p.y, 1.6, null, ['golden']),
-      chips: [chip(t('Regalo sorpresa', 'Surprise gift'), 'gold', 'gift'), chip(t(`${GOLDEN_LIFE} s`, `${GOLDEN_LIFE} s`), 'warn', 'clock')],
+      chips: [chip(t('Regalo', 'Gift'), 'gold', 'gift'), chip(t(`Se va en ${GOLDEN_LIFE} s`, `Leaves in ${GOLDEN_LIFE} s`), 'warn', 'clock')],
       data: {},
     })),
     // The spark must still be there to be worth a "tap it" card.
@@ -400,13 +417,13 @@ export const MOMENTS: MomentDef[] = [
     priority: 60,
     title: t('¡Mejora comprada!', 'Upgrade bought!'),
     lines: [
-      t('Las mejoras cambian cómo funciona tu laboratorio.', 'Upgrades change how your lab works.'),
-      t('Mira el efecto: así estaba y así queda.', 'See the effect: how it was, and how it is now.'),
+      t('Es tuya para siempre: nunca se pierde.', 'It is yours forever: it is never lost.'),
+      t('La próxima sesión ya lo vas a notar.', 'You will feel it next session.'),
     ],
     brief: t('¡Mejora!', 'Upgrade!'),
     illustration: 'upgrade',
     icon: 'upgrade',
-    mood: 'happy',
+    mood: 'proud',
     color: UI.accent,
     trigger: onEvent('upgradeBought'),
     build: from('upgradeBought', (p, c) => {
@@ -416,7 +433,11 @@ export const MOMENTS: MomentDef[] = [
         chips.push(chip(both((l) => `${u.name[l]} ${p.level}`), 'info', 'check'));
         if (u.effect.es || u.effect.en) chips.push(chip(u.effect, 'good', 'up'));
       }
-      return { focus: ui('tab.lab'), chips, data: { upgradeId: p.id } };
+      // The node in the research tree when it is on screen, else the upgrade's card (classic Lab).
+      const focus = ui(`tree.node.${p.id}`, `upgrade.${p.id}`, 'tab.lab');
+      // Classic Lab upgrades work at once and an Extinction resets them: say that instead.
+      if (c.view().cycle !== 'sessions') return { focus, chips, data: { upgradeId: p.id }, lines: [CLASSIC_UPGRADE_LINES[0], CLASSIC_UPGRADE_LINES[1]] };
+      return { focus, chips, data: { upgradeId: p.id } };
     }),
     delayMs: 500,
   },
@@ -426,7 +447,7 @@ export const MOMENTS: MomentDef[] = [
     title: t('Siembra automática', 'Auto-sowing'),
     lines: [
       t('El sembrador automático siembra por ti, solito.', 'The auto-sower plants seeds for you, all by itself.'),
-      t('Cada siembra gasta un poquito de Esencia.', 'Each seed spends a little Essence.'),
+      t('Cada semilla gasta un poquito de Esencia.', 'Each seed spends a little Essence.'),
     ],
     brief: t('Siembra automática', 'Auto-sown'),
     illustration: 'autoseed',
@@ -438,43 +459,46 @@ export const MOMENTS: MomentDef[] = [
     delayMs: 500,
   },
   {
-    id: 'calibration',
-    priority: 65,
-    title: t('Cambiaste las reglas', 'You changed the rules'),
+    id: 'clock',
+    priority: 95,
+    title: t('Tu tiempo de laboratorio', 'Your lab time'),
     lines: [
-      t('Moviste las reglas de la vida en toda la placa.', 'You moved the rules of life for the whole dish.'),
-      t('Unas se apagan, otras nacen… ¡y con σ alto todo se desborda!', 'Some fade, new ones appear… and with high σ everything overflows!'),
+      t('Este reloj es tu tiempo de laboratorio. Queda un minuto.', 'This clock is your lab time. One minute left.'),
+      t('Al llegar a 0:00, tu Esencia se cuenta. ¡No pierdes nada!', 'At 0:00 your Essence is counted. You lose nothing!'),
     ],
-    brief: t('Reglas nuevas', 'New rules'),
-    illustration: 'rules',
-    icon: 'sliders',
-    mood: 'neutral',
+    brief: t('¡Último minuto!', 'Last minute!'),
+    illustration: 'clock',
+    icon: 'clock',
+    mood: 'happy',
     color: UI.accent,
-    trigger: onEvent('calibrationChanged'),
-    build: from('calibrationChanged', (p, c) => {
-      const to = { mu: p.mu, sigma: p.sigma, R: p.R, dt: p.dt };
-      const vc = c.view().calibration;
-      const fromC = c.prev.calib ?? { mu: vc.mu, sigma: vc.sigma, R: vc.R, dt: vc.dt };
-      const ch = calibChip(fromC, to);
-      return { focus: ui('tab.calibrate', 'dish'), chips: ch ? [ch] : [], data: { calibFrom: fromC, calibTo: to } };
-    }),
-    // Never pause while the player drags a slider: wait until it rests.
-    settleMs: 1600,
-    merge: (first, latest) => {
-      const data = { ...latest.data, calibFrom: first.data.calibFrom };
-      const ch = calibChip(data.calibFrom, data.calibTo);
-      return { ...latest, data, chips: ch ? [ch] : [] };
+    // The lab session's clock crosses one minute left (sessions only; docs/CLARIDAD.md §3.2 step 8).
+    trigger: {
+      kind: 'poll',
+      when: (c) => {
+        const s = sessionOf(c.view());
+        return !!s && s.phase === 'running' && s.remaining > 0 && s.remaining <= CLOCK_MOMENT_S;
+      },
     },
+    build: (_p, c) => {
+      const s = sessionOf(c.view());
+      const left = Math.max(0, Math.ceil(s?.remaining ?? CLOCK_MOMENT_S));
+      return {
+        focus: ui('hud.clock'),
+        chips: [chip(t(`Quedan ${left} s`, `${left} s left`), 'info', 'clock')],
+        data: {},
+      };
+    },
+    delayMs: 200,
   },
   {
     id: 'seedPrice',
     priority: 62,
-    title: t('¿Por qué cuesta más?', 'Why so pricey?'),
+    title: t('¿Por qué sube?', 'Why does it rise?'),
     lines: [
-      t('Cuantas más criaturas viven, más cuesta sembrar.', 'The more creatures live, the more sowing costs.'),
-      t('Con la placa llena, cada extra cuesta mucho más. ¡Mejora la Placa!', 'With a full dish, each extra costs much more. Upgrade the Dish!'),
+      t('Cada semilla que compras hoy cuesta un poquito más.', 'Each seed you buy today costs a tiny bit more.'),
+      t('En la próxima sesión vuelve a costar lo de siempre.', 'Next session it costs the usual price again.'),
     ],
-    brief: t('La siembra sube de precio', 'Sowing got pricier'),
+    brief: t('La semilla sube un poquito', 'Seeds cost a bit more'),
     illustration: 'seedPrice',
     icon: 'tag',
     mood: 'neutral',
@@ -483,60 +507,22 @@ export const MOMENTS: MomentDef[] = [
     build: (_p, c) => {
       const v = c.view();
       const price = priceData(v);
-      const chips: Chip[] = [
-        chip(both((l) => `${l === 'es' ? 'Siembra' : 'Seed'}: ${fmt(v.seedCost, l)}`), 'warn', 'essence'),
-      ];
-      if (price)
-        chips.push(
-          chip(
-            both((l) => `${l === 'es' ? 'Espacios' : 'Slots'} ${Math.min(price.used, 99)}/${price.freeSlots}`),
-            price.used > price.freeSlots ? 'bad' : 'info',
-            'slot',
-          ),
-        );
+      const bought = v.seedPrice?.bought ?? 0;
+      const chips: Chip[] = [chip(both((l) => `${l === 'es' ? 'Semilla' : 'Seed'}: ${fmt(v.seedCost, l)}`), 'warn', 'essence')];
+      if (bought > 0) chips.push(chip(both((l) => `${l === 'es' ? 'Compradas hoy' : 'Bought today'}: ${fmt(bought, l)}`), 'info', 'up'));
       return { focus: ui('seed', 'dish'), chips, data: { price } };
     },
     delayMs: 800,
-  },
-  {
-    id: 'seedCheaper',
-    priority: 40,
-    title: t('Más barato', 'Cheaper'),
-    lines: [
-      t('Murió una criatura y quedó un espacio libre.', 'A creature died, so a slot is free again.'),
-      t('Por eso sembrar vuelve a ser más barato.', 'That is why sowing is cheaper again.'),
-    ],
-    brief: t('Murió una criatura → sembrar es más barato', 'A creature died → sowing is cheaper'),
-    illustration: 'seedCheaper',
-    icon: 'tag',
-    mood: 'happy',
-    color: UI.good,
-    // Price fell since the last poll, right after a death.
-    trigger: {
-      kind: 'poll',
-      when: (c) => c.prev.seedCost !== null && c.view().seedCost < c.prev.seedCost - 1e-9 && c.since('creatureDied') < 2500,
-    },
-    build: (_p, c) => {
-      const v = c.view();
-      const d = c.last('creatureDied') as GameEvents['creatureDied'] | undefined;
-      return {
-        focus: d ? at(d.x, d.y, 1) : ui('seed', 'dish'),
-        chips: [chip(both((l) => `${l === 'es' ? 'Siembra' : 'Seed'}: ${fmt(v.seedCost, l)}`), 'good', 'down')],
-        data: { price: priceData(v) },
-      };
-    },
-    forceBrief: true,
-    requires: 'seedPrice',
   },
   {
     id: 'overgrown',
     priority: 105,
     title: t('¡La placa se desbordó!', 'The dish overflowed!'),
     lines: [
-      t('Demasiada vida sin forma: deja de producir.', 'Too much shapeless life: it stops producing.'),
-      t('Límpiala y siembra con calma.', 'Clean it and sow calmly.'),
+      t('Mucha materia sin forma: ya no da Esencia.', 'Lots of shapeless matter: no more Essence.'),
+      t('Límpiala gratis y siembra separado.', 'Clean it for free and sow apart.'),
     ],
-    brief: t('¡Placa desbordada! 0/s', 'Dish overflowed! 0/s'),
+    brief: t('¡Placa desbordada! 0 Esencia/s', 'Dish overflowed! 0 Essence/s'),
     illustration: 'overgrown',
     icon: 'burst',
     mood: 'worried',
@@ -583,7 +569,7 @@ export const MOMENTS: MomentDef[] = [
     brief: t('¡Era nueva!', 'A new Era!'),
     illustration: 'keepReset',
     icon: 'genome',
-    mood: 'happy',
+    mood: 'proud',
     color: '#B892FF',
     trigger: onEvent('extinctionDone'),
     build: from('extinctionDone', (p) => ({
@@ -600,9 +586,10 @@ export const MOMENTS: MomentDef[] = [
     brief: t('¡Bienvenida de vuelta!', 'Welcome back!'),
     illustration: 'offline',
     icon: 'moon',
-    mood: 'happy',
+    mood: 'sleepy',
     color: UI.accent,
-    trigger: onEvent('offlineReturn', (p) => p.essence > 0),
+    // Classic loop only: sessions run only while playing (no work while away; CLARIDAD B-13).
+    trigger: onEvent('offlineReturn', (p, c) => p.essence > 0 && c.view().cycle !== 'sessions'),
     build: from('offlineReturn', (p) => ({
       focus: ui('hud.essence'),
       chips: [essenceChip(p.essence, '+'), chip(both((l) => fmtDuration(p.seconds, l)), 'info', 'clock')],
@@ -633,10 +620,9 @@ export const HELP_ORDER: readonly MomentId[] = [
   'golden',
   'upgrade',
   'seedPrice',
-  'seedCheaper',
   'overgrown',
   'autoseed',
-  'calibration',
+  'clock',
   'extinctionReady',
   'extinction',
   'offline',

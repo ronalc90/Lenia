@@ -11,52 +11,42 @@
 .mo-meter,
 .mo-spc,
 .mo-cmp,
-.mo-bh {
-  --mo-bg: #121921;
-  --mo-bg2: #0c1117;
-  --mo-text: #e6edf3;
-  --mo-dim: #93a1ae;
-  --mo-line: rgba(230, 237, 243, 0.1);
-  --mo-good: #8ae234;
-  --mo-warn: #f2a541;
-  --mo-bad: #ff7a5c;
-  --mo-gold: #ffd166;
-  --mo-violet: #b892ff;
-  --mo-info: #5bc0eb;
-  --mo-grey: #9aa6b2;
+.mo-bh,
+.mo-card[data-theme],
+.mo-card[data-theme] .mo-spc,
+.mo-card[data-theme] .mo-cmp {
+  /* The art tokens (src/ui/art/art.css, docs/ARTE.md §12): both themes come from --bl-*; the names are
+     re-declared on a card with its own data-theme so they resolve against that theme. */
+  --mo-bg: var(--bl-surface, #141a21);
+  --mo-bg2: var(--bl-bg, #0b0e12);
+  --mo-text: var(--bl-text, #e6edf3);
+  --mo-dim: var(--bl-text2, #a7b3bf);
+  --mo-line: var(--bl-line, rgba(230, 237, 243, 0.1));
+  --mo-good: var(--bl-good, #8ae234);
+  --mo-warn: var(--bl-warn, #f2a541);
+  --mo-bad: var(--bl-danger, #ff7a5c);
+  --mo-gold: var(--bl-gold, #ffd166);
+  --mo-violet: var(--bl-beh-pulsing, #b892ff);
+  --mo-info: var(--bl-accent, #5bc0eb);
+  --mo-accent-fill: var(--bl-accent-fill, #5bc0eb);
+  --mo-accent-ink: var(--bl-accent-ink, #04202e);
+  --mo-candle: var(--bl-candle, #ffb86b);
+  --mo-grey: var(--bl-text3, #7d8995);
   --mo-ink: #0b0e12;
-  --mo-font: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --mo-mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
-  --mo-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --mo-font: var(--bl-font-ui, Inter, system-ui, sans-serif);
+  --mo-display: var(--bl-font-display, Fraunces, Georgia, serif);
+  /* Numbers in Inter with tabular figures (docs/ARTE.md §4: the mono is for instruments only). */
+  --mo-mono: var(--bl-font-ui, Inter, system-ui, sans-serif);
+  font-variant-numeric: tabular-nums;
+  --mo-ease: var(--bl-ease-standard, cubic-bezier(0.2, 0, 0, 1));
   font-family: var(--mo-font);
-}
-
-html[data-theme='light'] .mo-sp-layer,
-html[data-theme='light'] .mo-help,
-html[data-theme='light'] .mo-spc,
-html[data-theme='light'] .mo-cmp,
-html[data-theme='light'] .mo-bh,
-.mo-card[data-theme='light'],
-.mo-card[data-theme='light'] .mo-spc,
-.mo-card[data-theme='light'] .mo-cmp {
-  --mo-bg: #fbfcfd;
-  --mo-bg2: #eef2f6;
-  --mo-text: #0f1720;
-  --mo-dim: #4e5c6a;
-  --mo-line: rgba(15, 23, 32, 0.12);
-  --mo-good: #2f7a0c;
-  --mo-warn: #a35600;
-  --mo-bad: #c53c1b;
-  --mo-gold: #8a5d00;
-  --mo-violet: #6b42d4;
-  --mo-info: #0d79ae;
-  --mo-grey: #5d6874;
 }
 
 .mo {
   position: absolute;
   inset: 0;
-  z-index: 46;
+  /* A Momento card is VELA explaining: dialogue level, just above the story layer, below modals. */
+  z-index: calc(var(--bl-z-dialogue, 50) + 2);
   pointer-events: none;
   color: var(--mo-text);
   -webkit-font-smoothing: antialiased;
@@ -331,10 +321,11 @@ html[data-theme='light'] .mo-bh,
   border-radius: 16px;
   font: 800 19px/1 var(--mo-font);
   cursor: pointer;
-  color: var(--mo-ink);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--mo-c) 88%, #fff), var(--mo-c));
+  /* The one primary-action colour (docs/ARTE.md §10), whatever the moment's own colour is. */
+  color: var(--mo-accent-ink);
+  background: var(--mo-accent-fill);
   box-shadow:
-    0 6px 18px color-mix(in srgb, var(--mo-c) 35%, transparent),
+    0 6px 18px color-mix(in srgb, var(--mo-accent-fill) 35%, transparent),
     inset 0 -2px 0 rgba(0, 0, 0, 0.18);
   transition: transform 120ms ease;
 }
@@ -639,7 +630,8 @@ html[data-theme='light'] .mo-seg-o button.on {
 .mo-sp-layer {
   position: fixed;
   inset: 0;
-  z-index: 47;
+  /* Price / guide sheets: above the cards, below real modals (Settings). */
+  z-index: calc(var(--bl-z-dialogue, 50) + 5);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -1039,7 +1031,9 @@ html[data-theme='light'] .mo-sp-hi {
   color: var(--mo-text);
   overflow-wrap: anywhere;
 }
-.mo-spc-n b.latin {
+.mo-spc-n b.latin,
+.mo-spc-n small.latin {
+  font-family: var(--mo-display);
   font-style: italic;
 }
 .mo-spc-n small {
@@ -1619,4 +1613,10 @@ html[data-theme='light'] .mo-spc-tag,
 button.mo-spc-tag.beh {
   cursor: pointer;
   min-height: 30px;
+}
+
+/* Paper theme: the deep behaviour colours carry white ink (AA), not the night ink (docs/ARTE.md §3). */
+html[data-theme='light'] .mo-bh-big,
+html[data-theme='light'] .mo-bh-glyph {
+  color: #ffffff;
 }

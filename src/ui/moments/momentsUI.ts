@@ -20,7 +20,7 @@ import { wrapDelta, type Camera } from '../../core/camera';
 import type { Behavior, Lang, Pattern, UpgradeView } from '../../core/types';
 import { BRIEF_MS } from '../../moments/config';
 import type { Moments } from '../../moments/moments';
-import type { Chip, MomentAction, MomentId, MomentView, UiTarget } from '../../moments/types';
+import type { Chip, MomentAction, MomentId, MomentView, UiTarget, VelaMood } from '../../moments/types';
 import { Portrait } from '../story/portraits';
 import { behaviorRowsHtml, createBehaviorGuideSheet, type BehaviorGuideSheet, type ExtraBooster } from './behavior-guide';
 import { createHelp, type HelpSheet } from './help';
@@ -32,7 +32,7 @@ import { MS, tr } from './strings';
 /** The slice of the story Portrait the card needs (a factory can supply another). */
 export interface PortraitLike {
   readonly canvas: HTMLCanvasElement;
-  set(speaker: 'vela', mood: 'neutral' | 'happy' | 'worried' | 'awed'): void;
+  set(speaker: 'vela', mood: VelaMood): void;
   frame(t: number, dt: number, talkTarget: number, talking: boolean): void;
   state: { reduceMotion: boolean };
 }
@@ -73,6 +73,10 @@ export interface MomentsUIOptions {
   seenBehaviors?(): readonly Behavior[];
   /** More ways to boost a behaviour (research-tree nodes, later). */
   extraBoosters?(b: Behavior): readonly ExtraBooster[];
+  /** The player's name for a catalog species once it is in the Bestiary (the guide's examples). */
+  knownName?(latin: string): string | null;
+  /** Ways of moving the game can grow (sessions: game/worlds REACHABLE_BEHAVIORS); the guide lists only these. */
+  reachableBehaviors?(): readonly Behavior[] | null;
 }
 
 export interface MomentsUI {
@@ -454,7 +458,7 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
     talkLabel.textContent = b ? tr(MS.bhWhat, lang) : '';
     bhBox.hidden = !b;
     bhBox.innerHTML = b
-      ? behaviorRowsHtml(b, { lang, upgrades: opts.upgrades?.() ?? [], canJump: !!opts.onShowUpgrade && !m.replay, extra: opts.extraBoosters?.(b) })
+      ? behaviorRowsHtml(b, { lang, upgrades: opts.upgrades?.() ?? [], canJump: !!opts.onShowUpgrade && !m.replay, extra: opts.extraBoosters?.(b), knownName: opts.knownName })
       : '';
     if (b) {
       // "+1 Muestra" and the way to the full guide share one line.
@@ -502,6 +506,8 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
           }
         : undefined,
       extraBoosters: opts.extraBoosters,
+      knownName: opts.knownName,
+      reachable: opts.reachableBehaviors,
     });
     guideSheet.open(focus ?? null);
   }

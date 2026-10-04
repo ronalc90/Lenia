@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SCENE_BY_ID } from '../story/script';
-import { HELP_ORDER, MOMENTS, MOMENT_BY_ID, MOMENT_IDS, STORY_SCENES_COVERED, calibChip } from './catalog';
+import { HELP_ORDER, MOMENTS, MOMENT_BY_ID, MOMENT_IDS, STORY_SCENES_COVERED } from './catalog';
 import { MAX_BRIEF_WORDS, MAX_LINE_WORDS, MAX_LINES, MAX_TITLE_WORDS } from './config';
 import type { Text } from '../core/types';
 
@@ -75,12 +75,11 @@ describe('moments catalog: structure', () => {
       'golden',
       'upgrade',
       'autoseed',
-      'calibration',
+      'clock',
       'extinctionReady',
       'extinction',
       'offline',
       'seedPrice',
-      'seedCheaper',
       'overgrown',
     ] as const)
       expect(MOMENT_BY_ID.has(id), id).toBe(true);
@@ -99,10 +98,17 @@ describe('moments catalog: structure', () => {
     }
   });
 
-  it('calibration chip names the parameter that moved and uses each language\'s decimal mark', () => {
-    const c = calibChip({ mu: 0.15, sigma: 0.015, R: 13, dt: 0.1 }, { mu: 0.15, sigma: 0.03, R: 13, dt: 0.1 })!;
-    expect(c.text.es).toBe('σ 0,0150 → 0,0300');
-    expect(c.text.en).toBe('σ 0.0150 → 0.0300');
-    expect(calibChip({ mu: 1, sigma: 1, R: 1, dt: 1 }, { mu: 1, sigma: 1, R: 1, dt: 1 })).toBeNull();
+  it('no simulation jargon and no scary words in any card (docs/CLARIDAD.md)', () => {
+    for (const m of MOMENTS)
+      for (const tx of [m.title, m.brief, ...m.lines])
+        for (const l of ['es', 'en'] as const) {
+          expect(tx[l], `${m.id} ${l}`).not.toMatch(/[μσ]|calibr|régimen|regime|kernel|alfa|alpha/i);
+          expect(tx[l], `${m.id} ${l}`).not.toMatch(/explot|exploded|muert|murió|\bdead\b|died/i);
+        }
+  });
+
+  it('the calibration card and the "a creature died → cheaper" label are gone', () => {
+    expect(MOMENT_BY_ID.has('calibration' as never)).toBe(false);
+    expect(MOMENT_BY_ID.has('seedCheaper' as never)).toBe(false);
   });
 });

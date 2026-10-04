@@ -9,6 +9,7 @@
  * Pure TS, no DOM. Every storage access is wrapped in try/catch.
  */
 import { Bus, type GameEvents } from '../core/bus';
+import type { GameView } from '../core/types';
 import { HELP_ORDER, MOMENT_BY_ID, MOMENTS } from './catalog';
 import {
   BOOT_QUIET_MS,
@@ -78,6 +79,12 @@ export interface Moments {
   wouldShow(id: MomentId): boolean;
   /** Re-watch a card (help sheet): no pause, no camera, nothing changes. */
   replay(id: MomentId): boolean;
+  /**
+   * Something happened that no bus event carries (e.g. the early runaway watch dissolved a maze nucleus):
+   * queue this moment through the normal path, first time only (mode, cooldown, blocked, downgrade all
+   * apply). `payload` is what its event would carry. Returns true when it was queued.
+   */
+  notify(id: MomentId, payload: unknown): boolean;
   /** Dev / tests: open a moment right now, as if it had just happened (ignores seen). */
   show(id: MomentId, opts?: { payload?: unknown; mode?: 'full' | 'brief' }): boolean;
   /** Dev: forget one (or every) explained moment. */
@@ -170,6 +177,8 @@ export function createMoments(deps: MomentsDeps): Moments {
   let seq = 0;
   let disposed = false;
   let evalQueued = false;
+  /** Behaviour moments told as a brief label while deferred: their full card waits for a creature. */
+  const deferred = new Set<MomentId>();
   const lastAt = new Map<keyof GameEvents, number>();
   const lastPayload = new Map<keyof GameEvents, unknown>();
   const prev: PollMemory = { seedCost: null, calib: null };
@@ -269,7 +278,7 @@ export function createMoments(deps: MomentsDeps): Moments {
       id: def.id,
       mode: m,
       title: def.title,
-      lines: def.lines,
+      lines: built.lines ?? def.lines,
       brief: def.brief,
       illustration: def.illustration,
       icon: def.icon,
@@ -351,19 +360,54 @@ export function createMoments(deps: MomentsDeps): Moments {
       }
       if (!ok) continue;
       let downgrade = false;
+      let later = false;
       try {
         downgrade = deps.downgrade?.(q.def.id) ?? false;
+        later = !q.def.forceBrief && mode === 'full' && (deps.defer?.(q.def.id) ?? false);
       } catch {
         downgrade = false;
       }
-      const m: 'full' | 'brief' = q.def.forceBrief || mode === 'brief' || downgrade ? 'brief' : 'full';
-      markSeen(q.def, q.built);
+      const m: 'full' | 'brief' = q.def.forceBrief || mode === 'brief' || downgrade || later ? 'brief' : 'full';
+      if (later) {
+        if (q.def.id.startsWith('behavior.')) deferred.add(q.def.id);
+      } else markSeen(q.def, q.built);
       openNow(q.def, q.built, m, false);
       return;
     }
   }
 
+  /** A deferred behaviour card comes back once it is allowed and a creature shows that behaviour. */
+  function pollDeferred(): void {
+    if (!deferred.size || mode !== 'full') return;
+    let v: GameView;
+    try {
+      v = deps.getView();
+    } catch {
+      return;
+    }
+    for (const id of [...deferred]) {
+      const def = MOMENT_BY_ID.get(id);
+      if (!def || seen.has(id)) {
+        deferred.delete(id);
+        continue;
+      }
+      let still = true;
+      try {
+        still = deps.defer?.(id) ?? false;
+      } catch {
+        still = false;
+      }
+      if (still || !canQueue(def) || queue.some((q) => q.def.id === id)) continue;
+      const b = id.slice('behavior.'.length);
+      const c = v.creatures.find((x) => x.state === 'stable' && x.behavior === b);
+      if (!c) continue;
+      deferred.delete(id);
+      enqueue(def, { behavior: b, x: c.x, y: c.y });
+    }
+  }
+
   function poll(): void {
+    pollDeferred();
     if (mode !== 'off') {
       for (const def of MOMENTS) {
         if (def.trigger.kind !== 'poll' || !canQueue(def)) continue;
@@ -509,6 +553,13 @@ export function createMoments(deps: MomentsDeps): Moments {
       const built = sampleBuilt(def);
       openNow(def, { focus: { grid: null, target: null, zoom: 1 }, chips: m?.chips ?? built.chips, data: m?.data ?? built.data }, 'full', true);
       return true;
+    },
+    notify(id, payload) {
+      const def = MOMENT_BY_ID.get(id);
+      if (!def || disposed || !canQueue(def) || queue.some((q) => q.def.id === id)) return false;
+      enqueue(def, payload);
+      scheduleEval();
+      return queue.some((q) => q.def.id === id);
     },
     show(id, opts = {}) {
       const def = MOMENT_BY_ID.get(id);

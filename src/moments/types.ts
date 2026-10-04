@@ -31,9 +31,8 @@ export type MomentId =
   | 'golden'
   | 'upgrade'
   | 'autoseed'
-  | 'calibration'
+  | 'clock'
   | 'seedPrice'
-  | 'seedCheaper'
   | 'overgrown'
   | 'extinctionReady'
   | 'extinction'
@@ -77,8 +76,8 @@ export type IllustrationKind =
   | 'upgrade'
   | 'autoseed'
   | 'rules'
+  | 'clock'
   | 'seedPrice'
-  | 'seedCheaper'
   | 'overgrown'
   | 'extinctionReady'
   | 'keepReset'
@@ -100,7 +99,8 @@ export type MomentIcon =
   | 'sliders'
   | 'tag'
   | 'genome'
-  | 'moon';
+  | 'moon'
+  | 'clock';
 
 /**
  * UI elements a moment may point at. The integrator maps each id to a viewport
@@ -117,7 +117,13 @@ export type UiTarget =
   | 'tab.calibrate'
   | 'tab.genome'
   | 'extinguish'
-  | 'golden';
+  | 'golden'
+  /** The session clock in the HUD (sessions). */
+  | 'hud.clock'
+  /** A research-tree node on screen (sessions). */
+  | `tree.node.${string}`
+  /** An upgrade's card (classic Lab / Bestiary). */
+  | `upgrade.${string}`;
 
 export type ChipTone = 'good' | 'bad' | 'warn' | 'info' | 'gold' | 'violet' | 'grey';
 export type ChipIcon = 'essence' | 'sample' | 'genome' | 'clock' | 'up' | 'down' | 'x' | 'check' | 'gift' | 'slot' | null;
@@ -140,7 +146,7 @@ export interface MomentFocus {
   zoom: number;
 }
 
-export type VelaMood = 'neutral' | 'happy' | 'worried' | 'awed';
+export type VelaMood = 'neutral' | 'happy' | 'worried' | 'awed' | 'sleepy' | 'proud';
 
 /** A game action a card may offer as its primary button (the integrator performs it). */
 export type MomentAction = 'sterilize';
@@ -215,6 +221,8 @@ export interface Built {
   focus: MomentFocus;
   chips: Chip[];
   data: MomentData;
+  /** This occurrence's lines when they depend on the loop (classic vs sessions); default `def.lines`. */
+  lines?: Text[];
 }
 
 export interface MomentDef {
@@ -312,6 +320,12 @@ export interface MomentsDeps {
    * as a brief label instead of a paused card, so the player sees one thing.
    */
   downgrade?: (id: MomentId) => boolean;
+  /**
+   * Not yet (docs/CLARIDAD.md §3.3: in the first session species and behaviours are told as brief
+   * labels): open as a brief label WITHOUT marking it explained, so the full card comes the next time
+   * it happens (behaviours, which happen once, come back as soon as a creature shows it again).
+   */
+  defer?: (id: MomentId) => boolean;
   /** Poll the view every N ms with setInterval (default 250). 0 = never; call tick() yourself. */
   pollMs?: number;
 }

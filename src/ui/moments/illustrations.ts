@@ -10,6 +10,7 @@
 import { BEHAVIOR_COLOR, UI, matterColor } from '../../core/palette';
 import type { Behavior, Lang, Pattern } from '../../core/types';
 import { BEHAVIOR_MULT } from '../../game/balance';
+import { DATOS_PER_NEW_SPECIES, SEED_PRICE_STEP, SEED_PRICE_STEP_MAX, SESSION_SEED_PRICE } from '../../game/cycleBalance';
 import type { IllustrationKind, MomentData } from '../../moments/types';
 import { catalogPattern } from '../../sim/catalog';
 import { clip, countBlobs, pumpAll, rulesClip, type LeniaClip } from './clips';
@@ -20,7 +21,8 @@ export const ILLUS_H = 140;
 
 const TAU = Math.PI * 2;
 const SANS = 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
-const MONO = '"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace';
+/** Numbers in Inter too (docs/ARTE.md §4: the mono is only for instruments); the name stays for the call sites. */
+const MONO = 'Inter, "Inter Fallback", system-ui, sans-serif';
 const GREY = '#9AA6B2';
 
 export interface IllusEnv {
@@ -326,15 +328,15 @@ function drop(ctx: CanvasRenderingContext2D, x: number, y: number, t: number, fa
   ctx.restore();
 }
 
-/** "How much matter?" gauge: poca / justo / demasiada, with a marker at v (0..1). */
+/** "How much light?" gauge: poca / justa / mucha, with a marker at v (0..1) (CLARIDAD J-113). */
 function gauge(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, v: number, env: IllusEnv, highlight: 'low' | 'ok' | 'high' | null): void {
   const w = 16;
   const zones: [number, number, string, string, 'low' | 'ok' | 'high'][] = [
     [0, 0.32, GREY, L(env, 'poca', 'too little'), 'low'],
-    [0.32, 0.66, UI.good, L(env, 'justo', 'just right'), 'ok'],
-    [0.66, 1, UI.warn, L(env, 'demasiada', 'too much'), 'high'],
+    [0.32, 0.66, UI.good, L(env, 'justa', 'just right'), 'ok'],
+    [0.66, 1, UI.warn, L(env, 'mucha', 'too much'), 'high'],
   ];
-  text(ctx, L(env, 'Materia', 'Matter'), x + w / 2, y - 8, { size: 10, color: UI.textDim, weight: 700 });
+  text(ctx, L(env, 'Luz', 'Light'), x + w / 2, y - 8, { size: 10, color: UI.textDim, weight: 700 });
   for (const [a, b, col, label, id] of zones) {
     const y0 = y + h * (1 - b);
     const y1 = y + h * (1 - a);
@@ -527,7 +529,7 @@ const seedTriptych: IllusDef = {
     const kinds = ['fade', 'flood', 'live'] as const;
     const labels = [
       [L(env, 'Se apaga', 'Fades'), GREY, false],
-      [L(env, 'Lo inunda', 'Floods'), UI.warn, false],
+      [L(env, 'Se desborda', 'Overflows'), UI.warn, false],
       [L(env, '¡Vive!', 'Lives!'), UI.good, true],
     ] as const;
     const S = 74;
@@ -550,7 +552,11 @@ const seedTriptych: IllusDef = {
       const [label, col, ok] = labels[i];
       const k2 = pop(seg(u, t1 + i * 0.18, t1 + 0.45 + i * 0.18));
       mark(ctx, ok, x + S - 11, y + 11, 8, col, k2);
-      text(ctx, label, x + S / 2, y + S + 16, { size: 13, color: u > t1 ? col : UI.textDim, weight: 800 });
+      // Until the outcomes are known each slot shows "?" (the seed may become any of them), then its word.
+      const q = 1 - seg(u, t1 - 0.4, t1);
+      if (q > 0) text(ctx, '?', x + S / 2, y + S + 16, { size: 16, color: UI.textDim, alpha: q * (0.6 + 0.4 * Math.sin(u * 6)) });
+      // A long word ("Se desborda") gets a smaller size so the three never touch.
+      text(ctx, label, x + S / 2, y + S + 16, { size: label.length > 9 ? 11 : 13, color: u > t1 ? col : UI.textDim, weight: 800, alpha: 1 - q });
       // How much matter: too little / too much / just right (same colours as the big gauge).
       const gy = y + S + 32;
       const zw = (S - 8) / 3;
@@ -573,9 +579,6 @@ const seedTriptych: IllusDef = {
       }
       if (ok && u > t1) ring(ctx, x + S / 2, y + S / 2, 20, UI.good, seg(u, t1, t1 + 0.4), 2);
     });
-    // "?" over the three until the outcomes are known: the seed may become any of them.
-    const q = 1 - seg(u, t1 - 0.4, t1);
-    if (u > t0 && q > 0) text(ctx, '?', ILLUS_W / 2, 96, { size: 16, color: UI.textDim, alpha: q * (0.6 + 0.4 * Math.sin(u * 6)) });
     seam(ctx, u, 6.2);
   },
 };
@@ -772,7 +775,8 @@ const species: IllusDef = {
       ctx.restore();
     }
     if (inBook) {
-      badge(ctx, L(env, '+1 Muestra', '+1 Sample'), bx, by - 40, UI.good, pop(seg(u, 2.6, 3.0)));
+      // A new species pays Datos at the end of the session (cycleBalance; CLARIDAD J-33).
+      badge(ctx, L(env, `+${DATOS_PER_NEW_SPECIES} Datos`, `+${DATOS_PER_NEW_SPECIES} Data`), bx, by - 40, UI.good, pop(seg(u, 2.6, 3.0)));
       text(ctx, L(env, 'Bestiario', 'Bestiary'), bx, by + 36, { size: 11, color: UI.good });
       for (let i = 0; i < 4; i++) sparkle(ctx, bx + Math.cos(i * 1.7 + u * 2) * 34, by + Math.sin(i * 1.7 + u * 2) * 26, 3, '#D9FFB8', seg(u, 2.5, 2.8) * (1 - seg(u, 3.6, 4.2)));
     }
@@ -1471,11 +1475,9 @@ const rules: IllusDef = {
       { c: a, x: 14, p: from, label: L(env, 'Antes', 'Before') },
       { c: b, x: 150, p: to, label: L(env, 'Ahora', 'Now') },
     ];
-    const keyOf = (p: typeof from) => {
-      const dm = Math.abs(to.mu - from.mu) / Math.max(1e-9, from.mu);
-      const ds = Math.abs(to.sigma - from.sigma) / Math.max(1e-9, from.sigma);
-      return ds > dm ? `σ ${num(p.sigma, env.lang, 4)}` : `μ ${num(p.mu, env.lang, 3)}`;
-    };
+    // What happens, in words (never the rule numbers: docs/CLARIDAD.md J-12).
+    const said = (v: ReturnType<typeof verdict>) =>
+      v === 'live' ? L(env, '¡Vive!', 'Lives!') : v === 'flood' ? L(env, 'Se desborda', 'Overflows') : L(env, 'Se apaga', 'Fades');
     for (const it of items) {
       const y = 22;
       panel(ctx, it.x, y, S, S, 12);
@@ -1490,8 +1492,8 @@ const rules: IllusDef = {
       });
       ctx.restore();
       text(ctx, it.label, it.x + S / 2, 10, { size: 12, color: UI.text, weight: 800 });
-      text(ctx, keyOf(it.p), it.x + S / 2, y + S + 12, { size: 11, color: UI.accent, mono: true });
       const col = v === 'live' ? UI.good : v === 'flood' ? UI.warn : GREY;
+      text(ctx, said(v), it.x + S / 2, y + S + 12, { size: 11, color: col, alpha: seg(u, 4, 4.4) });
       mark(ctx, v === 'live', it.x + S - 12, y + 12, 9, col, pop(seg(u, 4, 4.4)));
     }
     arrow(ctx, 116, 70, 144, 70, UI.accent, 3);
@@ -1501,33 +1503,11 @@ const rules: IllusDef = {
 
 // ───────────────────────────── seed price ─────────────────────────────
 
-interface PriceDemo {
-  base: number;
-  free: number;
-  used: number;
-}
-
-function priceDemo(env: IllusEnv): PriceDemo {
-  const p = env.data.price;
-  const free = Math.max(1, Math.min(6, p?.freeSlots ?? 1));
-  const used = Math.max(free + 1, Math.min(free + 2, p?.used ?? free + 2));
-  return { base: p?.base ?? 2, free, used };
-}
-
-const CROWD = 0.25;
-const SAT = 3;
-const priceAt = (d: PriceDemo, k: number) => d.base * (1 + CROWD * k) * Math.pow(SAT, Math.max(0, k - d.free));
-
 function socketPos(i: number, free: number, cx: number, cy: number): { x: number; y: number } {
   if (free === 1) return { x: cx, y: cy };
   const a = -Math.PI / 2 + (i / free) * TAU;
   const r = free <= 3 ? 22 : 30;
   return { x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r };
-}
-
-function extraPos(j: number, cx: number, cy: number): { x: number; y: number } {
-  const a = 0.5 + j * 1.25;
-  return { x: cx + Math.cos(a) * 46, y: cy + Math.sin(a) * 44 };
 }
 
 function priceTag(ctx: CanvasRenderingContext2D, x: number, y: number, value: number, prev: number, bounce: number, over: boolean, env: IllusEnv): void {
@@ -1562,92 +1542,63 @@ function priceTag(ctx: CanvasRenderingContext2D, x: number, y: number, value: nu
   void prev;
 }
 
-const seedPrice: IllusDef = {
-  loop: 7.5,
-  keys: [0.15, 0.45, 0.85],
-  clips: () => [clip('live')],
-  draw(ctx, u, env) {
-    const d = priceDemo(env);
-    const cx = 66;
-    const cy = 70;
-    // Dish.
-    panel(ctx, cx - 58, cy - 58, 116, 116, 58);
-    text(ctx, L(env, 'espacios baratos', 'cheap slots'), cx, 136, { size: 10, color: UI.textDim });
-    const step = 1.15;
-    const t0 = 0.6;
-    const arrivedAt = (k: number) => t0 + k * step; // k-th creature (0-based)
-    let n = 0;
-    for (let k = 0; k < d.used; k++) if (u >= arrivedAt(k)) n = k + 1;
-    for (let i = 0; i < d.free; i++) {
-      const p = socketPos(i, d.free, cx, cy);
-      const filled = i < n;
-      ring(ctx, p.x, p.y, 15, UI.good, filled ? 0.9 : 0.55 + 0.25 * Math.sin(u * 4 + i), 2.2, filled ? [] : [3, 3]);
-    }
-    for (let k = 0; k < n; k++) {
-      const extra = k >= d.free;
-      const p = extra ? extraPos(k - d.free, cx, cy) : socketPos(k, d.free, cx, cy);
-      const appear = easeOut(seg(u, arrivedAt(k), arrivedAt(k) + 0.35));
-      const yy = p.y - (1 - appear) * 20;
-      creatureToken(ctx, p.x, yy, 30, appear);
-      if (extra) ring(ctx, p.x, yy, 15, UI.danger, appear, 2.2);
-    }
-    // Price tag.
-    const price = priceAt(d, n);
-    const prev = n > 0 ? priceAt(d, n - 1) : price;
-    const since = n > 0 ? u - arrivedAt(n - 1) : 9;
-    const bounce = Math.max(0, Math.sin(Math.min(1, since / 0.45) * Math.PI)) * (n > d.free ? 1.6 : 0.8);
-    const over = n > d.free;
-    text(ctx, L(env, 'Precio de siembra', 'Seed price'), 140, 20, { size: 10, color: UI.textDim, align: 'left' });
-    priceTag(ctx, 186, 52, price, prev, bounce, over, env);
-    // "×3!" when the dish goes over its free slots.
-    if (over) {
-      const k = seg(u, arrivedAt(n - 1), arrivedAt(n - 1) + 0.5);
-      badge(ctx, '×3', 238, 84, UI.warn, pop(k) * (1 + 0.1 * Math.sin(u * 8)), 1, 14);
-    }
-    // Formula line.
-    const f = `${num(d.base, env.lang)} × ${num(1 + CROWD * n, env.lang, 2)}${over ? ` × ${Math.pow(SAT, n - d.free)}` : ''}`;
-    text(ctx, f, 140, 98, { size: 11, color: UI.textDim, mono: true, align: 'left' });
-    text(ctx, `${Math.min(n, d.free)}/${d.free} ${L(env, 'espacios', 'slots')}${over ? ` +${n - d.free}` : ''}`, 140, 118, {
-      size: 12,
-      color: over ? UI.warn : UI.good,
-      weight: 800,
-      align: 'left',
-    });
-    seam(ctx, u, 7.5);
-  },
-};
+/** A seed bought today: a small bright bead (not the Essence drop, which is the currency). */
+function seedBead(ctx: CanvasRenderingContext2D, x: number, y: number, alpha: number): void {
+  if (alpha <= 0.01) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.shadowColor = rgba(UI.good, 0.7);
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = '#D9FFB8';
+  ctx.beginPath();
+  ctx.arc(x, y, 8, 0, TAU);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = UI.good;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+}
 
-const seedCheaper: IllusDef = {
-  loop: 5,
-  keys: [0.2, 0.8],
-  clips: () => [clip('live')],
+/**
+ * The sessions price rule (docs/CICLO.md, CLARIDAD J-121): each seed bought today makes the next one a
+ * tiny bit dearer (×SEED_PRICE_STEP, whole Esencia), and a new session starts again at the usual price.
+ */
+const seedPrice: IllusDef = {
+  loop: 8,
+  keys: [0.2, 0.6, 0.85],
+  clips: () => [],
   draw(ctx, u, env) {
-    const d = priceDemo(env);
-    const cx = 66;
-    const cy = 70;
-    panel(ctx, cx - 58, cy - 58, 116, 116, 58);
-    const die = seg(u, 1.0, 2.0);
-    for (let i = 0; i < d.free; i++) {
-      const p = socketPos(i, d.free, cx, cy);
-      ring(ctx, p.x, p.y, 13, UI.good, 0.9, 2);
-      creatureToken(ctx, p.x, p.y, 26);
+    const base = Math.max(1, Math.round(env.data.price?.base ?? SESSION_SEED_PRICE));
+    const priceAt = (k: number) => Math.max(1, Math.round(base * Math.min(SEED_PRICE_STEP_MAX, Math.pow(SEED_PRICE_STEP, k))));
+    const N = 6;
+    const dropAt = (k: number) => 0.5 + k * 0.8;
+    const reset = 5.9;
+    const fresh = seg(u, reset, reset + 0.5);
+    let n = 0;
+    for (let k = 0; k < N; k++) if (u >= dropAt(k)) n = k + 1;
+    // Seeds bought this session.
+    panel(ctx, 10, 18, 132, 100, 14);
+    text(ctx, L(env, 'Semillas de hoy', 'Seeds today'), 76, 132, { size: 10, color: UI.textDim });
+    for (let k = 0; k < n; k++) {
+      const a = easeOut(seg(u, dropAt(k), dropAt(k) + 0.3)) * (1 - fresh);
+      seedBead(ctx, 36 + (k % 3) * 40, 46 + Math.floor(k / 3) * 44 - (1 - a) * 12, a);
     }
-    const e = extraPos(0, cx, cy);
-    if (die < 1) {
-      creatureToken(ctx, e.x, e.y - die * 6, 26, 1 - die);
-      ring(ctx, e.x, e.y, 13, UI.danger, 1 - die, 2);
+    // The price tag: a tiny bit more now and then; back to the usual price in a new session.
+    const now = fresh >= 0.5 ? base : priceAt(n);
+    const prev = n > 0 ? priceAt(n - 1) : now;
+    const since = n > 0 ? u - dropAt(n - 1) : 9;
+    const changed = fresh <= 0 && n > 0 && now !== prev;
+    const bounce = changed ? Math.max(0, Math.sin(Math.min(1, since / 0.45) * Math.PI)) * 1.3 : fresh > 0 ? Math.sin(fresh * Math.PI) * 0.8 : 0;
+    const up = now > base;
+    text(ctx, L(env, 'Precio', 'Price'), 200, 18, { size: 10, color: UI.textDim });
+    priceTag(ctx, 200, 52, now, prev, bounce, up, env);
+    if (up && fresh <= 0) text(ctx, L(env, 'un poquito más', 'a tiny bit more'), 200, 92, { size: 12, color: UI.warn, weight: 800 });
+    if (fresh > 0) {
+      badge(ctx, L(env, 'Sesión nueva', 'New session'), 200, 92, UI.good, pop(fresh));
+      text(ctx, L(env, 'precio de siempre', 'usual price'), 200, 116, { size: 11, color: UI.good, alpha: fresh });
     }
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * TAU;
-      sparkle(ctx, e.x + Math.cos(a) * die * 16, e.y + Math.sin(a) * die * 16 - die * 8, 2, GREY, die * (1 - die) * 3);
-    }
-    const n = die >= 1 ? d.free : d.free + 1;
-    const price = priceAt(d, n);
-    const k = seg(u, 2.0, 2.5);
-    priceTag(ctx, 196, 62, price, price, Math.sin(k * Math.PI) * 0.6, n > d.free, env);
-    if (u > 2) arrow(ctx, 244, 44, 244, 80, UI.good, 3.4, k);
-    text(ctx, L(env, 'más barato', 'cheaper'), 196, 104, { size: 12, color: UI.good, alpha: k });
-    seam(ctx, u, 5);
+    seam(ctx, u, 8);
   },
 };
 
@@ -1924,6 +1875,59 @@ const compare: IllusDef = {
 
 // ───────────────────────────── registry ─────────────────────────────
 
+// ───────────────────────────── clock (the lab session) ─────────────────────────────
+
+/**
+ * The session clock: a creature works on the dish while the dial runs from 1:00 to 0:00; drops fly
+ * into the counter and at 0:00 a check says it was all kept ("¡No pierdes nada!").
+ */
+const clock: IllusDef = {
+  loop: 6,
+  keys: [0.3, 4.6],
+  clips: () => [clip('swim')],
+  draw(ctx, u, env) {
+    const c = clip('swim');
+    // The dish with a creature at work.
+    panel(ctx, 14, 18, 104, 104, 14);
+    ctx.save();
+    clipRound(ctx, 14, 18, 104, 104, 14);
+    drawClip(ctx, c, fi(c, u, 0.6, 6), 14, 18, 104, 104, { cells: 44, center: 'centroid' });
+    ctx.restore();
+    // The dial: one minute running out.
+    const cx = 188;
+    const cy = 64;
+    const R = 40;
+    const k = seg(u, 0.3, 4.3);
+    ctx.save();
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = rgba(UI.accent, 0.18);
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, TAU);
+    ctx.stroke();
+    ctx.strokeStyle = k > 0.8 ? UI.warn : UI.accent;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, -Math.PI / 2, -Math.PI / 2 + TAU * (1 - k));
+    ctx.stroke();
+    ctx.restore();
+    const secs = Math.max(0, Math.ceil(60 * (1 - k)));
+    text(ctx, `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, cx, cy, { size: 17, mono: true, weight: 800, color: k >= 1 ? UI.good : UI.text });
+    // Essence drops from the creature to the dial while it runs.
+    for (let i = 0; i < 3; i++) {
+      const q = (u * 0.8 + i / 3) % 1;
+      if (u > 4.3) break;
+      essenceDrop(ctx, lerp(84, cx - R + 6, q), 70 - Math.sin(q * Math.PI) * 30, 3.2, UI.accent, 1 - Math.max(0, q - 0.8) / 0.2);
+    }
+    // 0:00: everything is counted and kept.
+    const end = seg(u, 4.4, 4.8);
+    if (end > 0) {
+      mark(ctx, true, cx + R - 4, cy - R + 6, 10, UI.good, pop(end));
+      badge(ctx, L(env, '¡No pierdes nada!', 'You lose nothing!'), cx, 124, UI.good, pop(end), end, 11);
+    }
+    seam(ctx, u, 6);
+  },
+};
+
 const DEFS: Record<IllustrationKind, IllusDef> = {
   seed: seedTriptych,
   dissolve: outcome('fade'),
@@ -1944,8 +1948,8 @@ const DEFS: Record<IllustrationKind, IllusDef> = {
   upgrade,
   autoseed,
   rules,
+  clock,
   seedPrice,
-  seedCheaper,
   extinctionReady,
   keepReset,
   offline,

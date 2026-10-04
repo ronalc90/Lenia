@@ -75,9 +75,8 @@ const FREEZE = {
   golden: 3.2,
   upgrade: 3.8,
   autoseed: 4.7,
-  calibration: 4.7,
   seedPrice: 4.6,
-  seedCheaper: 3.2,
+  clock: 2.5,
   overgrown: 5.6,
   extinctionReady: 4.1,
   extinction: 3.2,
@@ -100,7 +99,7 @@ const PLAN = [
     900,
   ]),
   // Laptop, dark and light.
-  ...['seed', 'stable', 'species', 'golden', 'calibration', 'seedPrice', 'extinctionReady'].map((id) => [
+  ...['seed', 'stable', 'species', 'golden', 'clock', 'seedPrice', 'extinctionReady'].map((id) => [
     `card-${id}-laptop`,
     `?m=${id}&t=${FREEZE[id]}&menu=0`,
     LAPTOP,
@@ -112,7 +111,7 @@ const PLAN = [
   // Brief labels (no pause).
   ['brief-stable', '?m=stable&mode=brief&menu=0', PHONE, 900],
   ['brief-explode-en', '?m=explode&mode=brief&menu=0&lang=en', PHONE, 900],
-  ['brief-seedCheaper', '?m=seedCheaper&menu=0', PHONE, 900],
+  ['brief-clock', '?m=clock&mode=brief&menu=0', PHONE, 900],
   ['brief-income-laptop', '?m=income&mode=brief&menu=0', LAPTOP, 900],
   // Status pills on every creature.
   ['status-pills', '?status=1&menu=0&still=1', PHONE, 1200],

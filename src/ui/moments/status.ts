@@ -21,7 +21,8 @@ import { MS, tr } from './strings';
 
 const TAU = Math.PI * 2;
 const SANS = 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
-const MONO = '"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace';
+/** Numbers in Inter (docs/ARTE.md §4: the mono is only for instruments). */
+const MONO = 'Inter, "Inter Fallback", system-ui, sans-serif';
 const FORMING = '#9FD3F0';
 const GREY = '#9AA6B2';
 
@@ -104,9 +105,18 @@ const overlaps = (a: Box, b: Box, pad = 3) =>
 
 /**
  * Place a pill of size w×h for a creature at (x, y) with halo radius r:
- * above it, else below, else stacked further up; kept inside the view.
+ * above it, else below, else stacked further up; kept inside the view. When every spot is taken the
+ * first one is returned with `blocked` (the caller hides that pill: one label at a time, ARTE §10).
  */
-export function placePill(x: number, y: number, r: number, w: number, h: number, taken: readonly Box[], view: { w: number; h: number }): Box & { below: boolean } {
+export function placePill(
+  x: number,
+  y: number,
+  r: number,
+  w: number,
+  h: number,
+  taken: readonly Box[],
+  view: { w: number; h: number },
+): Box & { below: boolean; blocked?: boolean } {
   const clampX = (bx: number) => Math.max(4, Math.min(view.w - w - 4, bx));
   const cands: (Box & { below: boolean })[] = [
     { x: clampX(x - w / 2), y: y - r - 8 - h, w, h, below: false },
@@ -119,7 +129,7 @@ export function placePill(x: number, y: number, r: number, w: number, h: number,
     if (!taken.some((t) => overlaps(c, t))) return c;
   }
   const first = cands[0].y >= 4 ? cands[0] : cands[1];
-  return first;
+  return taken.length ? { ...first, blocked: true } : first;
 }
 
 // ───────────────────────────── drawing ─────────────────────────────
@@ -272,12 +282,14 @@ export function drawCreatureStatus(
   c: CreatureView,
   pos: { x: number; y: number; r: number },
   o: DrawStatusOpts,
-): Box {
+): Box & { blocked?: boolean } {
   const info = statusInfo(c, o.lang);
   const rm = !!o.reduceMotion;
   const m = measure(ctx, info);
   const view = o.view ?? { w: ctx.canvas.width, h: ctx.canvas.height };
   const box = placePill(pos.x, pos.y, pos.r, m.w, PILL_H, o.taken ?? [], view);
+  // No free spot: this pill waits (the selected one always shows).
+  if (box.blocked && !o.selected) return box;
   o.taken?.push(box);
   const a = o.alpha ?? 1;
   if (a <= 0.01) return box;
@@ -334,6 +346,11 @@ export function drawCreatureStatus(
  */
 export class StatusLayer {
   private alpha = new Map<number, number>();
+  /** Per-view work (which creatures get a pill, draw order), redone only when the list changes: no per-frame maps or sorts. */
+  private key: { list: readonly CreatureView[] | null; onAll: boolean; sel: number | null } = { list: null, onAll: false, sel: null };
+  private picked = new Map<number, number>();
+  private order: CreatureView[] = [];
+  private taken: Box[] = [];
   /** Pills drawn last frame (for taps): box in overlay CSS px. */
   private hits: { box: Box; id: number; behavior: Behavior | null; state: CreatureState }[] = [];
 
@@ -358,13 +375,26 @@ export class StatusLayer {
     toScreen: (c: CreatureView) => { x: number; y: number; r: number } | null,
     o: { lang: Lang; time: number; dt: number; reduceMotion: boolean; onAll: boolean; selectedId: number | null; view: { w: number; h: number } },
   ): void {
-    const picked = new Map(pickStatusIds(creatures, { onAll: o.onAll, selectedId: o.selectedId }).map((p) => [p.id, p.alpha]));
+    const key = this.key;
+    if (key.list !== creatures || key.onAll !== o.onAll || key.sel !== o.selectedId) {
+      key.list = creatures;
+      key.onAll = o.onAll;
+      key.sel = o.selectedId;
+      this.picked.clear();
+      for (const p of pickStatusIds(creatures, { onAll: o.onAll, selectedId: o.selectedId })) this.picked.set(p.id, p.alpha);
+      // Selected first so it always gets the best spot.
+      this.order.length = 0;
+      for (const c of creatures) this.order.push(c);
+      this.order.sort((a, b) => (b.id === o.selectedId ? 1 : 0) - (a.id === o.selectedId ? 1 : 0));
+      // Forget creatures that are gone.
+      for (const id of this.alpha.keys()) if (!creatures.some((c) => c.id === id)) this.alpha.delete(id);
+    }
+    const picked = this.picked;
     const k = o.reduceMotion ? 1 : Math.min(1, o.dt * 6);
-    const taken: Box[] = [];
-    this.hits = [];
-    // Selected first so it always gets the best spot.
-    const order = [...creatures].sort((a, b) => (b.id === o.selectedId ? 1 : 0) - (a.id === o.selectedId ? 1 : 0));
-    for (const c of order) {
+    const taken = this.taken;
+    taken.length = 0;
+    this.hits.length = 0;
+    for (const c of this.order) {
       const target = picked.get(c.id) ?? 0;
       const cur = this.alpha.get(c.id) ?? 0;
       const a = cur + (target - cur) * k;
@@ -384,9 +414,7 @@ export class StatusLayer {
         taken,
         view: o.view,
       });
-      if (a > 0.5) this.hits.push({ box, id: c.id, behavior: c.state === 'stable' ? c.behavior : null, state: c.state });
+      if (a > 0.5 && !(box.blocked && c.id !== o.selectedId)) this.hits.push({ box, id: c.id, behavior: c.state === 'stable' ? c.behavior : null, state: c.state });
     }
-    const alive = new Set(creatures.map((c) => c.id));
-    for (const id of [...this.alpha.keys()]) if (!alive.has(id)) this.alpha.delete(id);
   }
 }

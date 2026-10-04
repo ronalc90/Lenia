@@ -168,7 +168,7 @@ export function createPriceSheet(root: HTMLElement, opts: { reduceMotion?(): boo
       layer.classList.toggle('rm', !!opts.reduceMotion?.());
       open = true;
       requestAnimationFrame(() => layer.classList.add('show'));
-      (sheet.querySelector('.mo-sp-x') as HTMLElement | null)?.focus();
+      (sheet.querySelector('.mo-sp-x') as HTMLElement | null)?.focus({ preventScroll: true });
     },
     update(x) {
       if (open) render(x);

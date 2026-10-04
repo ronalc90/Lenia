@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GameEvents } from '../core/bus';
 import type { Behavior, GameView } from '../core/types';
+import { DATOS_PER_NEW_SPECIES, SESSION_TIME_PER_SPECIES } from '../game/cycleBalance';
 import { MOMENT_BY_ID, MOMENTS } from './catalog';
 import { BRIEF_MS, COOLDOWN_MS, MAX_QUEUE_MS, MOMENTS_STORAGE_KEY, RITUAL_BLOCK_MS } from './config';
 import { SAMPLE_PAYLOADS, createMoments } from './moments';
@@ -21,23 +22,27 @@ function priceView(alive: number, used: number, freeSlots: number, satMult: numb
   };
 }
 
+/** Sessions loop: base 4, ×1,05 per seed bought today (whole Esencia), never crowding. */
+function sessionPriceView(bought: number): Partial<GameView> {
+  const stepMult = Math.pow(1.05, bought);
+  return {
+    seedCost: Math.max(1, Math.round(4 * stepMult)),
+    seedPrice: { base: 4, alive: 3, crowdMult: 1, freeSlots: 5, used: 3, satMult: 1, bigMult: 2.25, freeSeeds: 0, cheapMult: 1, stepMult, bought, capacity: 5, full: false },
+  };
+}
+
 /** Make the moment `id` happen in the harness (event or view change). */
 function happen(h: Harness, id: MomentId): void {
   const def = MOMENT_BY_ID.get(id)!;
   switch (id) {
     case 'seedPrice':
-      Object.assign(h.view, priceView(3, 3, 1, 9));
+      Object.assign(h.view, sessionPriceView(4));
       return;
     case 'extinctionReady':
       h.view.extinction = { ...h.view.extinction, available: true, genomeGain: 7 };
       return;
-    case 'seedCheaper':
-      // The first death would open "dissolve" first (higher priority): pretend it was explained.
-      h.m.load({ ...h.m.serialize(), seen: [...h.m.serialize().seen, 'dissolve'] });
-      Object.assign(h.view, priceView(3, 3, 1, 9));
-      h.advance(10);
-      Object.assign(h.view, priceView(2, 2, 1, 3));
-      emit(h, 'creatureDied', { id: 9, x: 10, y: 10 });
+    case 'clock':
+      (h.view as { session?: unknown }).session = { n: 1, phase: 'running', remaining: 58 };
       return;
     case 'golden':
       h.view.golden = { x: 50, y: 50, life: 1 };
@@ -112,6 +117,36 @@ describe('moments: triggers', () => {
     expect(h.m.seen('behavior.swimmer')).toBe(false);
   });
 
+  it('a new species pays what the loop pays: Datos and seconds in sessions, Samples in the classic loop', () => {
+    const ses = harness({}, { cycle: 'sessions' });
+    emit(ses, 'speciesNew', { speciesId: 'sp1', name: 'Orbium', rarity: 'common', x: 10, y: 10 });
+    ses.advance(LONG);
+    const a = ses.m.current()!;
+    expect(a.id).toBe('species');
+    expect(a.chips.map((c) => c.text.es)).toEqual([`+${DATOS_PER_NEW_SPECIES} Datos`, `+${SESSION_TIME_PER_SPECIES} s`, 'Orbium']);
+    expect(a.lines[1].es).toBe(`Cada especie nueva te da ${DATOS_PER_NEW_SPECIES} Datos y ${SESSION_TIME_PER_SPECIES} segundos más.`);
+    const classic = harness();
+    emit(classic, 'speciesNew', { speciesId: 'sp1', name: 'Orbium', rarity: 'common', x: 10, y: 10 });
+    classic.advance(LONG);
+    const b = classic.m.current()!;
+    expect(b.chips[0].text.es).toMatch(/Muestra/);
+    expect(b.lines[1].es).toMatch(/Muestras/);
+  });
+
+  it('notify: an event no bus carries (the runaway watch) opens its card once, then never again', () => {
+    const h = harness();
+    h.advance(10);
+    expect(h.m.notify('explode', { id: -1, x: 30, y: 40 })).toBe(true);
+    h.advance(LONG);
+    expect(h.m.current()?.id).toBe('explode');
+    expect(h.m.current()?.focus.grid).toMatchObject({ x: 30, y: 40 });
+    h.m.dismiss();
+    h.advance(LONG);
+    expect(h.m.notify('explode', { id: -1, x: 1, y: 1 })).toBe(false);
+    h.m.setMode('off');
+    expect(h.m.notify('stable', { id: 1, x: 1, y: 1 })).toBe(false);
+  });
+
   it('a second species compares both, keeping both creatures in view', () => {
     const h = harness();
     h.m.load({ ...h.m.serialize(), seen: ['species'] });
@@ -175,20 +210,23 @@ describe('moments: triggers', () => {
     expect(h.m.seen('golden')).toBe(false);
   });
 
-  it('seed price: opens the first time ANY multiplier goes above 1 (crowding or a full dish)', () => {
-    const h = harness({}, priceView(0, 0, 2, 1)); // empty dish: base price
+  it('seed price: opens the first time a seed bought today raises the price, never for living creatures', () => {
+    const h = harness({}, sessionPriceView(0));
     h.advance(LONG);
     expect(h.m.current()).toBeNull();
-    Object.assign(h.view, priceView(1, 1, 2, 1)); // one creature alive: ×1,25
+    Object.assign(h.view, sessionPriceView(2)); // 4 × 1,05² = 4,41 → still 4: nothing rose
+    h.advance(LONG);
+    expect(h.m.current()).toBeNull();
+    Object.assign(h.view, sessionPriceView(3)); // 4,63 → 5
     h.advance(LONG);
     expect(h.m.current()?.id).toBe('seedPrice');
-    expect(h.m.current()?.data.price?.crowdMult).toBe(1.25);
-    const h2 = harness({}, priceView(0, 2, 1, 3)); // saturation alone
+    // Crowding (the old rule) never opens it: growing is never punished.
+    const h2 = harness({}, priceView(3, 3, 1, 9));
     h2.advance(LONG);
-    expect(h2.m.current()?.id).toBe('seedPrice');
+    expect(h2.m.current()?.id).not.toBe('seedPrice');
   });
 
-  it('"cheaper" needs the price explained first, a death and a real drop', () => {
+  it('a death never makes a "cheaper!" label (nothing cheers a death)', () => {
     const h = harness({}, priceView(3, 3, 1, 9));
     h.m.setMode('off');
     h.advance(10);
@@ -196,25 +234,45 @@ describe('moments: triggers', () => {
     Object.assign(h.view, priceView(2, 2, 1, 3));
     emit(h, 'creatureDied', { id: 1, x: 1, y: 1 });
     h.advance(LONG);
-    // seedPrice not seen yet → no cheaper label (the seedPrice card itself may open)
     expect(h.m.current()?.id).not.toBe('seedCheaper');
   });
 
-  it('calibration waits until the slider rests and shows from → to', () => {
+  it('moving the rules opens nothing (the calibration card is gone)', () => {
     const h = harness();
-    h.advance(10); // poll remembers μ = 0.15
-    for (let i = 1; i <= 5; i++) {
-      emit(h, 'calibrationChanged', { mu: 0.15 + i * 0.002, sigma: 0.015, R: 13, dt: 0.1 });
-      h.advance(500);
-      expect(h.m.current()).toBeNull();
-    }
-    h.advance(2000);
-    const cur = h.m.current()!;
-    expect(cur.id).toBe('calibration');
-    expect(cur.data.calibFrom?.mu).toBeCloseTo(0.15);
-    expect(cur.data.calibTo?.mu).toBeCloseTo(0.16);
-    expect(cur.chips[0].text.es).toBe('μ 0,150 → 0,160');
-    expect(cur.chips[0].text.en).toBe('μ 0.150 → 0.160');
+    h.advance(10);
+    emit(h, 'calibrationChanged', { mu: 0.16, sigma: 0.015, R: 13, dt: 0.1 });
+    h.advance(LONG);
+    expect(h.m.current()).toBeNull();
+  });
+
+  it('the clock card opens once when a session has one minute left', () => {
+    const h = harness();
+    (h.view as { session?: unknown }).session = { n: 1, phase: 'running', remaining: 90 };
+    h.advance(LONG);
+    expect(h.m.current()).toBeNull();
+    (h.view as { session?: unknown }).session = { n: 1, phase: 'running', remaining: 59 };
+    h.advance(LONG);
+    expect(h.m.current()?.id).toBe('clock');
+    expect(h.m.current()?.focus.target).toEqual(['hud.clock']);
+  });
+});
+
+describe('moments: deferred (first session)', () => {
+  it('a deferred moment shows a brief label but stays unexplained, and comes back as a card later', () => {
+    let first = true;
+    const h = harness({ defer: (id) => first && (id === 'species' || id.startsWith('behavior.')) });
+    emit(h, 'behaviorNew', { behavior: 'swimmer', x: 50, y: 50 });
+    h.advance(LONG);
+    expect(h.m.current()).toMatchObject({ id: 'behavior.swimmer', mode: 'brief' });
+    h.advance(LONG);
+    expect(h.m.seen('behavior.swimmer')).toBe(false);
+    // Session 2: a swimmer on the dish brings the full card back.
+    first = false;
+    h.view.creatures = [{ ...creature(3, 'stable', 40, 40), behavior: 'swimmer' }];
+    h.advance(LONG);
+    h.advance(LONG);
+    expect(h.m.current()).toMatchObject({ id: 'behavior.swimmer', mode: 'full' });
+    expect(h.m.seen('behavior.swimmer')).toBe(true);
   });
 });
 

@@ -71,14 +71,14 @@ describe('no price changes without a visible reason', () => {
     expect(r).toEqual({ text: 'Placa llena: 4 de 3 espacios → ×3', dir: 1 });
   });
 
-  it('a creature died / room again / dish upgraded / free seeds', () => {
+  it('fewer creatures / room again / dish upgraded / free seeds (a death is never cheered)', () => {
     expect(seedPriceReason(snap({ alive: 2, crowdMult: 1.5 }), snap({ alive: 1, crowdMult: 1.25 }), 'es')).toEqual({
-      text: 'Murió una criatura → más barato',
+      text: 'Hay sitio otra vez → más barato',
       dir: -1,
     });
     expect(seedPriceReason(snap({ alive: 2, used: 2, satMult: 3 }), snap({ alive: 1, used: 1, satMult: 1 }), 'en')!.text).toBe('Room again → cheaper');
     expect(seedPriceReason(snap({ used: 2, satMult: 3 }), snap({ used: 2, freeSlots: 2, satMult: 1 }), 'es')!.text).toBe('Placa mejorada: 2 espacios baratos');
-    expect(seedPriceReason(snap(), snap({ freeSeeds: 5 }), 'es')).toEqual({ text: '¡Gratis! (lluvia de esporas)', dir: -1 });
+    expect(seedPriceReason(snap(), snap({ freeSeeds: 5 }), 'es')).toEqual({ text: '¡Gratis! (lluvia de semillas)', dir: -1 });
     expect(bigSeedReason(price(), 'es').text).toBe('Semilla grande ×2,25');
   });
 
@@ -89,20 +89,19 @@ describe('no price changes without a visible reason', () => {
 
 describe('the price sheet says it in plain words', () => {
   it("today's reason", () => {
-    expect(seedPriceToday(price(), 9, 'es')).toBe('Tienes 3 siembras gratis: la próxima no cuesta nada.');
+    expect(seedPriceToday(price(), 9, 'es')).toBe('Tienes 3 semillas gratis: la próxima no cuesta nada.');
     expect(seedPriceToday(price({ freeSeeds: 0 }), 9, 'es')).toBe('Hoy cuesta 9 porque hay 2 criaturas vivas y la placa está llena (2 de 1 espacios).');
     expect(seedPriceToday(price({ freeSeeds: 0, alive: 1, used: 1, satMult: 1 }), 2.5, 'en')).toBe('It costs 2.5 now because 1 creature is alive.');
     expect(seedPriceToday(price({ freeSeeds: 0, alive: 0, used: 0, satMult: 1, crowdMult: 1 }), 2, 'es')).toBe('Hoy cuesta 2: el mínimo, la placa está vacía.');
   });
 
-  it("equation with today's numbers + the rule + the Dish advice", () => {
+  it("the sheet is the generic one (one rule, one place): equation with today's numbers + the rule + the Dish advice", () => {
     const x = seedPriceExplain(makeView({ seedCost: 9, seedPrice: price() }), 'es', { onSeeDish: () => undefined })!;
     expect(x.terms.map((t) => t.value)).toEqual(['2', '×1,5', '×3']);
     expect(x.total).toBe('9');
-    expect(x.rule).toMatch(/^Sembrar cuesta más cuantas más criaturas viven\./);
-    expect(x.rule).toMatch(/Mejora la Placa para tener más espacios baratos\.$/);
-    expect(x.rows?.[0].text).toBe('1 de más: ×3 cada una');
-    expect(x.action?.label).toBe('Ver Placa');
+    expect(x.rule).toMatch(/^Cada semilla cuesta 2 de Esencia\. Cuantas más criaturas viven, más cuesta\./);
+    expect(x.rows?.[0].text).toBe('1 de más');
+    expect(x.action?.label).toBe('Más sitio: ver la Placa');
     expect(seedPriceExplain(makeView(), 'es')).toBeNull();
   });
 });

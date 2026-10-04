@@ -13,7 +13,7 @@ describe('creature status pills: what they say', () => {
     expect(es.label).toBe('Naciendo');
     expect(es.detail).toBe('62 %');
     expect(es.progress).toBeCloseTo(0.625);
-    expect(statusInfo(cv(1, 'born', 250), 'en').label).toBe('Forming');
+    expect(statusInfo(cv(1, 'born', 250), 'en').label).toBe('Hatching');
     expect(statusInfo(cv(1, 'born', 250), 'en').detail).toBe('62%');
     // Never shows 100 % while still forming.
     expect(statusInfo(cv(1, 'born', 9999), 'es').detail).toBe('99 %');
@@ -21,16 +21,16 @@ describe('creature status pills: what they say', () => {
 
   it('stable creatures show what they earn and their behaviour', () => {
     const s = statusInfo(cv(1, 'stable', 900, { eps: 1.2, behavior: 'swimmer' }), 'es');
-    expect(s.label).toBe('Estable');
+    expect(s.label).toBe('Viva');
     expect(s.detail).toBe('+1,2/s');
     expect(s.behavior).toBe('swimmer');
     expect(statusInfo(cv(1, 'stable', 900, { eps: 1.2 }), 'en').detail).toBe('+1.2/s');
   });
 
-  it('accidents read plainly in both languages', () => {
-    expect(statusInfo(cv(1, 'exploded'), 'es').label).toBe('Explotó');
-    expect(statusInfo(cv(1, 'exploded'), 'en').label).toBe('Exploded');
-    expect(statusInfo(cv(1, 'dead'), 'es').label).toBe('Se disuelve…');
+  it('accidents read plainly in both languages (no scary words)', () => {
+    expect(statusInfo(cv(1, 'exploded'), 'es').label).toBe('Sin forma');
+    expect(statusInfo(cv(1, 'exploded'), 'en').label).toBe('Shapeless');
+    expect(statusInfo(cv(1, 'dead'), 'es').label).toBe('Se apaga…');
     expect(statusInfo(cv(1, 'dead'), 'en').label).toBe('Fading…');
   });
 });
@@ -80,5 +80,11 @@ describe('creature status pills: placement', () => {
     expect(overlap).toBe(false);
     const edge = placePill(355, 200, 10, 120, 22, [], view);
     expect(edge.x + edge.w).toBeLessThanOrEqual(view.w - 4);
+  });
+
+  it('with no free spot a pill waits instead of covering another (one label at a time)', () => {
+    const cover = [{ x: 0, y: 0, w: view.w, h: view.h }];
+    expect(placePill(180, 200, 20, 100, 22, cover, view).blocked).toBe(true);
+    expect(placePill(180, 200, 20, 100, 22, [], view).blocked).toBeUndefined();
   });
 });
