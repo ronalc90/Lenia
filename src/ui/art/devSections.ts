@@ -1,6 +1,6 @@
 /** Extra sections of art-dev.html (characters, worlds, matter…), one builder per id. */
 import type { DevCtx } from './dev';
-import { MATTER_STOPS } from '../../core/palette';
+import { MATTER_STOPS_V1 } from '../../core/palette';
 import { WORLD_TEXT } from '../../game/treeText';
 import { catalogPattern } from '../../sim/catalog';
 import { rgbToHex } from './color';
@@ -198,7 +198,7 @@ function specimenCanvas(code: string, cssPx: number, stops: readonly Stop[], blo
   return c;
 }
 
-const OLD_STOPS: Stop[] = MATTER_STOPS.map(([v, r, g, b, a]) => [v, r, g, b, a] as const);
+const OLD_STOPS: Stop[] = MATTER_STOPS_V1.map(([v, r, g, b, a]) => [v, r, g, b, a] as const);
 
 function matterSection(ctx: DevCtx): HTMLElement {
   const es = ctx.lang === 'es';

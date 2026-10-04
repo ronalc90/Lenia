@@ -15,8 +15,29 @@ export const UI = {
   gold: '#FFD166',
 } as const;
 
-/** Matter colormap stops: [value, r, g, b, alpha] with rgb 0..255. */
+/**
+ * Matter colormap stops: [value, r, g, b, alpha] with rgb 0..255.
+ *
+ * Art direction (docs/ARTE.md §8.1, a copy of src/ui/art/matter.ts MATTER_ART.night, kept equal by
+ * palette.test.ts): indigo haze → royal blue → bioluma cyan → ice → candle white. Luminance rises
+ * evenly and white only arrives at 0.94, so a creature's inner structure stays visible instead of
+ * burning out (the first palette, MATTER_STOPS_V1, was white from 0.7).
+ */
 export const MATTER_STOPS: [number, number, number, number, number][] = [
+  [0.0, 8, 10, 24, 0],
+  [0.04, 22, 20, 70, 0.35],
+  [0.12, 46, 34, 134, 0.82],
+  [0.24, 38, 84, 204, 1],
+  [0.38, 30, 148, 226, 1],
+  [0.54, 58, 196, 240, 1],
+  [0.7, 132, 228, 250, 1],
+  [0.84, 206, 246, 252, 1],
+  [0.94, 255, 240, 214, 1],
+  [1.0, 255, 250, 240, 1],
+];
+
+/** The first matter colormap (v0.001–v0.010), for before/after comparisons and dev pages. */
+export const MATTER_STOPS_V1: readonly (readonly [number, number, number, number, number])[] = [
   [0.0, 11, 14, 18, 0],
   [0.08, 24, 20, 72, 0.55],
   [0.15, 46, 30, 120, 0.85],
