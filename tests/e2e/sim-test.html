@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="data:," />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bioluma sim test</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #0b0e12;
+        color: #8b98a5;
+        font: 12px/1.4 ui-monospace, monospace;
+      }
+      #panels {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 12px;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .panel canvas {
+        display: block;
+        background: #0b0e12;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="panels"></div>
+    <script type="module" src="./sim-test.ts"></script>
+  </body>
+</html>
