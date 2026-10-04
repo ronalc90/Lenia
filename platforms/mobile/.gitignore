@@ -1,0 +1,9 @@
+node_modules/
+# Native projects are generated: npm run add:android / add:ios (+ scripts/patch-native.mjs).
+# Once you customise them in Android Studio / Xcode, commit them and delete these two lines.
+android/
+ios/
+# Signing material never enters the repo.
+*.keystore
+*.jks
+twa/app/

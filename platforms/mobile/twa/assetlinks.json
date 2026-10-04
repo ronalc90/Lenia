@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.bioluma.twa",
+      "sha256_cert_fingerprints": [
+        "__SHA256_OF_PLAY_APP_SIGNING_KEY__",
+        "__SHA256_OF_UPLOAD_KEY__"
+      ]
+    }
+  }
+]

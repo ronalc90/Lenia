@@ -1,0 +1,37 @@
+{
+  "name": "bioluma-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bioluma native shells for Android and iOS (Capacitor). Loads the built web game from ../../dist; works offline, no domain needed.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "web": "npm --prefix ../.. run build",
+    "check": "node scripts/check-bridge.mjs",
+    "assets": "capacitor-assets generate --assetPath assets --iconBackgroundColor '#0B0E12' --iconBackgroundColorDark '#0B0E12' --splashBackgroundColor '#0B0E12' --splashBackgroundColorDark '#0B0E12'",
+    "add:android": "cap add android && npm run assets -- --android && node scripts/patch-native.mjs android",
+    "add:ios": "cap add ios && npm run assets -- --ios && node scripts/patch-native.mjs ios",
+    "sync": "cap sync && node scripts/patch-native.mjs all",
+    "sync:android": "cap sync android && node scripts/patch-native.mjs android",
+    "sync:ios": "cap sync ios && node scripts/patch-native.mjs ios",
+    "open:android": "cap open android",
+    "open:ios": "cap open ios",
+    "run:android": "cap run android",
+    "run:ios": "cap run ios",
+    "apk:debug": "npm run sync:android && cd android && ./gradlew assembleDebug",
+    "aab:release": "npm run sync:android && cd android && ./gradlew bundleRelease",
+    "doctor": "cap doctor"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.2",
+    "typescript": "^5.9.3"
+  }
+}
