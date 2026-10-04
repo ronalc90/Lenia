@@ -1,0 +1,213 @@
+/**
+ * Safe local persistence (doc §16). Every storage access is wrapped in try/catch and falls back
+ * to an in-memory store, so the game keeps working in private windows / blocked storage / node.
+ *
+ * Layout (localStorage):
+ *   bioluma.game       versioned game JSON with checksum (Game.serialize())
+ *   bioluma.game.bak   last copy that passed verification (used if the main one is corrupt)
+ *   bioluma.dish       "WxH:" + base64(zero-run-length-encoded 8-bit grid)
+ *   bioluma.dish.bak   previous dish
+ *   bioluma.savedAt    ms timestamp of the last write (offline calculation)
+ */
+import * as B from './balance';
+import { base64ToBytes, bytesToBase64, deserializeState } from './state';
+
+const K_GAME = 'bioluma.game';
+const K_GAME_BAK = 'bioluma.game.bak';
+const K_DISH = 'bioluma.dish';
+const K_DISH_BAK = 'bioluma.dish.bak';
+const K_TIME = 'bioluma.savedAt';
+
+export interface StorageLike {
+  getItem(k: string): string | null;
+  setItem(k: string, v: string): void;
+  removeItem(k: string): void;
+}
+
+const memory = new Map<string, string>();
+const memoryStorage: StorageLike = {
+  getItem: (k) => memory.get(k) ?? null,
+  setItem: (k, v) => void memory.set(k, v),
+  removeItem: (k) => void memory.delete(k),
+};
+
+let override: StorageLike | null | undefined;
+
+/** Tests: inject a storage (null = force the in-memory fallback, undefined = auto). */
+export function setStorage(s: StorageLike | null | undefined): void {
+  override = s;
+  memory.clear();
+}
+
+function storage(): StorageLike {
+  if (override !== undefined) return override ?? memoryStorage;
+  try {
+    const ls = (globalThis as { localStorage?: StorageLike }).localStorage;
+    if (ls) {
+      const probe = '__bioluma_probe__';
+      ls.setItem(probe, '1');
+      ls.removeItem(probe);
+      return ls;
+    }
+  } catch {
+    /* storage blocked */
+  }
+  return memoryStorage;
+}
+
+function get(k: string): string | null {
+  try {
+    return storage().getItem(k);
+  } catch {
+    return memory.get(k) ?? null;
+  }
+}
+
+function set(k: string, v: string): boolean {
+  try {
+    storage().setItem(k, v);
+    return true;
+  } catch {
+    memory.set(k, v); // quota exceeded / blocked: keep it for this session at least
+    return false;
+  }
+}
+
+// ───────────────────────────── dish encoding ───────────────────────
+
+/** Zero-run RLE: bytes 1..255 literal; 0 followed by a count byte (1..255) = run of zeros. */
+export function encodeDish(grid: Uint8Array): Uint8Array {
+  const out: number[] = [];
+  let i = 0;
+  while (i < grid.length) {
+    const v = grid[i];
+    if (v !== 0) {
+      out.push(v);
+      i++;
+      continue;
+    }
+    let run = 0;
+    while (i < grid.length && grid[i] === 0 && run < 255) {
+      run++;
+      i++;
+    }
+    out.push(0, run);
+  }
+  return Uint8Array.from(out);
+}
+
+export function decodeDish(rle: Uint8Array, expected: number): Uint8Array | null {
+  const out = new Uint8Array(expected);
+  let o = 0;
+  for (let i = 0; i < rle.length; i++) {
+    const v = rle[i];
+    if (v !== 0) {
+      if (o >= expected) return null;
+      out[o++] = v;
+    } else {
+      const run = rle[++i];
+      if (!run || o + run > expected) return null;
+      o += run; // already zero
+    }
+  }
+  return o === expected ? out : null;
+}
+
+function packDish(dish: Uint8Array, w: number, h: number): string {
+  return `${w}x${h}:${bytesToBase64(encodeDish(dish))}`;
+}
+
+function unpackDish(s: string | null): { dish: Uint8Array; w: number; h: number } | null {
+  if (!s) return null;
+  try {
+    const m = /^(\d{1,5})x(\d{1,5}):([A-Za-z0-9+/=]*)$/.exec(s);
+    if (!m) return null;
+    const w = Number(m[1]);
+    const h = Number(m[2]);
+    if (!(w > 0 && h > 0 && w * h <= 4096 * 4096)) return null;
+    const dish = decodeDish(base64ToBytes(m[3]), w * h);
+    return dish ? { dish, w, h } : null;
+  } catch {
+    return null;
+  }
+}
+
+// ───────────────────────────── public API ──────────────────────────
+
+export interface LoadedSave {
+  /** Game.serialize() string that passed checksum/range validation, or null. */
+  game: string | null;
+  dish: Uint8Array | null;
+  dishW: number;
+  dishH: number;
+  /** ms timestamp of the last write, or 0. */
+  savedAt: number;
+}
+
+const validGame = (s: string | null): s is string => !!s && deserializeState(s) !== null;
+
+/** Load the newest valid save (falls back to the last good copy). Never throws. */
+export function loadSave(): LoadedSave {
+  const out: LoadedSave = { game: null, dish: null, dishW: 0, dishH: 0, savedAt: 0 };
+  try {
+    const main = get(K_GAME);
+    const bak = get(K_GAME_BAK);
+    out.game = validGame(main) ? main : validGame(bak) ? bak : null;
+    const d = unpackDish(get(K_DISH)) ?? unpackDish(get(K_DISH_BAK));
+    if (d) {
+      out.dish = d.dish;
+      out.dishW = d.w;
+      out.dishH = d.h;
+    }
+    const t = Number(get(K_TIME));
+    out.savedAt = Number.isFinite(t) && t > 0 ? t : 0;
+  } catch {
+    /* corrupted storage: start fresh */
+  }
+  return out;
+}
+
+/**
+ * Write the game (and optionally the dish). The previous valid copy is kept as backup.
+ * Returns false if persistent storage refused the write (data kept in memory for the session).
+ */
+export function writeSave(gameStr: string, dish?: Uint8Array, w?: number, h?: number, now: number = Date.now()): boolean {
+  let ok = true;
+  try {
+    const prev = get(K_GAME);
+    if (prev && prev !== gameStr && validGame(prev)) ok = set(K_GAME_BAK, prev) && ok;
+    ok = set(K_GAME, gameStr) && ok;
+    if (dish && w && h && dish.length === w * h) {
+      const prevDish = get(K_DISH);
+      if (prevDish) set(K_DISH_BAK, prevDish);
+      ok = set(K_DISH, packDish(dish, w, h)) && ok;
+    }
+    ok = set(K_TIME, String(Math.floor(now))) && ok;
+  } catch {
+    ok = false;
+  }
+  return ok;
+}
+
+/** Remove every Bioluma key (Settings → delete save). */
+export function clearSave(): void {
+  for (const k of [K_GAME, K_GAME_BAK, K_DISH, K_DISH_BAK, K_TIME]) {
+    try {
+      storage().removeItem(k);
+    } catch {
+      /* ignore */
+    }
+    memory.delete(k);
+  }
+}
+
+/**
+ * Seconds away for offline progress (doc §12 clock rules): device-clock difference, never
+ * negative (a clock that went backwards counts 0), capped at 24 h.
+ */
+export function offlineSeconds(savedAt: number, now: number = Date.now()): number {
+  if (!(savedAt > 0) || !Number.isFinite(now)) return 0;
+  const d = (now - savedAt) / 1000;
+  if (!(d > 0)) return 0;
+  return Math.min(d, B.OFFLINE_HARD_CAP);
+}
