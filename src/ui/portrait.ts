@@ -1,12 +1,33 @@
 /**
  * Species portraits: a Pattern rendered with the matter colormap onto a
  * transparent square (so CSS drop-shadow glows around the creature's shape).
- * Results are cached per Pattern object as data URLs.
+ * Results are cached per Pattern object and palette id as data URLs.
+ *
+ * The colormap follows the equipped matter palette (cosmetic, src/store):
+ * `setPortraitPalette` is called by bindCosmetics; the default palette uses
+ * core/palette matterColor exactly as before.
  */
 import { matterColor } from '../core/palette';
 import type { Pattern } from '../core/types';
+import { paletteColor } from '../store/apply';
+import { DEFAULT_ITEM, type MatterStop } from '../store/catalog';
 
-const cache = new WeakMap<Pattern, string>();
+const cache = new WeakMap<Pattern, Map<string, string>>();
+let palette: { id: string; stops: readonly MatterStop[] } | null = null;
+
+/** Equipped palette for portraits (null or the default id = the built-in colormap). */
+export function setPortraitPalette(id: string | null, stops?: readonly MatterStop[]): void {
+  palette = id && id !== DEFAULT_ITEM.palette && stops?.length ? { id, stops } : null;
+}
+
+/** Id of the palette portraits are drawn with (part of the cache key). */
+export function portraitPaletteId(): string {
+  return palette?.id ?? DEFAULT_ITEM.palette;
+}
+
+function colorAt(v: number): [number, number, number, number] {
+  return palette ? paletteColor(palette.stops, v) : matterColor(v);
+}
 
 /** Bilinear sample of a pattern at fractional coords (outside = 0). */
 function sample(p: Pattern, x: number, y: number): number {
@@ -58,7 +79,7 @@ export function renderPattern(p: Pattern, size = 128, fill = 0.72): HTMLCanvasEl
       const px = cxp + (x + 0.5 - size / 2) * scale - 0.5;
       const py = cyp + (y + 0.5 - size / 2) * scale - 0.5;
       const v = sample(p, px, py);
-      const [r, g, bb, a] = matterColor(v);
+      const [r, g, bb, a] = colorAt(v);
       const i = (y * size + x) * 4;
       img.data[i] = r;
       img.data[i + 1] = g;
@@ -71,10 +92,18 @@ export function renderPattern(p: Pattern, size = 128, fill = 0.72): HTMLCanvasEl
 }
 
 export function portraitURL(p: Pattern): string {
-  let url = cache.get(p);
+  const key = portraitPaletteId();
+  let byPalette = cache.get(p);
+  if (!byPalette) {
+    byPalette = new Map();
+    cache.set(p, byPalette);
+  }
+  let url = byPalette.get(key);
   if (!url) {
     url = renderPattern(p).toDataURL('image/png');
-    cache.set(p, url);
+    // A player rarely switches more than a few palettes: keep the last three per portrait.
+    if (byPalette.size >= 3) byPalette.delete(byPalette.keys().next().value as string);
+    byPalette.set(key, url);
   }
   return url;
 }

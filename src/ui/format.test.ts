@@ -25,11 +25,11 @@ describe('fmt (currency)', () => {
   });
 
   it('switches to M, B, T, Qa, Qi with 3 significant digits', () => {
-    expect(fmt(1_000_000)).toBe('1.00M');
+    expect(fmt(1_000_000)).toBe('1M'); // no trailing zeros (QA3 F15)
     expect(fmt(1_234_567)).toBe('1.23M');
     expect(fmt(12_345_678)).toBe('12.3M');
     expect(fmt(123_456_789)).toBe('123M');
-    expect(fmt(1.5e9)).toBe('1.50B');
+    expect(fmt(1.5e9)).toBe('1.5B');
     expect(fmt(2.25e12)).toBe('2.25T');
     expect(fmt(9.87e15)).toBe('9.87Qa');
     expect(fmt(4.56e18)).toBe('4.56Qi');
@@ -58,11 +58,12 @@ describe('fmt (currency)', () => {
 describe('fmtShort', () => {
   it('uses K in compact contexts', () => {
     expect(fmtShort(950)).toBe('950');
-    expect(fmtShort(1000)).toBe('1.00K');
+    expect(fmtShort(1000)).toBe('1K');
+    expect(fmtShort(5000, 'es')).toBe('5K');
     expect(fmtShort(1234)).toBe('1.23K');
     expect(fmtShort(45_600)).toBe('45.6K');
     expect(fmtShort(999_999)).toBe('999K');
-    expect(fmtShort(1.2e6)).toBe('1.20M');
+    expect(fmtShort(1.2e6)).toBe('1.2M');
     expect(fmtShort(1.2)).toBe('1.2');
   });
 });

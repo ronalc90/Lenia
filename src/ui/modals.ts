@@ -12,6 +12,9 @@ import { fmt, fmtDuration, fmtFixed, fmtRate } from './format';
 import { behaviorName, getLang, rarityName, t, tx } from './i18n';
 import { icon, logo } from './icons';
 import { portraitURL } from './portrait';
+import { EXPORT_PREFIX } from '../game/balance';
+import { base64ToUtf8, deserializeState } from '../game/state';
+import { BUILD_DATE, VERSION_LABEL } from '../version';
 
 export interface ModalHandle {
   readonly wrap: HTMLElement;
@@ -21,6 +24,8 @@ export interface ModalHandle {
   update?(v: GameView): void;
   /** Rebuild after a language change. */
   relabel?(): void;
+  /** Change the title (and the close button's label) after a language change. */
+  setTitle?(title: string): void;
 }
 
 export class ModalHost {
@@ -52,10 +57,11 @@ export class ModalHost {
     const body = h('div', { class: 'modal-body' });
     const modal = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', tabindex: '-1' });
     const titleEl = h('h3');
+    let close: HTMLButtonElement | null = null;
     if (opts.title !== undefined) {
       titleEl.textContent = opts.title;
       modal.setAttribute('aria-label', opts.title);
-      const close = h('button', { type: 'button', class: 'modal-close', 'aria-label': t('close'), html: icon('close') });
+      close = h('button', { type: 'button', class: 'modal-close', 'aria-label': t('close'), html: icon('close') });
       close.addEventListener('click', () => handle.close());
       modal.appendChild(
         h('div', { class: 'modal-head' }, opts.titleIcon ? ic(opts.titleIcon, 24, 'title-ic') : null, titleEl, close),
@@ -68,6 +74,11 @@ export class ModalHost {
       wrap,
       body,
       kind: opts.kind,
+      setTitle: (title: string) => {
+        titleEl.textContent = title;
+        modal.setAttribute('aria-label', title);
+        close?.setAttribute('aria-label', t('close'));
+      },
       close: () => {
         if (closed) return;
         closed = true;
@@ -97,6 +108,37 @@ export class ModalHost {
   closeAll(): void {
     for (const m of [...this.stack]) m.close();
   }
+}
+
+// ───────────────────────────── Achievement card ─────────────────────────────
+
+/**
+ * Small centred card for a just-unlocked achievement (tapping its toast), instead of the half-screen
+ * Journal (QA2 H-29). "See all" opens the achievements list.
+ */
+export function openAchievementCard(host: ModalHost, ctx: Ctx, id: string, openList: () => void): ModalHandle {
+  const m = host.show({ kind: 'achievement', center: true });
+  const a = ctx.view.achievements.find((x) => x.id === id);
+  const close = h('button', { type: 'button', class: 'btn' }, t('close'));
+  close.addEventListener('click', () => m.close());
+  const all = h('button', { type: 'button', class: 'btn primary' }, ic('trophy', 24), t('achievementsAll'));
+  all.addEventListener('click', () => {
+    m.close();
+    openList();
+  });
+  m.body.append(
+    h(
+      'div',
+      { class: 'ach-card' },
+      h('div', { class: 'ach-card-ic' }, ic('trophy', 24)),
+      h('div', { class: 'ach-card-kicker' }, t('achievement')),
+      h('h2', null, a ? tx(a.name) : id),
+      a && tx(a.desc) ? h('p', null, tx(a.desc)) : null,
+      a?.reward ? h('p', { class: 'ach-card-reward' }, tx(a.reward)) : null,
+      h('div', { class: 'ach-card-actions' }, close, all),
+    ),
+  );
+  return m;
 }
 
 // ───────────────────────────── Journal ─────────────────────────────
@@ -194,6 +236,10 @@ export function openJournal(host: ModalHost, ctx: Ctx, startTab: 'journal' | 'ac
           stat(t('statBorn'), fmt(s.creaturesBorn, lang)),
           stat(t('statSpecies'), String(v.species.length)),
           stat(t('genome'), fmt(v.genome, lang)),
+          // Where production comes from (QA3 F13), when the game exposes it.
+          ...(v.multipliers
+            ? [stat(t('multGlobal'), `×${fmtFixed(v.multipliers.global, 2, lang)}`), stat(t('multBuffs'), `×${fmtFixed(v.multipliers.buffs, 2, lang)}`)]
+            : []),
         ),
       );
     }
@@ -227,6 +273,12 @@ export function openSettings(host: ModalHost, ctx: Ctx): ModalHandle {
         h('div', { class: 'sr-text' }, h('div', { class: 'sr-label' }, label), hint ? h('div', { class: 'sr-hint' }, hint) : null),
         control,
       );
+    /** A row whose control drops to its own line (long segmented controls; QA2 H-13). */
+    const wrapRow = (iconName: string, label: string, control: HTMLElement, hint?: string) => {
+      const r = row(iconName, label, control, hint);
+      r.classList.add('wrap');
+      return r;
+    };
     const sw = (key: 'muted' | 'vibration' | 'reduceMotion' | 'oneTouch' | 'analytics', label: string) => {
       const b = h('button', { type: 'button', class: 'switch', role: 'switch', 'aria-label': label });
       b.setAttribute('aria-checked', String(!!s0[key]));
@@ -304,6 +356,61 @@ export function openSettings(host: ModalHost, ctx: Ctx): ModalHandle {
             },
           ),
         ),
+        row(
+          'textsize',
+          t('textSize'),
+          segc(
+            [
+              { v: 'normal', label: t('textNormal') },
+              { v: 'large', label: t('textLarge') },
+            ] as { v: 'normal' | 'large'; label: string }[],
+            () => ctx.textSize(),
+            (v) => {
+              ctx.sound('toggle');
+              ctx.setTextSize(v);
+            },
+          ),
+        ),
+      ),
+      group(
+        t('customize'),
+        ...(ctx.deps.openWardrobe
+          ? [
+              row(
+                'hanger',
+                t('wardrobe'),
+                (() => {
+                  const b = h('button', { type: 'button', class: 'btn', style: 'min-height:40px', 'aria-label': t('wardrobe'), 'data-testid': 'open-wardrobe' }, ic('hanger', 24));
+                  b.addEventListener('click', () => {
+                    ctx.sound('open');
+                    m.close();
+                    ctx.deps.openWardrobe?.();
+                  });
+                  return b;
+                })(),
+                t('wardrobeHint'),
+              ),
+            ]
+          : []),
+        // The store is only offered here (never in the HUD), and only where it may show.
+        ...(ctx.deps.openStore
+          ? [
+              row(
+                'bag',
+                t('storeOpen'),
+                (() => {
+                  const b = h('button', { type: 'button', class: 'btn', style: 'min-height:40px', 'aria-label': t('storeOpen'), 'data-testid': 'open-store' }, ic('bag', 24));
+                  b.addEventListener('click', () => {
+                    ctx.sound('open');
+                    m.close();
+                    ctx.deps.openStore?.();
+                  });
+                  return b;
+                })(),
+                t('storeHint'),
+              ),
+            ]
+          : []),
       ),
       group(
         t('language'),
@@ -348,7 +455,7 @@ export function openSettings(host: ModalHost, ctx: Ctx): ModalHandle {
       ),
       group(
         t('graphics'),
-        row(
+        wrapRow(
           'layers',
           t('quality'),
           segc(
@@ -379,6 +486,21 @@ export function openSettings(host: ModalHost, ctx: Ctx): ModalHandle {
       ),
       group(t('privacy'), row('stats', t('analytics'), sw('analytics', t('analytics')), t('analyticsHint'))),
     );
+    // Extra sections from the integrator (the story archive "Historia").
+    if (ctx.deps.settingsSections) {
+      const extra = h('div', { class: 'set-extra' });
+      m.body.append(extra);
+      ctx.deps.settingsSections(extra);
+    }
+    // Which build is this? (the owner checks every deployment)
+    m.body.append(
+      h(
+        'div',
+        { class: 'set-version', 'data-testid': 'settings-version' },
+        `Bioluma ${VERSION_LABEL}`,
+        BUILD_DATE ? ` · ${BUILD_DATE.slice(0, 16).replace('T', ' ')} UTC` : '',
+      ),
+    );
 
     // Save data
     const box = h('textarea', { class: 'save-box', spellcheck: 'false', placeholder: t('savePlaceholder'), 'aria-label': t('saveData') });
@@ -401,15 +523,47 @@ export function openSettings(host: ModalHost, ctx: Ctx): ModalHandle {
         box.select();
       }
     });
+    // Import (QA1 #7): say what is wrong, and replacing the current game takes a second tap.
+    let importArmed = 0;
     imp.addEventListener('click', () => {
       const s = box.value.trim();
       if (!s) {
+        ctx.toast(t('importEmpty'), 'warn', 'info');
         box.focus();
         return;
       }
+      const other = /^[A-Z]+\d+\./.exec(s);
+      if (other && !s.startsWith(EXPORT_PREFIX)) {
+        ctx.toast(t('importVersion'), 'bad', 'warning');
+        return;
+      }
+      // A string that cannot load is rejected on the first tap; only a valid save asks to confirm.
+      if (!importable(s)) {
+        ctx.toast(t('importFail'), 'bad', 'warning');
+        return;
+      }
+      if (!importArmed || performance.now() > importArmed) {
+        importArmed = performance.now() + 4000;
+        imp.classList.add('danger');
+        imp.lastChild!.textContent = t('importConfirm');
+        ctx.vibrate(15);
+        setTimeout(() => {
+          if (importArmed && performance.now() > importArmed) {
+            importArmed = 0;
+            imp.classList.remove('danger');
+            imp.lastChild!.textContent = t('importSave');
+          }
+        }, 4100);
+        return;
+      }
+      importArmed = 0;
       const ok = ctx.deps.importSave(s);
       ctx.toast(ok ? t('importOk') : t('importFail'), ok ? 'good' : 'bad', ok ? 'check' : 'warning');
       if (ok) m.close();
+      else {
+        imp.classList.remove('danger');
+        imp.lastChild!.textContent = t('importSave');
+      }
     });
     reset.addEventListener('click', () => {
       if (!resetArmed || performance.now() > resetArmed) {
@@ -458,6 +612,7 @@ export function openSettings(host: ModalHost, ctx: Ctx): ModalHandle {
   };
   m.relabel = () => {
     const st = m.body.scrollTop;
+    m.setTitle?.(t('settings'));
     build();
     m.body.scrollTop = st;
   };
@@ -465,6 +620,16 @@ export function openSettings(host: ModalHost, ctx: Ctx): ModalHandle {
 }
 
 // ───────────────────────────── Species card ─────────────────────────────
+
+/** Longest custom species name (QA1 #5). */
+const NAME_MAX = 24;
+
+/** First `max` user-perceived characters (never splits an emoji or an accented letter). */
+export function cutGraphemes(s: string, max: number): string {
+  const Seg = (Intl as unknown as { Segmenter?: new (l?: string, o?: { granularity: string }) => { segment(x: string): Iterable<{ segment: string }> } }).Segmenter;
+  const parts = Seg ? Array.from(new Seg(undefined, { granularity: 'grapheme' }).segment(s), (x) => x.segment) : Array.from(s);
+  return parts.length > max ? parts.slice(0, max).join('') : s;
+}
 
 export function openSpecies(host: ModalHost, ctx: Ctx, id: string): ModalHandle {
   const m = host.show({ kind: 'species', title: t('tabBestiary'), titleIcon: 'bestiary' });
@@ -481,7 +646,9 @@ export function openSpecies(host: ModalHost, ctx: Ctx, id: string): ModalHandle 
     const lang = getLang();
     const k = JSON.stringify([s.name, s.catalogName, s.timesSeen, s.behavior, s.mult, v.samples >= s.printCost, v.calibration.mu, v.calibration.sigma, lang, renaming]);
     if (k === key) return;
-    if (renaming && m.body.contains(document.activeElement)) return;
+    // Do not rebuild under the player's fingers while they type the new name (only the input counts:
+    // the pencil keeping focus must not block opening the field, QA1 #2).
+    if (renaming && (document.activeElement as HTMLElement | null)?.closest?.('.rename-form')) return;
     key = k;
     m.body.textContent = '';
     m.body.appendChild(speciesBody(s, v, ctx, () => {
@@ -502,6 +669,7 @@ export function openSpecies(host: ModalHost, ctx: Ctx, id: string): ModalHandle 
   m.update = render;
   m.relabel = () => {
     key = '';
+    m.setTitle?.(t('tabBestiary'));
     render(ctx.view);
   };
   return m;
@@ -523,11 +691,12 @@ function speciesBody(
 
   let title: HTMLElement;
   if (renaming) {
-    const input = h('input', { type: 'text', maxlength: '28', value: s.name, 'aria-label': t('rename') });
+    const input = h('input', { type: 'text', maxlength: String(NAME_MAX), value: s.name, 'aria-label': t('rename') });
     const ok = h('button', { type: 'button', class: 'btn primary', 'aria-label': t('save') }, ic('check', 24));
-    ok.addEventListener('click', () => endRename(input.value.trim() || s.name));
+    const done = () => endRename(cutGraphemes(input.value.trim(), NAME_MAX) || s.name);
+    ok.addEventListener('click', done);
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') endRename(input.value.trim() || s.name);
+      if (e.key === 'Enter') done();
       if (e.key === 'Escape') {
         e.stopPropagation();
         endRename(null);
@@ -561,9 +730,14 @@ function speciesBody(
     { class: 'spc-grid' },
     stat(t('multiplier'), `×${fmtFixed(s.mult, 2, lang)}`),
     stat(t('timesSeen'), fmt(s.timesSeen, lang)),
-    stat(t('muRange'), `${s.muRange[0].toFixed(3)}–${s.muRange[1].toFixed(3)}`),
-    stat(t('sigmaRange'), `${s.sigmaRange[0].toFixed(4)}–${s.sigmaRange[1].toFixed(4)}`),
   );
+  // μ/σ ranges are the Microscope's reward (QA2 H-12): hidden before it, so a first card stays simple.
+  if ((v.microscope ?? v.upgrades.find((u) => u.id === 'microscope')?.level ?? 0) >= 1) {
+    grid.append(
+      stat(t('muRange'), `${s.muRange[0].toFixed(3)}–${s.muRange[1].toFixed(3)}`),
+      stat(t('sigmaRange'), `${s.sigmaRange[0].toFixed(4)}–${s.sigmaRange[1].toFixed(4)}`),
+    );
+  }
   const c = v.calibration;
   const tol = 0.004;
   const outOf =
@@ -574,7 +748,7 @@ function speciesBody(
     'button',
     { type: 'button', class: 'btn block good' },
     ic('print', 24),
-    `${t('print')} · `,
+    `${t('plantAnother')} · `,
     h('span', { class: 'mono', style: 'display:inline-flex;align-items:center;gap:3px', html: `${icon('samples', 16)}${fmt(s.printCost, lang)}` }),
   );
   printBtn.disabled = !canPrint;
@@ -666,4 +840,14 @@ export function openEraSummary(host: ModalHost, sum: EraSummary, onOpenTree: () 
     ),
   );
   return m;
+}
+
+/** Same checks as game.importString, without touching the game. */
+function importable(s: string): boolean {
+  if (!s.startsWith(EXPORT_PREFIX)) return false;
+  try {
+    return deserializeState(base64ToUtf8(s.slice(EXPORT_PREFIX.length))) !== null;
+  } catch {
+    return false;
+  }
 }

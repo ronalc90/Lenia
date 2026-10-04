@@ -2,6 +2,7 @@
 import type { GameView } from '../core/types';
 import { introEl, type Ctx, type Panel } from './ctx';
 import { h, show } from './dom';
+import { emptyState } from './empty';
 import { t } from './i18n';
 import { QtySelector, UpgradeList } from './upgrades';
 
@@ -10,7 +11,7 @@ export class LabPanel implements Panel {
   private scroll = h('div', { class: 'panel-scroll' });
   private qty: QtySelector;
   private list: UpgradeList;
-  private empty = h('div', { class: 'empty' });
+  private empty = h('div');
   private introSlot = h('div');
 
   constructor(private ctx: Ctx) {
@@ -25,7 +26,8 @@ export class LabPanel implements Panel {
     this.introSlot = h('div');
     const intro = introEl(this.ctx, 'lab');
     if (intro) this.introSlot.appendChild(intro);
-    this.empty.textContent = t('noUpgrades');
+    this.empty.textContent = '';
+    this.empty.appendChild(emptyState('dish', t('tabLab'), t('labEmpty'), t('labEmptyHint')));
     this.scroll.append(
       this.introSlot,
       h('div', { class: 'toolbar' }, h('span', { class: 'lbl' }, t('buyQty')), h('span', { class: 'grow' }), this.qty.el),

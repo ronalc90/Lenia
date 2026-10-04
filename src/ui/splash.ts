@@ -3,10 +3,13 @@
  * the "BIOLUMA" wordmark with a moving glow and "Toca para empezar". The tap
  * (or any key) dismisses it; the UI's first-gesture hook unlocks audio with it.
  */
+import type { Lang } from '../core/types';
 import { catalogPattern } from '../sim/catalog';
 import { h } from './dom';
 import { t } from './i18n';
+import { icon } from './icons';
 import { renderPattern } from './portrait';
+import { VERSION_LABEL } from '../version';
 
 export interface Splash {
   readonly el: HTMLElement;
@@ -24,7 +27,17 @@ interface Mote {
   hue: number;
 }
 
-export function createSplash(root: HTMLElement, opts: { reduceMotion: () => boolean; onDone: () => void }): Splash {
+export interface SplashOptions {
+  reduceMotion: () => boolean;
+  onDone: () => void;
+  /** Optional language and sound controls on the title screen (QA2 H-21). */
+  lang?: () => Lang;
+  setLang?: (l: Lang) => void;
+  muted?: () => boolean;
+  toggleMute?: () => void;
+}
+
+export function createSplash(root: HTMLElement, opts: SplashOptions): Splash {
   const canvas = h('canvas', { class: 'splash-cv', 'aria-hidden': 'true' });
   const word = h('h1', { class: 'splash-word', 'aria-label': 'Bioluma' });
   'BIOLUMA'.split('').forEach((ch, i) => {
@@ -35,18 +48,57 @@ export function createSplash(root: HTMLElement, opts: { reduceMotion: () => bool
   const tag = h('p', { class: 'splash-tag' });
   const tap = h('div', { class: 'splash-tap' }, h('span', { class: 'splash-tap-ring' }), h('span', { class: 'splash-tap-t' }));
   const credit = h('div', { class: 'splash-credit' });
+  // Language and sound before the game starts: these taps never dismiss the title.
+  const controls = h('div', { class: 'splash-ctl' });
+  const langBtns: { l: Lang; b: HTMLButtonElement }[] = [];
+  let soundBtn: HTMLButtonElement | null = null;
+  if (opts.setLang && opts.lang) {
+    const seg = h('div', { class: 'splash-lang', role: 'group' });
+    for (const l of ['es', 'en'] as Lang[]) {
+      const b = h('button', { type: 'button', text: l.toUpperCase(), 'data-testid': `splash-lang-${l}` });
+      b.addEventListener('click', () => {
+        opts.setLang?.(l);
+        relabel();
+      });
+      langBtns.push({ l, b });
+      seg.appendChild(b);
+    }
+    controls.appendChild(seg);
+  }
+  if (opts.toggleMute && opts.muted) {
+    soundBtn = h('button', { type: 'button', class: 'splash-sound', 'data-testid': 'splash-sound' });
+    soundBtn.addEventListener('click', () => {
+      opts.toggleMute?.();
+      relabel();
+    });
+    controls.appendChild(soundBtn);
+  }
+  controls.addEventListener('pointerdown', (e) => e.stopPropagation());
+  controls.addEventListener('keydown', (e) => e.stopPropagation());
   const el = h(
     'div',
     { class: 'splash', role: 'button', tabindex: '0', 'aria-label': 'Bioluma', 'data-testid': 'splash' },
     canvas,
-    h('div', { class: 'splash-center' }, word, tag),
+    h('div', { class: 'splash-center' }, word, tag, h('p', { class: 'splash-ver', 'data-testid': 'splash-version' }, VERSION_LABEL)),
     tap,
     credit,
+    controls.childElementCount ? controls : null,
   );
   const relabel = () => {
     tag.textContent = t('splashTagline');
     (tap.lastChild as HTMLElement).textContent = t('splashTap');
     credit.textContent = t('splashCredit');
+    const cur = opts.lang?.();
+    for (const { l, b } of langBtns) {
+      b.classList.toggle('on', l === cur);
+      b.setAttribute('aria-pressed', String(l === cur));
+    }
+    if (soundBtn) {
+      const m = !!opts.muted?.();
+      soundBtn.innerHTML = icon(m ? 'mute' : 'sound', 22);
+      soundBtn.setAttribute('aria-label', m ? t('unmute') : t('mute'));
+      soundBtn.classList.toggle('on', !m);
+    }
   };
   relabel();
   root.appendChild(el);

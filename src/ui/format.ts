@@ -51,8 +51,10 @@ function suffixed(n: number, minTier: number, sp: Sep): string {
   const digits = scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2;
   const f = Math.pow(10, digits);
   const v = floorEps(scaled * f) / f;
-  // Floor may carry 999.99 → 999 (fine); never round up into the next tier.
-  return v.toFixed(digits).replace('.', sp.decimal) + SUFFIXES[t];
+  // Floor may carry 999.99 → 999 (fine); never round up into the next tier. No trailing zeros:
+  // "5K", "1.2M", not "5.00K" (QA3 F15).
+  const body = digits > 0 ? v.toFixed(digits).replace(/\.?0+$/, '') : v.toFixed(0);
+  return body.replace('.', sp.decimal) + SUFFIXES[t];
 }
 
 function scientific(n: number, sp: Sep): string {

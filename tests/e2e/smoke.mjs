@@ -72,8 +72,10 @@ try {
       await splash.click();
       await page.waitForTimeout(700);
     }
+    // The story tutorial (VELA) starts a moment after the title; skipping all of it takes two taps.
     const skip = page.locator('[data-testid="tutorial-skip"]');
-    if (await skip.isVisible().catch(() => false)) {
+    await skip.waitFor({ state: 'visible', timeout: 6000 }).catch(() => undefined);
+    for (let k = 0; k < 2 && (await skip.isVisible().catch(() => false)); k++) {
       await skip.click();
       await page.waitForTimeout(400);
     }

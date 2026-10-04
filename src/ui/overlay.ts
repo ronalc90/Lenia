@@ -9,9 +9,55 @@
 import { mod, wrapDelta, type Camera } from '../core/camera';
 import { BEHAVIOR_COLOR, UI as C } from '../core/palette';
 import type { Behavior, CreatureView, GameView } from '../core/types';
+import { behaviorName, stateName } from './i18n';
+import { defaultItem, type DishTheme, type HaloStyle, type SparkSkin, type TrailStyle } from '../store/catalog';
+import {
+  drawHalo,
+  drawSpark,
+  drawSparkTrail,
+  drawTrailParticle,
+  drawTrailRipple,
+  stepTrailParticle,
+  trailBurst,
+  type TrailParticle,
+} from '../store/draw';
 
-const MONO = '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace';
-const SANS = 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+/** Equipped cosmetics the overlay draws (src/store/apply.ts bindCosmetics → setCosmetics). */
+export interface OverlayCosmetics {
+  halo: HaloStyle;
+  trail: TrailStyle;
+  spark: SparkSkin;
+  dish: DishTheme;
+}
+
+/** Same data as the slot's default item: keep the built-in drawing (today's look, byte for byte). */
+function nonDefault<T>(data: T, slot: 'halo' | 'trail' | 'spark'): T | null {
+  return JSON.stringify(data) === JSON.stringify(defaultItem(slot).data) ? null : data;
+}
+
+/**
+ * Extra drawing layer (seam for Momentos / Secrets / Encargos): called every frame with the overlay's
+ * 2D context in CSS pixels. 'creatures' layers run right after the creature halos, clipped to the dish;
+ * 'top' layers run last, unclipped (above labels, golden indicator and ritual).
+ */
+export interface OverlayLayerFrame {
+  ctx: CanvasRenderingContext2D;
+  time: number;
+  dt: number;
+  /** Visible dish rectangle (CSS px, overlay canvas coordinates). */
+  rect: { x: number; y: number; w: number; h: number };
+  /** CSS px per grid cell. */
+  scale: number;
+  reduceMotion: boolean;
+  paused: boolean;
+  /** Grid cell → overlay canvas coordinates (CSS px). */
+  gridToScreen(x: number, y: number): { x: number; y: number };
+}
+export type OverlayLayer = (f: OverlayLayerFrame) => void;
+export type OverlayLayerSlot = 'creatures' | 'top';
+
+const MONO = '"JetBrains Mono", "JetBrains Mono Fallback", ui-monospace, "SF Mono", Menlo, Consolas, monospace';
+const SANS = 'Inter, "Inter Fallback", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 
 interface Smoothed {
   x: number;
@@ -28,9 +74,19 @@ interface Smoothed {
   /** Velocity in cells per simulation step (0 if the view has none). */
   vx: number;
   vy: number;
-  /** performance.now() (ms) when tx/ty were received. */
+  /** performance.now() (ms) when the detector last reported a new position/velocity. */
   at: number;
+  /** Cells it jumped at that report (moving without a velocity → its ring cannot be kept in sync). */
+  jump: number;
+  /** Overlay time (s) of the last "became stable / new species" pulse, -1 = none. */
+  pulseAt: number;
+  /** Species accent hue (degrees) and name, once registered. */
+  hue?: number;
+  name: string | null;
 }
+
+/** Duration of the ring pulse when a creature becomes stable or is a new species (s). */
+const RING_PULSE_S = 1.6;
 
 interface Ripple {
   x: number;
@@ -41,6 +97,17 @@ interface Ripple {
   maxR: number;
   rings: number;
   width: number;
+  /** Successful-seed ripple drawn with an equipped trail skin (src/store/draw.ts). */
+  skin?: TrailStyle;
+}
+
+/** A seed-trail particle of an equipped skin, anchored to a grid point. */
+interface SkinParticle {
+  ax: number;
+  ay: number;
+  t0: number;
+  p: TrailParticle;
+  skin: TrailStyle;
 }
 
 interface Float {
@@ -94,11 +161,34 @@ interface Spot {
 }
 
 const MAX_FLOATS = 40;
+/** Income numbers visible at once; more income merges into the nearest number. */
+const MAX_INCOME_FLOATS = 12;
+/** Income numbers closer than this (CSS px) merge into one. */
+const MERGE_RADIUS_PX = 34;
 const MAX_PARTICLES = 420;
 
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 const clamp01 = (t: number) => (t < 0 ? 0 : t > 1 ? 1 : t);
+
+/** Stable creatures up to which each one gets its name drawn (a crowded dish stays readable). */
+const MAX_NAMED_CREATURES = 8;
+
+/** Species accent hue → '#RRGGBB' (hsl(h 70% L%)), cached: the halo/name colour of a species. */
+const hueCache = new Map<string, string>();
+export function hueHex(hue: number, light = 62): string {
+  const key = `${Math.round(hue)}|${light}`;
+  let hex = hueCache.get(key);
+  if (hex) return hex;
+  const s = 0.7;
+  const l = light / 100;
+  const k = (n: number) => (n + hue / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+  hex = '#' + [f(0), f(8), f(4)].map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
+  hueCache.set(key, hex);
+  return hex;
+}
 
 function rgba(hex: string, a: number): string {
   const n = parseInt(hex.slice(1), 16);
@@ -120,6 +210,13 @@ export class Overlay {
   private ripples: Ripple[] = [];
   private floats: Float[] = [];
   private particles: Particle[] = [];
+  private skinParticles: SkinParticle[] = [];
+  private layers: { fn: OverlayLayer; slot: OverlayLayerSlot }[] = [];
+  /** Equipped skins; null = the slot's default (drawn by the built-in code below). */
+  private haloSkin: HaloStyle | null = null;
+  private trailSkin: TrailStyle | null = null;
+  private sparkSkin: SparkSkin | null = null;
+  private motesColor: string | null = null;
   private labels: Label[] = [];
   private spots: Spot[] = [];
   private flashes: { x: number; y: number; t0: number; color: string; r: number }[] = [];
@@ -159,6 +256,53 @@ export class Overlay {
     this.canvas.height = Math.max(1, Math.round(h * this.dpr));
   }
 
+  /**
+   * Equipped cosmetics. Only the stable halo, the successful-seed ripple/burst, the golden spark
+   * and the dish motes are skinnable: the "forming" ring, the red "denied" ripple, the spark's
+   * size, hit area and off-screen indicator never change (fair play, docs/MONETIZACION.md).
+   */
+  /** Register an extra drawing layer; returns its remover. A layer that throws is dropped. */
+  addLayer(fn: OverlayLayer, slot: OverlayLayerSlot = 'creatures'): () => void {
+    const entry = { fn, slot };
+    this.layers.push(entry);
+    return () => {
+      this.layers = this.layers.filter((l) => l !== entry);
+    };
+  }
+
+  private runLayers(slot: OverlayLayerSlot, time: number, dt: number, rect: { x: number; y: number; w: number; h: number }, scale: number): void {
+    if (!this.layers.length) return;
+    const frame: OverlayLayerFrame = {
+      ctx: this.ctx,
+      time,
+      dt,
+      rect,
+      scale,
+      reduceMotion: this.reduceMotion,
+      paused: this.paused,
+      gridToScreen: (x, y) => this.camera.gridToScreen(x, y),
+    };
+    for (const l of [...this.layers]) {
+      if (l.slot !== slot) continue;
+      this.ctx.save();
+      try {
+        l.fn(frame);
+      } catch (e) {
+        console.error('[bioluma] overlay layer failed; removed', e);
+        this.layers = this.layers.filter((x) => x !== l);
+      }
+      this.ctx.restore();
+    }
+  }
+
+  setCosmetics(c: OverlayCosmetics): void {
+    this.haloSkin = nonDefault(c.halo, 'halo');
+    this.trailSkin = nonDefault(c.trail, 'trail');
+    this.sparkSkin = nonDefault(c.spark, 'spark');
+    const motes = c.dish.motes;
+    this.motesColor = motes.toUpperCase() === defaultItem('dish').data.motes.toUpperCase() ? null : motes;
+  }
+
   setView(view: GameView): void {
     this.reduceMotion = view.settings.reduceMotion;
     this.markers = !!(view.tools as { markers?: boolean }).markers;
@@ -184,6 +328,10 @@ export class Overlay {
           vx: c.vx ?? 0,
           vy: c.vy ?? 0,
           at: performance.now(),
+          jump: 0,
+          pulseAt: -1,
+          hue: c.hue,
+          name: c.speciesName,
         };
         this.creatures.set(c.id, s);
       } else {
@@ -203,11 +351,17 @@ export class Overlay {
           s.x = c.x;
           s.y = c.y;
         }
+        // Only a new report restarts the extrapolation clock (the view may repeat the same report).
+        if (c.x !== s.tx || c.y !== s.ty || (c.vx ?? 0) !== s.vx || (c.vy ?? 0) !== s.vy) {
+          s.at = performance.now();
+          s.jump = d;
+        }
+        // One short ring pulse when it becomes stable or its species is registered (new species).
+        if ((c.state === 'stable' && s.state !== 'stable') || (c.speciesName && !s.name)) s.pulseAt = this.now;
         s.tx = c.x;
         s.ty = c.y;
         s.vx = c.vx ?? 0;
         s.vy = c.vy ?? 0;
-        s.at = performance.now();
         if (s.vx || s.vy) {
           const n = Math.hypot(s.vx, s.vy);
           s.hx = s.vx / n;
@@ -216,6 +370,8 @@ export class Overlay {
         s.r = c.r;
         s.state = c.state;
         s.behavior = c.behavior;
+        s.hue = c.hue;
+        s.name = c.speciesName;
       }
     }
     for (const id of [...this.creatures.keys()]) if (!alive.has(id)) this.creatures.delete(id);
@@ -286,10 +442,18 @@ export class Overlay {
       erase: { dur: 0.3, color: C.warn, maxR: base * 0.9, rings: 1, width: 1.6 },
       print: { dur: 0.5, color: C.good, maxR: base * 1.4, rings: 3, width: 2 },
     };
-    this.ripples.push({ x, y, t0: this.now, ...spec[kind] });
+    const skin = (kind === 'seed' || kind === 'big') && this.trailSkin ? this.trailSkin : undefined;
+    this.ripples.push({ x, y, t0: this.now, ...spec[kind], ...(skin ? { rings: skin.rings, skin } : {}) });
     if (this.ripples.length > 24) this.ripples.shift();
     if ((kind === 'seed' || kind === 'big') && !this.reduceMotion) {
-      this.burst(x, y, kind === 'big' ? 10 : 6, C.accent, { speed: 60, life: 0.45, size: 1.6, grav: 0 });
+      if (skin) {
+        for (const p of trailBurst(skin, kind === 'big' ? 10 : 6)) {
+          if (this.skinParticles.length >= MAX_PARTICLES / 2) this.skinParticles.shift();
+          this.skinParticles.push({ ax: x, ay: y, t0: this.now, p, skin });
+        }
+      } else {
+        this.burst(x, y, kind === 'big' ? 10 : 6, C.accent, { speed: 60, life: 0.45, size: 1.6, grav: 0 });
+      }
     }
   }
 
@@ -313,6 +477,28 @@ export class Overlay {
         f.y = y;
         return;
       }
+    }
+    // Crowded dish: never a wall of numbers. Join the nearest live income number when one is close
+    // (or when MAX_INCOME_FLOATS are already showing); the merged number shows the running total.
+    let nearest: Float | null = null;
+    let best = Infinity;
+    let live = 0;
+    for (const f of this.floats) {
+      if (f.cid === undefined || this.now - f.t0 > f.dur * 0.7) continue;
+      live++;
+      const q = this.camera.gridToScreen(f.x, f.y);
+      const d = Math.hypot(q.x - p.x, q.y - p.y);
+      if (d < best) {
+        best = d;
+        nearest = f;
+      }
+    }
+    if (nearest && (best < MERGE_RADIUS_PX || live >= MAX_INCOME_FLOATS)) {
+      nearest.amount = (nearest.amount ?? 0) + amount;
+      nearest.text = '+' + format(nearest.amount);
+      nearest.t0 = Math.max(nearest.t0, this.now - 0.25);
+      nearest.cid = id;
+      return;
     }
     this.pushFloat({
       x,
@@ -375,7 +561,7 @@ export class Overlay {
   goldenCollected(x: number, y: number, reward: string): void {
     this.flash(x, y, C.gold, 2.2);
     if (!this.reduceMotion) {
-      this.burst(x, y, 44, C.gold, { speed: 190, life: 1.2, size: 2.4, grav: 40, star: true });
+      this.burst(x, y, 44, this.sparkSkin?.particles[0] ?? C.gold, { speed: 190, life: 1.2, size: 2.4, grav: 40, star: true });
       this.burst(x, y, 16, '#FFFFFF', { speed: 120, life: 0.7, size: 1.5, grav: 0 });
     }
     this.labels.push({ x, y, t0: this.now, dur: 2.4, text: reward, sub: '', color: C.gold, glyph: null });
@@ -384,7 +570,7 @@ export class Overlay {
   }
 
   goldenSpawned(x: number, y: number): void {
-    if (!this.reduceMotion) this.burst(x, y, 16, C.gold, { speed: 80, life: 0.8, size: 1.6, grav: 0, star: true });
+    if (!this.reduceMotion) this.burst(x, y, 16, this.sparkSkin?.particles[0] ?? C.gold, { speed: 80, life: 0.8, size: 1.6, grav: 0, star: true });
   }
 
   /** Long-press charge ring at a CSS-pixel point (cleared on release/fire). */
@@ -526,17 +712,21 @@ export class Overlay {
     if (!rm) this.drawMotes(time, dt, rect);
     this.drawSpots(time);
     this.drawCreatures(time, rect, scale, rm);
+    this.runLayers('creatures', time, dt, rect, scale);
     this.drawFlashes(time);
     this.drawRipples(time);
     this.drawParticles(time, dt);
+    if (this.skinParticles.length) this.drawSkinParticles(time, dt);
     if (g) this.drawGolden(time, g, rm);
     this.drawFloats(time);
-    this.drawLabels(time);
     ctx.restore();
+    // Labels are drawn unclipped and kept on screen, so a creature at the dish edge never cuts them.
+    this.drawLabels(time);
 
     if (g) this.drawGoldenIndicator(g);
     this.drawCharge(time);
     this.drawRitual(time, rect);
+    this.runLayers('top', time, dt, rect, scale);
   }
 
   private drawDishFrame(rect: { x: number; y: number; w: number; h: number }): void {
@@ -602,7 +792,8 @@ export class Overlay {
       const tw = 0.5 + 0.5 * Math.sin(time * 1.3 + m.ph);
       const x = rect.x + m.x * rect.w + Math.sin(time * 0.5 + m.ph) * 6;
       const y = rect.y + m.y * rect.h;
-      ctx.fillStyle = m.violet ? `rgba(184,146,255,${(0.05 + 0.13 * tw).toFixed(3)})` : `rgba(140,215,255,${(0.05 + 0.15 * tw).toFixed(3)})`;
+      if (this.motesColor) ctx.fillStyle = rgba(this.motesColor, m.violet ? 0.04 + 0.1 * tw : 0.05 + 0.15 * tw);
+      else ctx.fillStyle = m.violet ? `rgba(184,146,255,${(0.05 + 0.13 * tw).toFixed(3)})` : `rgba(140,215,255,${(0.05 + 0.15 * tw).toFixed(3)})`;
       ctx.beginPath();
       ctx.arc(x, y, m.r, 0, Math.PI * 2);
       ctx.fill();
@@ -629,49 +820,40 @@ export class Overlay {
     }
   }
 
+  /**
+   * Where the matter is right now: the latest detector position pushed forward by its velocity
+   * (no smoothing, no lag). Null when that cannot be known exactly (stale report while running, or a
+   * creature that moves without a reported velocity) — then no ring is drawn at all.
+   */
+  private exactPos(s: Smoothed, nowMs: number): { x: number; y: number } | null {
+    const rate = this.paused ? 0 : this.simRate;
+    const age = Math.max(0, (nowMs - s.at) / 1000);
+    if (!s.vx && !s.vy) return s.jump > 1.5 && rate > 0 && age < 0.6 ? null : { x: s.tx, y: s.ty };
+    if (rate > 0 && age > 0.5) return null;
+    const ahead = age * rate;
+    return { x: mod(s.tx + s.vx * ahead, this.camera.gridW), y: mod(s.ty + s.vy * ahead, this.camera.gridH) };
+  }
+
   private drawCreatures(time: number, rect: { x: number; y: number; w: number; h: number }, scale: number, rm: boolean): void {
     const ctx = this.ctx;
+    const nowMs = performance.now();
+    // No permanent ring: state is told by the small label under each creature (while the dish is
+    // not crowded). A ring appears only around the selected creature and as a short pulse when one
+    // becomes stable or is a new species — always at the exact matter position, or not at all.
+    let labelled = 0;
+    for (const c of this.creatures.values()) if (c.state === 'stable' || c.state === 'born') labelled++;
+    const showLabels = labelled > 0 && labelled <= MAX_NAMED_CREATURES;
     for (const [id, s] of this.creatures) {
-      const p = this.camera.gridToScreen(s.x, s.y);
+      // Labels and markers follow the matter itself when its position is known exactly.
+      const e = this.exactPos(s, nowMs);
+      const p = this.camera.gridToScreen(e ? e.x : s.x, e ? e.y : s.y);
       const R = this.haloRadius(s);
-      const selected = id === this.selectedId;
       this.copies(p.x, p.y, R + 14, rect, (x, y) => {
         if (s.state === 'stable') {
-          // Halo pulsing at 0.5 Hz (static with reduce motion).
-          const pulse = rm ? 0.5 : 0.5 + 0.5 * Math.sin((time * 0.5 + s.phase) * Math.PI * 2);
-          ctx.lineWidth = 6;
-          ctx.strokeStyle = rgba(C.accent, 0.05 + 0.06 * pulse);
-          ctx.beginPath();
-          ctx.arc(x, y, R + 1, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.lineWidth = 2;
-          ctx.strokeStyle = rgba(C.accent, 0.22 + 0.3 * pulse);
-          ctx.beginPath();
-          ctx.arc(x, y, R + (rm ? 0 : pulse * 1.5), 0, Math.PI * 2);
-          ctx.stroke();
-          if (!rm) {
-            // A bright shimmer travelling around the halo: "this is alive and producing".
-            const a0 = time * 1.4 + s.phase * 6.283;
-            ctx.lineCap = 'round';
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = rgba('#D8F4FF', 0.35 + 0.25 * pulse);
-            ctx.beginPath();
-            ctx.arc(x, y, R + pulse * 1.5, a0, a0 + 0.55);
-            ctx.stroke();
-            ctx.lineCap = 'butt';
-          }
           if (this.markers && s.behavior) this.drawMarker(x + R * 0.71, y - R * 0.71, s, time, rm);
+          if (showLabels) this.drawCreatureName(x, y + R + 4, s);
         } else if (s.state === 'born') {
-          // Dashed rotating ring: "forming".
-          ctx.save();
-          ctx.lineWidth = 1.5;
-          ctx.setLineDash([4, 5]);
-          ctx.lineDashOffset = rm ? 0 : -time * 18;
-          ctx.strokeStyle = rgba('#9FB8CC', 0.55);
-          ctx.beginPath();
-          ctx.arc(x, y, R, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.restore();
+          if (showLabels) this.drawStatusLabel(x, y + Math.min(R, 28) + 4, `${stateName('born')}…`, '#9FB8CC');
         } else if (s.state === 'exploded') {
           // Orange tint pulsing from the center.
           const pulse = rm ? 0.6 : 0.55 + 0.45 * Math.sin(time * Math.PI * 2 * 1.1 + s.phase * 6);
@@ -685,8 +867,45 @@ export class Overlay {
           ctx.arc(x, y, rr, 0, Math.PI * 2);
           ctx.fill();
         }
+      });
+
+      const selected = id === this.selectedId;
+      const pulseAge = s.pulseAt >= 0 ? time - s.pulseAt : Infinity;
+      const pulsing = s.state === 'stable' && pulseAge >= 0 && pulseAge < RING_PULSE_S;
+      if (!selected && !pulsing) continue;
+      if (!e) continue;
+      const q = p;
+      const hc = s.hue !== undefined ? hueHex(s.hue) : C.accent;
+      this.copies(q.x, q.y, R + 24, rect, (x, y) => {
+        if (pulsing) {
+          const u = pulseAge / RING_PULSE_S;
+          const a = Math.pow(1 - u, 1.5);
+          if (this.haloSkin) {
+            ctx.save();
+            ctx.globalAlpha = a;
+            drawHalo(ctx, x, y, R, time, this.haloSkin, { phase: s.phase, reduceMotion: rm });
+            ctx.restore();
+          } else {
+            const rr = R + (rm ? 2 : 2 + 12 * Math.sqrt(u));
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = rgba(hc, 0.12 * a);
+            ctx.beginPath();
+            ctx.arc(x, y, rr, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = rgba(hc, 0.75 * a);
+            ctx.beginPath();
+            ctx.arc(x, y, rr, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
         if (selected) {
           ctx.save();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = rgba(hc, 0.55);
+          ctx.beginPath();
+          ctx.arc(x, y, R + 3, 0, Math.PI * 2);
+          ctx.stroke();
           ctx.lineWidth = 1.5;
           ctx.strokeStyle = rgba('#FFFFFF', 0.8);
           ctx.setLineDash([2, 4]);
@@ -701,6 +920,44 @@ export class Overlay {
     void scale;
   }
 
+  /** Small status text under a creature that has no species name yet ("Naciendo…"). */
+  private drawStatusLabel(x: number, y: number, text: string, color: string): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.font = `600 12px ${SANS}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const w = ctx.measureText(text).width;
+    const tx = Math.min(this.w - w / 2 - 4, Math.max(w / 2 + 4, x));
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(8,10,14,0.85)';
+    ctx.strokeText(text, tx, y);
+    ctx.fillStyle = color;
+    ctx.fillText(text, tx, y);
+    ctx.restore();
+  }
+
+  /** "Gyrorbium · Nada" under a stable creature ("Estable · …" before its species is known). */
+  private drawCreatureName(x: number, y: number, s: Smoothed): void {
+    const ctx = this.ctx;
+    const base = s.name ?? stateName('stable');
+    const text = s.behavior ? `${base} · ${behaviorName(s.behavior)}` : base;
+    ctx.save();
+    ctx.font = `600 12px ${SANS}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const w = ctx.measureText(text).width;
+    const tx = Math.min(this.w - w / 2 - 4, Math.max(w / 2 + 4, x));
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(8,10,14,0.85)';
+    ctx.strokeText(text, tx, y);
+    ctx.fillStyle = s.hue !== undefined ? hueHex(s.hue, 78) : '#C9D6E2';
+    ctx.fillText(text, tx, y);
+    ctx.restore();
+  }
+
   /** Behaviour marker: shape + colour (never colour alone). */
   private drawMarker(x: number, y: number, s: Smoothed, time: number, rm: boolean): void {
     const ctx = this.ctx;
@@ -708,11 +965,16 @@ export class Overlay {
     const col = BEHAVIOR_COLOR[b] ?? C.accent;
     ctx.save();
     ctx.translate(x, y);
-    // Dark backing disc for contrast over bright matter.
+    // Dark backing disc for contrast over bright matter, ringed in the species' colour.
     ctx.fillStyle = 'rgba(11,14,18,0.78)';
     ctx.beginPath();
     ctx.arc(0, 0, 7.5, 0, Math.PI * 2);
     ctx.fill();
+    if (s.hue !== undefined) {
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = hueHex(s.hue);
+      ctx.stroke();
+    }
     ctx.fillStyle = col;
     ctx.strokeStyle = col;
     ctx.lineWidth = 1.5;
@@ -813,6 +1075,10 @@ export class Overlay {
         continue;
       }
       const p = this.camera.gridToScreen(rp.x, rp.y);
+      if (rp.skin) {
+        drawTrailRipple(ctx, p.x, p.y, time - rp.t0, rp.maxR, rp.skin, rp.dur);
+        continue;
+      }
       for (let r = 0; r < rp.rings; r++) {
         const t = (time - rp.t0 - r * 0.07) / rp.dur;
         if (t < 0 || t > 1) continue;
@@ -871,7 +1137,80 @@ export class Overlay {
     }
   }
 
+  /** Seed-trail particles of an equipped skin (drag + the skin's gravity, src/store/draw.ts). */
+  private drawSkinParticles(time: number, dt: number): void {
+    const d = Math.min(dt, 0.05);
+    for (let i = this.skinParticles.length - 1; i >= 0; i--) {
+      const sp = this.skinParticles[i];
+      const t = (time - sp.t0) / sp.p.life;
+      if (t >= 1) {
+        this.skinParticles.splice(i, 1);
+        continue;
+      }
+      stepTrailParticle(sp.p, sp.skin, d);
+      const a = this.camera.gridToScreen(sp.ax, sp.ay);
+      drawTrailParticle(this.ctx, a.x, a.y, sp.p, sp.skin, t);
+    }
+  }
+
+  /** Golden spark with an equipped skin: same position, size, life and blink as the default. */
+  private drawGoldenSkin(time: number, g: NonNullable<Overlay['golden']>, rm: boolean, skin: SparkSkin): void {
+    const ctx = this.ctx;
+    const p = this.camera.gridToScreen(g.x, g.y);
+    const last = this.goldenTrail[this.goldenTrail.length - 1];
+    if (!last || time - last.t > 0.035) {
+      this.goldenTrail.push({ x: g.x, y: g.y, t: time });
+      if (this.goldenTrail.length > 22) this.goldenTrail.shift();
+    }
+    const appear = clamp01((time - g.born) / 0.5);
+    const blink = g.life < 0.18 ? 0.55 + 0.45 * Math.sin(time * 18) : 1;
+    const A = appear * blink;
+    // Heading from the drift (comet tail, moth body).
+    const old = this.goldenTrail[Math.max(0, this.goldenTrail.length - 6)];
+    let heading: number | undefined;
+    if (old) {
+      const q = this.camera.gridToScreen(old.x, old.y);
+      if (Math.hypot(p.x - q.x, p.y - q.y) > 1 && Math.abs(q.x - p.x) < 80 && Math.abs(q.y - p.y) < 80) heading = Math.atan2(p.y - q.y, p.x - q.x);
+    }
+    if (!rm) {
+      const pts: { x: number; y: number }[] = [];
+      for (const tp of this.goldenTrail) {
+        const q = this.camera.gridToScreen(tp.x, tp.y);
+        if (Math.abs(q.x - p.x) > 80 || Math.abs(q.y - p.y) > 80) continue; // wrapped
+        pts.push(q);
+      }
+      drawSparkTrail(ctx, pts, skin, A);
+      if (time - this.lastSparkEmit > 0.09) {
+        this.lastSparkEmit = time;
+        if (this.particles.length < MAX_PARTICLES) {
+          const a = Math.random() * Math.PI * 2;
+          const cols = skin.particles.length ? skin.particles : [skin.core];
+          this.particles.push({
+            ax: g.x,
+            ay: g.y,
+            ox: Math.cos(a) * 6,
+            oy: Math.sin(a) * 6,
+            vx: Math.cos(a) * 22,
+            vy: Math.sin(a) * 22 - 8,
+            t0: time,
+            life: 0.7 + Math.random() * 0.4,
+            size: 1 + Math.random() * 1.2,
+            color: cols[Math.floor(Math.random() * cols.length)],
+            drag: 1.2,
+            grav: 10,
+            star: Math.random() < 0.4,
+          });
+        }
+      }
+    }
+    drawSpark(ctx, p.x, p.y, time, skin, { alpha: A, reduceMotion: rm, heading });
+  }
+
   private drawGolden(time: number, g: NonNullable<Overlay['golden']>, rm: boolean): void {
+    if (this.sparkSkin) {
+      this.drawGoldenSkin(time, g, rm, this.sparkSkin);
+      return;
+    }
     const ctx = this.ctx;
     const p = this.camera.gridToScreen(g.x, g.y);
     // Trail (grid positions so it survives zoom), sampled every 35 ms.
@@ -1097,7 +1436,7 @@ export class Overlay {
       const ty = L.sub ? y - 8 : y + 0.5;
       ctx.fillText(L.text, x + glyphW / 2, ty);
       if (L.glyph) {
-        const fake: Smoothed = { x: 0, y: 0, tx: 0, ty: 0, r: 0, hx: 1, hy: 0, state: 'stable', behavior: L.glyph, seenAt: 0, phase: 0, vx: 0, vy: 0, at: 0 };
+        const fake: Smoothed = { x: 0, y: 0, tx: 0, ty: 0, r: 0, hx: 1, hy: 0, state: 'stable', behavior: L.glyph, seenAt: 0, phase: 0, vx: 0, vy: 0, at: 0, jump: 0, pulseAt: -1, name: null };
         this.drawMarker(x - w1 / 2 - 4 + glyphW / 2 - 6, ty, fake, time, this.reduceMotion);
       }
       if (L.sub) {

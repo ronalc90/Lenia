@@ -8,6 +8,7 @@ export type TabId = 'lab' | 'bestiary' | 'calibrate' | 'genome';
 export const TABS: TabId[] = ['lab', 'bestiary', 'calibrate', 'genome'];
 export type ToastKind = 'info' | 'good' | 'warn' | 'bad' | 'gold';
 export type ThemePref = 'auto' | 'dark' | 'light';
+export type TextSize = 'normal' | 'large';
 
 export interface Ctx {
   readonly actions: GameActions;
@@ -29,6 +30,9 @@ export interface Ctx {
   /** Theme preference (auto follows the system). */
   themePref(): ThemePref;
   setTheme(t: ThemePref): void;
+  /** Text size preference ("Letra grande", QA2 H-07): scales every rem-based size. */
+  textSize(): TextSize;
+  setTextSize(s: TextSize): void;
   introVisible(tab: TabId): boolean;
   dismissIntro(tab: TabId): void;
 }

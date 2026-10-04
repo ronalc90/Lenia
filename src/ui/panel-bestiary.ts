@@ -12,6 +12,9 @@ import { icon } from './icons';
 import { portraitURL } from './portrait';
 import { QtySelector, UpgradeList } from './upgrades';
 
+/** Species cards per page in the grid. */
+const PAGE = 60;
+
 interface Card {
   el: HTMLElement;
   portrait?: HTMLElement;
@@ -39,8 +42,15 @@ export class BestiaryPanel implements Panel {
   private fBehavior: Behavior | null = null;
   private fRarity: Rarity | null = null;
   private chipKey = '';
+  /** Cards rendered (grows by PAGE with "Show more"). */
+  private limit = PAGE;
+  private more = h('button', { type: 'button', class: 'btn block sp-more', hidden: true });
 
   constructor(private ctx: Ctx) {
+    this.more.addEventListener('click', () => {
+      this.limit += PAGE;
+      this.update(this.ctx.view);
+    });
     this.qty = new QtySelector(ctx);
     this.ups = new UpgradeList(ctx, 'bestiary');
     this.el.appendChild(this.scroll);
@@ -52,13 +62,15 @@ export class BestiaryPanel implements Panel {
     const intro = introEl(this.ctx, 'bestiary');
     this.upsHead = h('div', { class: 'sec-h' }, ic('samples', 24), h('span', { class: 'grow' }, t('bestiaryUpgrades')), this.qty.el);
     this.upsWrap = h('div', null, this.upsHead, this.ups.el);
+    // The player's creatures first (QA2 H-14: "look at your specimen"), the Samples upgrades after.
     this.scroll.append(
       ...(intro ? [intro] : []),
-      this.upsWrap,
       h('div', { class: 'sec-h' }, ic('bestiary', 24), h('span', { class: 'grow' }, t('registered')), this.count),
       this.chips,
       this.grid,
+      this.more,
       this.empty,
+      this.upsWrap,
     );
     this.chipKey = '';
   }
@@ -84,8 +96,13 @@ export class BestiaryPanel implements Panel {
       (s) => (!this.fBehavior || s.behavior === this.fBehavior) && (!this.fRarity || s.rarity === this.fRarity),
     );
     const filtering = this.fBehavior !== null || this.fRarity !== null;
-    const items: GridItem[] = list.map((s) => ({ kind: 'sp', s }));
-    if (!filtering) {
+    // Pages of cards: a 5,000-species save must not build 5,000 cards every update (QA1 #14).
+    const shown = list.length > this.limit ? list.slice(0, this.limit) : list;
+    const items: GridItem[] = shown.map((s) => ({ kind: 'sp', s }));
+    const rest = list.length - shown.length;
+    show(this.more, rest > 0);
+    if (rest > 0) setText(this.more, t('showMore', { n: String(Math.min(rest, PAGE)) }));
+    if (!filtering && rest === 0) {
       // Silhouettes invite discovery: complete the row, plus one more row.
       const n = ((3 - (list.length % 3)) % 3) + 3;
       for (let i = 0; i < n; i++) items.push({ kind: 'unknown', i });

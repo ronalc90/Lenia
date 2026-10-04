@@ -6,7 +6,7 @@
 import type { BuyQty, GameView, UpgradeView } from '../core/types';
 import { currencyAmount, currencyIcon, retrigger, type Ctx } from './ctx';
 import { h, ic, reconcile, setAttr, setHTML, setStyle, setText, show, toggle } from './dom';
-import { fmtShort } from './format';
+import { fmtClock, fmtShort } from './format';
 import { icon } from './icons';
 import { getLang, t, tx } from './i18n';
 
@@ -197,7 +197,12 @@ export class UpgradeList {
     }
     const lang = getLang();
     setText(row.name!, tx(u.name));
-    const lvlText = u.maxLevel !== null ? `${t('level')} ${u.level}/${u.maxLevel}` : `${t('level')} ${u.level}`;
+    let lvlText = u.maxLevel !== null ? `${t('level')} ${u.level}/${u.maxLevel}` : `${t('level')} ${u.level}`;
+    // Time to afford at the current income (QA3 F13), on the level line so the card never grows.
+    if (!u.maxed && !u.affordable && u.currency === 'essence' && v.essencePerSec > 0) {
+      const eta = (u.cost - v.essence) / v.essencePerSec;
+      if (eta > 0 && eta < 86_400) lvlText += ` · ⏱ ${fmtClock(eta)}`;
+    }
     setText(row.lvl!, lvlText);
     if (row.lastLevel !== undefined && u.level > row.lastLevel) {
       retrigger(row.lvl!, 'pop');

@@ -10,6 +10,8 @@ interface ToastItem {
   kind: ToastKind;
   icon: string;
   onClick?: () => void;
+  /** Toasts of one group merge into a single counter ("+3 new species"). */
+  group?: { key: string; n: number; text: (n: number) => string };
 }
 
 const DEFAULT_ICON: Record<ToastKind, string> = {
@@ -24,23 +26,72 @@ export class Toasts {
   readonly el = h('div', { class: 'toasts bl-nodish', role: 'status', 'aria-live': 'polite' });
   private queue: ToastItem[] = [];
   private current: HTMLElement | null = null;
+  private currentItem: ToastItem | null = null;
   private timer = 0;
+  private holdTimer = 0;
+  /** While true (a story scene or an explainer is talking), only warnings show; the rest waits. */
+  private hold: () => boolean = () => false;
+
+  /** One message at a time: hold non-critical toasts while something else speaks (QA2 H-09). */
+  setHold(fn: () => boolean): void {
+    this.hold = fn;
+  }
 
   push(text: string, kind: ToastKind = 'info', icon?: string, onClick?: () => void): void {
     if (!text) return;
     // Skip exact duplicates of what is showing or queued.
     if (this.current?.dataset.text === text || this.queue.some((q) => q.text === text)) return;
-    this.queue.push({ text, kind, icon: icon ?? DEFAULT_ICON[kind], onClick });
+    this.enqueue({ text, kind, icon: icon ?? DEFAULT_ICON[kind], onClick });
+  }
+
+  /** A toast that merges with others of the same group while they wait or show (count goes up). */
+  pushGroup(key: string, text: (n: number) => string, kind: ToastKind, icon?: string, onClick?: () => void): void {
+    const cur = this.currentItem?.group?.key === key ? this.currentItem : null;
+    const waiting = this.queue.find((q) => q.group?.key === key);
+    const item = cur ?? waiting;
+    if (item?.group) {
+      item.group.n++;
+      item.text = item.group.text(item.group.n);
+      if (item === cur && this.current) {
+        const tt = this.current.querySelector('.tt');
+        if (tt) tt.textContent = item.text;
+        this.current.dataset.text = item.text;
+      }
+      return;
+    }
+    this.enqueue({ text: text(1), kind, icon: icon ?? DEFAULT_ICON[kind], onClick, group: { key, n: 1, text } });
+  }
+
+  private enqueue(item: ToastItem): void {
+    this.queue.push(item);
     while (this.queue.length > 3) this.queue.shift();
     if (!this.current) this.next();
   }
 
+  private critical(item: ToastItem): boolean {
+    return item.kind === 'warn' || item.kind === 'bad';
+  }
+
   private next(): void {
-    const item = this.queue.shift();
+    let i = 0;
+    if (this.hold()) {
+      i = this.queue.findIndex((q) => this.critical(q));
+      if (i < 0) {
+        // Everything waiting is non-critical: try again shortly.
+        this.current = null;
+        this.currentItem = null;
+        clearTimeout(this.holdTimer);
+        if (this.queue.length) this.holdTimer = window.setTimeout(() => !this.current && this.next(), 500);
+        return;
+      }
+    }
+    const item = this.queue.splice(i, 1)[0];
     if (!item) {
       this.current = null;
+      this.currentItem = null;
       return;
     }
+    this.currentItem = item;
     const el = h('div', { class: `toast k-${item.kind}` }, ic(item.icon, 24), h('span', { class: 'tt' }, item.text));
     el.dataset.text = item.text;
     if (item.onClick) {
