@@ -1,5 +1,5 @@
 /**
- * Round petri dish geometry (ADR-022). The simulation grid stays a fixed square in memory; the
+ * Round petri dish geometry (ADR-025). The simulation grid stays a fixed square in memory; the
  * living area is the disc of radius `radius` around (cx, cy). Cell i covers [i, i+1), so a cell
  * belongs to the dish when its centre (i + 0.5, j + 0.5) is inside the disc. There is no wrap:
  * every distance is plain Euclidean. The Placa upgrade grows `radius` (the matter is kept: growth

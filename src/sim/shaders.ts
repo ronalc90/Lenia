@@ -85,7 +85,7 @@ export const MAX_LYSIS = 8;
  * (regenerated only when R or rings change). Fetches use the hardware REPEAT
  * wrap for the torus, with constant texel offsets where the range allows.
  *
- * `dish` (ADR-022): round walled dish. The state textures are then read clamp-to-edge (the grid
+ * `dish` (ADR-025): round walled dish. The state textures are then read clamp-to-edge (the grid
  * keeps ≥ 4 empty cells around the dish, so that is exact zero padding); texels wholly outside
  * the glass write 0 without convolving; cells outside the glass are forced to 0; lysis discs
  * (deflect.ts) subtract from the growth. Same maths as CpuLenia with setDish/setLysis.
@@ -441,7 +441,7 @@ void main() {
 /**
  * Screen pass. Mapping identical to core/camera.ts (contain fit × zoom, centred
  * on (cx, cy)). Torus (uDishMode 0): toroidal content inside the dish rectangle. Round dish
- * (uDishMode 1, ADR-022): agar inside the glass, a thick glass wall with a highlight arc and a
+ * (uDishMode 1, ADR-025): agar inside the glass, a thick glass wall with a highlight arc and a
  * soft shadow on a lab-table background, a glow ring while the dish grows, and optional species
  * tints of the matter (dishgl.ts TINT_GLSL).
  */

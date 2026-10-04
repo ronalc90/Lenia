@@ -1,5 +1,5 @@
 /**
- * GLSL pieces for the round petri dish (ADR-022). shaders.ts composes them into the step, seed,
+ * GLSL pieces for the round petri dish (ADR-025). shaders.ts composes them into the step, seed,
  * erase, rotate and screen passes; every formula mirrors a CPU function so tests can compare:
  *
  *   inside(c)      cpu: core/dish.ts cellInDish          |c − centre|² < r²   (cell centres)

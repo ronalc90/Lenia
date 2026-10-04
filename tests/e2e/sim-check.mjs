@@ -8,7 +8,7 @@
 //  - lane / storage-format consistency, seeds/erase/capture/import/export vs CPU mirrors,
 //    R=18 multi-ring and R=27 kernels vs CPU, context loss + restore
 //  - steps/s at 192×240, R=13 and render cost
-//  - round walled dish (ADR-022): GPU vs CPU at the glass, seeds/erase without wrap, deflection
+//  - round walled dish (ADR-025): GPU vs CPU at the glass, seeds/erase without wrap, deflection
 //    turns, lysis, rim growth/shrink, a swimmer bouncing off the glass in the real GPU dish
 //  - screenshot of several species after 300 steps, and of round dishes (--dish-shot <png>)
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
@@ -125,7 +125,7 @@ try {
     check('export/import 8-bit round trip', seeds.ioDiff <= 0.5 / 255 + 1e-3, `max|Δ| ${fmt(seeds.ioDiff)}`);
     check('import of another size is centred/cropped', Math.abs(seeds.bigImportMass - seeds.expectedBigMass) < 1, `${fmt(seeds.bigImportMass)}`);
 
-    // ── round walled dish (ADR-022) ──
+    // ── round walled dish (ADR-025) ──
     for (const cfg of quick ? [{}] : [{}, { format: 'u8' }, { format: 'float' }]) {
       const d = await run('dishChecks', cfg);
       const tag = cfg.format ? ` [${cfg.format}]` : '';

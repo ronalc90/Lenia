@@ -1,7 +1,7 @@
 import type { DishShape } from '../core/dish';
 
 /**
- * Glass deflection (ADR-022): the round dish's rim and other creatures deflect swimmers like
+ * Glass deflection (ADR-025): the round dish's rim and other creatures deflect swimmers like
  * billiard balls instead of killing them.
  *
  * Why: a plain Lenia boundary is lethal. Measured on the CPU (docs/DISH.md): with matter outside

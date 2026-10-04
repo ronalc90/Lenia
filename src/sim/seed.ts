@@ -25,7 +25,7 @@ import type { Pattern, SeedSpec } from '../core/types';
  * rotation and scale 1 the template is snapped to whole cells, exactly like
  * CpuLenia.placeCentered (so printed creatures are pixel exact).
  *
- * Round dish (ADR-022): with a dish the offset d is the plain difference (no wrap) and cells
+ * Round dish (ADR-025): with a dish the offset d is the plain difference (no wrap) and cells
  * outside the glass stay 0 (`SeedOptions.dish`); without one, offsets wrap on the torus.
  */
 

@@ -469,7 +469,7 @@ function rerender(quality?: Quality) {
 }
 
 
-// ───────────────────────────── Round dish (ADR-022) ─────────────────────────────
+// ───────────────────────────── Round dish (ADR-025) ─────────────────────────────
 
 /** Max |value| of cells outside the dish (must be exactly 0). */
 function outsideMax(A: Float32Array, w: number, h: number, d: DishShape): number {

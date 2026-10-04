@@ -14,7 +14,7 @@ export const QUALITY_GRID: Record<Quality, { w: number; h: number }> = {
 };
 
 /**
- * Round dish (ADR-022, docs/DISH.md): square grid allocated once per profile and the largest rim
+ * Round dish (ADR-025, docs/DISH.md): square grid allocated once per profile and the largest rim
  * it allows. 4 empty cells around the largest dish make clamp-to-edge reads exact zero padding
  * (core/dish.ts DISH_GRID_MARGIN). Cost at the largest rim ≤ the old 4:5 grids (low 20 106 cells
  * vs 20 480, medium/high 39 408 vs 46 080 / 62 720).

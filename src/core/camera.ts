@@ -8,7 +8,7 @@ import type { CameraState } from './types';
  * Two topologies:
  *  - toroidal (default, legacy): at zoom 1 the whole grid is fitted ("contain") and centred;
  *    camera centres wrap and every grid point is drawn at its copy nearest the centre.
- *  - round dish (ADR-022, after `setDish`): at zoom 1 the disc of radius `fitRadius` (plus a
+ *  - round dish (ADR-025, after `setDish`): at zoom 1 the disc of radius `fitRadius` (plus a
  *    margin for the glass) is fitted and centred on the dish; nothing wraps, and panning keeps
  *    the view over the dish.
  */

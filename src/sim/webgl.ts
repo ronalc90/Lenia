@@ -49,7 +49,7 @@ import { DEFAULT_RENDER_STYLE, RIM_HALO, normalizeRenderStyle, type SimRenderSty
  * contextLost, SeedSpec.patternScale (see seed.ts), setMatterLUT / setRenderStyle (cosmetic
  * palettes and dish themes; purely visual, see style.ts).
  *
- * Round petri dish (ADR-022, docs/DISH.md), all opt-in; without `setDish` everything is the
+ * Round petri dish (ADR-025, docs/DISH.md), all opt-in; without `setDish` everything is the
  * torus exactly as before:
  *  - setDish(shape | null): absorbing glass (cells outside are always 0), clamp-to-edge reads
  *    (zero padding), no wrap in seeds/erase, step scissored to the dish and early-out outside.
@@ -359,7 +359,7 @@ export class WebGLSimulation implements Simulation {
     this.fieldDirty = true;
   }
 
-  // ───────────────────────────── Round dish (ADR-022) ─────────────────────────────
+  // ───────────────────────────── Round dish (ADR-025) ─────────────────────────────
 
   /** The round dish, or null on the torus. */
   get dish(): DishShape | null {
