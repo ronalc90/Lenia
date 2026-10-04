@@ -180,14 +180,23 @@ export function seedSuccess(fx: Pick<TreeEffects, 'dropper' | 'stabilizer' | 'ma
   return row[Math.max(0, Math.min(row.length - 1, fx.stabilizer))];
 }
 
-/** Template bias and noise of a random seed with these effects (the integrator feeds them to SeedSpec). */
-export function seedConfig(fx: Pick<TreeEffects, 'dropper' | 'stabilizer' | 'masterDropper'>): { bias: number; noise: number } {
+/**
+ * Template bias and noise of a random seed with these effects (the integrator feeds them to SeedSpec);
+ * in a thin world (`WORLD_SEED_HELP`, Frío) the seed gets its extra template and less noise.
+ */
+export function seedConfig(fx: Pick<TreeEffects, 'dropper' | 'stabilizer' | 'masterDropper'>, world?: string): { bias: number; noise: number } {
   if (fx.masterDropper) return { bias: 1, noise: C.DROPPER_MASTER_NOISE };
   const d = Math.max(0, Math.min(C.DROPPER_TREE_BIAS.length - 1, fx.dropper));
+  const help = world ? C.WORLD_SEED_HELP[world] : undefined;
   return {
-    bias: Math.min(0.99, C.DROPPER_TREE_BIAS[d] + C.STABILIZER_TREE_BIAS * fx.stabilizer),
-    noise: Math.max(C.DROPPER_MASTER_NOISE, C.DROPPER_TREE_NOISE[d] - C.STABILIZER_TREE_NOISE * fx.stabilizer),
+    bias: Math.min(0.99, C.DROPPER_TREE_BIAS[d] + C.STABILIZER_TREE_BIAS * fx.stabilizer + (help?.bias ?? 0)),
+    noise: Math.max(C.DROPPER_MASTER_NOISE, C.DROPPER_TREE_NOISE[d] - C.STABILIZER_TREE_NOISE * fx.stabilizer - (help?.noise ?? 0)),
   };
+}
+
+/** Seeds of this world turn by whole quarter turns (exact template copies): its creatures are too thin for a free angle. */
+export function exactTurns(world: string): boolean {
+  return !!C.WORLD_SEED_HELP[world];
 }
 
 /** Sembrador automático interval at a level ≥ 1. */

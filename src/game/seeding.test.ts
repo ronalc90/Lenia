@@ -2,13 +2,28 @@ import { describe, expect, it } from 'vitest';
 import { catalogByCode, catalogPattern } from '../sim/catalog';
 import * as B from './balance';
 import { createGame } from './game';
-import { nearestCatalog, resamplePattern, sporeCandidates } from './seeding';
+import { nearestCatalog, resamplePattern, rotateQuarter, sporeCandidates } from './seeding';
 import { creature, recordingBus, report, run, seededRng } from './testUtil';
 
 /** Tests of the paid-seed mechanics start without the new-game charges (free + guaranteed seeds). */
 function plainSpores(g: { state: unknown }): void {
   (g.state as { charges: { free: number; guaranteed: number } }).charges = { free: 0, guaranteed: 0 };
 }
+
+describe('quarter turns', () => {
+  it('turn a template cell for cell (an exact copy), four turns come back, and each turn is cached', () => {
+    // 3 wide × 2 tall:  1 2 3 / 4 5 6
+    const p = { w: 3, h: 2, data: new Float32Array([1, 2, 3, 4, 5, 6]) };
+    const q1 = rotateQuarter(p, 1);
+    expect([q1.w, q1.h]).toEqual([2, 3]);
+    expect(Array.from(q1.data)).toEqual([4, 1, 5, 2, 6, 3]);
+    expect(Array.from(rotateQuarter(p, 2).data)).toEqual([6, 5, 4, 3, 2, 1]);
+    expect(Array.from(rotateQuarter(q1, 3).data)).toEqual(Array.from(p.data));
+    expect(rotateQuarter(p, 0)).toBe(p);
+    expect(rotateQuarter(p, 4)).toBe(p);
+    expect(rotateQuarter(p, 1)).toBe(q1);
+  });
+});
 
 describe('seeding', () => {
   it('a brand-new game starts with a guaranteed first seed and a few free ones (QA2 H-04)', () => {

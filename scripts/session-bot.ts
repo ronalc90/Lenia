@@ -2,7 +2,7 @@
  * Session bot (docs/CICLO.md §11): plays the INTEGRATED sessions cycle end to end
  * (createGame({ cycle: 'sessions' }): clock, wallet, seed price and room, Spark gift, Abono, research
  * tree, worlds, nights, Nevera — all the game's own code) and reports the pacing, session by session.
- * Only the dish is a model: the statistical dish of scripts/balance-bot.ts (copied: that script runs
+ * Only the dish is a model: the statistical dish of the retired classic-loop bot (scripts/balance-bot.ts, deleted in 2B; copied: that script ran
  * its report on import), where a random seed takes with the MEASURED probability of the
  * Gotero/Estabilizador levels (cycleBalance SEED_SUCCESS) and grows into the species of the template
  * the game chose for it (the world's species, new forms first).
@@ -18,7 +18,7 @@ import type { Behavior, Creature, DetectorEvent, LeniaParams, Pattern, SeedSpec 
 import * as GB from '../src/game/balance';
 import * as C from '../src/game/cycleBalance';
 import { createGame, type CatalogSignature, type Game } from '../src/game/game';
-import { scaledTemplate } from '../src/game/seeding';
+import { rotateQuarter, scaledTemplate } from '../src/game/seeding';
 import { treeCtxOf } from '../src/game/session';
 import { seededRng } from '../src/game/testUtil';
 import { BRANCHES, TREE_BY_ID, TREE_NODES, nightInfo, seedSuccess, treeStates } from '../src/game/tree';
@@ -28,7 +28,7 @@ import { CATALOG, catalogByCode } from '../src/sim/catalog';
 import { SIG_SCALES } from '../src/detect/signature';
 import catalogSigJson from '../src/detect/catalogSignatures.json';
 
-// ───────────────────────────── dish model (from balance-bot.ts) ─────
+// ──────────────── dish model (from the retired balance-bot.ts) ────────
 
 const STEPS_PER_SEC = 30;
 /** --trace=N prints session N every 15 s. */
@@ -38,7 +38,7 @@ const BORN_STEPS = 400;
 const CLASSIFY_STEPS = 1000;
 const BASE_HAZARD = 1 / 2400;
 /**
- * Crowded movers die sooner. balance-bot.ts uses 1/600 (CPU audit); here 1/90 s, closer to QA3 F5's
+ * Crowded movers die sooner. the retired balance-bot.ts used 1/600 (CPU audit); here 1/90 s, closer to QA3 F5's
  * measured early play (median Orbium life ≈ 27 s when 3–5 swimmers share the dish), so the first
  * sessions are not 2–3× too rich.
  */
@@ -338,7 +338,10 @@ for (const w of WORLDS) {
   for (const code of w.species) {
     const e = catalogByCode(code);
     const m = MODEL_BY_CODE.get(code);
-    if (e && m) TEMPLATE_SPECIES.set(scaledTemplate(e, w.params.R), m);
+    if (!e || !m) continue;
+    // Pure templates and thin worlds' seeds turn by quarter turns (rotateQuarter caches them per template).
+    const tpl = scaledTemplate(e, w.params.R);
+    for (let k = 0; k < 4; k++) TEMPLATE_SPECIES.set(rotateQuarter(tpl, k), m);
   }
 }
 

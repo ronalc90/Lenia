@@ -280,6 +280,13 @@ export interface SpeciesView {
   boostedBy?: { id: string; name: Text }[];
   /** (species, sessions) The World it lives in (game/worlds WorldId); null when no World grows it. */
   world?: string | null;
+  /**
+   * (game, sessions) Essence a Copiadora copy of it costs right now: 0 when the Archivo's free copy is
+   * ready; null when no copy can be made now (`copyBlocked` says why).
+   */
+  copyCost?: number | null;
+  /** (game, sessions) Why no copy now: no Copiadora yet, no session running, or it lives in another World. */
+  copyBlocked?: 'noCopier' | 'noSession' | 'otherWorld' | null;
 }
 
 /** (game) The factors of one creature's production (product × global × buffs = Essence/s). */
@@ -296,24 +303,17 @@ export interface YieldView {
   symbiosis: number;
 }
 
+/**
+ * The rules the dish runs right now (the session's World, docs/CICLO.md §4), read-only: Calibrar,
+ * its sliders and saved regimes were retired with the classic loop (ADR-026).
+ */
 export interface CalibrationView {
   mu: number;
   sigma: number;
   R: number;
   dt: number;
-  /** Unlocked slider ranges; null = slider locked. */
-  muRange: [number, number] | null;
-  sigmaRange: [number, number] | null;
-  RRange: [number, number] | null;
-  dtRange: [number, number] | null;
-  regimes: { name: string; mu: number; sigma: number; R: number; dt: number }[];
-  maxRegimes: number;
   /** (game) Current kernel ring peaks. */
   rings?: number[];
-  /** (game) Ring presets the player may pick (Genome: Anillos dobles/triples); null = locked. */
-  ringsOptions?: number[][] | null;
-  /** (game) Microscopio III: (μ, σ) of undiscovered catalog species to mark under the sliders. */
-  hints?: { mu: number; sigma: number }[];
 }
 
 export interface JournalEntryView {
@@ -547,6 +547,13 @@ export interface ResearchView {
   capacity: number;
   /** Datos of the last sessions (for "unas N sesiones"). */
   recentDatos: number[];
+  /** What every Encargo done in a session adds: Datos to the summary and seconds to the clock. */
+  encargoReward?: { datos: number; seconds: number };
+  /**
+   * Round dish size index for the dish's growth (Placa route: TreeEffects.dishLevel, core/dish
+   * DISH_DIAMETERS). The live dish is still the 4:5 torus until main wires the round dish.
+   */
+  dishLevel?: number;
 }
 
 /** (game, sessions) Abono: production ×mult for the rest of the session. */
@@ -563,6 +570,8 @@ export interface BoostView {
   affordable: boolean;
   /** Seconds of clock until Abono is on sale this session (0 = now). */
   wait?: number;
+  /** No creature makes Essence yet: Abono would multiply nothing, so it is not on sale. */
+  needsLife?: boolean;
 }
 
 /** (game) Turno de laboratorio view. When `active` is false the lamp is off: dish and production stop. */
@@ -637,10 +646,6 @@ export interface GameActions {
   buyGenomeNode(id: string): boolean;
   /** Prestige. Returns true if it happened (caller clears the dish). */
   extinguish(): boolean;
-  setCalibration(p: Partial<Pick<LeniaParams, 'mu' | 'sigma' | 'R' | 'dt'>>): void;
-  saveRegime(name: string): boolean;
-  loadRegime(index: number): void;
-  deleteRegime(index: number): void;
   renameSpecies(id: string, name: string): void;
   markSpeciesSeen(id: string): void;
   /** Tap on the golden spark. */
@@ -654,8 +659,6 @@ export interface GameActions {
   sterilizeDish?(): void;
   /** (game) Pick the Gotero seed shape (only unlocked shapes are accepted). */
   setSeedShape?(shape: SeedShapeChoice): void;
-  /** (game) Pick a kernel ring preset from CalibrationView.ringsOptions. */
-  setRings?(rings: number[]): void;
   /** (game) Turno de laboratorio: recharge the generator (Essence, or free when the emergency crank is ready). */
   rechargeShift?(): boolean;
   /** (game) Any player input (tap, drag, button): resets the idle clock of the Termo de café. */

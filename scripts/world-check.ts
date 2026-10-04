@@ -11,6 +11,7 @@
  *                                                   each world AT the world's preset (ways of moving
  *                                                   a player can actually find; docs/CLARIDAD.md F-09)
  *   options: --trials=120 (seeds per cell) --rows=0,1,2,3 (Gotero levels) --steps=700
+ *            --world=cold (--seeds: that world's templates and seed help instead of the Clásico's)
  *
  * Worlds: each catalog template is stamped exactly at the world's preset on a 128² torus and run
  * for 700 steps; it "lives" when its mass stays within 0.4–2.5× and it fills < 20 % of the dish
@@ -26,9 +27,9 @@ import { runSpecies } from '../src/detect/harness';
 import { CpuLenia } from '../src/sim/cpu';
 import { applySeedCpu } from '../src/sim/seed';
 import { catalogByCode } from '../src/sim/catalog';
-import { scaledTemplate } from '../src/game/seeding';
+import { rotateQuarter, scaledTemplate } from '../src/game/seeding';
 import * as B from '../src/game/balance';
-import { seedConfig } from '../src/game/tree';
+import { exactTurns, seedConfig } from '../src/game/tree';
 import { WORLDS, WORLD_BY_ID } from '../src/game/worlds';
 import { catalogGroup } from '../src/species/identity';
 import catalogSigs from '../src/detect/catalogSignatures.json';
@@ -72,8 +73,11 @@ function measureSeeds(): void {
   const trials = Number(arg('trials', '120'));
   const rows = arg('rows', '0,1,2,3').split(',').map(Number);
   const N = 64;
-  const P = WORLD_BY_ID.classic.params;
-  const tpls = WORLD_BY_ID.classic.species.map((c) => scaledTemplate(catalogByCode(c)!, P.R));
+  // --world=cold: that world's templates and seed help (cycleBalance WORLD_SEED_HELP: exact quarter turns).
+  const world = arg('world', 'classic') as keyof typeof WORLD_BY_ID;
+  const exact = exactTurns(world);
+  const P = WORLD_BY_ID[world].params;
+  const tpls = WORLD_BY_ID[world].species.map((c) => scaledTemplate(catalogByCode(c)!, P.R));
   const ref = (() => {
     const s = new CpuLenia(N, N, P);
     const t = tpls[0];
@@ -87,16 +91,18 @@ function measureSeeds(): void {
     let ok = 0;
     for (let t = 0; t < trials; t++) {
       const sim = new CpuLenia(N, N, P);
+      const density = B.SEED_DENSITY_MIN + rand() * (B.SEED_DENSITY_MAX - B.SEED_DENSITY_MIN);
+      const turn = rand();
       applySeedCpu(sim.A, N, N, {
         x: N / 2,
         y: N / 2,
         radius: P.R * B.SEED_RADIUS,
-        density: B.SEED_DENSITY_MIN + rand() * (B.SEED_DENSITY_MAX - B.SEED_DENSITY_MIN),
+        density,
         noise,
         shape: 'blob',
-        pattern: tpls[t % tpls.length],
+        pattern: exact ? rotateQuarter(tpls[t % tpls.length], Math.floor(turn * 4)) : tpls[t % tpls.length],
         bias,
-        rotation: rand() * Math.PI * 2,
+        rotation: exact ? 0 : turn * Math.PI * 2,
         rngSeed: Math.floor(rand() * 2147483647),
       });
       sim.step(500);
@@ -111,7 +117,7 @@ function measureSeeds(): void {
   for (const d of rows) {
     const cells: number[] = [];
     for (let s = 0; s <= 5; s++) {
-      const c = seedConfig({ dropper: d, stabilizer: s, masterDropper: false });
+      const c = seedConfig({ dropper: d, stabilizer: s, masterDropper: false }, world);
       cells.push(Math.round(takes(c.bias, c.noise) * 100) / 100);
     }
     out.push(`  [${cells.join(', ')}], // Gotero ${d}`);

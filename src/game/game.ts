@@ -63,7 +63,7 @@ import {
   tightSquare,
   type ShapeKind,
 } from '../species';
-import { CATALOG, catalogByCode } from '../sim/catalog';
+import { catalogByCode } from '../sim/catalog';
 import * as B from './balance';
 import {
   ACHIEVEMENT_TEXT,
@@ -105,6 +105,7 @@ import {
   quantizePattern,
   resamplePattern,
   ringsEqual,
+  rotateQuarter,
   scaledTemplate,
 } from './seeding';
 import {
@@ -152,6 +153,7 @@ import {
   nightInfo,
   nodeLevel,
   nodeText,
+  exactTurns,
   seedConfig,
   TREE_NODES,
   treeEffects,
@@ -160,7 +162,7 @@ import {
   type TreeEffects,
 } from './tree';
 import { isWorldId, REACHABLE_BEHAVIORS, WORLD_BY_ID, WORLDS, worldEssenceMult, worldOfSpecies, worldRoom, worldSpeciesGroups, type WorldId } from './worlds';
-import { NODE_TEXT } from './treeText';
+import { NODE_TEXT, TREE_UI } from './treeText';
 
 const NODE_TEXT_CATALOGUING = NODE_TEXT.cataloguing.name;
 import {
@@ -270,6 +272,11 @@ export interface Game {
   readonly migration: MigrationReport | null;
   /** (sessions) Buy one tree level; the full result (revealed nodes for the reveal animation). */
   buyNode(id: string): BuyResult;
+  /**
+   * Scripts and tests only (scripts/species-audit.ts): set the dish rules directly. Players change
+   * the rules by picking a World; Calibrar was retired (ADR-026).
+   */
+  setRulesForTests(p: Partial<Pick<LeniaParams, 'mu' | 'sigma' | 'R' | 'dt'>>): void;
 }
 
 interface Golden {
@@ -435,7 +442,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       : [
           { id: 'culture', name: UPGRADE_TEXT.culture.name, mult: Math.pow(1 + B.CULTURE_BONUS, level('culture')) },
           { id: 'dish', name: UPGRADE_TEXT.dish.name, mult: 1 + B.DISH_BONUS * level('dish') },
-          { id: 'genome', name: TEXT.multGenome, mult: (1 + B.GENOME_SPENT_BONUS * s.genomeSpent) * (1 + B.GENOME_UNSPENT_BONUS * s.genome) },
+          { id: 'genome', name: { es: 'Herencia', en: 'Heritage' }, mult: (1 + B.GENOME_SPENT_BONUS * s.genomeSpent) * (1 + B.GENOME_UNSPENT_BONUS * s.genome) },
         ];
     parts.push(
       { id: 'collection', name: TEXT.multCollection, mult: 1 + B.SPECIES_MILESTONE_BONUS * Math.floor(s.species.length / B.SPECIES_MILESTONE_STEP) },
@@ -584,14 +591,14 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
   /** Template bias of a random seed of `shape` right now. */
   function seedBias(shape: SeedShape): number {
-    if (sessions) return seedConfig(fx).bias; // Gotero + Estabilizador of the tree (measured SEED_SUCCESS)
+    if (sessions) return seedConfig(fx, worldNow()).bias; // Gotero + Estabilizador of the tree (measured SEED_SUCCESS)
     const d = Math.min(level('dropper'), B.SEED_BIAS_GOTERO.length - 1);
     const b = B.SEED_BIAS_BASE + B.SEED_BIAS_GOTERO[d] + B.SEED_BIAS_STABILIZER * level('stabilizer') + helpBias();
     return Math.min(B.SEED_BIAS_MAX, b) * B.SHAPE_FACTORS[shape].bias;
   }
 
   function seedNoise(shape: SeedShape): number {
-    if (sessions) return seedConfig(fx).noise;
+    if (sessions) return seedConfig(fx, worldNow()).noise;
     const d = Math.min(level('dropper'), B.SEED_NOISE_GOTERO.length - 1);
     const n = Math.max(B.SEED_NOISE_MIN, B.SEED_NOISE_GOTERO[d] - B.SEED_NOISE_STABILIZER * level('stabilizer'));
     return Math.min(1, n * B.SHAPE_FACTORS[shape].noise);
@@ -668,27 +675,15 @@ export function createGame(deps: GameDeps, save?: string): Game {
     return formatLatin(latinName(sig, behavior, { rings, taken }));
   }
 
-  // ───────────────────────────── calibration ─────────────────────────
-  // PHASE-2B-REMOVE (Calibrar): ranges, ringOptions, calibrationView's knobs and the actions
-  // setCalibration / saveRegime / loadRegime / deleteRegime / setRings go with the Calibrar panel
-  // (ui/panel-calibrate.ts) when main.ts flips to the sessions cycle; worlds replace them.
-
-  function ranges() {
-    return B.CALIBRATOR_RANGES[Math.min(level('calibrator'), B.CALIBRATOR_RANGES.length - 1)];
-  }
-
-  function ringOptions(): number[][] | null {
-    const opts = B.RING_PRESETS.filter((p) => p.node === null || has(p.node)).map((p) => [...p.rings]);
-    return opts.length > 1 ? opts : null;
-  }
+  // ───────────────────────────── the dish's rules ─────────────────────────
+  // The rules are the session's World (worlds.ts, applyWorld); Calibrar, its sliders and saved
+  // regimes were retired with the classic loop (ADR-026).
 
   function calibrationChanged(): void {
     params = makeParams();
     const c = s.calib;
     bus.emit('calibrationChanged', { mu: c.mu, sigma: c.sigma, R: c.R, dt: c.dt });
   }
-
-  const clamp = (v: number, r: [number, number]) => Math.min(r[1], Math.max(r[0], v));
 
   // ───────────────────────────── seeding ─────────────────────────────
 
@@ -747,33 +742,46 @@ export function createGame(deps: GameDeps, save?: string): Game {
   /** The nursery is full: a new spore would wait (QA2 H-05 "⏳ Espera…"); too many at once fuse into a maze. */
   const nurseryFull = (): boolean => forming() >= (sessions ? fx.nurseryMax : B.SEED_NURSERY_MAX);
 
+  /**
+   * (sessions) A template and its turn. A pure template, and any seed of a thin world (Frío), turns by
+   * whole quarter turns: an exact copy, where a free angle resamples it and can blur a thin rim to
+   * death (cycleBalance WORLD_SEED_HELP). One rng() either way, like the free angle it replaces.
+   */
+  function turned(pattern: Pattern, exact: boolean): { pattern: Pattern; rotation: number } {
+    if (sessions && exact) return { pattern: rotateQuarter(pattern, Math.floor(rng() * 4)), rotation: 0 };
+    return { pattern, rotation: rng() * Math.PI * 2 };
+  }
+
   function buildSeed(x: number, y: number, radiusFactor: number, shape: SeedShape, guaranteed: boolean): SeedSpec {
     const R = s.calib.R;
-    const pattern = sporePattern(guaranteed);
     if (guaranteed) {
+      const t = turned(sporePattern(true), true);
       return {
         x,
         y,
-        radius: Math.max(pattern.w, pattern.h) / 2,
+        radius: Math.max(t.pattern.w, t.pattern.h) / 2,
         density: 1,
         noise: 0,
         shape: 'pattern',
-        pattern,
+        pattern: t.pattern,
         bias: 1,
-        rotation: rng() * Math.PI * 2,
+        rotation: t.rotation,
         rngSeed: Math.floor(rng() * 2147483647),
       };
     }
+    const pattern = sporePattern(false);
+    const density = B.SEED_DENSITY_MIN + rng() * (B.SEED_DENSITY_MAX - B.SEED_DENSITY_MIN);
+    const t = turned(pattern, sessions && exactTurns(worldNow()));
     return {
       x,
       y,
       radius: R * radiusFactor,
-      density: B.SEED_DENSITY_MIN + rng() * (B.SEED_DENSITY_MAX - B.SEED_DENSITY_MIN),
+      density,
       noise: seedNoise(shape),
       shape,
-      pattern,
+      pattern: t.pattern,
       bias: seedBias(shape),
-      rotation: rng() * Math.PI * 2,
+      rotation: t.rotation,
       rngSeed: Math.floor(rng() * 2147483647),
     };
   }
@@ -1114,6 +1122,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       hue,
       shape,
       common,
+      ...(sessions ? { world: worldNow() } : {}),
     };
     if (mut) pendingMutations = pendingMutations.filter((m) => m !== mut);
     s.species.push(sp);
@@ -1323,14 +1332,13 @@ export function createGame(deps: GameDeps, save?: string): Game {
     };
   }
 
-  /** Sticky upgrade unlocks; `silent` skips the toasts (initial load). */
-  function refreshUnlocks(silent = false): void {
+  /** Sticky upgrade unlocks (classic Lab; no toast: the Lab is gone from the player's view, CLARIDAD B-11). */
+  function refreshUnlocks(): void {
     const ctx = unlockCtx();
     for (const def of UPGRADES) {
       if (s.unlocked.includes(def.id)) continue;
       if (def.unlock(ctx)) {
         s.unlocked.push(def.id);
-        if (!silent && def.id !== 'dropper') toast(TEXT.upgradeUnlocked(UPGRADE_TEXT[def.id].name), 'good');
       }
     }
   }
@@ -1376,10 +1384,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
       s.flags.tabBestiary = true;
     }
     if (tabs.calibrate && !s.flags.tabCalibrate) s.flags.tabCalibrate = true;
-    if (tabs.genome && !s.flags.tabGenome) {
-      s.flags.tabGenome = true;
-      toast(TEXT.tabUnlocked('Genoma', 'Genome'), 'info');
-    }
+    // No "new tab" toast: the Genome tab is gone (CLARIDAD B-17).
+    if (tabs.genome && !s.flags.tabGenome) s.flags.tabGenome = true;
     if (tabs.lab) s.flags.tabLab = true;
     // A new night is ready (sessions: replaces "Extinction available").
     if (sessions && s.research) {
@@ -1392,9 +1398,9 @@ export function createGame(deps: GameDeps, save?: string): Game {
       }
     }
     // Extinction availability.
+    // (classic) No toast any more: the Extinction is gone from the player's view (CLARIDAD B-17).
     if (extinctionAvailable() && !s.flags[`extReady${s.era}`]) {
       s.flags[`extReady${s.era}`] = true;
-      toast(TEXT.extinctionReady, 'good');
       unlockJournal('extinctionNear');
     }
     // Objectives. A later objective already met by another route (bought early, a peak reached
@@ -1809,11 +1815,11 @@ export function createGame(deps: GameDeps, save?: string): Game {
     for (const code of codes.slice(0, n)) {
       const e = catalogByCode(code);
       if (!e) continue;
-      const pattern = scaledTemplate(e, s.calib.R);
       const spot = findFreeSpot(2);
       if (!spot) break;
-      const r = Math.max(pattern.w, pattern.h) / 2;
-      out.push({ x: spot.x, y: spot.y, radius: r, density: 1, noise: 0, shape: 'pattern', pattern, bias: 1, rotation: rng() * Math.PI * 2, rngSeed: Math.floor(rng() * 2147483647) });
+      const t = turned(scaledTemplate(e, s.calib.R), true);
+      const r = Math.max(t.pattern.w, t.pattern.h) / 2;
+      out.push({ x: spot.x, y: spot.y, radius: r, density: 1, noise: 0, shape: 'pattern', pattern: t.pattern, bias: 1, rotation: t.rotation, rngSeed: Math.floor(rng() * 2147483647) });
       recentSeeds.push({ x: spot.x, y: spot.y, t: B.RECENT_SEED_MEMORY, r }); // the next plant keeps clear of it
     }
     return out;
@@ -1946,7 +1952,15 @@ export function createGame(deps: GameDeps, save?: string): Game {
         currency: 'genome',
         affordable: st.affordable,
         unlocked: st.status === 'owned' || st.status === 'available',
-        unlockHint: { es: '', en: '' },
+        // Why it is closed, in words (the Behaviour Guide and the species card show it).
+        unlockHint:
+          st.status === 'owned' || st.status === 'available'
+            ? { es: '', en: '' }
+            : st.nightNeeded !== null
+              ? TREE_UI.nightLocked(st.nightNeeded)
+              : st.missingRequires.length
+                ? TREE_UI.afterNodes(st.missingRequires.map((id) => nodeText(id).name))
+                : { es: '', en: '' },
         maxed: st.maxed,
         secondsToAfford: null,
       });
@@ -2000,11 +2014,23 @@ export function createGame(deps: GameDeps, save?: string): Game {
         affordable: treeViews().affordable,
         capacity: room(),
         recentDatos: recentDatos(r),
+        encargoReward: { datos: C.DATOS_PER_ENCARGO, seconds: fx.timePerEncargo },
+        dishLevel: fx.dishLevel,
       },
       // Session 1 hides the Datos pill: the player does not know what a Dato is yet (CLARIDAD §3.3).
       sessionPreview: se && se.phase !== 'over' && se.n > 1 ? sessionPreview(r, se, fx, species) : null,
       boost: se
-        ? { cost, count: se.boosts, mult: boostMult(se), nextMult: boostMult(se) * C.BOOST_MULT, affordable: running && boostWait(se) === 0 && s.essence >= cost, wait: boostWait(se) }
+        ? {
+            cost,
+            count: se.boosts,
+            mult: boostMult(se),
+            nextMult: boostMult(se) * C.BOOST_MULT,
+            // Abono multiplies what creatures make: with none making Essence it would buy nothing (and
+            // spend the Essence a seed needs), so it is not on sale then.
+            affordable: running && boostWait(se) === 0 && eps > 0 && s.essence >= cost,
+            wait: boostWait(se),
+            needsLife: eps <= 0,
+          }
         : null,
     };
   }
@@ -2179,35 +2205,40 @@ export function createGame(deps: GameDeps, save?: string): Game {
       sigmaRange: [...sp.sigmaRange] as [number, number],
       printCost: B.PRINT_COST[sp.rarity],
       isNew: sp.isNew,
+      ...(sessions ? { world: speciesWorld(sp), ...copyOf(sp) } : {}),
     }));
   }
 
-  function calibrationView(): CalibrationView {
-    const r = ranges();
-    const c = s.calib;
-    let hints: { mu: number; sigma: number }[] = [];
-    if (level('microscope') >= 3) {
-      const known = new Set(s.species.map((x) => x.catalogCode && catalogGroup(x.catalogCode)).filter(Boolean));
-      hints = CATALOG.filter((e) => ringsEqual(e.b, c.rings) && !known.has(catalogGroup(e.code)))
-        .filter((e) => !r.mu || (e.m >= r.mu[0] && e.m <= r.mu[1]))
-        .filter((e) => paramDistance(e.m, e.s, c.mu, c.sigma) <= B.HINT_RADIUS)
-        .map((e) => ({ mu: e.m, sigma: e.s }));
+  /**
+   * (sessions) The World a species lives in: its catalog code's World, else the World it was found
+   * in, else the World whose rules hold its μ/σ range (older saves).
+   */
+  function speciesWorld(sp: SpeciesState): WorldId | null {
+    if (sp.catalogCode) {
+      const w = worldOfSpecies(sp.catalogCode);
+      if (w) return w;
     }
-    return {
-      mu: c.mu,
-      sigma: c.sigma,
-      R: c.R,
-      dt: c.dt,
-      muRange: r.mu ? [...r.mu] : null,
-      sigmaRange: r.sigma ? [...r.sigma] : null,
-      RRange: r.R ? [...r.R] : null,
-      dtRange: r.dt ? [...r.dt] : null,
-      regimes: s.regimes.map((g) => ({ name: g.name, mu: g.mu, sigma: g.sigma, R: g.R, dt: g.dt })),
-      maxRegimes: level('calibrator') >= 2 ? B.MAX_REGIMES : 0,
-      rings: [...c.rings],
-      ringsOptions: ringOptions(),
-      hints,
-    };
+    if (isWorldId(sp.world)) return sp.world;
+    const eps = 1e-4;
+    const inside = (x: number, r: [number, number]) => x >= r[0] - eps && x <= r[1] + eps;
+    return WORLDS.find((w) => inside(w.params.mu, sp.muRange) && inside(w.params.sigma, sp.sigmaRange))?.id ?? null;
+  }
+
+  /** (sessions) What a Copiadora copy costs now, or why there is none (the species sheet's button). */
+  function copyOf(sp: SpeciesState): { copyCost: number | null; copyBlocked: 'noCopier' | 'noSession' | 'otherWorld' | null } {
+    if (!fx.print) return { copyCost: null, copyBlocked: 'noCopier' };
+    const se = ses();
+    if (!se || se.phase === 'over') return { copyCost: null, copyBlocked: 'noSession' };
+    // A copy is the species' catalog pattern: one never found in the catalog has none to copy.
+    if (!sp.catalogCode || !catalogByCode(sp.catalogCode)) return { copyCost: null, copyBlocked: null };
+    const home = speciesWorld(sp);
+    if (home && home !== se.world) return { copyCost: null, copyBlocked: 'otherWorld' };
+    return { copyCost: archiveReady() ? 0 : Math.round(C.PRINT_SEEDS_PRICE * seedCost()), copyBlocked: null };
+  }
+
+  function calibrationView(): CalibrationView {
+    const c = s.calib;
+    return { mu: c.mu, sigma: c.sigma, R: c.R, dt: c.dt, rings: [...c.rings] };
   }
 
   function creatureViews(): CreatureView[] {
@@ -2305,7 +2336,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
             available: extAvailable,
             genomeGain: gainNow,
             gainIn10Min: currentGenomeGain(baseEps * 600),
-            requirement: extAvailable ? TEXT.extinctionGain(gainNow) : TEXT.extinctionRequirement(EXTINCTION_ESSENCE_NEEDED, s.eraEssence),
+            requirement: { es: '', en: '' },
           },
       golden: golden ? { x: golden.x, y: golden.y, life: Math.max(0, golden.life / golden.max) } : null,
       buffs: s.buffs.map((b) => ({ id: b.id, name: TEXT.bloom, remaining: b.remaining, mult: b.mult })),
@@ -2535,61 +2566,6 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
     extinguish,
 
-    // PHASE-2B-REMOVE (Calibrar): classic only; worlds replace the knobs in the sessions cycle.
-    setCalibration(p) {
-      if (sessions) return;
-      const r = ranges();
-      const c = s.calib;
-      let changed = false;
-      const apply = (key: 'mu' | 'sigma' | 'R' | 'dt', v: number | undefined) => {
-        const rr = r[key];
-        if (v === undefined || !rr || !Number.isFinite(v)) return;
-        const nv = clamp(key === 'R' ? Math.round(v) : v, rr);
-        if (nv !== c[key]) {
-          c[key] = nv;
-          changed = true;
-        }
-      };
-      apply('mu', p.mu);
-      apply('sigma', p.sigma);
-      apply('R', p.R);
-      apply('dt', p.dt);
-      if (changed) {
-        s.stats.calibrations++;
-        calibrationChanged();
-        checkProgress();
-      }
-    },
-
-    // PHASE-2B-REMOVE (Calibrar).
-    saveRegime(name) {
-      if (sessions || level('calibrator') < 2 || s.regimes.length >= B.MAX_REGIMES) return false;
-      const clean = sanitizeName(name) || `${lang() === 'es' ? 'Régimen' : 'Regime'} ${s.regimes.length + 1}`;
-      const c = s.calib;
-      s.regimes.push({ name: clipGraphemes(clean, B.NAME_MAX_CHARS), mu: c.mu, sigma: c.sigma, R: c.R, dt: c.dt, rings: [...c.rings] });
-      s.stats.regimesSaved++;
-      checkProgress();
-      return true;
-    },
-
-    // PHASE-2B-REMOVE (Calibrar).
-    loadRegime(index) {
-      const g = s.regimes[index];
-      if (!g || sessions) return;
-      const preset = B.RING_PRESETS.find((p) => ringsEqual(p.rings, g.rings));
-      if (preset && (preset.node === null || has(preset.node)) && !ringsEqual(s.calib.rings, g.rings)) {
-        s.calib.rings = [...g.rings];
-        if (!ranges().R) s.calib.R = preset.R;
-        calibrationChanged();
-      }
-      actions.setCalibration({ mu: g.mu, sigma: g.sigma, R: g.R, dt: g.dt });
-    },
-
-    // PHASE-2B-REMOVE (Calibrar).
-    deleteRegime(index) {
-      if (index >= 0 && index < s.regimes.length) s.regimes.splice(index, 1);
-    },
-
     renameSpecies(id, name) {
       const sp = speciesById(id);
       if (!sp) return;
@@ -2640,18 +2616,6 @@ export function createGame(deps: GameDeps, save?: string): Game {
       if (shapes().includes(shape)) s.shape = shape;
     },
 
-    // PHASE-2B-REMOVE (Calibrar): ring presets are part of the worlds in the sessions cycle.
-    setRings(rings) {
-      if (sessions) return;
-      const preset = B.RING_PRESETS.find((p) => ringsEqual(p.rings, rings));
-      if (!preset || (preset.node !== null && !has(preset.node))) return;
-      if (ringsEqual(s.calib.rings, preset.rings)) return;
-      s.calib.rings = [...preset.rings];
-      if (!ranges().R) s.calib.R = preset.R; // R slider locked: jump to the preset's native radius
-      s.stats.calibrations++;
-      calibrationChanged();
-    },
-
     noteTabOpened(tab) {
       if (tab === 'bestiary' && s.species.length > 0 && !s.flags.bestiaryLooked) {
         s.flags.bestiaryLooked = true;
@@ -2692,7 +2656,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
     buyBoost() {
       const se = ses();
-      if (!se || se.phase !== 'running' || boostWait(se) > 0) return false;
+      if (!se || se.phase !== 'running' || boostWait(se) > 0 || !(eps > 0)) return false;
       const cost = boostCost(se, eps);
       if (!(s.essence >= cost)) return false;
       s.essence -= cost;
@@ -2751,6 +2715,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     recordSeed(spot.x, spot.y, 0, true, false, bodyR, from);
     sessionEvents(noteSeed(se));
     checkProgress();
+    const t = turned(pattern, true);
     return {
       x: spot.x,
       y: spot.y,
@@ -2758,9 +2723,9 @@ export function createGame(deps: GameDeps, save?: string): Game {
       density: 1,
       noise: mutate ? B.MUTATION_NOISE : 0,
       shape: 'pattern',
-      pattern,
+      pattern: t.pattern,
       bias: 1,
-      rotation: rng() * Math.PI * 2,
+      rotation: t.rotation,
       rngSeed: Math.floor(rng() * 2147483647),
     };
   }
@@ -2835,7 +2800,6 @@ export function createGame(deps: GameDeps, save?: string): Game {
     if (running && !pipetteReady()) {
       if (pipetteWanted()) {
         s.pipetteTimer += dt;
-        if (pipetteReady()) toast(TEXT.pipetteReady, 'info');
       } else s.pipetteTimer = 0;
     }
 
@@ -2883,7 +2847,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     portraitBest.clear();
     portraitCaptures.clear();
     sanitizeLoaded();
-    refreshUnlocks(true);
+    refreshUnlocks();
     bus.emit('dishClear', {});
     if (sessions) {
       migration = null;
@@ -3015,6 +2979,14 @@ export function createGame(deps: GameDeps, save?: string): Game {
       return migration;
     },
     buyNode: (id) => buyTreeNode(id),
+    setRulesForTests(p) {
+      const c = s.calib;
+      for (const k of ['mu', 'sigma', 'R', 'dt'] as const) {
+        const v = p[k];
+        if (v !== undefined && Number.isFinite(v)) c[k] = v;
+      }
+      calibrationChanged();
+    },
   };
   sanitizeLoaded();
   if (sessions) {
@@ -3026,6 +2998,6 @@ export function createGame(deps: GameDeps, save?: string): Game {
     if (resumed) bootReplant = null;
   }
   params = makeParams();
-  refreshUnlocks(true);
+  refreshUnlocks();
   return game;
 }

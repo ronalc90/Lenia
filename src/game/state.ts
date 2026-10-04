@@ -47,6 +47,8 @@ export interface SpeciesState {
   shape?: string;
   /** Common name, Spanish and English ("Nadadora celeste" / "Sky swimmer"), frozen at registration. */
   common?: Text | null;
+  /** (sessions) The World the species was found in (game/worlds WorldId), frozen at registration. */
+  world?: string | null;
 }
 
 export interface Regime {
@@ -389,6 +391,7 @@ function species(x: unknown): SpeciesState {
     ...(isObj(x.common) && typeof x.common.es === 'string' && typeof x.common.en === 'string'
       ? { common: { es: str(x.common.es, 48), en: str(x.common.en, 48) } }
       : {}),
+    ...(typeof x.world === 'string' && x.world ? { world: str(x.world, 16) } : {}),
   };
 }
 
@@ -460,10 +463,8 @@ export function validateState(x: unknown): GameState | null {
       maxDropper: int(x.maxDropper, 0, UPGRADE_BY_ID.dropper.maxLevel ?? 5, 0),
       nodes,
       calib: calibration(x.calib),
-      regimes: arr(x.regimes, B.MAX_REGIMES).map((r) => {
-        if (!isObj(r)) throw new Invalid('regime');
-        return { name: str(r.name, 24, 'R'), ...calibration(r) };
-      }),
+      // Saved regimes belonged to Calibrar (retired, ADR-026): an old save's are dropped.
+      regimes: [],
       species: speciesList,
       specimenCounter: int(x.specimenCounter, 0, 1e6, speciesList.length),
       behaviorsSeen: arr(x.behaviorsSeen, 6).filter((b): b is Behavior => BEHAVIORS.includes(b as Behavior)),

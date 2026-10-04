@@ -3,7 +3,11 @@ import catalogSigs from '../detect/catalogSignatures.json';
 import { catalogGroup } from '../species/identity';
 import { CATALOG } from '../sim/catalog';
 import * as B from './balance';
-import { TREE_BY_ID, routeNodes } from './tree';
+import { CpuLenia } from '../sim/cpu';
+import { applySeedCpu } from '../sim/seed';
+import { catalogByCode } from '../sim/catalog';
+import { rotateQuarter, scaledTemplate } from './seeding';
+import { TREE_BY_ID, exactTurns, routeNodes, seedConfig } from './tree';
 import { BASE_WORLD, TOTAL_WORLD_SPECIES, WORLDS, WORLD_BY_ID, worldOfSpecies, worldSpeciesCount } from './worlds';
 
 type Sig = { code: string; viable: boolean; behavior: keyof typeof B.BEHAVIOR_MULT | null; complexity: number };
@@ -59,6 +63,28 @@ describe('worlds (the rules as cards, no knobs)', () => {
       expect(p, w.id).toBeGreaterThanOrEqual(prev * 0.98);
       prev = p;
     }
+  });
+
+  it('Frío: an exact quarter-turned copy of its thinnest creature lives where a free angle blurs it to death', () => {
+    // Session play found World 2 barren (every seed faded): Orbium ignis's rim is too thin for the
+    // bilinear turn of a free angle. Its seeds turn by quarter turns instead (cycleBalance WORLD_SEED_HELP).
+    const P = WORLD_BY_ID.cold.params;
+    const tpl = scaledTemplate(catalogByCode('O2ui')!, P.R);
+    const after = (pattern: typeof tpl, rotation: number): number => {
+      const sim = new CpuLenia(64, 64, P);
+      applySeedCpu(sim.A, 64, 64, { x: 32, y: 32, radius: Math.max(pattern.w, pattern.h) / 2, density: 1, noise: 0, shape: 'pattern', pattern, bias: 1, rotation, rngSeed: 7 });
+      const m0 = sim.mass();
+      sim.step(400);
+      return sim.mass() / m0;
+    };
+    expect(after(rotateQuarter(tpl, 1), 0)).toBeGreaterThan(0.6);
+    expect(after(tpl, 0.6)).toBeLessThan(0.05);
+    expect(exactTurns('cold')).toBe(true);
+    expect(exactTurns('classic')).toBe(false);
+    const fx = { dropper: 0, stabilizer: 0, masterDropper: false };
+    expect(seedConfig(fx, 'cold').bias).toBeGreaterThan(seedConfig(fx, 'classic').bias);
+    expect(seedConfig(fx, 'cold').noise).toBeLessThan(seedConfig(fx, 'classic').noise);
+    expect(seedConfig(fx, 'classic')).toEqual(seedConfig(fx));
   });
 
   it('presets are plain LeniaParams the dish can take', () => {

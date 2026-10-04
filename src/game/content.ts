@@ -351,21 +351,14 @@ export function objectiveText(id: string, current: number, target: number, sessi
 // ───────────────────────────── Golden rewards & misc ───────────────
 
 /**
- * TEXT keys of the classic loop only (Extinción, Genoma, pestañas, Pipeta, ausencia): never shown in
- * the sessions cycle, deleted with it in Phase 2B (CLARIDAD B-11). The jargon guard skips them.
+ * TEXT keys of the classic loop only (its Destello rewards): never shown in the sessions cycle. The
+ * retired systems' messages (Extinción, Genoma, pestañas, Pipeta, ausencia) are gone (CLARIDAD B-11).
+ * The jargon guard skips these.
  */
 export const CLASSIC_ONLY_TEXT: readonly string[] = [
   'bloom',
   'bloomReward',
   'lumpReward',
-  'upgradeUnlocked',
-  'tabUnlocked',
-  'extinctionReady',
-  'pipetteReady',
-  'extinctionRequirement',
-  'extinctionGain',
-  'multGenome',
-  'offline',
 ];
 
 export const TEXT = {
@@ -376,28 +369,19 @@ export const TEXT = {
   mutagenReward: (n: number) => t(`¡Semillas mágicas! Las próximas ${n} siempre viven`, `Magic seeds! Your next ${n} always live`),
   objectiveDone: (reward: number) =>
     reward > 0 ? t(`Objetivo cumplido: +${f(reward)} Esencia`, `Objective complete: +${f(reward)} Essence`) : t('Objetivo cumplido', 'Objective complete'),
-  upgradeUnlocked: (name: Text) => t(`Nueva mejora: ${name.es}`, `New upgrade: ${name.en}`),
-  tabUnlocked: (es: string, en: string) => t(`Nueva pestaña: ${es}`, `New tab: ${en}`),
-  extinctionReady: t('La placa está madura: la Extinción está disponible', 'The dish is ripe: Extinction is available'),
   dishSaturated: t('Placa llena: el Sembrador espera a que haya sitio.', 'Dish full: the Auto-seeder waits for room.'),
   newBehavior: (b: Behavior) => t(`¡Nueva manera de moverse: ${BEHAVIOR_NAMES[b].es}!`, `New way of moving: ${BEHAVIOR_NAMES[b].en}!`),
-  pipetteReady: t('Pipeta de emergencia lista: siembra gratis', 'Emergency pipette ready: free seed'),
   freePrintReady: t('Archivo: ¡copia gratis lista!', 'Archive: free copy ready!'),
   invalidImport: t('Partida no válida', 'Invalid save'),
   seedTooClose: t('Muy cerca: se fundirían. ¡Más lejos!', 'Too close: they would melt. Further away!'),
   seedGrowing: t('Espera: ya hay semillas naciendo. Mira cómo crecen.', 'Wait: some seeds are still hatching. Watch them grow.'),
   dishAutoCleaned: t('La placa se desbordó y la limpié. ¡Siembra separado!', 'The dish overflowed and I cleaned it. Sow apart!'),
-  extinctionRequirement: (need: number, have: number) =>
-    t(`Gana ${f(need)} Esencia en esta Era (llevas ${f(have)})`, `Earn ${f(need)} Essence this Era (you have ${f(have)})`),
-  extinctionGain: (g: number) => t(`Extinguir ahora da ${f(g)} Genoma`, `Extinguishing now gives ${f(g)} Genome`),
   /** Registration number shown under a species name (QA2 §5.3: "Criatura N", not "Espécimen"). */
   specimen: (n: number) => t(`Criatura ${n}`, `Creature ${n}`),
-  multGenome: t('Genoma', 'Genome'),
   multCollection: t('Colección', 'Collection'),
   multBehaviors: t('Comportamientos vistos', 'Behaviours seen'),
   multAchievements: t('Logros', 'Achievements'),
   variantSuffix: t(' (sorpresa)', ' (surprise)'),
-  offline: (amount: number) => t(`Mientras no estabas: +${f(amount)} Esencia`, `While you were away: +${f(amount)} Essence`),
   // ── Sessions cycle (docs/CICLO.md) ──
   /** Coordinator: the proportional Spark gift says what it is ("30 s de tu Esencia"). */
   sparkGift: (secs: number, amount: number) =>
@@ -412,8 +396,7 @@ export const TEXT = {
     t(`¡Placa llena! Caben ${n}. Compra «Placa más grande» en el Árbol.`, `Dish full! Room for ${n}. Buy “Bigger dish” in the Tree.`),
   /** Abono: the in-session production boost. */
   boost: t('Abono', 'Fertiliser'),
-  boostBought: (mult: string, multEn = mult) =>
-    t(`¡Abono! Tus criaturas dan Esencia ${mult} hasta el final de la sesión.`, `Fertiliser! Your creatures give Essence ${multEn} until the session ends.`),
+  boostBought: (mult: string, multEn = mult) => t(`¡Abono! Esencia ${mult} hasta el final.`, `Fertiliser! Essence ${multEn} until the end.`),
   multTree: t('Árbol (Vida)', 'Tree (Life)'),
   multWorld: t('Mundo', 'World'),
   multEcosystem: t('Placa variada', 'Mixed dish'),

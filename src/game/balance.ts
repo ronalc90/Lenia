@@ -1,7 +1,7 @@
 /**
  * Every tunable number of the game lives here, one commented constant per value.
  * Origin tags: [doc §N] = design doc section, [brief] = approved corrections / fun layer,
- * [bot] = tuned with scripts/balance-bot.ts, [design] = chosen here, open to tuning.
+ * [bot] = tuned with the classic-loop balance bot (scripts/balance-bot.ts, retired in 2B; the sessions cycle uses scripts/session-bot.ts), [design] = chosen here, open to tuning.
  *
  * Nothing in this file has side effects; tests and the balance bot import it freely.
  */
@@ -411,35 +411,8 @@ export const MARKER_COSTS = [10];
 
 /** Calibration at the start of every Era. [doc §4, §10] */
 export const BASE_CALIBRATION = { mu: 0.15, sigma: 0.015, R: 13, dt: 0.1, rings: [1] as number[] };
-/**
- * Slider ranges unlocked by Calibrador level (index = level); null = locked.
- * Doc §4/§8 disagree (Scutium at μ .29 would be unreachable until III); this merges both. [design]
- */
-export const CALIBRATOR_RANGES: {
-  mu: [number, number] | null;
-  sigma: [number, number] | null;
-  R: [number, number] | null;
-  dt: [number, number] | null;
-}[] = [
-  { mu: null, sigma: null, R: null, dt: null },
-  { mu: [0.12, 0.18], sigma: [0.01, 0.025], R: null, dt: null },
-  { mu: [0.1, 0.3], sigma: [0.005, 0.05], R: null, dt: null },
-  { mu: [0.1, 0.5], sigma: [0.005, 0.1], R: null, dt: [0.05, 0.5] },
-  { mu: [0.1, 0.5], sigma: [0.005, 0.1], R: [10, 27], dt: [0.05, 0.5] },
-];
 /** Absolute calibration limits accepted from saves/imports. [doc §4] */
 export const CALIBRATION_LIMITS = { mu: [0.05, 0.6], sigma: [0.001, 0.2], R: [5, 40], dt: [0.01, 1] } as const;
-/** Saved regimes allowed once Calibrador II is owned. [doc §7, §8] */
-export const MAX_REGIMES = 8;
-/** Kernel ring presets: always / Anillos dobles / Anillos triples. [brief] */
-export const RING_PRESETS: { rings: number[]; R: number; node: string | null }[] = [
-  { rings: [1], R: 13, node: null },
-  { rings: [0.5, 1], R: 18, node: 'doubleRings' },
-  { rings: [1, 1 / 3], R: 18, node: 'doubleRings' },
-  { rings: [0.5, 1, 2 / 3], R: 18, node: 'tripleRings' },
-];
-/** Microscopio III shows hints for undiscovered catalog species within this normalised (μ,σ) distance. [design] */
-export const HINT_RADIUS = 16;
 /** Doc §11: after this many active seconds without a new species, Microscopio I is given free once. */
 export const FREE_MICROSCOPE_AFTER = 1200;
 /** Seconds between two "dish saturated" toasts from the Sembrador. [design] */

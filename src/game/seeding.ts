@@ -132,6 +132,35 @@ export function resamplePattern(p: Pattern, sx: number, sy = sx): Pattern {
   return { w, h, data };
 }
 
+const turnCache = new WeakMap<Pattern, Pattern[]>();
+
+/**
+ * The template turned by `k` quarter turns (clockwise on screen), cell for cell: an exact copy, where a
+ * free angle resamples (blurs) it. Cached per template.
+ */
+export function rotateQuarter(p: Pattern, k: number): Pattern {
+  const q = ((Math.round(k) % 4) + 4) % 4;
+  if (q === 0) return p;
+  let turns = turnCache.get(p);
+  if (!turns) turnCache.set(p, (turns = []));
+  const hit = turns[q];
+  if (hit) return hit;
+  const w = q === 2 ? p.w : p.h;
+  const h = q === 2 ? p.h : p.w;
+  const data = new Float32Array(w * h);
+  for (let y = 0; y < p.h; y++)
+    for (let x = 0; x < p.w; x++) {
+      const v = p.data[y * p.w + x];
+      // (x, y) → q=1: (h−1−y, x) · q=2: (w−1−x, h−1−y) · q=3: (y, w−1−x)
+      const nx = q === 1 ? p.h - 1 - y : q === 2 ? p.w - 1 - x : y;
+      const ny = q === 1 ? x : q === 2 ? p.h - 1 - y : p.w - 1 - x;
+      data[ny * w + nx] = v;
+    }
+  const out: Pattern = { w, h, data };
+  turns[q] = out;
+  return out;
+}
+
 const templateCache = new Map<string, Pattern>();
 
 /** Catalog pattern of `code` scaled from its native R to `R`. Cached. */

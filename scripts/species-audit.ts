@@ -243,7 +243,7 @@ function runPlayer(player: number, seedsWanted: number, steps: number): PlayerRe
   let seeds = 0;
   for (const cal of CALIBS) {
     if (seeds >= seedsWanted) break;
-    game.actions.setCalibration({ mu: cal.mu, sigma: cal.sigma });
+    game.setRulesForTests({ mu: cal.mu, sigma: cal.sigma });
     calibKey = `${cal.mu}/${cal.sigma}`;
     for (let k = 0; k < seedsPerCalib / SPOTS.length && seeds < seedsWanted; k++) {
       dishNo++;

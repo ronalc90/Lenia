@@ -281,6 +281,18 @@ export const STABILIZER_TREE_NOISE = 0.012;
 /** Gotero maestro: every seed is the pure template with this little noise (correction 1: never zero). [plan: 100 %] */
 export const DROPPER_MASTER_NOISE = 0.08;
 /**
+ * Worlds whose creatures are too thin for the Clásico seed (docs/CICLO.md §4.5, «Frío»). Measured with
+ * `scripts/world-check.ts --seeds --world=cold` (CPU, 64² torus, 500 steps, 20 seeds per species and
+ * cell): with the Clásico seed Frío takes 3 % (Orbium ignis 0 %, Synorbium solidus 5 %, Orbium
+ * phantasma 5 %; even a pure template at a free angle lives 5–65 %: the bilinear turn blurs its thin rim).
+ * There a seed turns by whole quarter turns (an exact copy of the template) and gets this much more
+ * template (`bias`, added) and less noise (`noise`, removed): Gotero 0 → 27 %, Gotero III → 57 %, the
+ * pure template 100 %, about the Clásico table. [measured]
+ */
+export const WORLD_SEED_HELP: Readonly<Record<string, { bias: number; noise: number }>> = {
+  cold: { bias: 0.07, noise: 0.12 },
+};
+/**
  * Measured share of random seeds that become a creature, by Gotero level (rows) and Estabilizador
  * level (columns), Clásico world. The UI prints these, nothing else. 24 cells × 100 seeds plus 13
  * bias/noise sweeps (~3 000 CPU seeds, scripts/world-check.ts --seeds), smoothed with one logistic

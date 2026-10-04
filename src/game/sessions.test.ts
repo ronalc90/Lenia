@@ -5,6 +5,8 @@ import { createGame } from './game';
 import type { GameState } from './state';
 import { creature, recordingBus, report, run, seededRng } from './testUtil';
 import { WORLD_BY_ID } from './worlds';
+import { rotateQuarter, scaledTemplate } from './seeding';
+import { catalogByCode } from '../sim/catalog';
 
 /** A sessions game (the integrated loop of docs/CICLO.md). */
 function sessionsGame(seed = 1, save?: string) {
@@ -206,8 +208,27 @@ describe('sessions cycle: the tree, worlds and nights', () => {
     expect(g.actions.pickWorld!('classic')).toBe(true);
     expect(g.simParams.mu).toBe(WORLD_BY_ID.classic.params.mu);
     expect(g.actions.pickWorld!('giants')).toBe(false); // not open
-    g.actions.setCalibration({ mu: 0.3 }); // Calibrar is gone in this cycle
-    expect(g.simParams.mu).toBe(WORLD_BY_ID.classic.params.mu);
+    // Calibrar is gone: the rules are the World's (no action changes them).
+    expect('setCalibration' in g.actions).toBe(false);
+  });
+
+  it('Frío seeds are exact quarter turns of its templates with more template; Clásico keeps the free angle', () => {
+    const { g } = sessionsGame(3);
+    st(g).charges = { free: 5, guaranteed: 0 };
+    const a = g.actions.seedAt(150, 200)!;
+    expect(a.rotation).not.toBe(0);
+    st(g).research!.datos = 100;
+    g.actions.endSessionNow!();
+    expect(g.buyNode('worldCold').ok).toBe(true);
+    g.actions.startSession!();
+    expect(g.view().session!.world).toBe('cold');
+    st(g).charges = { free: 5, guaranteed: 0 };
+    const b = g.actions.seedAt(150, 200)!;
+    expect(b.rotation).toBe(0);
+    const turns = WORLD_BY_ID.cold.species.flatMap((c) => [0, 1, 2, 3].map((k) => rotateQuarter(scaledTemplate(catalogByCode(c)!, 13), k)));
+    expect(turns).toContain(b.pattern);
+    expect(b.bias).toBeCloseTo(C.DROPPER_TREE_BIAS[0] + C.WORLD_SEED_HELP.cold.bias, 6);
+    expect(b.noise).toBeCloseTo(C.DROPPER_TREE_NOISE[0] - C.WORLD_SEED_HELP.cold.noise, 6);
   });
 
   it('the night replaces the Extinction: ready after its sessions, free at the centre', () => {

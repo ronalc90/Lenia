@@ -194,6 +194,9 @@ export const TREE_UI = {
   step: (i: number, n: number) => t(`Paso ${i} de ${n}`, `Step ${i} of ${n}`),
   bought: (name: string) => t(`Comprado: ${name}`, `Bought: ${name}`),
   needs: t('Necesita', 'Needs'),
+  /** A closed node: what to buy first in the Tree. */
+  afterNodes: (names: Text[]) =>
+    t(`primero ${names.map((n) => `«${n.es}»`).join(' y ')} en el Árbol`, `first ${names.map((n) => `“${n.en}”`).join(' and ')} in the Tree`),
   mystery: t('Algo nuevo… compra el paso anterior para verlo.', 'Something new… buy the step before to see it.'),
   nightLocked: (n: number) => t(`Se abre en la Noche ${n} (toca el centro cuando brille).`, `Opens on Night ${n} (tap the centre when it glows).`),
   /** The night button while its gate is not met (J-102): what is still missing. */
@@ -261,6 +264,8 @@ export const SESSION_UI = {
   newSpecies: t('especies nuevas', 'new species'),
   newBehaviors: t('maneras de moverse nuevas', 'new ways of moving'),
   encargos: t('encargos', 'requests'),
+  /** Session 1 shows no Encargo (CLARIDAD §3.3): its silent goals (sow, a creature) are "first goals". */
+  firstSteps: t('primeras metas', 'first goals'),
   sparks: t('destellos atrapados', 'sparks caught'),
   records: t('récords', 'records'),
   minimum: t('mínimo', 'minimum'),
@@ -293,14 +298,43 @@ export const SESSION_UI = {
   conversionRule: (d: number) => t(`Por cada ${d} de Esencia, 1 Dato`, `For every ${d} Essence, 1 Data`),
   // CLARIDAD J-162…J-170: texts the new loop needs (the integrator wires them into the UI).
   endNow: t('Terminar ahora', 'End now'),
+  /** One-time card for a save from the old loop (VELA, three short lines). */
+  welcomeTitle: t('¡Bienvenida al laboratorio nuevo!', 'Welcome to the new lab!'),
+  welcomeLines: (datos: string) => [
+    t('Ahora juegas sesiones cortas, con reloj.', 'Now you play short sessions, with a clock.'),
+    t('Tu Esencia se vuelve Datos, y con Datos mejoras el Árbol.', 'Your Essence becomes Data, and Data grows the Tree.'),
+    t(`Lo que tenías ahora son ${datos} Datos. ¡Nada se perdió!`, `What you had is now ${datos} Data. Nothing was lost!`),
+  ],
+  welcomeGo: t('¡Vamos!', 'Let’s go!'),
+  /** Dock button between sessions. */
+  dockTree: t('Árbol', 'Tree'),
+  /** Pause card. */
+  pausedTitle: t('En pausa', 'Paused'),
+  pausedBody: t('La placa y el reloj esperan.', 'The dish and the clock wait.'),
+  keepPlaying: t('Seguir', 'Keep playing'),
+  endNowYes: t('Sí, terminar', 'Yes, end it'),
+  /** Abono on sale after the first seconds of the clock. */
+  boostIn: (clock: string) => t(`Abono en ${clock}`, `Fertiliser in ${clock}`),
+  boostWait: (clock: string) => t(`en ${clock}`, `in ${clock}`),
+  /** Abono with nothing alive to boost: the dock's short line, and what a tap on it says. */
+  boostNeedsLife: t('Falta vida', 'Needs life'),
+  boostNeedsLifeWhy: t('El Abono necesita criaturas vivas.', 'Fertiliser needs living creatures.'),
+  /** The Datos preview in the dock: "+12 Datos" over "al terminar". */
+  previewShort: (n: string) => t(`+${n} Datos`, `+${n} Data`),
+  previewEnd: t('al terminar', 'at the end'),
   endNowConfirm: (datos: string) => t(`¿Terminar ya? Te llevas ${datos} Datos.`, `End now? You take ${datos} Data.`),
   boostDesc: t('Todo da Esencia ×1,25 hasta el final de la sesión.', 'Everything gives Essence ×1.25 until the session ends.'),
   boostPrice: t('Cuesta 20 s de tu Esencia; el siguiente de hoy, el doble.', 'Costs 20 s of your Essence; the next one today costs double.'),
   tapAgain: t('¡Toca aquí otra vez!', 'Tap here again!'),
   keptNew: t('¡Nueva! · guardada en el Bestiario', 'New! · kept in the Bestiary'),
+  /** Under a new species' portrait in the summary (with the "¡Nueva!" badge above it). */
+  keptShort: t('guardada en el Bestiario', 'kept in the Bestiary'),
   datosKept: t('Los Datos no se pierden nunca.', 'Data is never lost.'),
   startVela: t('Esto te regala el Árbol hoy. ¡Y tienes un encargo!', 'This is the Tree’s gift today. And you have a request!'),
+  startVelaNoRequest: t('Esto te regala el Árbol hoy.', 'This is the Tree’s gift today.'),
   sheetHint: t('Gris es ahora. Verde es lo que tendrás.', 'Grey is now. Green is what you will get.'),
+  /** Right after the first purchase, in the same spot (CLARIDAD J-120: an upgrade is forever). */
+  sheetHintBought: t('¡Es tuya para siempre! La notarás en la próxima sesión.', 'It is yours forever! You will feel it next session.'),
   worldHint: t('Toca un mundo para jugar allí.', 'Tap a world to play there.'),
   newSpeciesTime: (s: number) => t(`¡Especie nueva: +${s} segundos!`, `New species: +${s} seconds!`),
 };
