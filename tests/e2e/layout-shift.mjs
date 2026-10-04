@@ -3,7 +3,8 @@
 // Serves <dir> (default dist/) with `vite preview`, opens the game at 390×844 (touch) and 1366×768,
 // dismisses the splash, skips the tutorial if offered, then taps the dish for N seconds like a player.
 // Checks: cumulative layout-shift score (every shift, input or not) < 0.05, and the bounding boxes of
-// the dish, the side/bottom panel, the tab bar and the HUD identical at t = 1 s and at the end.
+// the dish, the dock, the session clock and the HUD identical at t = 1 s and at the end (the first
+// seeds start the session clock: nothing may move when it starts).
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -38,7 +39,7 @@ await new Promise((res, rej) => {
   });
 });
 
-const SELECTORS = { dish: '.bl-dish', panel: '.bl-sheet', tabs: '.bl-tabs', hud: '.bl-hud' };
+const SELECTORS = { dish: '.bl-dish', dock: '.bl-dock', clock: '.bl-hud .hud-clock', hud: '.bl-hud' };
 const failures = [];
 const browser = await chromium.launch({
   executablePath: findChromium(),

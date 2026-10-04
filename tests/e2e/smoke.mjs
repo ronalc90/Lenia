@@ -1,7 +1,8 @@
 // End-to-end smoke test of the real game in headless Chromium.
 // Usage: npm run build && node tests/e2e/smoke.mjs [--single] [--shots <dir>]
-// Serves dist/ (or dist-single/) with `vite preview`, plays the first minutes
-// through the debug handle + real taps, fails on console errors.
+// Serves dist/ (or dist-single/) with `vite preview`, plays the first seconds of the first lab
+// session with real taps (the clock starts, the Bestiary drawer opens), fails on console errors.
+// The full sessions 1–3 play-through is tests/e2e/session-play.mjs.
 import { spawn } from 'node:child_process';
 import { existsSync, readdirSync, mkdirSync } from 'node:fs';
 import { chromium } from 'playwright-core';
@@ -125,23 +126,29 @@ try {
         seeds: v.stats.seeds,
         creatures: v.creatures.map((c) => c.state),
         species: v.species.length,
+        session: v.session ? { n: v.session.n, phase: v.session.phase, remaining: Math.round(v.session.remaining) } : null,
+        clock: !!document.querySelector('.bl-hud .ss-hud'),
       };
     });
     console.log(`[${vp.name}]`, JSON.stringify(state));
     if (state.step < 100) throw new Error(`[${vp.name}] simulation barely advanced: ${state.step} steps`);
     if (state.seeds < 1) throw new Error(`[${vp.name}] no seeds registered from taps`);
+    // The live game plays lab sessions: the first seed started the clock, shown in the HUD.
+    if (!state.session || state.session.phase !== 'running') throw new Error(`[${vp.name}] the session clock is not running: ${JSON.stringify(state.session)}`);
+    if (!state.clock) throw new Error(`[${vp.name}] no session clock in the HUD`);
     if (shotsDir) await page.screenshot({ path: `${shotsDir}/${vp.name}-2-running.png` });
 
-    // Visit every visible tab.
-    const tabs = await page.locator('[data-tab]').all();
-    for (const [i, t] of tabs.entries()) {
-      await gotIt();
-      if (await t.isVisible()) {
-        await t.click();
-        await page.waitForTimeout(300);
-        if (shotsDir) await page.screenshot({ path: `${shotsDir}/${vp.name}-3-tab${i}.png` });
-      }
-    }
+    // The Bestiary drawer opens from the dock and closes again.
+    await gotIt();
+    const best = page.locator('.bl-dock [data-tab="bestiary"]');
+    if (!(await best.isVisible())) throw new Error(`[${vp.name}] no Bestiary button in the dock`);
+    await best.click();
+    await page.waitForTimeout(400);
+    if (!(await page.locator('.bl-drawer').isVisible())) throw new Error(`[${vp.name}] the Bestiary drawer did not open`);
+    if (shotsDir) await page.screenshot({ path: `${shotsDir}/${vp.name}-3-bestiary.png` });
+    await page.locator('.bl-drawer .drawer-x').click();
+    await page.waitForTimeout(300);
+    if (await page.locator('.bl-drawer').isVisible()) throw new Error(`[${vp.name}] the Bestiary drawer did not close`);
     await ctx.close();
   }
 } catch (err) {
