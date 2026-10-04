@@ -276,7 +276,9 @@ ADR that supersedes the old one.
 
 ## ADR-016: No ads, donations only
 
-- **Status:** Accepted (2026-10-04). Source: GDD section 19 and the 100-USD plan.
+- **Status:** Accepted (2026-10-04). Source: GDD section 19 and the 100-USD plan. **Partly superseded by
+  ADR-021:** the "no purchases / no paid cosmetics" part is replaced by a cosmetic-only store (off by default);
+  no ads, no accelerators and donations without in-game benefit still hold.
 - **Context:** Vercel Hobby forbids ads and any payment method (donations are allowed); galaxy.click forbids
   games with advertisements; the incremental community reacts badly to monetised first versions.
 - **Decision:** The game is free, with **no ads, no purchases, no passes, no paid cosmetics, no accelerators**. The
@@ -345,3 +347,40 @@ ADR that supersedes the old one.
   - The current `ci.yml` has `permissions: contents: read`, no secrets and no agent steps.
 - **Consequences:** Activating the nightly cycle happens after Phase 0 with CI and `CLAUDE.md` ready (see
   `docs/ROADMAP.md`); until then no workflow may call a model.
+
+## ADR-021: Cosmetic-only store and supporter subscription (supersedes the "no purchases" part of ADR-016)
+
+- **Status:** Proposed (2026-10-04). Implemented behind `STORE_ENABLED = false`.
+- **Context:** The owner asked for paid items and a subscription that give no gameplay advantage. ADR-016 allowed
+  only donations because Vercel Hobby forbids charging and galaxy.click forbids ads. Payments need a host that
+  allows commercial use and a seller that handles foreign taxes for a Colombian developer.
+- **Decision:**
+  - Sell **cosmetics only** (matter palettes, dish themes, halo/seed-trail/spark skins, music ambiences, ranking
+    badges/frames/name colours), packs, and a **"Mecenas del laboratorio"** subscription (monthly 2.99 / yearly
+    24.99 USD) whose perks are all cosmetic. No currency, no loot boxes, no timers, no store button in the HUD.
+  - Fair play is enforced by tests: no gameplay keys in item data, spark skins keep brightness and geometry,
+    palettes meet contrast on every dish, state indicators are never skinned, SFX never change.
+  - Free cosmetics unlock through achievements; the wardrobe works everywhere, also with the store off.
+  - Web payments through **Lemon Squeezy** (Merchant of Record); Play Billing on Android, Steam DLC on Steam,
+    StoreKit on iOS later. Server-side entitlements (webhook HMAC + player ECDSA signature) are authoritative.
+  - The paying production site and the store API run on **Cloudflare Pages + Functions + KV**; Vercel previews
+    only run the mock or provider test mode. The store is hidden on galaxy.click, itch.io and CrazyGames.
+  - Payments stay off (`STORE_ENABLED = false`) until accounts, products, webhook secret, KV and legal pages exist.
+- **Consequences:** Adds no npm dependency (lemon.js loads lazily from Lemon Squeezy only when a checkout opens).
+  New env vars: LEMONSQUEEZY_WEBHOOK_SECRET, LEMONSQUEEZY_VARIANTS, LEMONSQUEEZY_ALLOW_TEST, STORE_KV,
+  STORE_ALLOWED_ORIGINS, VITE_STORE_ENABLED, VITE_BUILD_TARGET. Ranking cosmetics come from the server record.
+  Changing which hosts may take payments needs a new ADR. See docs/MONETIZACION.md.
+
+## ADR-022: Story layer: short dialogue scenes, a story-driven tutorial and ending cinematics
+
+- **Status:** Accepted (2026-10-04). Source: owner request; design in [`docs/STORY.md`](docs/STORY.md).
+- **Context:** GDD §3 said "no cinematics, no dialogue, only the Journal". The owner asked for an animated tutorial
+  with a story, several endings and characters.
+- **Decision:** add `src/story` (pure state machine, data-driven script, es/en) and `src/ui/story` (dialogue with
+  animated procedural portraits, spotlight tutorial, two-button choices, environmental hints, ending cinematics).
+  Guard-rails: lines ≤ 12 words in the tutorial and ≤ 20 elsewhere (tested), every scene skippable, the game never
+  pauses, beats ≥ 20 s apart, endings never stop the game ("Continue the experiment"), hints are overlays around real
+  creatures (pillar 1), choices do not touch the economy, reduce motion respected, the whole story can be turned off.
+- **Consequences:** GDD §3 gets a "(Corrección v1.2)" pointing here; the UI tutorial is disabled in favour of the
+  story tutorial. The story persists under its own storage key (`bioluma.story`) and is wired in `src/main.ts`
+  (journal entries merged into the Bitácora, tab signals, archive in Settings, ending achievements).

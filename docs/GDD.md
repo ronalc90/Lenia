@@ -116,6 +116,8 @@ Los términos de abajo se usan igual en el juego, en el código y en este docume
 
 Eres una científica o científico con una sola placa de Petri y una regla que no entiendes del todo: a veces, al sembrar materia, algo se mueve. La narrativa existe para dar sentido a las mecánicas, nunca para interrumpirlas: nada de cinemáticas ni diálogos, solo la Bitácora.
 
+> **(Corrección v1.2, ADR-022)** El dueño pidió un tutorial animado con historia, personajes y varios finales. Se añade una capa de historia ([`docs/STORY.md`](STORY.md)): escenas cortas de diálogo con VELA y otros personajes (líneas de ≤ 12 palabras en el tutorial, ≤ 20 en el resto, siempre saltables), el tutorial contado como historia (reemplaza al tutorial de marcas), dos opciones en momentos clave y cinemáticas de final que nunca detienen el juego ("Continuar el experimento"). El juego no se pausa por la historia, las decisiones no tocan la economía, se respeta "reducir movimiento" y toda la historia se puede apagar. La Bitácora sigue siendo el hilo principal y recibe también las entradas de la historia.
+
 **Tono.** Curiosidad serena, ligeramente melancólica. El humor es seco y escaso. Se habla de las criaturas con respeto y nombres en latín inventado (Orbium, Gyrorbium), como en el catálogo real de Lenia. Nunca se antropomorfiza más allá de un "parece que busca algo".
 
 **La Bitácora.** Entradas de 1 a 3 frases, en primera persona, que se desbloquean con hitos. Se leen en una pestaña propia y aparecen como aviso discreto al desbloquearse. Son el único texto narrativo del juego.

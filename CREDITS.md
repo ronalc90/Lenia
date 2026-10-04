@@ -117,5 +117,13 @@ TypeScript, Vitest, Playwright) is used under its own licenses and is not redist
 
 ## Support
 
-Bioluma has no ads and no purchases. If you want to support it, there will be a donation link in the in-game
-Credits screen; donating gives no in-game advantage.
+Bioluma has no ads. If you want to support it, there will be a donation link in the in-game Credits screen;
+donating gives no in-game advantage. An optional **cosmetic-only** store (palettes, dish themes, effects, music
+ambiences, ranking badges) exists in the code but is switched off (`STORE_ENABLED = false`, ADR-021); nothing in it
+gives any gameplay advantage.
+
+## Payments (only when the store is switched on)
+
+- **lemon.js**, by Lemon Squeezy (the Merchant of Record for web payments), is **not bundled**: it loads lazily from
+  `https://app.lemonsqueezy.com/js/lemon.js` only when a player opens a checkout, and never otherwise. Google Play
+  Billing and Steam use the platforms' own clients. No payment SDK ships in the game bundle.
