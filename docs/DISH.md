@@ -248,7 +248,9 @@ the control is a maze by t 600), `runaway-film-cluster.png` (six spores sown tog
 | `core/dish.ts` | `DishShape`, `dishForGrid(w, h, diameter)`, `DISH_DIAMETERS` (96…224), `dishDiameterFor(index, maxDiameter)`, `DishAnimator` (`setTarget(shape, animate)`, `update(dt)`, `rim`, `fit`, `glow`, `done`), `dishDist`, `rimDistance`, `insideDish`, `cellInDish`, `clampToDish`, `randomPointInDish`, `dishArea`, `dishCellCount`, `dishMask`, `moveInDish`, `DISH_GRID_MARGIN`, `DISH_GROW_SECONDS` |
 | `core/camera.ts` | `Camera.setDish(shape \| null, fitRadius?)`, `.dish`, `.fitRadius`, `.clamp()`; torus behaviour unchanged without a dish |
 | `sim/perf.ts` | `QUALITY_DISH[quality] = { grid, maxDiameter }` (low 168/160, medium 232/224, high 232/224) |
-| `sim/webgl.ts` | `setDish(shape \| null)`, `dish`, `applyTurns(turns)`, `setLysis(discs)`, `setDishFx({ grow })`, `setCreatureTints(list, amount?)` |
+| `sim/webgl.ts` | `setDish(shape \| null)`, `dish`, `applyTurns(turns)`, `setLysis(discs)`, `setDishFx({ grow, next, frost })`, `setCreatureTints(list, amount = 1)` |
+| `sim/tintlut.ts` | `TintRows`, `tintRow`, `tintWeight`, `TINT_LUT_ROWS`, `TINT_AMOUNT_DEFAULT` (species tint colormaps) |
+| `detect/detector.ts` | `createDetector() → DishDetector` (`Detector` + `noteTurn(id, angle)`) |
 | `sim/deflect.ts` | `Deflector.update(bodies, dish, step, interval) → Turn[]`, `DEFLECT`; `LysisPlanner.update(targets, step, R) → { discs, started }`, `LYSIS`, `lysisPenalty`, `rotateDiscCpu` |
 | `sim/cpu.ts` | `CpuLenia.setDish`, `applyTurns`, `setLysis` (CPU mirror for tests and bots) |
 | `sim/seed.ts` | `applySeedCpu(…, { dish })`, `applyEraseCpu(…, { dish })` (no wrap, masked) |
@@ -265,9 +267,11 @@ sim.setDish(anim.rim); camera.setDish(anim.rim, anim.fit);
 // size change (research node, era reset): anim.setTarget(dishForGrid(...), animate)
 // every frame:
 if (anim.update(dt)) { sim.setDish(anim.rim); camera.setDish(anim.rim, anim.fit); }
-sim.setDishFx({ grow: anim.glow });
+sim.setDishFx({ grow: anim.glow, next: nextSizeOnOffer ? nextDiameter / 2 : 0 });
 // every detector report (positions extrapolated by v·(sim.stepCount − report.step)):
-sim.applyTurns(deflector.update(bodies, anim.rim, sim.stepCount, DETECT_EVERY));
+const turns = deflector.update(bodies, anim.rim, sim.stepCount, DETECT_EVERY); // steerable: never gated on 'spinner'
+sim.applyTurns(turns);
+for (const t of turns) detector.noteTurn(t.id, t.angle); // before the next snapshot
 const rw = runaway.update(report, snap, sim.params, anim.rim);    // §5b
 // visible 60-step dissolve in the dish (or simply sim.erase each rw.erase disc, as on the torus):
 const { discs, started } = lysis.update(rw.started, sim.stepCount, params.R);
@@ -275,27 +279,29 @@ sim.setLysis(discs); // started → bus event → Momento "el laboratorio la dis
 // species tints (hue in degrees = SpeciesView.hue): sim.setCreatureTints(creatures.map(c => ({ x: c.x, y: c.y, r: 2 * c.r, hue })))
 ```
 
-Caveat for the detector (Phase 2b, measured): a swimmer that bounces in the Ø96 dish turns 60–180° every
-~100 steps, and the detector's rotation tracking then classifies it as **spinner** after ~1000 steps (CPU run:
-stable → spinner at step 1010). Both spinner tests see the glass: `turnHead` sums the heading changes between
-50-step chunks (each bounce adds up to ±π), and `turnBody` reads the phase of the angular harmonics, which a
-rigid rotation by θ shifts by n·θ. A pinballing swimmer also has a small net displacement, so even without the
-spinner label it fails `swim = net·window > 4R`. Proposal for `src/detect/detector.ts` (≈ 30 lines):
+Detector and the glass (Phase 2b, done): a swimmer that bounces in the Ø96 dish turns 60–180° every ~100 steps,
+and the detector used to classify it as **spinner** after ~1000 steps (CPU: stable → spinner at step 1010; with
+`steerable` gated on that label it then hit the glass unsteered and died at 1630). Both spinner tests saw the
+glass: `turnHead` sums the heading changes between 50-step chunks (each bounce adds up to ±π), and `turnBody`
+reads the phase of the angular harmonics, which a rigid rotation by θ shifts by n·θ; a pinballing swimmer also
+has a small net displacement. Now (`src/detect/detector.ts`):
 
-1. `noteTurn(id, angle)`: main forwards every `Turn` the deflector applied (same ids as the report). The track
-   keeps a cumulative `extTurn`, stored in each history record (new field `F_EXT`).
-2. Harmonics: `t.rot[n] += wrapPi(ph − t.phase[n] − n·dExt) / n`, with `dExt` the external turn since the last
-   measurement (line ≈ 1057), so `turnBody` only sees the creature's own spin.
-3. Heading: in `analyzeMotion`, subtract the external turn between chunk ends:
-   `acc += wrapPi(heads[i] − heads[i−1] − (ext[i] − ext[i−1]))`.
-4. Swimming: `swim = net·window > 4R || (speed·window > 8R && |turnHead| < fullTurn / 2)` — a long path with
-   no own turning is a swimmer even when the walls fold it back.
-5. `steerable` must not depend on the `spinner` label (the deflector's heading-curl filter, `maxCurl` 0.3,
-   already leaves real spinners alone), so a misclassification can never switch steering off.
+1. `createDetector()` returns a `DishDetector` (the `Detector` contract plus `noteTurn(id, angle)`; no change to
+   `core/types.ts`). Main forwards every `Turn` the deflector applied, right after `sim.applyTurns` and before the
+   next snapshot. Each creature keeps its cumulative external turn, stored in its history (`F_EXT`).
+2. Harmonics: `rot[n] += wrapPi(ph − phase[n] − n·dExt) / n`, so `turnBody` is the body's own spin.
+3. Heading: `acc += wrapPi(heads[i] − heads[i−1] − (extMid[i] − extMid[i−1]))`, with the external turn at the
+   middle of each chunk (a turn inside a chunk bends that chunk's heading about halfway).
+4. Swimming: `net·window > 4R`, or — only for a creature turned from outside within the window — a path
+   `> 8R` with own turning below half a turn. On the torus (no turns) every number is unchanged:
+   `scripts/calibrate-detector.ts` rewrites `catalogSignatures.json` byte for byte.
+5. `steerable` must not depend on the `spinner` label (sim/deflect.ts `Body.steerable`): real spinners are left
+   alone by the deflector's heading-curl filter (`maxCurl` 0.3).
 
-Test: one Orbium in the Ø96 dish with deflection for 3000 steps stays `swimmer` (today: `spinner` at 1010), and
-the existing true-spinner fixtures stay `spinner`. The detector's `exploded` state also fires late for a maze
-nucleus; `RunawayWatch` (§5b) is the early flag the lysis uses.
+Measured (CPU, Ø96 dish on 128², 3000 steps, deflector steering every non-exploded creature): Orbium at three
+headings and Scutium at two stay `swimmer` (own turning 0.00–0.12 of a turn, path 3–5.7 × 8R, net 0.45–0.93 × 4R)
+while a detector without `noteTurn` reads `spinner` (4.0–4.3 turns); Gyrorbium and Helicium stay `spinner` (the
+deflector never turns them). Tests: `src/detect/detector.test.ts` "round dish".
 
 GPU checks (`node tests/e2e/sim-check.mjs`, SwiftShader): Orbium into the glass GPU vs CPU max|Δ| 1e-5–1e-4
 (f32/u8) and < 0.02 (f16); seeds/erase without wrap 2.5e-4; deflection turn vs `rotateDiscCpu` 2.4e-4; lysis
@@ -310,14 +316,29 @@ seed/erase/extract without wrap; new rotate pass (mirror of `rotateDiscCpu`); re
 highlight over a lab-table background (no tiling), growth ring, species tints. Detector: no wrap, fill over dish
 cells. Camera/overlay: fit the circle, clamp pan, no wrapped copies. Game: `dishDist`, free spots in the circle,
 Placa = growth, golden spark bounces (`moveInDish`). main: deflector after each detector report (positions
-extrapolated by v·Δsteps), `steerable` = state stable/born and behaviour not colony (not gated on `spinner`,
-see §7 caveat); `RunawayWatch` after each detector report (§5b), its discs as erase (torus) or lysis (dish).
-Look (art direction, docs/ARTE.md §12 "swap-in"): `sim.setMatterLUT(lutFromStops(MATTER_ART.night))` (white at
-0.94, creature interiors keep structure), `sim.setRenderStyle(ART_RENDER_STYLE)` (frost-white glass rim, deeper
-night), tints `setCreatureTints(list, TINT_AMOUNT)` (optionally `matterLUT2D()` with row `familyIndex(hue) + 1`);
-the GPU glass must match the Canvas reference `src/ui/art/dishref.ts` (glass walls, lid sheen, frost, warm glint,
-growth ring). `src/core/palette.ts` MATTER_STOPS is a contract file: update it additively, keeping the old stops
-as `MATTER_STOPS_V1` if anything still imports them.
+extrapolated by v·Δsteps), then `detector.noteTurn(t.id, t.angle)` for every applied turn; `steerable` = state
+stable/born and behaviour not colony (never gated on `spinner`, §7); `RunawayWatch` after each detector report
+(§5b), its discs as erase (torus) or lysis (dish).
+Look (art direction, docs/ARTE.md §8 and §12): done on the sim side.
+- `core/palette.ts` `MATTER_STOPS` **is now the art night palette** (white only at 0.94; the first palette is kept
+  as `MATTER_STOPS_V1`). It feeds the GPU's default colormap, the store's default palette (`store/catalog.ts`),
+  portraits, story sprites and Momento clips, so the live game already wears it. `sim.setMatterLUT(
+  lutFromStops(MATTER_ART.night))` is therefore the same bytes (`palette.test.ts`).
+- Render style: main passes `sim.setRenderStyle(ART_RENDER_STYLE)` (frost-white rim, deeper night) — or the store's
+  default dish theme takes those values; in the light theme the same style with `bg` #dfe7ee gives a pale bench
+  (the dish stays night).
+- The round dish's glass follows `ui/art/dishref.ts`: steel bench with vignette and streaks, soft shadow and the
+  culture's cool light, agar lit towards the top left with a meniscus, two glass walls with frost-white edges, lid
+  sheen, specular strokes, VELA's warm glint, frost ferns on two arcs, and the dashed ring of the next dish size
+  (`sim.setDishFx({ next: radiusInCells })`, 0 hides it; fit it with `camera.setDish(rim, max(fit, next))`;
+  `setDishFx({ frost })` 0..1). Screenshot with the Canvas reference side by side: `sim-dish-art.png`.
+- Species tints: `sim.setCreatureTints(list)` — leave `amount` at its default 1. Each species hue gets a row of a
+  256 × 16 tint colormap made from the **current** colormap (`sim/tintlut.ts`, OKLCH lightness kept, banding of
+  `tintedStops`; equals `matterLUT2D` within 2/255 for the art palette and follows cosmetic palettes); the
+  creature's contour and glow take its body colour. `TINT_AMOUNT` 0.6 belonged to the old hue-mix shader: with
+  these rows it would pull every hue towards grey.
+- `src/ui/art/devSections.ts` compares the art palette with `MATTER_STOPS` as "today": point it at
+  `MATTER_STOPS_V1`.
 
 ## 9. ADR-025 draft (for DECISIONS.md; supersedes ADR-004)
 
