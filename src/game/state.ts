@@ -232,9 +232,19 @@ export function checksum(s: string): string {
   return h.toString(16).padStart(8, '0');
 }
 
-/** `{"v":1,"sum":"…","data":{…}}`; the checksum covers JSON.stringify(data). */
+/**
+ * JSON has no NaN/Infinity: JSON.stringify writes them as `null`, which strict validation
+ * rejects, so one bad number would make the whole save unreadable. Write the nearest finite
+ * value instead (NaN → 0, ±Infinity → ±MAX_VALUE); the checksum is taken over this output.
+ */
+function finiteReplacer(_key: string, v: unknown): unknown {
+  if (typeof v !== 'number' || Number.isFinite(v)) return v;
+  return Number.isNaN(v) ? 0 : v > 0 ? Number.MAX_VALUE : -Number.MAX_VALUE;
+}
+
+/** `{"v":1,"sum":"…","data":{…}}`; the checksum covers the serialized data. */
 export function serializeState(s: GameState): string {
-  const data = JSON.stringify(s);
+  const data = JSON.stringify(s, finiteReplacer);
   return `{"v":${B.SAVE_VERSION},"sum":"${checksum(data)}","data":${data}}`;
 }
 
@@ -256,6 +266,8 @@ export function deserializeState(str: string): GameState | null {
 // ───────────────────────────── Validation ──────────────────────────
 
 const BEHAVIORS: Behavior[] = ['still', 'pulsing', 'swimmer', 'spinner', 'divider', 'colony'];
+/** Sanity bound on imported bestiaries (far above what fits in localStorage anyway). */
+const MAX_SPECIES = 20000;
 const RARITIES: Rarity[] = ['common', 'uncommon', 'rare', 'veryRare'];
 
 function isObj(x: unknown): x is Record<string, unknown> {
@@ -268,6 +280,10 @@ function num(x: unknown, min = 0, max = Number.MAX_VALUE, fallback?: number): nu
   if (x === undefined && fallback !== undefined) return fallback;
   if (typeof x !== 'number' || !Number.isFinite(x) || x < min || x > max) throw new Invalid(String(x));
   return x;
+}
+/** Lenient number for non-critical fields (stats, timers): anything invalid becomes `fallback`. */
+function numOr(x: unknown, fallback: number, min = 0, max = Number.MAX_VALUE): number {
+  return typeof x === 'number' && Number.isFinite(x) && x >= min && x <= max ? x : fallback;
 }
 function int(x: unknown, min = 0, max = Number.MAX_SAFE_INTEGER, fallback?: number): number {
   const v = num(x, min, max, fallback);
@@ -387,10 +403,11 @@ export function validateState(x: unknown): GameState | null {
     }
     const statsIn = isObj(x.stats) ? x.stats : {};
     const stats = emptyStats();
-    for (const k of Object.keys(stats) as (keyof Stats)[]) stats[k] = num(statsIn[k], 0, Number.MAX_VALUE, 0);
+    for (const k of Object.keys(stats) as (keyof Stats)[]) stats[k] = numOr(statsIn[k], 0);
     const flags: Record<string, boolean> = {};
     if (isObj(x.flags)) for (const [k, v] of Object.entries(x.flags)) if (v === true) flags[k.slice(0, 32)] = true;
-    const speciesList = arr(x.species, 2000).map(species);
+    // The game never caps the bestiary, so this limit is only a sanity bound for imports.
+    const speciesList = arr(x.species, MAX_SPECIES).map(species);
     const ids = new Set(speciesList.map((s) => s.id));
     if (ids.size !== speciesList.length) throw new Invalid('dup species');
     const charges = isObj(x.charges) ? x.charges : {};
@@ -404,7 +421,7 @@ export function validateState(x: unknown): GameState | null {
       genomeSpent: num(x.genomeSpent, 0, Number.MAX_VALUE, 0),
       era: int(x.era, 1, 1e6),
       eraEssence: num(x.eraEssence),
-      eraTime: num(x.eraTime, 0, Number.MAX_VALUE, 0),
+      eraTime: numOr(x.eraTime, 0),
       eraStablePeak: int(x.eraStablePeak, 0, 1e6, 0),
       eraHadStable: bool(x.eraHadStable),
       upgrades,
@@ -429,18 +446,18 @@ export function validateState(x: unknown): GameState | null {
       objective: int(x.objective, 0, 1000, 0),
       stats,
       flags,
-      epsHistory: arr(x.epsHistory, 1000).map((v) => num(v)),
-      bucketSum: num(x.bucketSum, 0, Number.MAX_VALUE, 0),
-      bucketTime: num(x.bucketTime, 0, 1e6, 0),
+      epsHistory: arr(x.epsHistory, 1000).map((v) => numOr(v, 0)),
+      bucketSum: numOr(x.bucketSum, 0),
+      bucketTime: numOr(x.bucketTime, 0, 0, 1e6),
       charges: { free: int(charges.free, 0, 1e6, 0), guaranteed: int(charges.guaranteed, 0, 1e6, 0) },
       buffs: arr(x.buffs, 16).map((b) => {
         if (!isObj(b)) throw new Invalid('buff');
         return { id: str(b.id, 16), remaining: num(b.remaining, 0, 1e6), mult: num(b.mult, 0, 1e6) };
       }),
-      goldenTimer: num(x.goldenTimer, -1, 1e7, d.goldenTimer),
-      autoSeedTimer: num(x.autoSeedTimer, 0, 1e7, 0),
-      pipetteTimer: num(x.pipetteTimer, 0, 1e7, 0),
-      archiveTimer: num(x.archiveTimer, 0, 1e7, 0),
+      goldenTimer: numOr(x.goldenTimer, d.goldenTimer, -1, 1e7),
+      autoSeedTimer: numOr(x.autoSeedTimer, 0, 0, 1e7),
+      pipetteTimer: numOr(x.pipetteTimer, 0, 0, 1e7),
+      archiveTimer: numOr(x.archiveTimer, 0, 0, 1e7),
       settings: settings(x.settings),
       speed: num(x.speed, 1, 16, 1),
       buyQty,

@@ -7,7 +7,12 @@
  *   bioluma.game.bak   last copy that passed verification (used if the main one is corrupt)
  *   bioluma.dish       "WxH:" + base64(zero-run-length-encoded 8-bit grid)
  *   bioluma.dish.bak   previous dish
- *   bioluma.savedAt    ms timestamp of the last write (offline calculation)
+ *   bioluma.savedAt    ms timestamp of the last successful game write (offline calculation)
+ *   bioluma.game.unreadable  a save no build could read (corrupt, or from a newer version), kept
+ *                      aside so the next autosave cannot destroy it (recoverable by hand)
+ *
+ * Priorities when the storage is full: the game state first, then its backup, the dish last
+ * (dish copies are dropped to make room for the game).
  */
 import * as B from './balance';
 import { base64ToBytes, bytesToBase64, deserializeState } from './state';
@@ -17,6 +22,9 @@ const K_GAME_BAK = 'bioluma.game.bak';
 const K_DISH = 'bioluma.dish';
 const K_DISH_BAK = 'bioluma.dish.bak';
 const K_TIME = 'bioluma.savedAt';
+const K_UNREADABLE = 'bioluma.game.unreadable';
+/** What may be deleted to make room for the game state, least valuable first. */
+const DROPPABLE = [K_DISH_BAK, K_DISH, K_GAME_BAK];
 
 export interface StorageLike {
   getItem(k: string): string | null;
@@ -71,6 +79,26 @@ function set(k: string, v: string): boolean {
     memory.set(k, v); // quota exceeded / blocked: keep it for this session at least
     return false;
   }
+}
+
+function remove(k: string): void {
+  try {
+    storage().removeItem(k);
+  } catch {
+    /* ignore */
+  }
+  memory.delete(k);
+}
+
+/** Write the game state; on failure (quota) free optional copies one by one and retry. */
+function setGame(v: string): boolean {
+  if (set(K_GAME, v)) return true;
+  for (const k of DROPPABLE) {
+    if (get(k) === null) continue;
+    remove(k);
+    if (set(K_GAME, v)) return true;
+  }
+  return false;
 }
 
 // ───────────────────────────── dish encoding ───────────────────────
@@ -153,6 +181,9 @@ export function loadSave(): LoadedSave {
     const main = get(K_GAME);
     const bak = get(K_GAME_BAK);
     out.game = validGame(main) ? main : validGame(bak) ? bak : null;
+    // Nothing readable but something is there (corrupt, or written by a newer build): park it
+    // where the autosave will not overwrite it, instead of losing it two saves from now.
+    if (out.game === null && (main || bak) && get(K_UNREADABLE) === null) set(K_UNREADABLE, (main || bak)!);
     const d = unpackDish(get(K_DISH)) ?? unpackDish(get(K_DISH_BAK));
     if (d) {
       out.dish = d.dish;
@@ -176,13 +207,16 @@ export function writeSave(gameStr: string, dish?: Uint8Array, w?: number, h?: nu
   try {
     const prev = get(K_GAME);
     if (prev && prev !== gameStr && validGame(prev)) ok = set(K_GAME_BAK, prev) && ok;
-    ok = set(K_GAME, gameStr) && ok;
+    const gameOk = setGame(gameStr);
+    ok = gameOk && ok;
     if (dish && w && h && dish.length === w * h) {
       const prevDish = get(K_DISH);
       if (prevDish) set(K_DISH_BAK, prevDish);
       ok = set(K_DISH, packDish(dish, w, h)) && ok;
     }
-    ok = set(K_TIME, String(Math.floor(now))) && ok;
+    // The offline clock only moves with the game it belongs to: if the game write failed, the
+    // stored state is older than `now` and the next session must count from that older time.
+    if (gameOk) ok = set(K_TIME, String(Math.floor(now))) && ok;
   } catch {
     ok = false;
   }
@@ -191,14 +225,7 @@ export function writeSave(gameStr: string, dish?: Uint8Array, w?: number, h?: nu
 
 /** Remove every Bioluma key (Settings → delete save). */
 export function clearSave(): void {
-  for (const k of [K_GAME, K_GAME_BAK, K_DISH, K_DISH_BAK, K_TIME]) {
-    try {
-      storage().removeItem(k);
-    } catch {
-      /* ignore */
-    }
-    memory.delete(k);
-  }
+  for (const k of [K_GAME, K_GAME_BAK, K_DISH, K_DISH_BAK, K_TIME, K_UNREADABLE]) remove(k);
 }
 
 /**
