@@ -22,6 +22,7 @@ import { createPlayerIdentity } from './net/identity';
 import { setupCosmetics } from './app/cosmetics';
 import { createExtraJournal } from './app/journal';
 import { LYSIS_TOAST_MS, lysisTargets } from './app/lysis';
+import { RunawayWatch } from './sim/runaway';
 import { SUPPORTER_JOURNAL } from './store/catalog';
 import { setPortraitPalette } from './ui/portrait';
 import { createStory } from './story';
@@ -85,6 +86,9 @@ function boot(): void {
   if (saved.savedAt) integrity.noteSavedAt(saved.savedAt);
   integrity.start();
   const game = createGame({ bus }, saved.game ?? undefined);
+  /** Watches every component for the runaway growth that becomes a maze (early lysis). Declared before any
+   * bus handler that resets it ('dishClear' can fire while booting). */
+  const runaway = new RunawayWatch();
   const settings = game.view().settings;
   if (!saved.game) {
     // First run: follow the browser language.
@@ -343,6 +347,7 @@ function boot(): void {
     }
   }
   bus.on('dishClear', () => {
+    runaway.reset();
     if (ritual) {
       // Wipe when the white-out lands; fall back in case the UI never reports it.
       epoch++;
@@ -502,18 +507,28 @@ function boot(): void {
     const myEpoch = epoch;
     s.snapshotAsync()
       .then((snap) => {
-        if (myEpoch === epoch) reports.push(detector.update(snap, s.params));
+        if (myEpoch !== epoch) return;
+        const report = detector.update(snap, s.params);
+        // Dissolve a maze nucleus while it is still small (src/sim/runaway.ts, docs/DISH.md §5b).
+        const caught = runaway.update(report, snap, s.params);
+        for (const e of caught.erase) s.erase(e.x, e.y, e.radius);
+        if (caught.started.length) noteDissolved();
+        reports.push(report);
       })
       .catch((err) => console.warn('snapshot failed', err))
       .finally(() => (snapInFlight = false));
   }
 
   let lysisToastAt = -Infinity;
-  /** Dissolve runaway shapeless matter before it grows into a maze (src/app/lysis.ts). */
+  /** Backstop: dissolve matter the detector already calls exploded (src/app/lysis.ts). */
   function dissolveShapeless(report: DetectorReport): void {
     const targets = lysisTargets(report, sim!.params.R, DISH_OVERGROWN_FILL);
     if (!targets.length) return;
     for (const t of targets) sim!.erase(t.x, t.y, t.radius);
+    noteDissolved();
+  }
+  /** Tell the player why matter vanished (the first time in a session explains it). */
+  function noteDissolved(): void {
     const now = performance.now();
     if (now - lysisToastAt < LYSIS_TOAST_MS) return;
     const first = lysisToastAt === -Infinity;
