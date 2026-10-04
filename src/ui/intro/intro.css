@@ -1,0 +1,392 @@
+/* The opening intro (src/ui/intro/intro.ts). Tokens from src/ui/art/art.css, with fallbacks. */
+
+.bl-intro {
+  position: fixed;
+  inset: 0;
+  z-index: var(--bl-z-cinematic, 80);
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  background: var(--bl-bg, #0b0e12);
+  color: var(--bl-text, #e6edf3);
+  font-family: var(--bl-font-ui, Inter, system-ui, sans-serif);
+  -webkit-font-smoothing: antialiased;
+  outline: none;
+  overflow: hidden;
+  animation: bl-intro-in 420ms var(--bl-ease-enter, cubic-bezier(0.05, 0.7, 0.1, 1)) both;
+}
+.bl-intro.out {
+  animation: bl-intro-out 260ms var(--bl-ease-exit, cubic-bezier(0.3, 0, 0.8, 0.15)) both;
+  pointer-events: none;
+}
+.bl-intro.rm,
+.bl-intro.rm.out {
+  animation: none;
+}
+@keyframes bl-intro-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes bl-intro-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* ── the picture ── */
+.bl-intro-art {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background: #06090d;
+  cursor: pointer;
+}
+.bl-intro-cv {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.bl-intro.swap .bl-intro-cv {
+  animation: bl-intro-pic 380ms var(--bl-ease-enter, cubic-bezier(0.05, 0.7, 0.1, 1)) both;
+}
+.bl-intro.swap-back .bl-intro-cv {
+  animation: bl-intro-pic-back 380ms var(--bl-ease-enter, cubic-bezier(0.05, 0.7, 0.1, 1)) both;
+}
+@keyframes bl-intro-pic {
+  from {
+    opacity: 0;
+    transform: translateX(18px) scale(1.02);
+  }
+}
+@keyframes bl-intro-pic-back {
+  from {
+    opacity: 0;
+    transform: translateX(-18px) scale(1.02);
+  }
+}
+/* Soft fade from the picture into the text card. */
+.bl-intro-art::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 28px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0), var(--bl-bg, #0b0e12));
+  pointer-events: none;
+}
+
+/* ── top bar: progress and "skip" ── */
+.bl-intro-top {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: calc(env(safe-area-inset-top, 0px) + 6px) 8px 0 16px;
+  pointer-events: none;
+}
+.bl-intro-dots {
+  display: flex;
+  gap: 6px;
+}
+.bl-intro-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(230, 237, 243, 0.28);
+  transition: width 200ms var(--bl-ease-standard, ease), background 200ms;
+}
+.bl-intro-dots span.past {
+  background: rgba(230, 237, 243, 0.6);
+}
+.bl-intro-dots span.on {
+  width: 22px;
+  background: #ffb86b;
+}
+.bl-intro-skip {
+  pointer-events: auto;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(6, 9, 13, 0.55);
+  color: #e6edf3;
+  font: 600 15px/20px var(--bl-font-ui, Inter, system-ui, sans-serif);
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.bl-intro-skip:hover {
+  background: rgba(6, 9, 13, 0.75);
+}
+
+/* ── the text card ── */
+.bl-intro-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 6px 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
+  background: var(--bl-bg, #0b0e12);
+  min-height: 0;
+}
+.bl-intro-kicker {
+  margin: 0;
+  font: 700 13px/18px var(--bl-font-ui, Inter, system-ui, sans-serif);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bl-accent, #5bc0eb);
+}
+.bl-intro-kicker[hidden] {
+  display: none;
+}
+.bl-intro-lines {
+  display: grid;
+  gap: 10px;
+  min-height: 112px;
+  align-content: start;
+}
+.bl-intro-ln {
+  animation: bl-intro-line 420ms var(--bl-ease-enter, cubic-bezier(0.05, 0.7, 0.1, 1)) both;
+  animation-delay: var(--d, 0s);
+}
+.bl-intro.rm .bl-intro-ln {
+  animation: none;
+}
+@keyframes bl-intro-line {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.bl-intro-ln p {
+  margin: 0;
+}
+.bl-intro-ln.narr p {
+  font: 600 21px/29px var(--bl-font-display, Fraunces, Georgia, serif);
+  font-variation-settings: 'SOFT' 100, 'opsz' 40;
+  color: var(--bl-text, #e6edf3);
+  text-wrap: pretty;
+}
+.bl-intro-ln.say {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 8px 6px;
+  border-radius: 16px;
+  background: var(--bl-surface2, #1b232c);
+  box-shadow: 0 0 0 1px rgba(255, 184, 107, 0.16);
+}
+.bl-intro-ln.say.who-albor {
+  box-shadow: 0 0 0 1px rgba(255, 184, 107, 0.3);
+}
+.bl-intro-face {
+  width: 56px;
+  height: 56px;
+  display: block;
+  border-radius: 14px;
+  background: radial-gradient(circle at 50% 60%, #1a2a44, #0b111c 72%);
+}
+.bl-intro-say b {
+  display: block;
+  font: 700 13px/18px var(--bl-font-ui, Inter, system-ui, sans-serif);
+  letter-spacing: 0.04em;
+  color: var(--bl-candle, #ffb86b);
+}
+.bl-intro-say p {
+  font: 600 18px/25px var(--bl-font-ui, Inter, system-ui, sans-serif);
+  color: var(--bl-text, #e6edf3);
+}
+
+/* ── look picker ── */
+.bl-intro-picker {
+  display: flex;
+  gap: 12px;
+}
+.bl-intro-picker[hidden] {
+  display: none;
+}
+.bl-intro-look {
+  flex: 0 0 auto;
+  width: 72px;
+  height: 72px;
+  padding: 0;
+  border-radius: 20px;
+  border: 2px solid var(--bl-line, rgba(127, 127, 127, 0.3));
+  background: radial-gradient(circle at 50% 60%, #1a2a44, #0b111c 75%);
+  cursor: pointer;
+  transition: transform 140ms var(--bl-ease-standard, ease), border-color 140ms;
+}
+.bl-intro-look canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: 18px;
+}
+.bl-intro-look.on {
+  border-color: var(--bl-accent, #5bc0eb);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bl-accent, #5bc0eb) 30%, transparent);
+  transform: scale(1.06);
+}
+.bl-intro-look:active {
+  transform: scale(0.96);
+}
+
+/* ── buttons ── */
+.bl-intro-nav {
+  display: flex;
+  gap: 10px;
+  margin-top: auto;
+}
+.bl-intro-back {
+  flex: 0 0 56px;
+  min-height: 52px;
+  border-radius: 14px;
+  border: 1px solid var(--bl-line2, rgba(127, 127, 127, 0.45));
+  background: var(--bl-surface2, #1b232c);
+  color: var(--bl-text, #e6edf3);
+  font: 700 26px/1 var(--bl-font-ui, Inter, system-ui, sans-serif);
+  cursor: pointer;
+}
+.bl-intro-back[hidden] {
+  display: none;
+}
+.bl-intro-next {
+  flex: 1 1 auto;
+  min-height: 52px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--bl-accent-fill, #5bc0eb);
+  color: var(--bl-accent-ink, #04202e);
+  font: 800 18px/22px var(--bl-font-ui, Inter, system-ui, sans-serif);
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: transform 90ms var(--bl-ease-standard, ease);
+}
+.bl-intro-next:active,
+.bl-intro-back:active {
+  transform: scale(0.96);
+}
+.bl-intro-next.go {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--bl-accent-fill, #5bc0eb) 25%, transparent), 0 8px 26px rgba(91, 192, 235, 0.35);
+}
+.bl-intro button:focus-visible {
+  outline: 3px solid var(--bl-gold, #ffd166);
+  outline-offset: 2px;
+}
+
+/* ── phone: picture on top (≈ 56 %), text below ── */
+@media (max-aspect-ratio: 1/1) {
+  .bl-intro {
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .bl-intro-copy {
+    min-height: 40vh;
+  }
+}
+
+/* ── landscape / desktop: a picture-book spread, picture left, text right ── */
+@media (min-aspect-ratio: 1/1) and (min-width: 700px) {
+  .bl-intro {
+    grid-template-rows: 1fr;
+    grid-template-columns: minmax(0, 1.65fr) minmax(340px, 1fr);
+  }
+  .bl-intro-art {
+    margin: 20px 0 20px 20px;
+    border-radius: 24px;
+    box-shadow: 0 0 0 1px rgba(207, 232, 245, 0.12), 0 20px 60px rgba(0, 0, 0, 0.45);
+  }
+  .bl-intro-art::after {
+    display: none;
+  }
+  .bl-intro-top {
+    left: 36px;
+    right: auto;
+    top: 32px;
+    padding: 0;
+  }
+  .bl-intro-skip {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    background: transparent;
+    color: var(--bl-text2, #a7b3bf);
+    backdrop-filter: none;
+  }
+  .bl-intro-skip:hover {
+    background: var(--bl-surface2, #1b232c);
+  }
+  .bl-intro-copy {
+    justify-content: center;
+    padding: 96px 40px 40px 36px;
+    gap: 18px;
+  }
+  .bl-intro-lines {
+    min-height: 180px;
+    gap: 14px;
+  }
+  .bl-intro-ln.narr p {
+    font-size: 26px;
+    line-height: 35px;
+  }
+  .bl-intro-say p {
+    font-size: 20px;
+    line-height: 28px;
+  }
+  .bl-intro-nav {
+    margin-top: 12px;
+  }
+}
+
+/* ── light theme: the text card is warm paper; the picture stays night ── */
+[data-theme='light'] .bl-intro {
+  background: var(--bl-bg, #eef2f6);
+}
+[data-theme='light'] .bl-intro-copy {
+  background: var(--bl-bg, #eef2f6);
+}
+[data-theme='light'] .bl-intro-art::after {
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0), var(--bl-bg, #eef2f6));
+}
+[data-theme='light'] .bl-intro-ln.say {
+  background: var(--bl-surface, #ffffff);
+  box-shadow: 0 0 0 1px rgba(165, 79, 8, 0.18), 0 2px 8px rgba(15, 23, 32, 0.06);
+}
+[data-theme='light'] .bl-intro-look {
+  border-color: rgba(68, 80, 93, 0.25);
+}
+
+/* ── Settings entry ── */
+.bl-intro-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+}
+.bl-intro-entry b {
+  display: block;
+  font: 700 15px/20px var(--bl-font-ui, Inter, system-ui, sans-serif);
+}
+.bl-intro-entry small {
+  display: block;
+  color: var(--bl-text2, #a7b3bf);
+  font: 500 13px/18px var(--bl-font-ui, Inter, system-ui, sans-serif);
+}
+.bl-intro-entry-btn {
+  flex: 0 0 auto;
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid var(--bl-line2, rgba(127, 127, 127, 0.45));
+  background: var(--bl-surface2, #1b232c);
+  color: var(--bl-text, #e6edf3);
+  font: 700 15px/20px var(--bl-font-ui, Inter, system-ui, sans-serif);
+  cursor: pointer;
+}

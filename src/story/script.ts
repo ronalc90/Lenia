@@ -163,6 +163,22 @@ const LAMP_CHOICE: NonNullable<SceneDef['choice']> = {
  */
 export const CLASSIC_ONLY_SCENES: readonly string[] = ['t_lab', 't_calibrate', 'a1_extinction'];
 
+/** Set by the integrator (story.setFlag) when the opening intro (src/ui/intro) finishes or is skipped. */
+export const INTRO_SEEN_FLAG = 'introSeen';
+
+/** VELA's hello (t_intro) for a player who did not watch the intro. */
+export const T_INTRO_LINES: LineDef[] = [
+  vela('awed', '¡Oh! ¡Hola, hola! Esto es la Estación Vigilia.', 'Oh! Hello, hello! This is Vigil Station.'),
+  vela('happy', 'Soy VELA. Es un acrónimo. Nadie sabe de qué.', 'I\'m VELA. It\'s an acronym. Nobody knows for what.'),
+  vela('neutral', 'Aquí la noche dura meses. La luz crece en la placa.', 'Here the night lasts months. Light grows in the dish.', at('dish')),
+  vela('happy', '¡Toca la placa! A ver qué pasa.', 'Tap the dish! Let\'s see what happens.', at('dish')),
+];
+/** t_intro after the intro: the station, VELA and the dish were already introduced; straight to the task. */
+export const T_INTRO_AFTER_INTRO: LineDef[] = [
+  vela('happy', '¡Ya estamos! Tu primera semilla, colega.', 'Here we are! Your first seed, colleague.', at('dish')),
+  vela('happy', '¡Toca la placa! A ver qué pasa.', 'Tap the dish! Let\'s see what happens.', at('dish')),
+];
+
 /** The Choir's question (final choice). */
 const QUESTION = coro('¿qué  ·  somos  ·  para  ·  ti  ?', 'what  ·  are  ·  we  ·  to  ·  you  ?', { hint: 'echo' });
 
@@ -177,12 +193,8 @@ export const SCENES: SceneDef[] = [
     priority: 100,
     title: t('Estación Vigilia', 'Vigil Station'),
     when: (c) => c.n('seeds') === 0 && c.v.stats.seeds === 0,
-    lines: [
-      vela('awed', '¡Oh! ¡Hola, hola! Esto es la Estación Vigilia.', 'Oh! Hello, hello! This is Vigil Station.'),
-      vela('happy', 'Soy VELA. Es un acrónimo. Nadie sabe de qué.', 'I\'m VELA. It\'s an acronym. Nobody knows for what.'),
-      vela('neutral', 'Aquí la noche dura meses. La luz crece en la placa.', 'Here the night lasts months. Light grows in the dish.', at('dish')),
-      vela('happy', '¡Toca la placa! A ver qué pasa.', 'Tap the dish! Let\'s see what happens.', at('dish')),
-    ],
+    // After the opening intro (src/ui/intro, flag 'introSeen') VELA skips the hello it already said.
+    lines: (c) => (c.flag(INTRO_SEEN_FLAG) ? T_INTRO_AFTER_INTRO : T_INTRO_LINES),
     wait: tapWait('Toca la placa.', 'Tap the dish.', { event: 'seeds' }),
   },
   {

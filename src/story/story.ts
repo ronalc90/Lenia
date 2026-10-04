@@ -122,6 +122,11 @@ export interface Story {
   unlockJournal(id: string): void;
   /** The player printed a species (until GameEvents carries a 'print' event). */
   notePrint(): void;
+  /**
+   * Set a persistent story flag from outside (e.g. 'introSeen' when the opening intro,
+   * src/ui/intro, finished: t_intro then skips the hello the intro already said).
+   */
+  setFlag(name: string, on?: boolean): void;
   setEnabled(on: boolean): void;
   readonly enabled: boolean;
   archive(): ArchiveView;
@@ -875,6 +880,13 @@ export function createStory(deps: StoryDeps): Story {
     notePrint() {
       bump('prints');
       markDirty();
+    },
+    setFlag(name, on = true) {
+      if (on === st.flags.has(name)) return;
+      if (on) st.flags.add(name);
+      else st.flags.delete(name);
+      persist();
+      events.emit('change', {});
     },
     setEnabled(on) {
       st.enabled = on;

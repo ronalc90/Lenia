@@ -11,8 +11,8 @@ import type { GameView, Text } from '../core/types';
 
 /** Cast. `you` is the player-scientist (journal voice). */
 export type Speaker = 'vela' | 'albor' | 'committee' | 'coro' | 'you';
-/** VELA's face. 'sleepy' (back after a while, long sessions) and 'proud' (a purchase, a request done, a new night) come with the art direction (docs/ARTE.md §6). */
-export type Mood = 'neutral' | 'happy' | 'worried' | 'awed' | 'sleepy' | 'proud';
+/** Faces. 'thinking' is the doctors' (Albor, You; VELA shows neutral). 'sleepy' (back after a while, long sessions) and 'proud' (a purchase, a request done, a new night) come with the art direction (docs/ARTE.md §6). */
+export type Mood = 'neutral' | 'happy' | 'worried' | 'awed' | 'sleepy' | 'proud' | 'thinking';
 export type Act = 1 | 2 | 3 | 4;
 
 /**
