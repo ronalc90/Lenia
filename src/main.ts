@@ -8,7 +8,7 @@ import type { DetectorReport, Quality, Simulation } from './core/types';
 import { createSimulation } from './sim/webgl';
 import { createDetector } from './detect/detector';
 import { createGame } from './game/game';
-import { loadSave, writeSave } from './game/save';
+import { loadSave, offlineSeconds, writeSave } from './game/save';
 import { createUI } from './ui/ui';
 import { createAudio } from './audio/audio';
 
@@ -115,7 +115,15 @@ function boot(): void {
   });
 
   try {
-    sim = createSimulation(glCanvas, { gridW, gridH, params: game.simParams });
+    // Desktop GPUs handle full floats easily and match the CPU reference exactly;
+    // phones keep the faster half-float default.
+    const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+    sim = createSimulation(glCanvas, {
+      gridW,
+      gridH,
+      params: game.simParams,
+      ...(coarse ? {} : { format: 'float' as const }),
+    });
   } catch (err) {
     console.error(err);
     ui.showUnsupported(err instanceof Error ? err.message : String(err));
@@ -132,19 +140,20 @@ function boot(): void {
   }
 
   const detector = createDetector();
+  game.setGridSize(gridW, gridH);
 
   if (saved.dish && saved.dishW === gridW && saved.dishH === gridH) {
     sim.importState(saved.dish, gridW, gridH);
   }
-  if (saved.game && saved.savedAt) {
-    const away = (Date.now() - saved.savedAt) / 1000;
-    if (away > 60) {
-      const before = game.view().essence;
-      game.applyOffline(away);
-      const gained = game.view().essence - before;
-      if (gained > 0) ui.showOfflineCard(Math.min(away, 24 * 3600), gained);
-    }
+  /** Grant offline progress for time spent away (closed app or long-hidden tab). */
+  function grantOffline(away: number): void {
+    if (away <= 60) return;
+    const before = game.view().essence;
+    game.applyOffline(away);
+    const gained = game.view().essence - before;
+    if (gained > 0) ui.showOfflineCard(Math.min(away, 24 * 3600), gained);
   }
+  if (saved.game && saved.savedAt) grantOffline(offlineSeconds(saved.savedAt));
 
   // Dish requests from the game (auto-seeder, rewards, extinction).
   bus.on('dishSeed', ({ specs }) => specs.forEach((s) => sim!.seed(s)));
@@ -248,12 +257,16 @@ function boot(): void {
   requestAnimationFrame(frame);
 
   window.addEventListener('pointerdown', () => (lastInteraction = performance.now()), { passive: true });
+  let hiddenAt = 0;
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
+      hiddenAt = Date.now();
       save();
       audio.suspend();
     } else {
       last = performance.now();
+      if (hiddenAt) grantOffline(offlineSeconds(hiddenAt));
+      hiddenAt = 0;
       audio.resume();
     }
   });
