@@ -9,6 +9,7 @@
  *
  * Uniform contract (set by webgl.ts): `uniform vec3 uDish;` = (cx, cy, radius) in grid cells.
  */
+import { TINT_LUT_ROWS } from './tintlut';
 
 /** Dish helpers; needs nothing else. */
 export const DISH_GLSL = `
@@ -92,34 +93,42 @@ void main() {
 export const MAX_TINTS = 32;
 
 /**
- * Species tint for the screen pass: matter near a tinted creature drifts towards its species hue.
- * Uniforms: uTint[i] = (x, y, radius, hue 0..1) in grid cells; uTintCount; uTintAmt (0..1).
- * tintMatter(mat, g) returns the tinted colour for matter colour `mat` at grid point g.
+ * Species tint for the screen pass: matter near a tinted creature takes its species' row of the
+ * tint colormap (tintlut.ts: the matter colormap re-coloured to one hue at the same OKLCH
+ * lightness, docs/ARTE.md §8.2), and its contour and glow take the species' body colour.
+ * Uniforms: uTint[i] = (x, y, radius, row) in grid cells; uTintCount; uTintAmt (0..1, 1 = the art
+ * direction's tinted palette exactly); uTintLut (256 × TINT_LUT_ROWS).
  */
 export const TINT_GLSL = `
-uniform vec4 uTint[${MAX_TINTS}];
+uniform vec4 uTint[${MAX_TINTS}];   // x, y, radius (cells), row of uTintLut
 uniform int uTintCount;
 uniform float uTintAmt;
-vec3 hue2rgb(float h) {
-  vec3 k = clamp(abs(fract(h + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0) - 1.0, 0.0, 1.0);
-  return k * k * (3.0 - 2.0 * k);
-}
-vec3 tintMatter(vec3 mat, vec2 g) {
+uniform sampler2D uTintLut;          // 256 × ${TINT_LUT_ROWS}: row 0 = matter colormap, rows 1.. = tinted copies
+/**
+ * Species tint at grid point g: atV = the tinted colormap colour at matter value v, body = the
+ * species' body colour (value .6, for its contour and glow), both averaged over the nearby tints by
+ * a gaussian of each creature's radius. Returns how much of them to use (0 = untinted).
+ */
+float tintAt(vec2 g, float v, out vec3 atV, out vec3 body) {
   float wsum = 0.0;
-  vec3 hsum = vec3(0.0);
+  vec3 csum = vec3(0.0);
+  vec3 bsum = vec3(0.0);
+  float u = (v * 255.0 + 0.5) / 256.0;
+  float ub = (0.6 * 255.0 + 0.5) / 256.0;
   for (int i = 0; i < ${MAX_TINTS}; i++) {
     if (i >= uTintCount) break;
     vec4 t = uTint[i];
     vec2 d = (g - t.xy) / max(t.z, 1.0);
     float w = exp(-dot(d, d));
+    if (w < 0.004) continue;
+    float row = (t.w + 0.5) / ${TINT_LUT_ROWS}.0;
     wsum += w;
-    hsum += hue2rgb(t.w) * w;
+    csum += texture(uTintLut, vec2(u, row)).rgb * w;
+    bsum += texture(uTintLut, vec2(ub, row)).rgb * w;
   }
-  if (wsum < 1e-3) return mat;
-  vec3 hc = hsum / wsum;
-  float lum = dot(mat, vec3(0.299, 0.587, 0.114));
-  // Keep the palette's brightness, swap part of its hue for the species hue.
-  vec3 tinted = hc * lum * 1.6 + mat * 0.15;
-  return mix(mat, tinted, uTintAmt * min(1.0, wsum));
+  if (wsum < 1e-3) return 0.0;
+  atV = csum / wsum;
+  body = bsum / wsum;
+  return uTintAmt * min(1.0, wsum);
 }
 `;

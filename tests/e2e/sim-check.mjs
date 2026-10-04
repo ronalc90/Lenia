@@ -159,6 +159,8 @@ try {
       const dp = await run('dishPerf', 1500, 224);
       const dp96 = await run('dishPerf', 1500, 96);
       console.log(`PERF  round dish ${dp.grid}² Ø${dp.diameter}: ${fmt(dp.stepsPerSec, 4)} steps/s; Ø96: ${fmt(dp96.stepsPerSec, 4)} steps/s`);
+      const rc = await run('dishRenderCost', 10);
+      console.log(`PERF  screen pass 780×1688: torus ${fmt(rc.torusMs, 3)} ms, round dish (glass, frost, ring, 10 tints) ${fmt(rc.dishMs, 3)} ms`);
     }
 
     if (!quick) {

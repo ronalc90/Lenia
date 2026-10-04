@@ -476,6 +476,8 @@ uniform vec4 uLabGrid;      // rgba of a faint grid every 16 cells; a = 0 disabl
 uniform int uDishMode;      // 0 = toroidal rectangle (legacy), 1 = round walled dish
 uniform vec3 uDish;         // round dish: centre (grid cells) and radius
 uniform float uGrowFx;      // 0..1 glow of the rim while the dish grows
+uniform float uNextR;       // round dish: radius (cells) of the next dish size to hint at, 0 = none
+uniform float uFrost;       // round dish: frost on the glass, 0..1
 ${TINT_GLSL}
 out vec4 o;
 
@@ -507,47 +509,187 @@ float hash12(vec2 p) {
   return fract((p3.x + p3.y) * p3.z);
 }
 
-/** Lab table, the dish's shadow and the glass wall around a round dish (inside = px to the rim). */
-vec3 glassDish(vec3 agar, float inside, vec2 g, vec2 px) {
+const float TAU = 6.2831853;
+const vec3 WARM = vec3(1.0, 0.784, 0.51);       // VELA's candle, (255, 200, 130)
+const vec3 FROST = vec3(0.91, 0.965, 1.0);      // (232, 246, 255)
+const vec3 MENISCUS = vec3(0.588, 0.804, 0.941); // (150, 205, 240)
+const vec3 ACCENT = vec3(0.357, 0.753, 0.922);  // UI accent #5bc0eb: the growth ring
+
+/**
+ * Round dish geometry on screen: (Rr, wall) in px. The art reference draws a glass wall 0.045 Rr
+ * thick centred on its radius Rr; here the wall starts at the living area (uDish.z), so Rr sits
+ * half a wall further out.
+ */
+vec2 dishWall() {
+  float R = uDish.z * uScale;
+  float wall = max(5.0 * uDpr, 0.045 * R / 0.9775);
+  return vec2(R + 0.5 * wall, wall);
+}
+
+/** Angle of a dish-centred offset (y down), 0..2π clockwise on screen like canvas arcs. */
+float angOf(vec2 d) {
+  float a = atan(d.y, d.x);
+  return a < 0.0 ? a + TAU : a;
+}
+
+/** Distance (px) from d to the arc of radius rad between angles a0 < a1, with round caps. */
+float arcDist(vec2 d, float r, float a, float rad, float a0, float a1) {
+  if (a >= a0 && a <= a1) return abs(r - rad);
+  return min(length(d - rad * vec2(cos(a0), sin(a0))), length(d - rad * vec2(cos(a1), sin(a1))));
+}
+
+float segDist(vec2 p, vec2 a, vec2 b) {
+  vec2 pa = p - a;
+  vec2 ba = b - a;
+  float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-6), 0.0, 1.0);
+  return length(pa - ba * h);
+}
+
+/** Antialiased stroke coverage at dist px from a line width px wide. */
+float stroke(float dist, float width) {
+  return 1.0 - smoothstep(0.5 * width - 0.5 * uDpr, 0.5 * width + 0.5 * uDpr, dist);
+}
+
+/**
+ * Agar of the round dish (docs/ARTE.md §8.3): lighter and bluer towards the upper left, the
+ * style's agar colours at the glass, and a lit meniscus where it climbs the wall. q = offset from
+ * the dish centre in units of the reference radius.
+ */
+vec3 dishAgar(vec2 q) {
+  // Two-circle radial gradient (start: radius .1 at (−.15, −.2); end: radius 1 at the centre).
+  vec2 dc = vec2(0.15, 0.2);
+  vec2 qq = q + dc;
+  float a = dot(dc, dc) - 0.81;
+  float b = -2.0 * (dot(qq, dc) + 0.09);
+  float c = dot(qq, qq) - 0.01;
+  float t = clamp((-b - sqrt(max(b * b - 4.0 * a * c, 0.0))) / (2.0 * a), 0.0, 1.0);
+  vec3 agar = mix(uAgarIn * 1.16, uAgarIn * 0.9, smoothstep(0.0, 0.75, t));
+  agar = mix(agar, uAgarOut, smoothstep(0.75, 1.0, t));
+  return mix(agar, MENISCUS, 0.16 * smoothstep(0.86, 1.0, length(q)));
+}
+
+/** Frost on the glass along one arc (a0..a1): a soft haze and fine fern crystals growing inward. */
+float frostArc(vec2 d, float r, float a, float Rr, float wall, float a0, float a1, float salt) {
+  float span = a1 - a0;
+  float am = clamp((a - a0) / span, -1.0, 2.0);
+  float haze = 0.15 * exp(-pow((r - Rr - 0.3 * wall) / (1.15 * wall), 2.0))
+    * smoothstep(0.0, 0.1, a - a0) * smoothstep(0.0, 0.1, a1 - a);
+  // 26 ferns at jittered angular slots; only the slots that can reach this pixel are drawn.
+  float slot = span / 26.0;
+  float k0 = floor((a - a0) / slot);
+  float best = 1e9;
+  for (int j = -4; j <= 4; j++) {
+    float k = k0 + float(j);
+    if (k < 0.0 || k > 25.0) continue;
+    float h1 = hash12(vec2(k, salt));
+    float h2 = hash12(vec2(k + 31.7, salt));
+    float h3 = hash12(vec2(k + 63.1, salt));
+    float h4 = hash12(vec2(k + 91.3, salt));
+    float fa = a0 + (k + h1) * slot;
+    float edge = sin((fa - a0) / span * 3.14159);
+    float len = Rr * (0.02 + 0.07 * edge * h4);
+    if (len < 1.5 * uDpr) continue;
+    float rr = Rr + wall * (h2 - 0.2);
+    vec2 s0 = rr * vec2(cos(fa), sin(fa));
+    float dir = fa + 3.14159 + (h3 - 0.5) * 1.4;   // inward-ish
+    vec2 u = vec2(cos(dir), sin(dir));
+    vec2 s1 = s0 + u * len;
+    best = min(best, segDist(d, s0, s1));
+    best = min(best, segDist(d, s1, s1 + u * len * 0.55));
+    for (int i = 1; i <= 2; i++) {
+      vec2 bp = mix(s0, s1, float(i) / 3.0);
+      vec2 ul = vec2(cos(dir - 1.0), sin(dir - 1.0));
+      vec2 ur = vec2(cos(dir + 1.0), sin(dir + 1.0));
+      best = min(best, segDist(d, bp, bp + ul * len * 0.45));
+      best = min(best, segDist(d, bp, bp + ur * len * 0.45));
+    }
+  }
+  float crystals = 0.5 * stroke(best, max(0.6 * uDpr, 0.0035 * Rr));
+  return am < -0.2 || am > 1.2 ? 0.0 : max(haze, crystals);
+}
+
+/**
+ * The lab bench, the dish's shadow and its glass, after the art bible's reference
+ * (src/ui/art/dishref.ts, docs/ARTE.md §8.3): steel bench in the polar night with a vignette, a soft
+ * shadow and the cool light the culture throws on it, two glass walls with clear glass between
+ * them (frost-white edges lit from the top left), a lid sheen, a warm glint from VELA's candle,
+ * frost on two arcs of the rim and, when uNextR is set, the dashed ring of the next dish size.
+ * col is the agar with its matter; inside = px to the rim (> 0 in the living area).
+ */
+vec3 glassDish(vec3 col, float inside, vec2 g, vec2 px) {
   float s = uScale;
-  // Glass wall thickness on screen (≈ 2 cells, never thinner than 6 px).
-  float wall = max(6.0 * uDpr, 2.0 * s);
-  vec2 dg = g - uDish.xy;
-  float r = length(dg);
-  vec2 nrm = r > 1e-4 ? dg / r : vec2(0.0, -1.0);
-  // Table: the style background, lit from the top-left, with a faint static grain.
+  float R = uDish.z * s;                          // living area (px)
+  vec2 rw = dishWall();
+  float Rr = rw.x;
+  float wall = rw.y;
+  vec2 d = (g - uDish.xy) * s;
+  float r = length(d);
+  float a = angOf(d);
+  vec2 q = d / Rr;
+  // Lid sheen: a faint crescent of reflected light over the upper-left of the agar.
+  float off = length(d - vec2(0.18, 0.16) * Rr) - 0.95 * Rr;
+  float sheen = 0.10 * clamp(1.0 - (q.x + q.y + 2.0) * 0.5, 0.0, 1.0) * smoothstep(-1.0, 1.5, off);
+  // Most of the dish is plain agar: nothing below reaches inside 0.84 Rr (frost, glint, rim lines).
+  if (r < 0.84 * Rr) return mix(col, vec3(1.0), sheen);
+  float k = uRimAmt / 0.26;                       // cosmetics' rim strength (art default .26)
+  float dark = step(dot(uBg, vec3(0.299, 0.587, 0.114)), 0.5);
+
+  // Bench: brushed steel lit from above, a vignette, faint streaks and a static grain.
   vec2 sp = px / uView;
-  float light = 1.0 - 0.55 * clamp(length(sp - vec2(0.28, 0.18)), 0.0, 1.0);
-  vec3 table = uBg * (0.8 + 0.6 * light) + uRim * 0.012 * light;
-  table *= 0.985 + 0.03 * hash12(floor(px / (2.0 * uDpr)));
-  // Soft shadow of the dish, cast towards the bottom-right.
-  vec2 so = vec2(0.6, 0.9) * (6.0 * uDpr + 0.9 * wall);
-  float sd = (uDish.z - length(g - so / s - uDish.xy)) * s + wall;
-  table *= 1.0 - 0.45 * smoothstep(-22.0 * uDpr, 4.0 * uDpr, sd);
-  // Glass wall: a little lighter than the table, tinted by the rim colour, thicker-looking at the
-  // outer edge, with a specular arc where it faces the light and a fainter refraction opposite.
-  float t = clamp(-inside / wall, 0.0, 1.0);
-  // Thick glass: brighter towards its middle, tinted by the rim colour.
-  vec3 glass = table * 1.3 + uRim * (0.09 + 0.07 * sin(3.14159 * t));
-  float spec = pow(max(dot(nrm, normalize(vec2(-0.62, -0.78))), 0.0), 4.0);
-  float refr = pow(max(dot(nrm, normalize(vec2(0.62, 0.78))), 0.0), 8.0);
-  glass += vec3(0.85, 0.95, 1.0) * (spec * 0.30 * smoothstep(0.05, 0.45, t) * (1.0 - 0.6 * t) + refr * 0.07 * (1.0 - t));
+  // Night bench #0b1017 → #05080c around bg #06090d; a light-theme bench (pale bg) #dfe7ee → #c9d4de.
+  vec3 bench = uBg * mix(mix(1.0, 1.8, dark), mix(0.91, 0.88, dark), sp.y);
+  float row = sp.y * 40.0 + 0.12 * sp.x * (hash12(vec2(floor(sp.y * 40.0), 7.0)) - 0.5);
+  float streak = 1.0 - smoothstep(0.0, 1.2 * uDpr, abs(fract(row + 0.5) - 0.5) * uView.y / 40.0);
+  bench += mix(vec3(1.0) * 0.05, vec3(0.62, 0.71, 0.78) * 0.025, dark) * streak;
+  float vd = length(px - 0.5 * uView);
+  bench *= 1.0 - mix(0.18, 0.55, dark) * smoothstep(0.3 * min(uView.x, uView.y), 0.75 * max(uView.x, uView.y), vd);
+  bench *= 0.985 + 0.03 * hash12(floor(px / (2.0 * uDpr)));
+  // Soft shadow of the dish (towards the bottom right) and the cool light of the culture.
+  float sd = length(d - vec2(0.04, 0.08) * Rr) - 1.02 * Rr;
+  bench = mix(bench, mix(vec3(0.094, 0.141, 0.204), vec3(0.0), dark), mix(0.25, 0.6, dark) * (1.0 - smoothstep(-0.16 * Rr, 0.16 * Rr, sd)));
+  bench = mix(bench, mix(vec3(0.039, 0.447, 0.651), ACCENT, dark), 0.12 * (1.0 - smoothstep(0.9 * Rr, 1.6 * Rr, r)));
+
+  // Agar under the inner half of the glass, bench under the outer half; clear glass over both.
   float aIn = clamp(inside + 0.5, 0.0, 1.0);
   float aOut = clamp(inside + wall + 0.5, 0.0, 1.0);
-  vec3 c = mix(table, glass, aOut);
-  c = mix(c, agar, aIn);
-  // Inner rim line (the meniscus), a glint inside the glass and a thinner outer edge.
-  c += uRim * uRimAmt * exp(-pow(inside / (0.9 * uDpr), 2.0));
-  c += vec3(0.9, 0.97, 1.0) * (0.06 + 0.22 * spec) * exp(-pow((inside + 0.4 * wall) / (0.7 * uDpr), 2.0));
-  c += uRim * uRimAmt * 0.7 * exp(-pow((inside + wall) / (0.8 * uDpr), 2.0));
-  if (uRimDouble > 0.0) {
-    float rim2 = exp(-pow((inside - 3.0 * uDpr) / (0.7 * uDpr), 2.0));
-    c += uRim * rim2 * uRimAmt * 0.6 * uRimDouble;
+  vec3 under = mix(bench, dishAgar(q), clamp(Rr - r + 0.5, 0.0, 1.0));
+  vec3 glass = mix(under, uRim, 0.07);
+  vec3 c = mix(bench, glass, aOut);
+  c = mix(c, col, aIn);
+
+  c = mix(c, vec3(1.0), sheen * aIn);
+
+  // Glass edges: outer edge lit from the top left (frost-white → shade), thinner inner edge.
+  float diag = clamp(0.5 + 0.5 * dot(q, vec2(0.7071)), 0.0, 1.0);
+  vec3 outerCol = uRim * mix(1.16, 0.62, diag);
+  float outerA = diag < 0.55 ? mix(0.9, 0.45, diag / 0.55) : mix(0.45, 0.35, (diag - 0.55) / 0.45);
+  c = mix(c, outerCol, min(1.0, k * outerA) * stroke(abs(r - Rr - 0.5 * wall), max(1.2 * uDpr, 0.008 * Rr)));
+  c = mix(c, uRim * 0.95, min(1.0, k * 0.35) * stroke(abs(r - R), max(1.0 * uDpr, 0.005 * Rr)));
+  // Specular strokes where the wall faces the room light, and the warm candle glint.
+  c = mix(c, vec3(1.0), 0.85 * stroke(arcDist(d, r, a, Rr + 0.2 * wall, 1.1 * 3.14159, 1.32 * 3.14159), max(1.5 * uDpr, 0.35 * wall)));
+  c = mix(c, vec3(1.0), 0.45 * stroke(arcDist(d, r, a, Rr + 0.2 * wall, 1.36 * 3.14159, 1.42 * 3.14159), max(1.0 * uDpr, 0.2 * wall)));
+  c = mix(c, WARM, 0.45 * clamp(1.0 - length(d - vec2(0.62, -0.78) * Rr) / (0.09 * Rr), 0.0, 1.0));
+  c = mix(c, vec3(1.0, 0.839, 0.627), 0.9 * stroke(arcDist(d, r, a, Rr + 0.15 * wall, 1.69 * 3.14159, 1.75 * 3.14159), max(1.2 * uDpr, 0.25 * wall)));
+  // Frost (polar night) on two arcs of the rim.
+  if (uFrost > 0.0 && r > 0.85 * Rr && r < Rr + 2.0 * wall) {
+    float fr = 0.0;
+    if (a > 2.05 && a < 3.2) fr = frostArc(d, r, a, Rr, wall, 2.2, 3.05, 1.7);
+    else if (a > 5.3) fr = frostArc(d, r, a, Rr, wall, 5.45, 6.05, 4.3);
+    c = mix(c, FROST, uFrost * fr);
   }
+  // Cosmetic rim styles: a second line inside, a wider halo outside.
+  if (uRimDouble > 0.0) c += uRim * uRimAmt * 0.6 * uRimDouble * exp(-pow((inside - 3.0 * uDpr) / (0.7 * uDpr), 2.0));
   c += uRim * uRimHalo * exp(-max(-inside - wall, 0.0) / (10.0 * uDpr)) * (1.0 - aOut);
   // Growth: the meniscus glows and a soft ring breathes on the glass.
   if (uGrowFx > 0.0) {
-    c += uRim * uGrowFx * (0.9 * exp(-pow(inside / (2.5 * uDpr), 2.0)) + 0.25 * aOut * (1.0 - aIn));
+    c += ACCENT * uGrowFx * (0.9 * exp(-pow(inside / (2.5 * uDpr), 2.0)) + 0.25 * aOut * (1.0 - aIn));
+  }
+  // The next dish size: a dashed ring (shown by the game while that upgrade is on offer).
+  if (uNextR > uDish.z) {
+    float rn = uNextR * s;
+    float dash = mod(a * rn, 0.075 * rn);
+    float on = smoothstep(0.0, uDpr, dash) * (1.0 - smoothstep(0.04 * rn - uDpr, 0.04 * rn, dash));
+    c = mix(c, ACCENT, 0.55 * on * stroke(abs(r - rn), max(1.5 * uDpr, 0.01 * rn)));
   }
   return c;
 }
@@ -575,22 +717,28 @@ void main() {
   vec2 grad = f.gb - uGradBias;
   float gm = length(grad);
 
-  // Agar: slightly lighter than the background, with a very faint vignette.
+  // Agar: slightly lighter than the background, with a very faint vignette (torus); the round
+  // dish's agar follows the art reference (dishAgar).
   float vig = smoothstep(1.6, 0.2, length(e));
-  vec3 col = mix(uAgarOut, uAgarIn, vig);
+  vec3 col = uDishMode == 1 ? dishAgar(e * uDish.z * uScale / dishWall().x) : mix(uAgarOut, uAgarIn, vig);
   // Optional lab grid (graph paper), toroidal like the dish; drawn under the matter.
   if (uLabGrid.a > 0.0) {
     vec2 gd = abs(fract(g / 16.0 + 0.5) - 0.5) * 16.0 * uScale;
     float gline = 1.0 - smoothstep(0.5 * uDpr, 0.5 * uDpr + 1.0, min(gd.x, gd.y));
     col = mix(col, uLabGrid.rgb, uLabGrid.a * gline);
   }
-  // Inner shadow near the rim, like a glass dish wall.
-  col *= 0.78 + 0.22 * smoothstep(0.0, 14.0 * uDpr, inside);
+  // Inner shadow near the rim, like a glass dish wall (torus; the round dish has a lit meniscus).
+  if (uDishMode == 0) col *= 0.78 + 0.22 * smoothstep(0.0, 14.0 * uDpr, inside);
 
   vec4 lut = texture(uLut, vec2((v * 255.0 + 0.5) / 256.0, 0.5));
   vec3 mat = lut.rgb;
-  // Species tint (round dish): matter near a creature leans towards its species hue.
-  if (uTintCount > 0 && lut.a > 0.0) mat = tintMatter(mat, g);
+  // Species tint (round dish): matter near a creature takes its species' tinted colormap, and its
+  // contour and glow take the species' body colour.
+  vec3 tintV = mat;
+  vec3 tintBody = uContour;
+  float tw = uTintCount > 0 ? tintAt(g, v, tintV, tintBody) : 0.0;
+  mat = mix(mat, tintV, tw);
+  vec3 contourC = mix(uContour, tintBody * 1.15, 0.85 * tw);
   // Soft relief: the field as a gel surface lit from the top-left, so bodies
   // read as volumes and saturated cores do not go flat.
   vec3 n = normalize(vec3(-grad * 5.0, 1.0));
@@ -605,17 +753,20 @@ void main() {
 
   // "This produces": luminous cyan sheen on steep edges + a thin iso-contour.
   float edge = smoothstep(0.02, 0.16, gm);
-  col += uContour * 0.14 * edge * (1.0 - smoothstep(0.25, 0.65, v));
+  col += contourC * 0.14 * edge * (1.0 - smoothstep(0.25, 0.65, v));
   float fw = max(fwidth(v), 1e-5);
   float dist = abs(v - 0.13) / fw;
   float hw = 0.55 * uDpr;
   float line = 1.0 - smoothstep(hw - 0.5, hw + 0.75, dist);
-  col += uContour * line * (0.25 + 0.75 * edge) * 0.85;
+  col += contourC * line * (0.25 + 0.75 * edge) * 0.85;
 
-  // Bloom from the half-res blurred bright matter: wide indigo, cyan core.
+  // Bloom from the half-res blurred bright matter: wide indigo, cyan core (a tinted creature glows
+  // in its own colour).
   if (uGlowAmt > 0.0) {
     float gl = texture(uGlow, g / uGrid).r;
-    col += (uGlowWide * gl + uGlowCore * gl * gl * 1.4) * uGlowAmt;
+    vec3 gw = mix(uGlowWide, tintBody * 0.75, 0.85 * tw);
+    vec3 gc = mix(uGlowCore, tintBody, 0.85 * tw);
+    col += (gw * gl + gc * gl * gl * 1.4) * uGlowAmt;
   }
 
   vec3 outCol;

@@ -4,6 +4,7 @@ import { matterLUT } from '../core/palette';
 import type { FieldSnapshot, LeniaParams, Pattern, Quality, RenderView, SeedSpec, Simulation } from '../core/types';
 import { DEFLECT, LYSIS, type LysisDisc, type Turn } from './deflect';
 import { MAX_TINTS } from './dishgl';
+import { TINT_AMOUNT_DEFAULT, TINT_LUT_ROWS, TintRows } from './tintlut';
 import { buildPackedKernel, lanesFor } from './kernel';
 import { resolveSeed, type SeedSpecExt } from './seed';
 import {
@@ -57,7 +58,7 @@ import { DEFAULT_RENDER_STYLE, RIM_HALO, normalizeRenderStyle, type SimRenderSty
  *    outside.
  *  - applyTurns(turns): glass deflection (deflect.ts Deflector), rigid rotations of matter.
  *  - setLysis(discs): growth penalty discs (deflect.ts LysisPlanner).
- *  - setDishFx({ grow }), setCreatureTints(list): purely visual.
+ *  - setDishFx({ grow, next, frost }), setCreatureTints(list, amount?): purely visual.
  */
 
 export type StateFormat = 'auto' | 'half' | 'float' | 'u8';
@@ -174,9 +175,15 @@ export class WebGLSimulation implements Simulation {
   /** True while tryFormat probes the storage: passes then run in torus mode. */
   private probing = false;
   private growFx = 0;
+  /** Radius (cells) of the next dish size drawn as a dashed ring; 0 = none. */
+  private nextRadius = 0;
+  private frost = 1;
   private tintData = new Float32Array(MAX_TINTS * 4);
   private tintCount = 0;
-  private tintAmt = 0.7;
+  private tintAmt = TINT_AMOUNT_DEFAULT;
+  /** Matter colormap plus one tinted copy per species hue (tintlut.ts), as a 256 × TINT_LUT_ROWS texture. */
+  private tintRows = new TintRows(this.lutData);
+  private tintLut!: WebGLTexture;
   private lysisData = new Float32Array(MAX_LYSIS * 4);
   private lysisCount = 0;
   private floatField = false;
@@ -428,22 +435,34 @@ export class WebGLSimulation implements Simulation {
     this.lysisCount = n;
   }
 
-  /** Purely visual dish effects: `grow` 0..1 = rim glow while the dish grows (DishAnimator.glow). */
-  setDishFx(fx: { grow?: number }): void {
-    this.growFx = Math.min(1, Math.max(0, fx.grow ?? 0));
+  /**
+   * Purely visual dish effects (each field optional, others unchanged):
+   *  - `grow` 0..1: rim glow while the dish grows (DishAnimator.glow);
+   *  - `next`: radius in cells of the next dish size, drawn as a dashed ring while that upgrade is
+   *    on offer (docs/ARTE.md §8.3); 0 hides it. Fit it in the camera to show it (Camera.setDish
+   *    fitRadius);
+   *  - `frost` 0..1: frost on the glass (default 1, the polar-night look).
+   */
+  setDishFx(fx: { grow?: number; next?: number; frost?: number }): void {
+    if (fx.grow !== undefined) this.growFx = Math.min(1, Math.max(0, fx.grow));
+    if (fx.next !== undefined) this.nextRadius = Number.isFinite(fx.next) ? Math.max(0, fx.next) : 0;
+    if (fx.frost !== undefined) this.frost = Math.min(1, Math.max(0, fx.frost));
   }
 
   /**
-   * Species tints (purely visual): matter near each creature leans towards its species hue.
-   * At most MAX_TINTS (32) entries; x, y, r in grid cells, `hue` in degrees like SpeciesView.hue
-   * (the UI's `hsl(hue …)`). `amount` 0..1 (default 0.7).
+   * Species tints (purely visual): matter near each creature takes its species hue at the
+   * palette's own lightness (tintlut.ts, docs/ARTE.md §8.2). At most MAX_TINTS (32) entries; x, y,
+   * r in grid cells, `hue` in degrees like SpeciesView.hue. `amount` 0..1 (default 1 = the art
+   * direction's tinted palette exactly); it persists until changed.
    */
   setCreatureTints(list: readonly { x: number; y: number; r: number; hue: number }[], amount?: number): void {
     const n = Math.min(MAX_TINTS, list.length);
     for (let i = 0; i < n; i++) {
       const t = list[i];
-      const h = (((t.hue / 360) % 1) + 1) % 1;
-      this.tintData.set([t.x, t.y, Math.max(1, t.r), h], i * 4);
+      this.tintData[i * 4] = t.x;
+      this.tintData[i * 4 + 1] = t.y;
+      this.tintData[i * 4 + 2] = Math.max(1, t.r);
+      this.tintData[i * 4 + 3] = this.tintRows.rowFor(Number.isFinite(t.hue) ? t.hue : 0);
     }
     this.tintCount = n;
     if (amount !== undefined) this.tintAmt = Math.min(1, Math.max(0, amount));
@@ -684,13 +703,28 @@ export class WebGLSimulation implements Simulation {
     gl.uniform1i(p.u('uDishMode'), d ? 1 : 0);
     if (d) gl.uniform3f(p.u('uDish'), d.cx, d.cy, d.radius);
     gl.uniform1f(p.u('uGrowFx'), d ? this.growFx : 0);
+    gl.uniform1f(p.u('uNextR'), d ? this.nextRadius : 0);
+    gl.uniform1f(p.u('uFrost'), this.frost);
     gl.uniform1i(p.u('uTintCount'), this.tintCount);
     if (this.tintCount) {
+      gl.activeTexture(gl.TEXTURE3); // the upload binds to the active unit: never to uLut's
+      if (this.tintRows.dirty) this.uploadTintLut();
+      else gl.bindTexture(gl.TEXTURE_2D, this.tintLut);
+      gl.uniform1i(p.u('uTintLut'), 3);
       gl.uniform4fv(p.u('uTint[0]'), this.tintData);
       gl.uniform1f(p.u('uTintAmt'), this.tintAmt);
     }
     if (this.styleDirty) this.uploadStyle(p);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /** (Re)uploads the tint colormaps (row 0 = matter colormap, rows 1.. = species hues) to the active texture unit. */
+  private uploadTintLut(): void {
+    const gl = this.gl;
+    gl.bindTexture(gl.TEXTURE_2D, this.tintLut);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 256, TINT_LUT_ROWS, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.tintRows.data);
+    this.texParams(gl.LINEAR, gl.CLAMP_TO_EDGE);
+    this.tintRows.dirty = false;
   }
 
   /** Style uniforms persist in the render program; sent only after a change or a rebuild. */
@@ -719,6 +753,7 @@ export class WebGLSimulation implements Simulation {
   setMatterLUT(lut: Uint8Array): void {
     if (lut.length !== 256 * 4) throw new Error('setMatterLUT: expected 256×1 RGBA8 (1024 bytes)');
     this.lutData = lut.slice();
+    this.tintRows.setBase(this.lutData); // species tints follow the equipped palette
     if (this.lost || this.disposed) return; // initGL uploads lutData on restore
     const gl = this.gl;
     gl.bindTexture(gl.TEXTURE_2D, this.lut);
@@ -884,6 +919,8 @@ export class WebGLSimulation implements Simulation {
     gl.bindTexture(gl.TEXTURE_2D, this.lut);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.lutData);
     this.texParams(gl.LINEAR, gl.CLAMP_TO_EDGE);
+    this.tintLut = gl.createTexture()!;
+    this.tintRows.dirty = true; // uploaded on first use (also after a context restore)
 
     this.progs = {
       ...this.progs,
@@ -1273,7 +1310,7 @@ export class WebGLSimulation implements Simulation {
     for (const p of Object.values(this.progs ?? {})) if (p) gl.deleteProgram(p.p);
     for (const p of this.stepCache.values()) gl.deleteProgram(p.p);
     this.stepCache.clear();
-    for (const t of [this.lut, this.tmplTex, this.emptyTmpl]) if (t) gl.deleteTexture(t);
+    for (const t of [this.lut, this.tintLut, this.tmplTex, this.emptyTmpl]) if (t) gl.deleteTexture(t);
     if (this.vao) gl.deleteVertexArray(this.vao);
     if (this.pbo) gl.deleteBuffer(this.pbo);
   }

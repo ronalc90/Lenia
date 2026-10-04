@@ -15,6 +15,9 @@ import { snapshotFromCpu } from '../../src/sim/snapshot';
 import { createSimulation, type StateFormat, type WebGLSimulation } from '../../src/sim/webgl';
 import { paletteLUT, renderStyleFor } from '../../src/store/apply';
 import { cosmeticById, defaultItem, type DishTheme, type PaletteData } from '../../src/store/catalog';
+import { drawDishReference } from '../../src/ui/art/dishref';
+import { ART_RENDER_STYLE, lutFromStops, MATTER_ART } from '../../src/ui/art/matter';
+import type { SimRenderStyle } from '../../src/sim/style';
 
 function makeCanvas(cssW = 64, cssH = 64, show = false, label = ''): HTMLCanvasElement {
   const c = document.createElement('canvas');
@@ -276,6 +279,47 @@ function renderPerf(quality: Quality, frames = 20) {
   const ms = (performance.now() - t0) / frames;
   sim.dispose();
   return { quality, msPerFrame: ms, backing: [c.width, c.height] };
+}
+
+/**
+ * Screen-pass cost only (no steps): the old torus look vs the round dish with the art glass, frost,
+ * the next-size ring and 10 species tints, same canvas. SwiftShader runs fragments on the CPU, so
+ * the ratio is what matters.
+ */
+function dishRenderCost(frames = 20) {
+  const P = species('O2u');
+  const time = (sim: WebGLSimulation, view: Parameters<WebGLSimulation['render']>[0]) => {
+    sim.render(view);
+    sim.finish();
+    const t0 = performance.now();
+    for (let i = 0; i < frames; i++) sim.render({ ...view, time: i / 60 });
+    sim.finish();
+    return (performance.now() - t0) / frames;
+  };
+  const torus = createSimulation(makeCanvas(390, 844), { gridW: 192, gridH: 240, params: P });
+  torus.seed({ x: 96, y: 120, radius: 13, density: 1, noise: 0, shape: 'pattern', pattern: catalogPattern('O2u') });
+  const torusMs = time(torus, { camera: { zoom: 1, cx: 96, cy: 120 }, time: 0, quality: 'medium' });
+  torus.dispose();
+  const N = QUALITY_DISH.medium.grid;
+  const dish = createSimulation(makeCanvas(390, 844), { gridW: N, gridH: N, params: P });
+  dish.setRenderStyle(ART_RENDER_STYLE as unknown as SimRenderStyle);
+  const d = dishForGrid(N, N, 192);
+  dish.setDish(d);
+  dish.setDishFx({ next: 112 });
+  const tints = [];
+  for (let k = 0; k < 10; k++) {
+    const a = (k / 10) * Math.PI * 2;
+    const x = N / 2 + 60 * Math.cos(a);
+    const y = N / 2 + 60 * Math.sin(a);
+    dish.seed({ x, y, radius: 13, density: 1, noise: 0, shape: 'pattern', pattern: catalogPattern('O2u') });
+    tints.push({ x, y, r: 13, hue: k * 36 });
+  }
+  dish.setCreatureTints(tints);
+  const cam = new Camera(N, N, 390, 844);
+  cam.setDish(d, 112);
+  const dishMs = time(dish, { camera: cam, time: 0, quality: 'medium' });
+  dish.dispose();
+  return { torusMs, dishMs };
 }
 
 /** Context loss: nothing throws while lost; state comes back after restore. */
@@ -765,6 +809,8 @@ function dishVisual(quality: Quality = 'medium', cssW = 300, cssH = 375) {
     zoom?: number;
     growTo?: number;
     growAt?: number;
+    next?: number;
+    light?: boolean;
     style?: [string, string];
   }[] = [
     { label: 'Ø96 dish, 2 Orbium (start size)', code: 'O2u', grid: 168, diameter: 96, seeds: [{ x: 64, y: 70, rot: 0.3 }, { x: 104, y: 100, rot: 3.4 }] },
@@ -785,12 +831,53 @@ function dishVisual(quality: Quality = 'medium', cssW = 300, cssH = 375) {
     { label: 'growing Ø128 → Ø160 (mid tween, glow)', code: 'O2u', grid: 232, diameter: 128, growTo: 160, growAt: 0.45, seeds: [{ x: 116, y: 100, rot: 1.2 }] },
     { label: 'Ø96, zoom ×2.5: Orbium turning off the glass', code: 'O2u', grid: 168, diameter: 96, zoom: 2.5, seeds: [{ x: 84, y: 100, rot: 1.4 }], steps: 60 },
     { label: 'Hydrogeminium in Ø224', code: '3GH2n', grid: 232, diameter: 224, seeds: [{ x: 116, y: 100, rot: 0 }] },
+    {
+      label: 'light theme: pale bench, the dish stays night (GDD §14)',
+      code: 'S1s',
+      grid: 168,
+      diameter: 128,
+      light: true,
+      seeds: [{ x: 70, y: 74, rot: 0, hue: 272 }],
+    },
+    {
+      label: 'Ø128, tints, next size Ø160 offered (dashed ring)',
+      code: 'O2u',
+      grid: 168,
+      diameter: 128,
+      next: 160,
+      steps: 120,
+      seeds: [
+        { x: 52, y: 64, rot: 0.3, hue: 198 },
+        { x: 118, y: 66, rot: 2.2, hue: 145 },
+        { x: 84, y: 124, rot: 4.0, hue: 45 },
+      ],
+    },
   ];
+  // Canvas reference of the target look (docs/ARTE.md §8.3), for comparison.
+  {
+    const ref = makeCanvas(cssW, cssH, true, 'art reference (ui/art/dishref.ts, Canvas 2D)');
+    const c2 = ref.getContext('2d')!;
+    const dpr = window.devicePixelRatio || 1;
+    c2.scale(dpr, dpr);
+    drawDishReference(c2, cssW, cssH, {
+      growth: 1.16,
+      creatures: [
+        { pattern: catalogPattern('O2u'), x: -0.35, y: -0.3, size: 0.3, rotate: 20, hue: 198 },
+        { pattern: catalogPattern('S1s'), x: 0.38, y: -0.2, size: 0.26, rotate: 0, hue: 145 },
+        { pattern: catalogPattern('OG2g'), x: 0.1, y: 0.4, size: 0.3, rotate: 60, hue: 272 },
+        { pattern: catalogPattern('O4i'), x: -0.45, y: 0.3, size: 0.26, rotate: -40, hue: 45 },
+      ],
+    });
+  }
   const out: { label: string; mass: number; outside: number }[] = [];
   for (const p of panels) {
     const P = species(p.code);
     const c = makeCanvas(cssW, cssH, true, p.label);
     const sim = createSimulation(c, { gridW: p.grid, gridH: p.grid, params: P });
+    // The art direction's look (docs/ARTE.md §12 "Materia").
+    sim.setMatterLUT(lutFromStops(MATTER_ART.night));
+    const art = ART_RENDER_STYLE as unknown as SimRenderStyle;
+    sim.setRenderStyle(p.light ? { ...art, bg: [0xdf / 255, 0xe7 / 255, 0xee / 255] } : art);
     const d0 = dishForGrid(p.grid, p.grid, p.diameter);
     const anim = new DishAnimator(d0);
     sim.setDish(d0);
@@ -803,9 +890,10 @@ function dishVisual(quality: Quality = 'medium', cssW = 300, cssH = 375) {
       sim.setDish(anim.rim);
       sim.setDishFx({ grow: anim.glow });
     }
+    if (p.next) sim.setDishFx({ next: p.next / 2 });
     const A = sim.readState();
     const cam = new Camera(p.grid, p.grid, cssW, cssH);
-    cam.setDish(anim.rim, anim.fit);
+    cam.setDish(anim.rim, p.next ? Math.max(anim.fit, p.next / 2) : anim.fit);
     if (p.zoom) {
       const cc = centroidPlain(A, p.grid, p.grid);
       cam.zoom = p.zoom;
@@ -830,6 +918,7 @@ function dishVisual(quality: Quality = 'medium', cssW = 300, cssH = 375) {
   dishChecks,
   bounce,
   dishPerf,
+  dishRenderCost,
   dishVisual,
   accuracy,
   laneConsistency,
