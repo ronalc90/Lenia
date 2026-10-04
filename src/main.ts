@@ -9,6 +9,7 @@ import { createSimulation } from './sim/webgl';
 import { QUALITY_GRID } from './sim/perf';
 import { createDetector, DISH_OVERGROWN_FILL } from './detect/detector';
 import { createGame } from './game/game';
+import { TEXT } from './game/content';
 import { clearSave, loadSave, offlineSeconds, writeSave } from './game/save';
 import { createUI } from './ui/ui';
 import { createAudio } from './audio/audio';
@@ -54,6 +55,8 @@ const KERNEL_DEBOUNCE_MS = 350;
 const IDLE_AFTER_MS = 60_000;
 /** Frame interval while idle (30 fps). */
 const IDLE_FRAME_MS = 1000 / 30;
+/** At most one "refused tap" toast in this many ms (a player tapping fast gets one, not ten). */
+const SEED_BLOCKED_TOAST_MS = 2500;
 
 /**
  * Why the dish is frozen. The simulation and the economy stop while any source is active; the UI's
@@ -315,6 +318,14 @@ function boot(): void {
 
   // Dish requests from the game (auto-seeder, rewards, extinction).
   bus.on('dishSeed', ({ specs }) => specs.forEach((s) => sim!.seed(s)));
+  // A refused tap (spacing rule, full nursery) always says why: nothing is charged and nothing lands.
+  let blockedToastAt = -Infinity;
+  bus.on('seedBlocked', ({ reason }) => {
+    const now = performance.now();
+    if (now - blockedToastAt < SEED_BLOCKED_TOAST_MS) return;
+    blockedToastAt = now;
+    bus.emit('toast', { kind: 'info', text: reason === 'tooClose' ? TEXT.seedTooClose : TEXT.seedGrowing });
+  });
   function clearDish(): void {
     sim!.clear();
     detector.reset();
