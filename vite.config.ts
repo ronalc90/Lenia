@@ -8,6 +8,7 @@ const single = process.env.SINGLE === '1';
 export default defineConfig({
   base: './',
   plugins: single ? [viteSingleFile()] : [],
+  define: { __SINGLE_FILE__: JSON.stringify(single) },
   build: {
     outDir: single ? 'dist-single' : 'dist',
     target: 'es2022',

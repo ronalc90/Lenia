@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#0B0E12" />
+    <meta name="description" content="Bioluma — un incremental de vida artificial: siembra materia, descubre especies de Lenia, provoca una extinción y vuelve con mejores genes." />
+    <title>Bioluma</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+    />
+    <style>
+      html, body { margin: 0; height: 100%; background: #0B0E12; color: #E6EDF3; overscroll-behavior: none; }
+      body { font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+      #app { position: fixed; inset: 0; overflow: hidden; }
+      #boot { position: fixed; inset: 0; display: grid; place-items: center; font: 500 14px/1.4 Inter, system-ui, sans-serif; color: #8B98A5; letter-spacing: 0.08em; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="boot">BIOLUMA</div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
