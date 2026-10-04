@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bioluma audio render test</title>
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <p id="status">loading…</p>
+    <script type="module">
+      import { runForTest } from '/src/audio/offlineRender.ts';
+      import { createAudio } from '/src/audio/audio.ts';
+      import { Bus } from '/src/core/bus.ts';
+
+      window.biolumaAudioTest = runForTest;
+
+      /** Realtime smoke test of the public API (needs autoplay allowed). */
+      window.biolumaRealtimeSmoke = async () => {
+        const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+        const bus = new Bus();
+        const audio = createAudio(bus);
+        const log = [];
+        bus.emit('seed', { x: 1, y: 1, cost: 1, manual: true }); // before unlock: ignored
+        audio.setVolumes(0.7, 0.5, false);
+        audio.setState({ eps: 0, species: 0, creatures: 0, era: 1, behaviors: 0, paused: false });
+        audio.unlock();
+        audio.unlock();
+        await sleep(300);
+        log.push(`running after unlock: ${audio.running}`);
+        audio.setState({ eps: 300, species: 7, creatures: 8, era: 1, behaviors: 4, paused: false });
+        for (const [type, p] of [
+          ['seed', { x: 10, y: 10, cost: 1, manual: true }],
+          ['creatureStable', { id: 1, x: 50, y: 50 }],
+          ['speciesNew', { speciesId: 'orbium', name: 'Orbium', rarity: 'rare', x: 90, y: 90 }],
+          ['upgradeBought', { id: 'a', level: 1 }],
+          ['calibrationChanged', { mu: 0.16, sigma: 0.015, R: 13, dt: 0.1 }],
+          ['income', { id: 1, x: 5, y: 5, amount: 1 }],
+        ]) {
+          bus.emit(type, p);
+          await sleep(60);
+        }
+        await sleep(800);
+        audio.setIdle(true);
+        audio.setState({ eps: 300, species: 7, creatures: 8, era: 1, behaviors: 4, paused: true });
+        await sleep(200);
+        audio.setVolumes(0.7, 0.5, true);
+        await sleep(450);
+        log.push(`running while muted: ${audio.running}`);
+        audio.setVolumes(0.7, 0.5, false);
+        await sleep(300);
+        log.push(`running after unmute: ${audio.running}`);
+        audio.suspend();
+        await sleep(150);
+        log.push(`running while hidden: ${audio.running}`);
+        audio.resume();
+        await sleep(300);
+        log.push(`running after resume: ${audio.running}`);
+        bus.emit('extinctionStart', { genome: 1 });
+        bus.emit('extinctionDone', { era: 2, genome: 1 });
+        await sleep(300);
+        audio.dispose();
+        audio.dispose();
+        bus.emit('seed', { x: 1, y: 1, cost: 1, manual: true }); // after dispose: ignored
+        await sleep(150);
+        log.push(`running after dispose: ${audio.running}`);
+        return log;
+      };
+
+      document.getElementById('status').textContent = 'ready';
+      window.__audioTestReady = true;
+    </script>
+  </body>
+</html>
