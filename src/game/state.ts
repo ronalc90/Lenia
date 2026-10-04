@@ -2,7 +2,7 @@
  * Persistent game state, defaults, versioned serialization with checksum, and strict
  * validation of untrusted input (imports, corrupted saves).
  */
-import type { Behavior, BuyQty, Lang, Quality, Rarity, Settings } from '../core/types';
+import type { Behavior, BuyQty, Lang, Quality, Rarity, Settings, Text } from '../core/types';
 import * as B from './balance';
 import { GENOME_BY_ID, UPGRADE_BY_ID } from './defs';
 
@@ -37,6 +37,14 @@ export interface SpeciesState {
   isNew: boolean;
   /** Parent species id when born from a mutated print. */
   variantOf: string | null;
+  /** Procedural Latin name of a non-catalog species, frozen at registration (src/species). */
+  latin?: string | null;
+  /** Accent hue in degrees, frozen at registration (src/species speciesHue). */
+  hue?: number;
+  /** Body kind (src/species ShapeKind), frozen at registration with the common name. */
+  shape?: string;
+  /** Common name, Spanish and English ("Nadadora celeste" / "Sky swimmer"), frozen at registration. */
+  common?: Text | null;
 }
 
 export interface Regime {
@@ -64,6 +72,8 @@ export interface Stats {
   creaturesBorn: number;
   stableEver: number;
   deaths: number;
+  /** Exploded matter that vanished (lysis / clean-up): not counted as deaths. */
+  dissolved: number;
   explosions: number;
   golden: number;
   goldenMissed: number;
@@ -155,6 +165,7 @@ export function emptyStats(): Stats {
     creaturesBorn: 0,
     stableEver: 0,
     deaths: 0,
+    dissolved: 0,
     explosions: 0,
     golden: 0,
     goldenMissed: 0,
@@ -207,7 +218,9 @@ export function defaultState(now: number): GameState {
     epsHistory: [],
     bucketSum: 0,
     bucketTime: 0,
-    charges: { free: 0, guaranteed: 0 },
+    // QA2 H-04: the very first seed always takes (guaranteed) and the next ones are free, so a new
+    // player sees life at once instead of a string of dissolving blobs.
+    charges: { free: B.START_FREE_SEEDS, guaranteed: B.START_GUARANTEED_SEEDS },
     buffs: [],
     goldenTimer: -1,
     autoSeedTimer: 0,
@@ -358,6 +371,12 @@ function species(x: unknown): SpeciesState {
     portrait,
     isNew: bool(x.isNew),
     variantOf: x.variantOf === null || x.variantOf === undefined ? null : str(x.variantOf, 32),
+    latin: typeof x.latin === 'string' ? str(x.latin, 64) || null : null,
+    ...(typeof x.hue === 'number' && x.hue >= 0 && x.hue <= 360 ? { hue: x.hue } : {}),
+    ...(typeof x.shape === 'string' && x.shape ? { shape: str(x.shape, 16) } : {}),
+    ...(isObj(x.common) && typeof x.common.es === 'string' && typeof x.common.en === 'string'
+      ? { common: { es: str(x.common.es, 48), en: str(x.common.en, 48) } }
+      : {}),
   };
 }
 

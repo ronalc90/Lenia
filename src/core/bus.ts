@@ -5,13 +5,23 @@ import type { Behavior, Rarity, Text } from './types';
  * Positions are in grid cells.
  */
 export interface GameEvents {
-  /** A seed was placed (manual = by the player, else by the auto-seeder). */
-  seed: { x: number; y: number; cost: number; manual: boolean };
+  /**
+   * A seed was placed (manual = by the player, else by the auto-seeder). (game) `from` = where the
+   * player tapped when the seed was moved to the nearest spot with room (spacing rule).
+   */
+  seed: { x: number; y: number; cost: number; manual: boolean; from?: { x: number; y: number } };
+  /**
+   * (game) A tap was refused, nothing charged: 'tooClose' = no room there (it would fuse with nearby
+   * matter); 'growing' = enough seeds are still forming ("⏳ Espera…", GameView.seedsGrowing).
+   */
+  seedBlocked: { x: number; y: number; reason: 'tooClose' | 'growing' };
   /** Seeding refused for lack of essence. */
   seedDenied: { x: number; y: number; cost: number };
   creatureBorn: { id: number; x: number; y: number };
   creatureStable: { id: number; x: number; y: number };
   creatureDied: { id: number; x: number; y: number };
+  /** (game) Exploded matter vanished (lysis, clean-up): not a death of a creature. */
+  creatureDissolved: { id: number; x: number; y: number };
   creatureExploded: { id: number; x: number; y: number };
   creatureDivided: { parentId: number; x: number; y: number };
   /** Periodic income popped from a creature (for floating numbers). */

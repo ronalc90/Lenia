@@ -6,7 +6,8 @@
  *  - every frame: game.tick(realDt, reportOrNull); sim.advance(stepsPerFrame * game.speed) unless game.isPaused
  *  - bus 'calibrationChanged' → sim.setParams(game.simParams)
  *  - bus 'dishSeed' → specs.forEach(sim.seed);  'dishClear' → sim.clear() (+ detector.reset())
- *  - bus 'speciesNew' → game.setSpeciesPortrait(id, sim.capture(x, y, 64))
+ *  - after every tick: for (const r of game.takePortraitRequests()) game.setSpeciesPortrait(r.speciesId,
+ *    sim.capture(r.x, r.y, r.size), r.creatureId) — the game keeps the best capture of each species
  *  - game.setGridSize(sim.gridW, sim.gridH) after creating the dish
  */
 import type { Bus, GameEvents } from '../core/bus';
@@ -31,9 +32,27 @@ import type {
   SpeciesView,
   Text,
   UpgradeView,
+  YieldView,
 } from '../core/types';
 import { CATALOG_REFS } from '../detect/catalogRefs';
-import { matchSignature, signatureDistance, SPECIES_MATCH_THRESHOLD } from '../detect/signature';
+import { matchSignature, SIG, signatureDistance, SPECIES_MATCH_THRESHOLD } from '../detect/signature';
+import {
+  catalogGroup,
+  catalogPortrait,
+  colorFamily,
+  commonName,
+  formatLatin,
+  isolateCreature,
+  latinName,
+  normalizePortrait,
+  portraitScore,
+  sameCatalogSpecies,
+  SHAPE_LABELS,
+  shapeKind,
+  speciesHue,
+  tightSquare,
+  type ShapeKind,
+} from '../species';
 import { CATALOG, catalogByCode } from '../sim/catalog';
 import * as B from './balance';
 import {
@@ -60,7 +79,8 @@ import {
   type UnlockCtx,
   type UpgradeDef,
 } from './defs';
-import { computeProduction, wrapDist } from './economy';
+import { computeProduction, wrapDist, type YieldDetail } from './economy';
+import { clipGraphemes } from './format';
 import { averageEps, offlineEssence } from './offline';
 import {
   cropPattern,
@@ -68,6 +88,7 @@ import {
   mutatePattern,
   nearestCatalog,
   paramDistance,
+  pickSporeTemplate,
   quantizePattern,
   resamplePattern,
   ringsEqual,
@@ -110,6 +131,17 @@ export interface GameDeps {
   grid?: { w: number; h: number };
 }
 
+/** A capture the game wants: the integrator answers with setSpeciesPortrait(speciesId, sim.capture(x, y, size), creatureId). */
+export interface PortraitRequest {
+  speciesId: string;
+  creatureId: number;
+  /** Creature centroid in grid cells at the latest report. */
+  x: number;
+  y: number;
+  /** Capture square side in cells. */
+  size: number;
+}
+
 export interface Game {
   readonly actions: GameActions;
   view(): GameView;
@@ -119,8 +151,20 @@ export interface Game {
   readonly simParams: LeniaParams;
   /** Steps-per-frame multiplier chosen by the player (Incubadora). */
   readonly speed: number;
-  /** Called by integrator after a new species is registered, with a captured crop of the creature. */
-  setSpeciesPortrait(speciesId: string, p: Pattern): void;
+  /**
+   * A captured crop of a creature of the species (answer to a PortraitRequest; `creatureId` lets the
+   * game judge how representative it is). The game keeps the best capture: clean (nothing else in
+   * the square, not cut by the crop) and close to the species signature. Legacy calls without
+   * `creatureId` right after 'speciesNew' are attributed to the founder.
+   */
+  setSpeciesPortrait(speciesId: string, p: Pattern, creatureId?: number): void;
+  /** Captures the game wants right now (drained by the call). See PortraitRequest. */
+  takePortraitRequests(): PortraitRequest[];
+  /**
+   * An outside production multiplier (e.g. a secret's reward), shown in the multiplier breakdown.
+   * `mult` 1 (or ≤ 0) removes it. Not saved: the owner re-applies it after loading.
+   */
+  setBonus(id: string, name: Text, mult: number): void;
   serialize(): string;
   exportString(): string;
   importString(s: string): boolean;
@@ -169,17 +213,40 @@ export function createGame(deps: GameDeps, save?: string): Game {
   const knownIds = new Set<number>();
   const lastBehavior = new Map<number, Behavior | null>();
   let perCreature = new Map<number, number>();
+  /** Why each paying creature pays what it pays (from the last economic tick). */
+  let perDetail = new Map<number, YieldDetail>();
+  /** Body kind of each species' portrait (cleared with the display portrait). */
+  const shapeCache = new Map<string, ShapeKind>();
   const incomeAcc = new Map<number, { amount: number; t: number }>();
   let baseEps = 0; // production before timed buffs
   let eps = 0; // production including buffs
   let econAcc = 0;
   let golden: Golden | null = null;
-  let recentSeeds: { x: number; y: number; t: number }[] = [];
+  /** Seeds placed lately (t = seconds left in memory) and the radius of matter they stamped. */
+  let recentSeeds: { x: number; y: number; t: number; r: number }[] = [];
+  /** State of each creature in the previous report (a 'died' creature that was exploded dissolved). */
+  let lastStates = new Map<number, Creature['state']>();
   let pendingMutations: { x: number; y: number; parent: string; t: number }[] = [];
   let brush: { x: number; y: number; lastMs: number } | null = null;
   let saturatedToastT = 0;
   let sinceNewSpecies = 0;
   const portraitCache = new Map<string, Pattern | null>();
+  /** Display portraits (catalog pattern or the normalised best capture), same object until it changes. */
+  const displayCache = new Map<string, Pattern | null>();
+  /** Score of the stored portrait of each species (this session). */
+  const portraitBest = new Map<string, number>();
+  /** Portrait captures requested per species this session. */
+  const portraitCaptures = new Map<string, number>();
+  let portraitQueue: PortraitRequest[] = [];
+  /** Creatures to re-capture later (report step at which to ask), while their species' portrait is not good. */
+  const portraitWatch = new Map<number, { speciesId: string; at: number }>();
+  /** Founder of the latest registration (attributes legacy setSpeciesPortrait calls). */
+  let lastFounder: { speciesId: string; creatureId: number } | null = null;
+  let reportStep = 0;
+  /** Outside multipliers (secrets…), see Game.setBonus. */
+  const bonuses = new Map<string, { name: Text; mult: number }>();
+  /** Creatures that were stable in the latest report (a division only counts from a real creature). */
+  let stableIds = new Set<number>();
   let params = makeParams();
 
   // ───────────────────────────── helpers ─────────────────────────────
@@ -199,6 +266,13 @@ export function createGame(deps: GameDeps, save?: string): Game {
   function sanitizeLoaded(): void {
     if (!speeds().includes(s.speed)) s.speed = 1;
     if (!shapes().includes(s.shape)) s.shape = 'blob';
+    // Saves from before species identity: freeze a hue and a Latin name now (deterministic).
+    for (const sp of s.species) {
+      if (sp.hue === undefined) sp.hue = speciesHue(sp.signature, sp.catalogCode, takenHues(sp));
+      if (!sp.catalogCode && !sp.latin) sp.latin = newLatin(sp.signature, sp.behavior, sp.rings.length, sp);
+      if (!sp.shape) sp.shape = shapeKind(sp.catalogCode ? catalogPortrait(sp.catalogCode) : portraitOf(sp), sp.signature);
+      if (!sp.common) sp.common = commonName(sp.shape as ShapeKind, sp.behavior, sp.hue, takenCommon(sp));
+    }
   }
 
   function makeParams(): LeniaParams {
@@ -234,16 +308,23 @@ export function createGame(deps: GameDeps, save?: string): Game {
     return sum;
   }
 
-  /** M_global: upgrades, Genome, collection milestones, achievements (each group multiplies). */
+  /** The factors of M_global, for the multiplier breakdown (QA3 #13). Their product is globalMult(). */
+  function globalParts(): { id: string; name: Text; mult: number }[] {
+    const parts = [
+      { id: 'culture', name: UPGRADE_TEXT.culture.name, mult: Math.pow(1 + B.CULTURE_BONUS, level('culture')) },
+      { id: 'dish', name: UPGRADE_TEXT.dish.name, mult: 1 + B.DISH_BONUS * level('dish') },
+      { id: 'genome', name: TEXT.multGenome, mult: (1 + B.GENOME_SPENT_BONUS * s.genomeSpent) * (1 + B.GENOME_UNSPENT_BONUS * s.genome) },
+      { id: 'collection', name: TEXT.multCollection, mult: 1 + B.SPECIES_MILESTONE_BONUS * Math.floor(s.species.length / B.SPECIES_MILESTONE_STEP) },
+      { id: 'behaviors', name: TEXT.multBehaviors, mult: 1 + B.BEHAVIOR_MILESTONE_BONUS * s.behaviorsSeen.length },
+      { id: 'achievements', name: TEXT.multAchievements, mult: 1 + achievementBonus() },
+    ];
+    for (const [id, b] of bonuses) parts.push({ id, name: b.name, mult: b.mult });
+    return parts;
+  }
+
+  /** M_global: upgrades, Genome (spent and unspent), collection milestones, achievements, outside bonuses. */
   function globalMult(): number {
-    return (
-      Math.pow(1 + B.CULTURE_BONUS, level('culture')) *
-      (1 + B.DISH_BONUS * level('dish')) *
-      (1 + B.GENOME_SPENT_BONUS * s.genomeSpent) *
-      (1 + B.SPECIES_MILESTONE_BONUS * Math.floor(s.species.length / B.SPECIES_MILESTONE_STEP)) *
-      (1 + B.BEHAVIOR_MILESTONE_BONUS * s.behaviorsSeen.length) *
-      (1 + achievementBonus())
-    );
+    return globalParts().reduce((m, p) => m * p.mult, 1);
   }
 
   function buffMult(): number {
@@ -358,8 +439,39 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
   function speciesName(sp: SpeciesState, l = lang()): string {
     if (sp.customName) return sp.customName;
-    const base = sp.catalogName ?? TEXT.specimen(sp.n)[l];
+    // The Spanish/English common name first (owner: names in Spanish, clearly different); the
+    // catalog or procedural Latin name is the scientific line (SpeciesView.scientificName).
+    const base = sp.common?.[l] ?? sp.catalogName ?? sp.latin ?? TEXT.specimen(sp.n)[l];
     return sp.variantOf ? base + TEXT.variantSuffix[l] : base;
+  }
+
+  /** Hues already used by other species of the bestiary (new hues keep apart from them). */
+  function takenHues(except?: SpeciesState): number[] {
+    const out: number[] = [];
+    for (const x of s.species) if (x !== except && typeof x.hue === 'number') out.push(x.hue);
+    return out;
+  }
+
+  /** Common names (both languages) and custom names already used by other species. */
+  function takenCommon(except?: SpeciesState): string[] {
+    const out: string[] = [];
+    for (const x of s.species) {
+      if (x === except) continue;
+      if (x.common) out.push(x.common.es, x.common.en);
+      if (x.customName) out.push(x.customName);
+    }
+    return out;
+  }
+
+  /** A procedural Latin name not used by any other species of the bestiary. */
+  function newLatin(sig: number[], behavior: Behavior | null, rings: number, except?: SpeciesState): string {
+    const taken: string[] = [];
+    for (const x of s.species) {
+      if (x === except) continue;
+      if (x.latin) taken.push(x.latin);
+      if (x.customName) taken.push(x.customName);
+    }
+    return formatLatin(latinName(sig, behavior, { rings, taken }));
   }
 
   // ───────────────────────────── calibration ─────────────────────────
@@ -383,14 +495,34 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
   // ───────────────────────────── seeding ─────────────────────────────
 
-  function sporePattern(): Pattern {
-    const e = nearestCatalog(s.calib);
+  /**
+   * Spore template: one of the viable catalog species around the calibration (weighted by
+   * closeness, see sporeCandidates) so seeds grow into varied real forms. Guaranteed seeds
+   * (Mutágeno) use the nearest species, the surest one.
+   */
+  function sporePattern(guaranteed: boolean): Pattern {
+    const known = new Set<string>();
+    for (const x of s.species) if (x.catalogCode) known.add(catalogGroup(x.catalogCode));
+    // Varied templates only once the first species is in the bestiary: a fresh dish starts with the
+    // surest, smallest form (bigger ones like Synorbium add swimmers that collide into a maze).
+    const varied = !guaranteed && s.species.length >= B.SPORE_VARIETY_AFTER_SPECIES;
+    const e = varied ? pickSporeTemplate(s.calib, rng, known) : nearestCatalog(s.calib);
     return scaledTemplate(e, s.calib.R);
   }
 
+  /** Spores still forming: newborn creatures plus seeds the detector has not reported yet. */
+  function forming(): number {
+    let n = pendingSeeds();
+    for (const c of creatures) if (c.state === 'born') n++;
+    return n;
+  }
+
+  /** The nursery is full: a new spore would wait (QA2 H-05 "⏳ Espera…"); too many at once fuse into a maze. */
+  const nurseryFull = (): boolean => forming() >= B.SEED_NURSERY_MAX;
+
   function buildSeed(x: number, y: number, radiusFactor: number, shape: SeedShape, guaranteed: boolean): SeedSpec {
     const R = s.calib.R;
-    const pattern = sporePattern();
+    const pattern = sporePattern(guaranteed);
     if (guaranteed) {
       return {
         x,
@@ -419,24 +551,86 @@ export function createGame(deps: GameDeps, save?: string): Game {
     };
   }
 
-  function recordSeed(x: number, y: number, cost: number, manual: boolean, countSeed = true): void {
+  function recordSeed(x: number, y: number, cost: number, manual: boolean, countSeed = true, bodyR = s.calib.R, from?: { x: number; y: number }): void {
     if (countSeed) s.stats.seeds++;
-    recentSeeds.push({ x, y, t: B.RECENT_SEED_MEMORY });
+    recentSeeds.push({ x, y, t: B.RECENT_SEED_MEMORY, r: bodyR });
     if (!s.flags.firstSeed) {
       s.flags.firstSeed = true;
       unlockJournal('firstSeed');
     }
-    bus.emit('seed', { x, y, cost, manual });
+    bus.emit('seed', from ? { x, y, cost, manual, from } : { x, y, cost, manual });
   }
 
-  /** Farthest-from-everything random point; null if nothing is farther than spacing·R. */
-  function findFreeSpot(spacingR: number, extra: { x: number; y: number }[] = []): { x: number; y: number } | null {
-    const obstacles: { x: number; y: number }[] = [
-      ...creatures.filter((c) => c.state !== 'dead'),
-      ...recentSeeds,
-      ...extra,
-    ];
-    const minD = spacingR * s.calib.R;
+  // ── seed spacing: spores stamped onto or next to other matter fuse into mazes (smoke flood) ──
+
+  /** Radius of the matter a seed stamps: its disc, or its template if that is bigger (Synorbium). */
+  function seedBodyRadius(spec: SeedSpec): number {
+    const tpl = spec.pattern ? Math.max(spec.pattern.w, spec.pattern.h) / 2 : 0;
+    return Math.max(spec.radius, spec.shape === 'pattern' ? tpl : Math.max(tpl, spec.radius));
+  }
+
+  /**
+   * Bodies a new seed must keep clear of: every living, forming or exploded creature (extent ≈
+   * BODY_FROM_RG × its radius of gyration, at least half a kernel) and every seed placed in the
+   * last SEED_SPACING_MEMORY seconds that the detector has not reported yet.
+   */
+  function seedObstacles(extra: { x: number; y: number; r: number }[] = []): { x: number; y: number; r: number }[] {
+    const R = s.calib.R;
+    const out: { x: number; y: number; r: number }[] = [];
+    for (const c of creatures) {
+      if (c.state === 'dead') continue;
+      out.push({ x: c.x, y: c.y, r: Math.max(B.SEED_BODY_MIN_R * R, B.SEED_BODY_FROM_RG * (Number.isFinite(c.radius) ? c.radius : 0)) });
+    }
+    for (const r of recentSeeds) {
+      if (B.RECENT_SEED_MEMORY - r.t > B.SEED_SPACING_MEMORY) continue;
+      if (creatures.some((c) => c.state !== 'dead' && wrapDist(c.x, c.y, r.x, r.y, grid.w, grid.h) < R)) continue; // already reported
+      out.push({ x: r.x, y: r.y, r: r.r });
+    }
+    return out.concat(extra);
+  }
+
+  /** Room for a seed of body radius `bodyR` at (x, y): SEED_GAP·R of empty dish between it and every body. */
+  function seedFits(x: number, y: number, bodyR: number, obstacles: { x: number; y: number; r: number }[]): boolean {
+    const gap = B.SEED_GAP * s.calib.R;
+    for (const o of obstacles) if (wrapDist(x, y, o.x, o.y, grid.w, grid.h) < bodyR + o.r + gap) return false;
+    return true;
+  }
+
+  /**
+   * Where a tapped seed may go: the tap itself if it has room, else the nearest spot with room within
+   * SEED_RELOCATE·R (rings of R/4, 16 directions; deterministic), else null (refused, nothing charged).
+   */
+  function clearSpotNear(x: number, y: number, bodyR: number): { x: number; y: number } | null {
+    const obstacles = seedObstacles();
+    if (seedFits(x, y, bodyR, obstacles)) return { x, y };
+    const R = s.calib.R;
+    const wrap = (v: number, n: number) => ((v % n) + n) % n;
+    for (let d = 0.25 * R; d <= B.SEED_RELOCATE * R + 1e-9; d += 0.25 * R) {
+      let best: { x: number; y: number } | null = null;
+      let bestClear = -Infinity;
+      for (let k = 0; k < 16; k++) {
+        const a = (k / 16) * Math.PI * 2;
+        const px = wrap(x + Math.cos(a) * d, grid.w);
+        const py = wrap(y + Math.sin(a) * d, grid.h);
+        if (!seedFits(px, py, bodyR, obstacles)) continue;
+        // Among the directions of this ring, the one farthest from everything.
+        let clear = Infinity;
+        for (const o of obstacles) clear = Math.min(clear, wrapDist(px, py, o.x, o.y, grid.w, grid.h) - o.r);
+        if (clear > bestClear) {
+          bestClear = clear;
+          best = { x: px, y: py };
+        }
+      }
+      if (best) return best;
+    }
+    return null;
+  }
+
+  /** Farthest-from-everything random point with room for a seed; null if none is farther than spacing·R. */
+  function findFreeSpot(spacingR: number, extra: { x: number; y: number; r?: number }[] = []): { x: number; y: number } | null {
+    const R = s.calib.R;
+    const obstacles = seedObstacles(extra.map((e) => ({ x: e.x, y: e.y, r: e.r ?? B.SEED_RADIUS * R })));
+    const minD = spacingR * R;
     let best: { x: number; y: number } | null = null;
     let bestD = -1;
     for (let i = 0; i < B.AUTOSEED_TRIES; i++) {
@@ -450,10 +644,12 @@ export function createGame(deps: GameDeps, save?: string): Game {
       }
       if (!obstacles.length) break;
     }
-    return bestD > minD ? best : null;
+    // Auto-seeder and golden seeds respect the same room as a tap (a spore of radius R).
+    return bestD > minD && best && seedFits(best.x, best.y, B.SEED_RADIUS * R * 1.3, obstacles) ? best : null;
   }
 
   function autoSeed(): void {
+    if (nurseryFull()) return;
     const cost = seedCost();
     if (cost > s.essence * B.AUTOSEED_MAX_SPEND && !(aliveCount() === 0 && cost <= s.essence)) return;
     const spacing = B.DISH_SPACING[Math.min(level('dish'), B.DISH_SPACING.length - 1)];
@@ -467,7 +663,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     }
     s.essence -= cost;
     const spec = buildSeed(spot.x, spot.y, B.SEED_RADIUS, s.shape, false);
-    recordSeed(spot.x, spot.y, cost, false);
+    recordSeed(spot.x, spot.y, cost, false, true, seedBodyRadius(spec));
     bus.emit('dishSeed', { specs: [spec] });
   }
 
@@ -504,6 +700,24 @@ export function createGame(deps: GameDeps, save?: string): Game {
     const c = s.calib;
     sp.muRange = [Math.min(sp.muRange[0], c.mu), Math.max(sp.muRange[1], c.mu)];
     sp.sigmaRange = [Math.min(sp.sigmaRange[0], c.sigma), Math.max(sp.sigmaRange[1], c.sigma)];
+  }
+
+  /**
+   * A form worth a NEW bestiary entry: its behaviour is known (complete signature), it has been
+   * stable for two shape windows and its shape stopped changing (detector shapeDrift), and — unless
+   * it is a catalog form — it is one compact body, not a speck. Fields the report lacks (fake
+   * reports in tests and the balance bot) are not gated. See balance SPECIES_*.
+   */
+  function finishedForm(c: Creature, sig: number[], reveal: CatalogSignature | null): boolean {
+    if (!sig.length || !sig.every((v) => v >= 0)) return false;
+    if (c.stableSteps !== undefined && !(c.stableSteps >= B.SPECIES_MIN_STABLE_STEPS)) return false;
+    if (c.shapeDrift !== undefined && !(c.shapeDrift >= 0 && c.shapeDrift <= B.SPECIES_MAX_SHAPE_DRIFT)) return false;
+    if (reveal) return true;
+    const parts = sig[SIG.PARTS];
+    const mass = sig[SIG.MASS];
+    if (parts !== undefined && sig.length > SIG.PARTS && !(parts <= B.SPECIES_MAX_PARTS)) return false;
+    if (mass !== undefined && !(mass >= B.SPECIES_MIN_MASS_R2)) return false;
+    return true;
   }
 
   function matchCatalog(sig: number[]): CatalogSignature | null {
@@ -563,19 +777,60 @@ export function createGame(deps: GameDeps, save?: string): Game {
     );
     let sp: SpeciesState | undefined = idx >= 0 ? s.species[idx] : undefined;
     const reveal = sp ? null : matchCatalog(sig);
-    if (!sp && reveal) sp = s.species.find((x) => x.catalogCode === reveal.code); // same catalog species, drifted signature
+    // Same catalog species (or one the detector cannot tell apart from it), drifted signature.
+    if (!sp && reveal) sp = s.species.find((x) => sameCatalogSpecies(x.catalogCode, reveal.code));
     if (sp) {
       sp.timesSeen++;
       blendSignature(sp, sig);
       expandRanges(sp);
+      // A settled member may give a better portrait than the one stored (checked when due).
+      if (!portraitWatch.has(c.id)) portraitWatch.set(c.id, { speciesId: sp.id, at: reportStep + B.PORTRAIT_RECAPTURE_DELAY });
     } else {
-      if (newSpeciesTokens < 1 || crowded(c)) return;
+      // Only finished forms found a species; until then the creature pays as an unknown one.
+      if (!finishedForm(c, sig, reveal) || newSpeciesTokens < 1 || crowded(c)) return;
       sp = registerSpecies(c, sig, reveal);
       newSpeciesTokens -= 1;
     }
     unassigned.delete(c.id);
     creatureSpecies.set(c.id, sp.id);
     if (c.behavior) onBehavior(c);
+  }
+
+  function requestPortrait(speciesId: string, c: Creature): void {
+    const n = portraitCaptures.get(speciesId) ?? 0;
+    if (n >= B.PORTRAIT_MAX_CAPTURES) return;
+    portraitCaptures.set(speciesId, n + 1);
+    const size = Math.min(B.PORTRAIT_CAPTURE_MAX, Math.ceil(s.calib.R * B.PORTRAIT_CAPTURE_R));
+    portraitQueue.push({ speciesId, creatureId: c.id, x: c.x, y: c.y, size });
+  }
+
+  /** True while the stored portrait of a species could still be improved by another capture. */
+  function portraitWanted(speciesId: string): boolean {
+    if ((portraitCaptures.get(speciesId) ?? 0) >= B.PORTRAIT_MAX_CAPTURES) return false;
+    const best = portraitBest.get(speciesId);
+    return best === undefined || best < B.PORTRAIT_GOOD_SCORE;
+  }
+
+  /** No other creature close enough to share the capture square. */
+  function clearAround(c: Creature): boolean {
+    const r = B.PORTRAIT_CLEAR_R * s.calib.R;
+    return !creatures.some((o) => o.id !== c.id && o.state !== 'dead' && wrapDist(o.x, o.y, c.x, c.y, grid.w, grid.h) < r);
+  }
+
+  /** Scheduled re-captures of settled creatures, only while their species' portrait is not good yet. */
+  function processPortraitWatch(): void {
+    if (!portraitWatch.size) return;
+    for (const c of creatures) {
+      const w = portraitWatch.get(c.id);
+      if (!w) continue;
+      if (creatureSpecies.get(c.id) !== w.speciesId || !portraitWanted(w.speciesId)) {
+        portraitWatch.delete(c.id);
+        continue;
+      }
+      if (reportStep < w.at || c.state !== 'stable' || !clearAround(c)) continue;
+      portraitWatch.delete(c.id);
+      requestPortrait(w.speciesId, c);
+    }
   }
 
   function registerSpecies(c: Creature, sig: number[], reveal: CatalogSignature | null): SpeciesState {
@@ -588,6 +843,11 @@ export function createGame(deps: GameDeps, save?: string): Game {
       : parent
         ? parent.rarity
         : B.DEFAULT_RARITY;
+    const latin = reveal ? null : newLatin(sig, c.behavior, s.calib.rings.length);
+    const hue = speciesHue(sig, reveal ? reveal.code : null, takenHues());
+    // Frozen at registration: the body seen in the catalog pattern (revealed) or read from the signature.
+    const shape = shapeKind(reveal ? catalogPortrait(reveal.code) : null, sig);
+    const common = commonName(shape, c.behavior, hue, takenCommon());
     const sp: SpeciesState = {
       id: `sp${n}`,
       n,
@@ -608,6 +868,10 @@ export function createGame(deps: GameDeps, save?: string): Game {
       portrait: null,
       isNew: true,
       variantOf: parent && !reveal ? parent.id : null,
+      latin,
+      hue,
+      shape,
+      common,
     };
     if (mut) pendingMutations = pendingMutations.filter((m) => m !== mut);
     s.species.push(sp);
@@ -615,6 +879,9 @@ export function createGame(deps: GameDeps, save?: string): Game {
     s.pendingSpecies++;
     if (sp.variantOf) s.stats.variants++;
     sinceNewSpecies = 0;
+    lastFounder = { speciesId: sp.id, creatureId: c.id };
+    requestPortrait(sp.id, c);
+    portraitWatch.set(c.id, { speciesId: sp.id, at: reportStep + B.PORTRAIT_RECAPTURE_DELAY });
     bus.emit('speciesNew', { speciesId: sp.id, name: speciesName(sp), rarity, x: c.x, y: c.y });
     if (s.species.length >= 10) unlockJournal('species10');
     if (s.species.length >= 50) unlockJournal('species50');
@@ -667,6 +934,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
   function processReport(report: DetectorReport): void {
     creatures = Array.isArray(report.creatures) ? report.creatures.filter((c) => c && Number.isFinite(c.x) && Number.isFinite(c.y)) : [];
+    if (Number.isFinite(report.step)) reportStep = report.step;
     updateOvergrown(Number.isFinite(report.fill) ? report.fill : 0);
     for (const c of creatures) {
       if (!knownIds.has(c.id)) {
@@ -680,6 +948,13 @@ export function createGame(deps: GameDeps, save?: string): Game {
     for (const ev of report.events ?? []) {
       switch (ev.type) {
         case 'died':
+          // Exploded matter that vanished (lysis, the clean-up, or it simply fell apart) dissolved:
+          // not a creature the player lost, so no death, no "it died" moment.
+          if (lastStates.get(ev.id) === 'exploded') {
+            s.stats.dissolved++;
+            bus.emit('creatureDissolved', { id: ev.id, x: ev.x, y: ev.y });
+            break;
+          }
           s.stats.deaths++;
           bus.emit('creatureDied', { id: ev.id, x: ev.x, y: ev.y });
           unlockJournal('firstDeath');
@@ -691,8 +966,11 @@ export function createGame(deps: GameDeps, save?: string): Game {
           break;
         case 'divided':
           bus.emit('creatureDivided', { parentId: ev.parentId, x: ev.x, y: ev.y });
-          s.flags.firstDivision = true;
-          unlockJournal('firstDivision');
+          // QA3 F14: spore noise splitting in minute 1 is not a division of a creature.
+          if (stableIds.has(ev.parentId) || creatureSpecies.has(ev.parentId)) {
+            s.flags.firstDivision = true;
+            unlockJournal('firstDivision');
+          }
           break;
         default:
           break; // born / stable / behavior are derived from the creature list
@@ -713,8 +991,12 @@ export function createGame(deps: GameDeps, save?: string): Game {
         unassigned.delete(id);
         lastBehavior.delete(id);
         incomeAcc.delete(id);
+        portraitWatch.delete(id);
       }
     }
+    processPortraitWatch();
+    stableIds = new Set(creatures.filter((c) => c.state === 'stable').map((c) => c.id));
+    lastStates = new Map(creatures.map((c) => [c.id, c.state]));
     const st = stableCount();
     s.eraStablePeak = Math.max(s.eraStablePeak, st);
     s.stats.stablePeak = Math.max(s.stats.stablePeak, st);
@@ -739,11 +1021,12 @@ export function createGame(deps: GameDeps, save?: string): Game {
   }
 
   function econTick(dt: number): void {
-    const prod = overgrown ? { total: 0, per: new Map<number, number>(), symbiotic: 0 } : production();
+    const prod = overgrown ? { total: 0, per: new Map<number, number>(), symbiotic: 0, detail: new Map<number, YieldDetail>() } : production();
     const bm = buffMult();
     baseEps = prod.total;
     eps = prod.total * bm;
     perCreature = prod.per;
+    perDetail = prod.detail;
     addEssence(eps * dt);
     if (prod.symbiotic > 0) s.stats.symbiosis = Math.max(s.stats.symbiosis, prod.symbiotic);
     s.stats.epsPeak = Math.max(s.stats.epsPeak, eps);
@@ -819,10 +1102,15 @@ export function createGame(deps: GameDeps, save?: string): Game {
       toast(TEXT.extinctionReady, 'good');
       unlockJournal('extinctionNear');
     }
-    // Objectives.
+    // Objectives. A later objective already met by another route (bought early, a peak reached
+    // while an earlier step waited) is remembered, so the chain never stalls on it (QA2 H-24).
+    for (let i = s.objective; i < B.OBJECTIVES.length; i++) {
+      const o = B.OBJECTIVES[i];
+      if (!s.flags[`obj:${o.id}`] && metric(o.metric) >= o.target) s.flags[`obj:${o.id}`] = true;
+    }
     while (s.objective < B.OBJECTIVES.length) {
       const o = B.OBJECTIVES[s.objective];
-      if (metric(o.metric) < o.target) break;
+      if (!s.flags[`obj:${o.id}`] && metric(o.metric) < o.target) break;
       s.objective++;
       if (o.reward > 0) s.essence += o.reward;
       toast(TEXT.objectiveDone(o.reward), 'good');
@@ -853,7 +1141,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
       case 'species':
         return s.species.length;
       case 'speciesSeen':
-        return st.speciesSeen;
+        // Opening the Bestiary with a creature in it counts as looking at it (QA3 F7).
+        return Math.max(st.speciesSeen, s.flags.bestiaryLooked ? 1 : 0);
       case 'eps':
         return eps;
       case 'epsPeak':
@@ -931,13 +1220,13 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
   function sporeRain(): number {
     const specs: SeedSpec[] = [];
-    const placed: { x: number; y: number }[] = [];
     for (let i = 0; i < B.SPORE_RAIN_SEEDS; i++) {
-      const spot = findFreeSpot(2, placed);
+      if (nurseryFull()) break; // the rest wait as free seeds
+      const spot = findFreeSpot(2);
       if (!spot) break;
-      placed.push(spot);
-      specs.push(buildSeed(spot.x, spot.y, B.SEED_RADIUS, 'blob', false));
-      recordSeed(spot.x, spot.y, 0, false);
+      const spec = buildSeed(spot.x, spot.y, B.SEED_RADIUS, 'blob', false);
+      specs.push(spec);
+      recordSeed(spot.x, spot.y, 0, false, true, seedBodyRadius(spec)); // later drops keep clear of it
     }
     if (specs.length) bus.emit('dishSeed', { specs });
     const left = B.SPORE_RAIN_SEEDS - specs.length;
@@ -946,7 +1235,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
   }
 
   function collectGolden(): void {
-    if (!golden) return;
+    // QA1 #9: no aiming at a frozen spark while paused (and no seeding a paused dish).
+    if (!golden || paused) return;
     const g = golden;
     golden = null;
     const W = B.GOLDEN_WEIGHTS;
@@ -954,6 +1244,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
     let kind: 'bloom' | 'lump' | 'spores' | 'mutagen' =
       (r -= W.bloom) < 0 ? 'bloom' : (r -= W.lump) < 0 ? 'lump' : (r -= W.spores) < 0 ? 'spores' : 'mutagen';
     if (kind === 'bloom' && baseEps <= 0) kind = 'spores'; // a bloom of nothing is no reward
+    // QA3 F9: free seeds are worthless to a rich bank or a full dish — give Essence instead.
+    if (kind === 'spores' && (s.essence > B.SPORES_REROLL_BANK * seedCost() || !findFreeSpot(2))) kind = 'lump';
     let reward: Text;
     switch (kind) {
       case 'bloom': {
@@ -1004,8 +1296,13 @@ export function createGame(deps: GameDeps, save?: string): Game {
     lastBehavior.clear();
     incomeAcc.clear();
     perCreature = new Map();
+    perDetail = new Map();
     recentSeeds = [];
     pendingMutations = [];
+    portraitWatch.clear();
+    portraitQueue = [];
+    lastFounder = null;
+    lastStates = new Map();
     golden = null;
     brush = null;
     baseEps = 0;
@@ -1098,6 +1395,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       unlocked: s.unlocked.includes(def.id),
       unlockHint: tx.hint,
       maxed,
+      secondsToAfford: maxed ? null : cost <= budget ? 0 : def.currency === 'essence' && eps > 0 ? (cost - budget) / eps : null,
     };
   }
 
@@ -1120,9 +1418,83 @@ export function createGame(deps: GameDeps, save?: string): Game {
     });
   }
 
+  /** The stored capture (what Impresión stamps): the isolated creature, unrotated, at sp.R. */
   function portraitOf(sp: SpeciesState): Pattern | null {
     if (!portraitCache.has(sp.id)) portraitCache.set(sp.id, sp.portrait ? dequantizePattern(sp.portrait) : null);
     return portraitCache.get(sp.id) ?? null;
+  }
+
+  /**
+   * What the bestiary shows: a revealed catalog species is drawn from its catalog pattern (crisp
+   * and iconic); any other species from its best capture, centred, aligned and tightly framed.
+   */
+  function displayPortrait(sp: SpeciesState): Pattern | null {
+    if (!displayCache.has(sp.id)) {
+      let p = sp.catalogCode ? catalogPortrait(sp.catalogCode) : null;
+      if (!p) {
+        const raw = portraitOf(sp);
+        p = raw ? (normalizePortrait(raw) ?? raw) : null;
+      }
+      displayCache.set(sp.id, p);
+    }
+    return displayCache.get(sp.id) ?? null;
+  }
+
+  function yieldView(d: YieldDetail | undefined): YieldView | null {
+    return d ? { complexity: d.complexity, behaviorMult: d.behaviorMult, speciesMult: d.speciesMult, diminishing: d.diminishing, symbiosis: d.symbiosis } : null;
+  }
+
+  function speciesShape(sp: SpeciesState): ShapeKind {
+    if (sp.shape) return sp.shape as ShapeKind; // frozen with the name, so label and name agree
+    let k = shapeCache.get(sp.id);
+    if (!k) shapeCache.set(sp.id, (k = shapeKind(displayPortrait(sp), sp.signature)));
+    return k;
+  }
+
+  /** Mean yield factors of the species' paying members (or what one would get when none is alive). */
+  function speciesProduction(sp: SpeciesState): YieldView & { members: number; eps: number } {
+    let n = 0;
+    let eps = 0;
+    const acc = { complexity: 0, behaviorMult: 0, speciesMult: 0, diminishing: 0, symbiosis: 0 };
+    for (const c of creatures) {
+      const d = perDetail.get(c.id);
+      if (!d || creatureSpecies.get(c.id) !== sp.id) continue;
+      n++;
+      eps += perCreature.get(c.id) ?? 0;
+      acc.complexity += d.complexity;
+      acc.behaviorMult += d.behaviorMult;
+      acc.speciesMult += d.speciesMult;
+      acc.diminishing += d.diminishing;
+      acc.symbiosis += d.symbiosis;
+    }
+    if (!n) {
+      const ref = sp.catalogCode ? catalogSigs.find((e) => e.code === sp.catalogCode) : undefined;
+      const comp = Math.min(ref?.complexity ?? 1, B.COMPLEXITY_CAP) * (1 + B.NUTRIENT_BONUS * level('nutrient'));
+      return { members: 0, eps: 0, complexity: comp, behaviorMult: behaviorMult(sp.behavior), speciesMult: speciesMult(sp), diminishing: 1, symbiosis: 1 };
+    }
+    return {
+      members: n,
+      eps,
+      complexity: acc.complexity / n,
+      behaviorMult: acc.behaviorMult / n,
+      speciesMult: acc.speciesMult / n,
+      diminishing: acc.diminishing / n,
+      symbiosis: acc.symbiosis / n,
+    };
+  }
+
+  /** Upgrades that raise a species' yield: its behaviour's Afinidad, then Catalogación and Nutriente. */
+  function boostersOf(b: Behavior | null): { id: string; name: Text }[] {
+    const affinity = b === 'swimmer' || b === 'spinner' ? 'swimAffinity' : b === 'divider' || b === 'colony' ? 'colonyAffinity' : 'sessileAffinity';
+    return [affinity, 'cataloguing', 'nutrient']
+      .filter((id) => id === affinity || s.unlocked.includes(id))
+      .map((id) => ({ id, name: UPGRADE_TEXT[id].name }));
+  }
+
+  function colorText(hue: number | undefined): Text | undefined {
+    if (hue === undefined) return undefined;
+    const f = colorFamily(hue);
+    return { es: f.m, en: f.en };
   }
 
   function speciesView(): SpeciesView[] {
@@ -1135,7 +1507,15 @@ export function createGame(deps: GameDeps, save?: string): Game {
       mult: speciesMult(sp),
       timesSeen: sp.timesSeen,
       era: sp.era,
-      portrait: portraitOf(sp),
+      portrait: displayPortrait(sp),
+      hue: sp.hue,
+      subtitle: TEXT.specimen(sp.n)[lang()],
+      scientificName: sp.catalogName ?? sp.latin ?? null,
+      colorName: colorText(sp.hue),
+      shapeLabel: SHAPE_LABELS[speciesShape(sp)],
+      shapeKind: speciesShape(sp),
+      production: speciesProduction(sp),
+      boostedBy: boostersOf(sp.behavior),
       muRange: [...sp.muRange] as [number, number],
       sigmaRange: [...sp.sigmaRange] as [number, number],
       printCost: B.PRINT_COST[sp.rarity],
@@ -1148,8 +1528,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
     const c = s.calib;
     let hints: { mu: number; sigma: number }[] = [];
     if (level('microscope') >= 3) {
-      const known = new Set(s.species.map((x) => x.catalogCode).filter(Boolean));
-      hints = CATALOG.filter((e) => ringsEqual(e.b, c.rings) && !known.has(e.code))
+      const known = new Set(s.species.map((x) => x.catalogCode && catalogGroup(x.catalogCode)).filter(Boolean));
+      hints = CATALOG.filter((e) => ringsEqual(e.b, c.rings) && !known.has(catalogGroup(e.code)))
         .filter((e) => !r.mu || (e.m >= r.mu[0] && e.m <= r.mu[1]))
         .filter((e) => paramDistance(e.m, e.s, c.mu, c.sigma) <= B.HINT_RADIUS)
         .map((e) => ({ mu: e.m, sigma: e.s }));
@@ -1186,6 +1566,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
         behavior: c.behavior,
         speciesId: sp ? sp.id : null,
         speciesName: sp ? speciesName(sp) : null,
+        hue: sp ? sp.hue : undefined,
+        yield: yieldView(perDetail.get(c.id)),
         eps: (perCreature.get(c.id) ?? 0) * bm,
         age: c.age,
         vx: Number.isFinite(c.vx) ? c.vx : 0,
@@ -1270,9 +1652,23 @@ export function createGame(deps: GameDeps, save?: string): Game {
       freePrint: { active: level('archive') > 0, ready: archiveReady(), progress: level('archive') > 0 ? Math.min(1, s.archiveTimer / archiveInterval()) : 0 },
       markers: level('marker') > 0,
       microscope: level('microscope'),
-      multipliers: { global: globalMult(), buffs: buffMult() },
+      multipliers: multiplierView(),
+      seedsGrowing: nurseryFull(),
     };
   }
+
+  function multiplierView(): NonNullable<GameView['multipliers']> {
+    let n = 0;
+    let sm = 0;
+    let bm = 0;
+    for (const d of perDetail.values()) {
+      n++;
+      sm += d.speciesMult;
+      bm += d.behaviorMult;
+    }
+    return { global: globalMult(), buffs: buffMult(), parts: globalParts(), species: n ? sm / n : 1, behavior: n ? bm / n : 1 };
+  }
+
 
   // ───────────────────────────── actions ─────────────────────────────
 
@@ -1281,22 +1677,37 @@ export function createGame(deps: GameDeps, save?: string): Game {
       const big = !!opts?.big && level('dropper') >= 2;
       const rf = B.SEED_RADIUS * (big ? B.SEED_BIG_RADIUS : 1);
       const cost = seedCost(rf);
-      let paid = 0;
-      if (s.charges.free > 0) s.charges.free--;
-      else if (pipetteReady()) {
-        s.pipetteTimer = 0;
-        s.flags.pipetteUsed = true;
-      } else if (s.essence >= cost) {
-        s.essence -= cost;
-        paid = cost;
-      } else {
+      const pay = s.charges.free > 0 ? 'free' : pipetteReady() ? 'pipette' : s.essence >= cost ? 'essence' : null;
+      if (!pay) {
         bus.emit('seedDenied', { x, y, cost });
         return null;
       }
+      if (nurseryFull()) {
+        bus.emit('seedBlocked', { x, y, reason: 'growing' });
+        return null; // nothing charged: "your seeds are still growing"
+      }
       const guaranteed = s.charges.guaranteed > 0;
-      if (guaranteed) s.charges.guaranteed--;
       const spec = buildSeed(x, y, rf, s.shape, guaranteed);
-      recordSeed(x, y, paid, true);
+      // Spacing: never stamp a spore onto or right next to other matter (they fuse into a maze).
+      const spot = clearSpotNear(x, y, seedBodyRadius(spec));
+      if (!spot) {
+        bus.emit('seedBlocked', { x, y, reason: 'tooClose' });
+        return null; // nothing charged, no charge used
+      }
+      let paid = 0;
+      if (pay === 'free') s.charges.free--;
+      else if (pay === 'pipette') {
+        s.pipetteTimer = 0;
+        s.flags.pipetteUsed = true;
+      } else {
+        s.essence -= cost;
+        paid = cost;
+      }
+      if (guaranteed) s.charges.guaranteed--;
+      const moved = spot.x !== x || spot.y !== y;
+      spec.x = spot.x;
+      spec.y = spot.y;
+      recordSeed(spot.x, spot.y, paid, true, true, seedBodyRadius(spec), moved ? { x, y } : undefined);
       checkProgress();
       return spec;
     },
@@ -1359,6 +1770,15 @@ export function createGame(deps: GameDeps, save?: string): Game {
         bus.emit('seedDenied', { x, y, cost });
         return null;
       }
+      const bodyR = Math.max(pattern.w, pattern.h) / 2;
+      const spot = clearSpotNear(x, y, bodyR);
+      if (!spot) {
+        bus.emit('seedBlocked', { x, y, reason: 'tooClose' });
+        return null;
+      }
+      const from = spot.x !== x || spot.y !== y ? { x, y } : undefined;
+      x = spot.x;
+      y = spot.y;
       if (free) s.archiveTimer = 0;
       else s.samples -= cost;
       const mutate = has('mutations') && rng() < B.MUTATION_CHANCE;
@@ -1367,7 +1787,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
         pendingMutations.push({ x, y, parent: sp.id, t: B.MUTATION_LINK_TIME });
       }
       s.stats.prints++;
-      recordSeed(x, y, 0, true, false);
+      recordSeed(x, y, 0, true, false, bodyR, from);
       checkProgress();
       return {
         x,
@@ -1453,7 +1873,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       if (level('calibrator') < 2 || s.regimes.length >= B.MAX_REGIMES) return false;
       const clean = sanitizeName(name) || `${lang() === 'es' ? 'Régimen' : 'Regime'} ${s.regimes.length + 1}`;
       const c = s.calib;
-      s.regimes.push({ name: clean.slice(0, 24), mu: c.mu, sigma: c.sigma, R: c.R, dt: c.dt, rings: [...c.rings] });
+      s.regimes.push({ name: clipGraphemes(clean, B.NAME_MAX_CHARS), mu: c.mu, sigma: c.sigma, R: c.R, dt: c.dt, rings: [...c.rings] });
       s.stats.regimesSaved++;
       checkProgress();
       return true;
@@ -1534,11 +1954,18 @@ export function createGame(deps: GameDeps, save?: string): Game {
       s.stats.calibrations++;
       calibrationChanged();
     },
+
+    noteTabOpened(tab) {
+      if (tab === 'bestiary' && s.species.length > 0 && !s.flags.bestiaryLooked) {
+        s.flags.bestiaryLooked = true;
+        checkProgress();
+      }
+    },
   };
 
   function sanitizeName(name: string): string {
     // eslint-disable-next-line no-control-regex
-    return String(name ?? '').replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, 24);
+    return clipGraphemes(String(name ?? '').replace(/[\u0000-\u001f\u007f<>]/g, '').trim(), B.NAME_MAX_CHARS);
   }
 
   // ───────────────────────────── tick ────────────────────────────────
@@ -1635,6 +2062,10 @@ export function createGame(deps: GameDeps, save?: string): Game {
     s = next;
     clearTransient();
     portraitCache.clear();
+    displayCache.clear();
+    shapeCache.clear();
+    portraitBest.clear();
+    portraitCaptures.clear();
     sanitizeLoaded();
     refreshUnlocks(true);
     bus.emit('dishClear', {});
@@ -1651,12 +2082,37 @@ export function createGame(deps: GameDeps, save?: string): Game {
     get speed() {
       return s.speed;
     },
-    setSpeciesPortrait(speciesId, p) {
+    setBonus(id, name, mult) {
+      if (!(mult > 0) || mult === 1) bonuses.delete(id);
+      else bonuses.set(id, { name, mult });
+    },
+    setSpeciesPortrait(speciesId, p, creatureId) {
       const sp = speciesById(speciesId);
       if (!sp || !p || !(p.w > 0) || !(p.h > 0) || p.data.length !== p.w * p.h) return;
-      sp.portrait = quantizePattern(cropPattern(p, B.PORTRAIT_MAX_SIDE));
+      const iso = isolateCreature(p);
+      if (!(iso.stats.mass > 0)) return;
+      if (creatureId === undefined && lastFounder?.speciesId === speciesId) creatureId = lastFounder.creatureId;
+      const c = creatureId !== undefined ? creatures.find((x) => x.id === creatureId) : undefined;
+      const sigDist = c ? signatureDistance(signatureOf(c), sp.signature) : undefined;
+      const score = portraitScore(p, sigDist);
+      let best = portraitBest.get(sp.id);
+      if (best === undefined && sp.portrait) {
+        // A portrait from an earlier session: unknown provenance, so a clean capture beats it.
+        const old = portraitOf(sp);
+        best = old ? portraitScore(old) - B.PORTRAIT_OLD_PENALTY : -Infinity;
+      }
+      if (best !== undefined && !(score > best)) return;
+      sp.portrait = quantizePattern(cropPattern(tightSquare(iso.pattern, 1), B.PORTRAIT_MAX_SIDE));
       sp.R = s.calib.R;
+      portraitBest.set(sp.id, score);
       portraitCache.delete(sp.id);
+      displayCache.delete(sp.id);
+      shapeCache.delete(sp.id);
+    },
+    takePortraitRequests() {
+      const out = portraitQueue;
+      portraitQueue = [];
+      return out;
     },
     serialize: () => serializeState(s),
     exportString: () => B.EXPORT_PREFIX + utf8ToBase64(serializeState(s)),

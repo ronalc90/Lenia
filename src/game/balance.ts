@@ -24,6 +24,15 @@ export const BEHAVIOR_MULT: Record<Behavior, number> = {
 };
 /** m_comp of a stable creature not yet classified (pays as 'still'). [brief correction 6] */
 export const UNCLASSIFIED_MULT = 1.0;
+/**
+ * A creature still forming ('born') pays this share of a still creature once it has held together
+ * for BORN_PAY_MIN_AGE steps, so the counter never sits at 0 while life is forming (QA3 F5 proposes
+ * 0.25). OFF (0): CLAUDE.md's hard gate says the game never pays a creature that is not stable;
+ * set 0.25 only together with an ADR that amends that gate. [QA3 §2.13, CLAUDE.md hard gates]
+ */
+export const BORN_PAY = 0;
+/** Steps a 'born' creature must exist before it pays BORN_PAY. [QA3 §2.2: "after 200 calm steps"] */
+export const BORN_PAY_MIN_AGE = 200;
 /** k-th creature (k = 0,1,2…) of the same species yields ×DECAY^k. [brief correction 5] */
 export const SAME_SPECIES_DECAY = 0.85;
 /** Minimum seconds between two floating income numbers of the same creature. [brief] */
@@ -85,8 +94,45 @@ export const PARAM_MU_SCALE = 0.03;
 export const PARAM_SIGMA_SCALE = 0.006;
 /** Catalog reveal ignores candidates whose normalised (μ,σ) distance exceeds this. [design] */
 export const CATALOG_REVEAL_MAX_PARAM_DIST = 3;
+/** Longest species / regime name in user-perceived characters (UI field maxlength must match). [QA1 #5] */
+export const NAME_MAX_CHARS = 24;
 /** Biggest portrait side kept in the save (larger crops are centre-cropped). [doc §9: 64×64] */
 export const PORTRAIT_MAX_SIDE = 96;
+/**
+ * A NEW species is only registered from a finished form (play-test: "after the first one they all
+ * look the same and amorphous"; scripts/species-audit.ts). Until then the creature pays as an
+ * unknown stable creature. Matching an already registered species stays immediate.
+ * Stable for at least this many steps (two of the detector's 400-step shape windows). [audit]
+ */
+export const SPECIES_MIN_STABLE_STEPS = 800;
+/**
+ * …its shape no longer changing: detector shapeDrift (static-signature distance between the last
+ * two 400-step windows) at most this. Catalog species settle below ~0.5 at their params (O2u 0.05,
+ * P3sp 0.5); morphing blobs and creatures that just fused or split are far above. [audit]
+ */
+export const SPECIES_MAX_SHAPE_DRIFT = 0.6;
+/** …a single body: mean connected parts (signature PARTS) at most this, unless it is a catalog form. [audit] */
+export const SPECIES_MAX_PARTS = 1.1;
+/** …not a speck: mass ≥ this · R² (the lightest viable catalog form, O2p, is 0.33 R²), unless catalog. [audit] */
+export const SPECIES_MIN_MASS_R2 = 0.2;
+/** Portrait capture square side in units of R (big Helicium-like bodies must not be cut). [audit] */
+export const PORTRAIT_CAPTURE_R = 5;
+/** Largest capture side in cells (also bounded by PORTRAIT_MAX_SIDE for the save). [design] */
+export const PORTRAIT_CAPTURE_MAX = 96;
+/** A portrait loaded from a save (unknown provenance) scores this much lower than a fresh capture. [design] */
+export const PORTRAIT_OLD_PENALTY = 0.5;
+/**
+ * Portrait captures the game asks for per species and session (best one kept). Each capture is a
+ * synchronous GPU read today (QA3 F2), so: one at registration (already a finished form), and more
+ * only while the stored portrait is not good yet. [QA3, design]
+ */
+export const PORTRAIT_MAX_CAPTURES = 3;
+/** A stored portrait scoring at least this (clean, uncut, representative) is never re-captured. [design] */
+export const PORTRAIT_GOOD_SCORE = 1.4;
+/** Steps to wait before re-capturing a creature (founder after registration, members after matching). [design] */
+export const PORTRAIT_RECAPTURE_DELAY = 600;
+/** A re-capture waits until no other creature is within this many R (a clean square). [design] */
+export const PORTRAIT_CLEAR_R = 2.5;
 
 // ───────────────────────────── Collection milestones ─────────────────
 
@@ -98,21 +144,31 @@ export const SPECIES_MILESTONE_STEP = 5;
 export const BEHAVIOR_MILESTONE_BONUS = 0.1;
 /** +X to M_global per Genome point spent. [doc §10] */
 export const GENOME_SPENT_BONUS = 0.02;
+/**
+ * +X to M_global per UNSPENT Genome point: the infinite sink once the tree is bought (QA3 F6, à la
+ * Cookie Clicker's heavenly chips). Lower than the spent bonus so buying nodes stays better. [QA3]
+ */
+export const GENOME_UNSPENT_BONUS = 0.01;
 
 // ───────────────────────────── Seeding ─────────────────────────────
 
 /** Essence at the start of every Era (without Arranque con Esencia). [doc §5] */
 export const START_ESSENCE = 20;
+/** Free seeds of a brand-new game (QA2 H-04: "¡Vida!" at once, not after 4–9 failed taps). [QA2] */
+export const START_FREE_SEEDS = 3;
+/** Guaranteed (pure template) seeds of a brand-new game: the very first tap takes. [QA2 H-04] */
+export const START_GUARANTEED_SEEDS = 1;
 /** c0 of the seed cost formula c0·(r/R)²·(1 + crowd·n_alive). [doc §5] */
 export const SEED_C0 = 2;
 /** Crowding factor per stable creature in the seed cost. [doc §5] */
 export const SEED_CROWD = 0.25;
 /**
  * Saturation: every stable creature beyond the free slots (DISH_FREE_SLOTS) multiplies the seed cost
- * by this. Without it a creature repays its seeds in ~10 s and the dish fills in a minute (bot);
- * with it population grows with income all Era long. 1 = pure doc formula. [bot]
+ * by this. Without it a creature repays its seeds in ~10 s and the dish fills in a minute (bot).
+ * QA3 package "Hh": 3 → 1.6 so population is the main growth axis ("creatures are the
+ * buildings"): the 8th creature costs ~60 instead of 13 K. [QA3 §2.12, bot]
  */
-export const SEED_SATURATION_GROWTH = 3;
+export const SEED_SATURATION_GROWTH = 1.6;
 /**
  * Cap on the saturation exponent: the price never exceeds growth^max for crowding. Without it a
  * flooded dish priced a seed at 1e38. [play-test]
@@ -145,6 +201,29 @@ export const SPECIES_NEW_ISOLATION_R = 2.5;
 export const SPECIES_NEW_CROWD_NEIGHBORS = 3;
 /** Newborn (not yet stable) creatures that do not count towards saturation: a short burst of taps is fine. [design] */
 export const SEED_NURSERY_FREE = 2;
+/**
+ * Seed spacing (play-test flood, e2e mobile smoke): a seed must leave SEED_GAP·R of empty dish between
+ * the matter it stamps and every creature body or not-yet-detected seed; otherwise it moves to the
+ * nearest spot with room within SEED_RELOCATE·R of the tap, or is refused (nothing charged).
+ * Measured with a CPU repro of the smoke (5 taps on a 128×160 torus at μ .15 σ .015): see the
+ * report of species-audit / flood repro. [play-test, measured]
+ */
+export const SEED_GAP = 1.5;
+/**
+ * At most this many spores forming at once (newborns + seeds not yet reported); more taps are
+ * refused for free with "⏳ Espera…" (QA2 H-05). Kids' tap bursts flooded the dish (QA2 H-06). [measured]
+ */
+export const SEED_NURSERY_MAX = 3;
+/** Spore templates vary (sporeCandidates) only once this many species are registered. [measured] */
+export const SPORE_VARIETY_AFTER_SPECIES = 1;
+/** How far (in R) a tapped seed may be moved to find room. [design: "within ~2 R"] */
+export const SEED_RELOCATE = 2;
+/** Body extent of a detected creature = this × its radius of gyration (a disc: r ≈ 1.4–1.6 rg). [measured] */
+export const SEED_BODY_FROM_RG = 1.5;
+/** …and at least this many R (a forming blob's rg is still small). [design] */
+export const SEED_BODY_MIN_R = 0.6;
+/** Seeds younger than this (s) that the detector has not reported yet still block their spot. [design] */
+export const SEED_SPACING_MEMORY = 3;
 /** Long press seed radius multiplier (cost ×2.25 follows from the formula). [doc §7] */
 export const SEED_BIG_RADIUS = 1.5;
 /** Seed radius in units of R. [doc §4: radio ≈ R] */
@@ -186,6 +265,26 @@ export const SEED_HELP_STEP = 0.02;
 export const SEED_HELP_INTERVAL = 30;
 /** Invisible help maximum extra bias. [design] */
 export const SEED_HELP_MAX = 0.08;
+/**
+ * Spore diversity: a spore's template is drawn among the SPORE_K catalog species nearest to the
+ * calibration (same rings) that lie within SPORE_MAX_PARAM_DIST of it (the nearest one always
+ * counts), with softmax weights exp(−Δd / SPORE_TEMPERATURE) on the normalised (μ, σ) distance.
+ * Measured (game spores, bias 0.88, CPU sim, 10–12 seeds per template, survivors at 1 600 steps):
+ * μ .15 σ .015: O2u 42 %, O4i 75 % (some stay Synorbium), O2b 42 % → mix 52 % vs 42 % before;
+ * μ .22 σ .034: H3cp 40 % (60 % explode), P3sp 90 % → mix 50 %; μ .29 σ .045: S1s 40 %, S1v 10 %,
+ * P4cp 100 % → mix 41 %. Templates farther than ~0.6 rarely live (OG2g at .165/.019: 0/10). [audit]
+ */
+export const SPORE_K = 4;
+/** Extra candidates must be within this normalised (μ, σ) distance of the calibration. [audit] */
+export const SPORE_MAX_PARAM_DIST = 0.6;
+/** Softmax temperature of the spore template choice (lower = nearest template dominates). [audit] */
+export const SPORE_TEMPERATURE = 0.35;
+/**
+ * Templates of forms the player has not discovered yet weigh this many times more (owner: "the
+ * first species must look different"). At μ .15 σ .015 only Orbium and Synorbium ignis live (CPU
+ * test of every catalog pattern there), so after Orbium ~56 % of spores are Synorbium ignis. [owner]
+ */
+export const SPORE_NOVELTY = 3;
 /** Mutágeno: number of guaranteed (pure template) seeds. [brief] */
 export const MUTAGEN_SEEDS = 3;
 /** Brush dab radius in units of R. [design] */
@@ -221,8 +320,8 @@ export const AUTOSEED_MAX_SPEND = 0.5;
 
 // ───────────────────────────── Upgrades: Laboratorio ───────────────
 
-/** Gotero fixed costs. [doc §8: 15, 60, 250, 1 200, 6 000; bot: ×~10 after I, income per creature is ~2–3× the doc's] */
-export const DROPPER_COSTS = [15, 150, 1500, 12000, 80000];
+/** Gotero fixed costs. [doc §8: 15, 60, 250, 1 200, 6 000; bot: ×~10 after I; QA3 F10: II back to the doc's 60 for the minute 1–4 gap] */
+export const DROPPER_COSTS = [15, 60, 1500, 12000, 80000];
 /** Sembrador base cost b. [doc §8: 40; bot: lands at ~6–7 min for greedy] */
 export const AUTOSEEDER_BASE = 750;
 /** Sembrador growth g. [doc §8] */
@@ -235,8 +334,8 @@ export const CULTURE_GROWTH = 1.35;
 export const CULTURE_BONUS = 0.1;
 /** Cultivo unlocks at this essence/second. [doc §8] */
 export const CULTURE_UNLOCK_EPS = 10;
-/** Calibrador fixed costs. [doc §8: 25, 300, 3 000, 30 000; bot] */
-export const CALIBRATOR_COSTS = [250, 5000, 60000, 600000];
+/** Calibrador fixed costs. [doc §8: 25, 300, 3 000, 30 000; QA3 "Hh": σ, dt and R sliders reachable in Era 1; F10: I at 150] */
+export const CALIBRATOR_COSTS = [150, 2500, 25000, 200000];
 /** Estabilizador base cost. [doc §8: 80; bot] */
 export const STABILIZER_BASE = 400;
 /** Estabilizador growth. [doc §8: 1.30; bot] */
@@ -249,17 +348,18 @@ export const STABILIZER_SHOWN_BONUS = 0.03;
 export const DISH_COSTS = [3000, 30000, 300000, 3000000];
 /**
  * Placa: stable creatures that fit before saturation raises the seed cost, by level. The grid is
- * fixed per quality profile (brief correction 8), so "more room" is economic room. [design, bot]
+ * fixed per quality profile (brief correction 8), so "more room" is economic room. QA3 "Hh": the
+ * first 3 creatures never feel punished and each Placa level is +2–3 creatures. [QA3 §2.12, bot]
  */
-export const DISH_FREE_SLOTS = [1, 2, 3, 4, 5];
+export const DISH_FREE_SLOTS = [3, 5, 7, 9, 12];
 /** Placa: auto-seeder spacing in R by level (creatures can live closer). [design] */
 export const DISH_SPACING = [3, 2.75, 2.5, 2.3, 2.1];
 /** Placa: +X production per level (healthier medium). [design] */
 export const DISH_BONUS = 0.1;
 /** Placa unlocks with this many stable creatures at once. [doc §8] */
 export const DISH_UNLOCK_CREATURES = 4;
-/** Incubadora fixed costs. [doc §8: 200, 2 000; bot] */
-export const INCUBATOR_COSTS = [8000, 80000];
+/** Incubadora fixed costs. [doc §8: 200, 2 000; QA3 "Hh": ×2/×4 is a toy, reachable in Era 1] */
+export const INCUBATOR_COSTS = [2000, 20000];
 /** Speeds available by Incubadora level. [doc §7] */
 export const INCUBATOR_SPEEDS = [[1], [1, 2], [1, 2, 4]];
 /** Afinidad nadadora / sésil base cost. [doc §8: 120; bot] */
@@ -346,8 +446,8 @@ export const SATURATED_TOAST_COOLDOWN = 120;
 
 /** Essence divisor in G = floor(sqrt(E_era / DIV)) + … [doc §5] */
 export const GENOME_ESSENCE_DIV = 1e4;
-/** Genome per species registered for the first time ever. [doc §5, brief correction 3] */
-export const GENOME_PER_SPECIES = 2;
+/** Genome per species registered for the first time ever. [doc §5: 2; QA3 F6: 1 (explorer Era 1: 47 → ~28)] */
+export const GENOME_PER_SPECIES = 1;
 /** Genome per behaviour seen for the first time ever. [doc §5] */
 export const GENOME_PER_BEHAVIOR = 1;
 /** Extinction is available when the essence term alone reaches this. [doc §10, brief correction 3] */
@@ -378,9 +478,10 @@ export const GENOME_COSTS: Record<string, number> = {
   tripleRings: 12,
   secondChannel: 20,
   flow: 40,
+  // Herencia: Arranque con Esencia is the cheap root so Era 2 opens fast (QA3 F8).
+  essenceStart: 3,
   dropperMemory: 3,
   regimesPersist: 4,
-  essenceStart: 6,
   persistentSeeder: 10,
   mutations: 8,
   symbiosis: 15,
@@ -404,8 +505,8 @@ export const OFFLINE_MIN_RETURN = 60;
 
 /** Spawn interval range in seconds. [brief] */
 export const GOLDEN_INTERVAL: [number, number] = [90, 240];
-/** First spark after the first stable creature, range in seconds. [design] */
-export const GOLDEN_FIRST_DELAY: [number, number] = [150, 240];
+/** First spark after the first stable creature, range in seconds. [doc §23.1: 40–80 s; QA3 F9] */
+export const GOLDEN_FIRST_DELAY: [number, number] = [40, 80];
 /** Lifetime in seconds. [brief] */
 export const GOLDEN_LIFE = 12;
 /** Drift speed in grid cells per second. [design] */
@@ -420,6 +521,8 @@ export const LUMP_SECONDS = 90;
 export const LUMP_MIN = 25;
 /** Lluvia de esporas: number of free seeds. [brief] */
 export const SPORE_RAIN_SEEDS = 5;
+/** "Lluvia de esporas" becomes an Essence lump when the bank holds this many seeds already (or the dish is full). [QA3 F9] */
+export const SPORES_REROLL_BANK = 10;
 /** Reward weights (bloom is rerolled when nothing produces). [design] */
 export const GOLDEN_WEIGHTS = { bloom: 0.38, lump: 0.32, spores: 0.18, mutagen: 0.12 };
 
