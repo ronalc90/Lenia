@@ -11,7 +11,7 @@
  * Bump CACHE_VERSION when shipping a release that must not reuse old cached files. The page registers
  * this worker only on http(s) origins (never from file://, e.g. the single-file build).
  */
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'bioluma-v2';
 const CACHE_PREFIX = 'bioluma-';
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 
@@ -116,6 +116,8 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET' || request.headers.has('range')) return;
   const url = new URL(request.url);
   if (!sameOrigin(url)) return;
+  // Live data (ranking API) must never be served from cache.
+  if (url.pathname.includes('/api/')) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(networkFirst(request));
