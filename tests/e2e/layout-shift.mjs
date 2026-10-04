@@ -85,6 +85,12 @@ try {
     const splash = page.locator('[data-testid="splash"]');
     if (await splash.isVisible().catch(() => false)) await splash.click();
     await page.waitForTimeout(1000);
+    // The opening intro (first launch): skipped like a returning player would.
+    const introSkip = page.locator('[data-testid="intro-skip"]');
+    if (await introSkip.isVisible().catch(() => false)) {
+      await introSkip.click();
+      await page.waitForTimeout(800);
+    }
     const boxes = async () =>
       page.evaluate((sel) => {
         const out = {};

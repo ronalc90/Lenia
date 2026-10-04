@@ -17,6 +17,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
+import { inflateSync } from 'node:zlib';
 import { chromium } from 'playwright-core';
 
 const args = process.argv.slice(2);
@@ -94,6 +95,80 @@ const browser = await chromium.launch({
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'],
 });
 const errors = [];
+
+/** Decode an 8-bit non-interlaced PNG (Playwright screenshots) to { w, h, px: RGBA bytes }. */
+function decodePng(buf) {
+  let p = 8;
+  let w = 0;
+  let h = 0;
+  let type = 6;
+  const idat = [];
+  while (p < buf.length) {
+    const len = buf.readUInt32BE(p);
+    const kind = buf.toString('latin1', p + 4, p + 8);
+    const data = buf.subarray(p + 8, p + 8 + len);
+    if (kind === 'IHDR') {
+      w = data.readUInt32BE(0);
+      h = data.readUInt32BE(4);
+      type = data[9];
+    } else if (kind === 'IDAT') idat.push(data);
+    p += 12 + len;
+  }
+  const bpp = type === 6 ? 4 : 3;
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = w * bpp;
+  const cur = Buffer.alloc(stride);
+  const prev = Buffer.alloc(stride);
+  const px = new Uint8Array(w * h * 4);
+  for (let y = 0; y < h; y++) {
+    const f = raw[y * (stride + 1)];
+    const line = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
+    for (let i = 0; i < stride; i++) {
+      const a = i >= bpp ? cur[i - bpp] : 0;
+      const b = prev[i];
+      const c = i >= bpp ? prev[i - bpp] : 0;
+      let v = line[i];
+      if (f === 1) v += a;
+      else if (f === 2) v += b;
+      else if (f === 3) v += (a + b) >> 1;
+      else if (f === 4) {
+        const pa = Math.abs(b - c);
+        const pb = Math.abs(a - c);
+        const pc = Math.abs(a + b - 2 * c);
+        v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+      }
+      cur[i] = v & 255;
+    }
+    for (let x = 0; x < w; x++) {
+      px.set([cur[x * bpp], cur[x * bpp + 1], cur[x * bpp + 2], bpp === 4 ? cur[x * bpp + 3] : 255], (y * w + x) * 4);
+    }
+    prev.set(cur);
+  }
+  return { w, h, px };
+}
+
+/** Dominant hue (HSL degrees) of the coloured pixels: circular mean weighted by saturation × value. */
+function dominantHue({ px }) {
+  let sx = 0;
+  let sy = 0;
+  let wsum = 0;
+  for (let i = 0; i < px.length; i += 4) {
+    const r = px[i] / 255;
+    const g = px[i + 1] / 255;
+    const b = px[i + 2] / 255;
+    const mx = Math.max(r, g, b);
+    const d = mx - Math.min(r, g, b);
+    if (mx < 0.25 || d / mx < 0.25) continue;
+    const h = (mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4) * 60;
+    const wt = (d / mx) * mx;
+    sx += Math.cos((h * Math.PI) / 180) * wt;
+    sy += Math.sin((h * Math.PI) / 180) * wt;
+    wsum += wt;
+  }
+  return wsum < 1 ? null : (((Math.atan2(sy, sx) * 180) / Math.PI) + 360) % 360;
+}
+const hueGap = (a, b) => Math.min(Math.abs(a - b) % 360, 360 - (Math.abs(a - b) % 360));
+
 const problems = [];
 const shots = [];
 const story = [];
@@ -115,11 +190,14 @@ async function runCase(c) {
   }, c.theme);
   const page = await ctx.newPage();
   page.on('console', (m) => {
+    if (m.type() === 'info' && m.text().startsWith('[dish]')) say(m.text());
     if (m.type() === 'error' && !/ERR_CERT|fonts\.(googleapis|gstatic)|net::ERR/.test(m.text() + (m.location()?.url ?? '')))
       errors.push(`[${c.name}] ${m.text()}`);
   });
   page.on('pageerror', (e) => errors.push(`[${c.name}] pageerror: ${e.message}`));
   let n = 0;
+  /** «Placa más grande» bought in the last tree: the dish diameter before it (checked at the next session). */
+  let dishGrewFrom = null;
   const wikiDone = new Set();
   const shot = async (label) => {
     const f = `${out}/play-${c.name}-${String(n++).padStart(2, '0')}-${label}.png`;
@@ -134,6 +212,72 @@ async function runCase(c) {
     return f;
   };
   const say = (line) => story.push(`[${c.name}] ${line}`);
+  /**
+   * Species colour on the dish (owner: "cada especie un color claramente distinto"): with the dish
+   * frozen and the 2D overlay hidden (labels and halos carry the species colour themselves), the
+   * matter under every registered creature must have the hue of its card (SpeciesView.hue ± 30°).
+   * Returns the number of distinct species hues checked.
+   */
+  const checkSpeciesTints = async (label) => {
+    const prevScale = await page.evaluate(() => {
+      const s = window.bioluma.debugTime.scale;
+      window.bioluma.debugTime.scale = 0;
+      return s;
+    });
+    await page.waitForTimeout(250);
+    const items = await page.evaluate(() => {
+      const b = window.bioluma;
+      const v = b.game.view();
+      const dish = document.querySelector('.bl-dish')?.getBoundingClientRect();
+      if (!dish) return [];
+      const out = [];
+      for (const cr of v.creatures) {
+        if (cr.hue === undefined || cr.state !== 'stable') continue;
+        const p = b.camera.gridToScreen(cr.x, cr.y);
+        const r = Math.max(4, cr.r * b.camera.scale * 0.7);
+        const sp = v.species.find((x) => x.id === cr.speciesId);
+        // Only creatures a player can see right now (not under a card, a sheet or VELA's box).
+        const top = document.elementFromPoint(dish.x + p.x, dish.y + p.y);
+        if (!top || top.tagName !== 'CANVAS') continue;
+        out.push({ id: cr.id, hue: cr.hue, name: sp ? (sp.name.es ?? String(sp.name)) : '?', x: dish.x + p.x - r, y: dish.y + p.y - r, s: 2 * r });
+      }
+      for (const cv of document.querySelectorAll('canvas')) if (cv.getContext('2d')) cv.dataset.hueHidden = cv.style.visibility || '-', (cv.style.visibility = 'hidden');
+      return out;
+    });
+    let fails = 0;
+    const hues = new Set();
+    try {
+      for (const it of items) {
+        const vw = c.width;
+        const vh = c.height;
+        // The box under the creature, cut to the viewport (a creature at the edge keeps what shows).
+        const x0 = Math.max(0, it.x);
+        const y0 = Math.max(0, it.y);
+        const x1 = Math.min(vw, it.x + it.s);
+        const y1 = Math.min(vh, it.y + it.s);
+        if (!(x1 - x0 >= 3 && y1 - y0 >= 3)) continue;
+        const clip = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+        const got = dominantHue(decodePng(await page.screenshot({ clip })));
+        hues.add(Math.round(it.hue));
+        if (got === null || hueGap(got, it.hue) > 30) {
+          fails++;
+          problems.push(`[${c.name}] ${label}: creature #${it.id} (${it.name}) shows hue ${got === null ? 'none' : got.toFixed(0)}° on the dish, its card says ${it.hue.toFixed(0)}°`);
+        }
+      }
+      if (items.length) await shot(`${label}-species-tints`);
+    } finally {
+      await page.evaluate((s) => {
+        for (const cv of document.querySelectorAll('canvas'))
+          if (cv.dataset.hueHidden) {
+            cv.style.visibility = cv.dataset.hueHidden === '-' ? '' : cv.dataset.hueHidden;
+            delete cv.dataset.hueHidden;
+          }
+        window.bioluma.debugTime.scale = s;
+      }, prevScale);
+    }
+    if (items.length) say(`${label}: ${items.length} registered creature(s) in ${hues.size} species colour(s) checked on the dish (hue of the card ± 30°: ${items.length - fails} ok).`);
+    return hues.size;
+  };
   const tap = async (x, y) => (c.mobile ? page.touchscreen.tap(x, y) : page.mouse.click(x, y));
   const visible = (sel) => page.locator(sel).first().isVisible().catch(() => false);
   const tapSel = async (sel) => {
@@ -150,7 +294,7 @@ async function runCase(c) {
       eps: v.essencePerSec,
       creatures: v.creatures.filter((x) => x.state !== 'dead').length,
       species: v.species.length,
-      session: v.session ? { n: v.session.n, phase: v.session.phase, remaining: Math.round(v.session.remaining), world: v.session.world } : null,
+      session: v.session ? { n: v.session.n, phase: v.session.phase, remaining: Math.round(v.session.remaining), total: v.session.limit + v.session.bonus, world: v.session.world } : null,
       datos: v.research?.datos ?? 0,
       world: v.research?.world ?? null,
       worlds: v.research?.worlds ?? [],
@@ -346,11 +490,21 @@ async function runCase(c) {
   const seedOnce = async () => {
     const d = await dishBox();
     if (!d) return false;
-    // The camera fits the 4:5 grid in the middle of the dish box: aim inside it.
-    const gw = Math.min(d.width, d.height * 0.8);
-    const gh = gw / 0.8;
-    const gx = d.x + (d.width - gw) / 2;
-    const gy = d.y + (d.height - gh) / 2;
+    // Aim inside the round dish (its box on screen; a tall phone panel puts it near the top), else the
+    // 4:5 grid of the torus in the middle of the dish box.
+    const circle = await page.evaluate(() => {
+      const b = window.bioluma;
+      const dd = b.game.view().dish;
+      if (!dd) return null;
+      const c = b.ui.gridToClient(dd.cx, dd.cy);
+      const e = b.ui.gridToClient(dd.cx + dd.radius, dd.cy);
+      return c && e ? { x: c.x, y: c.y, r: Math.abs(e.x - c.x) } : null;
+    });
+    const side = circle ? circle.r * 2 * 0.72 : 0; // the square inside the glass, away from the rim
+    const gw = circle ? side : Math.min(d.width, d.height * 0.8);
+    const gh = circle ? side : gw / 0.8;
+    const gx = circle ? circle.x - side / 2 : d.x + (d.width - gw) / 2;
+    const gy = circle ? circle.y - side / 2 : d.y + (d.height - gh) / 2;
     // Like a player: sow on empty glass, away from the creatures and the labels above them.
     const busy = await page.evaluate(() => {
       const b = window.bioluma;
@@ -378,6 +532,13 @@ async function runCase(c) {
     await tapSel('[data-testid="splash"]');
     await page.waitForTimeout(1200);
   }
+  // The opening intro on the first launch: one look at it, then "Saltar intro".
+  if (await visible('[data-testid="intro-skip"]')) {
+    await shot('intro');
+    await tapSel('[data-testid="intro-skip"]');
+    await page.waitForTimeout(900);
+    say('The opening intro opened after the title; skipped it.');
+  } else problems.push(`[${c.name}] the opening intro did not open after the title`);
   base = await frame();
   say('Title screen → tap → the dish, the clock "2:00" in the HUD, VELA starts talking.');
   await page.waitForTimeout(1200);
@@ -412,6 +573,14 @@ async function runCase(c) {
       } else problems.push(`[${c.name}] session ${k}: no start card`);
       await checkStable(`session ${k} ready`);
       await shot(`s${k}-ready`);
+      if (dishGrewFrom !== null) {
+        await page.waitForTimeout(2200); // DISH_GROW_SECONDS 1.5 s (+ camera lag)
+        const d = await page.evaluate(() => Math.round(2 * (window.bioluma.dishAnim?.rim.radius ?? 0)));
+        await shot(`s${k}-dish-grown`);
+        if (!(d > dishGrewFrom)) problems.push(`[${c.name}] session ${k}: «Placa más grande» did not grow the dish (Ø${dishGrewFrom} → Ø${d})`);
+        else say(`Session ${k}: the round dish grew Ø${dishGrewFrom} → Ø${d} before the first tap.`);
+        dishGrewFrom = null;
+      }
       // VELA's request "Mira tu criatura en el Bestiario": the Bestiary from the dock, one species card.
       if (k === 2 && (await visible('.bl-dock [data-tab="bestiary"]'))) {
         await settle(`bestiary ${k}`);
@@ -452,6 +621,7 @@ async function runCase(c) {
     // ── Play until "¡Tiempo!" ──
     let shotHalf = false;
     let shotWarn = false;
+    let tintHues = 0;
     let boosted = 0;
     let boostTries = 0;
     const boostCovers = new Set();
@@ -508,12 +678,19 @@ async function runCase(c) {
         say(`Session ${k}: caught a Spark.`);
         await page.waitForTimeout(300);
       }
-      if (!shotHalf && v.session.remaining < 75) {
+      // Species colours: checked once a species is on the dish, again when two different ones are.
+      if (tintHues < 2) {
+        const n = await page.evaluate(() => new Set(window.bioluma.game.view().creatures.filter((x) => x.hue !== undefined && x.state === 'stable').map((x) => x.hue)).size);
+        if (n > tintHues) tintHues = Math.max(tintHues, await checkSpeciesTints(`s${k}-tints${n}`));
+      }
+      if (!shotHalf && v.session.remaining <= v.session.total * 0.8) {
         shotHalf = true;
         await shot(`s${k}-midway`);
         await overlapCheck(`session ${k} midway`);
         // Session 2: the pause button, its card ("Seguir" · "Terminar ahora"), then back to the dish.
         if (k === 2 && (await visible('.fab-pause'))) {
+          // A Momento card opened at this instant owns the screen: a player reads it first, then pauses.
+          await settle(`pause ${k}`);
           await tapSel('.fab-pause');
           await page.waitForTimeout(600);
           await shot(`s${k}-pause`);
@@ -525,7 +702,7 @@ async function runCase(c) {
           say(`Session ${k}: paused (the card offers "Seguir" and "Terminar ahora"), then went on.`);
         }
       }
-      if (!shotWarn && v.session.remaining <= 20 && v.session.remaining > 3) {
+      if (!shotWarn && v.session.remaining <= Math.max(4, v.session.total * 0.3) && v.session.remaining > 2) {
         shotWarn = true;
         await shot(`s${k}-last-seconds`);
       }
@@ -534,7 +711,8 @@ async function runCase(c) {
     await page.waitForTimeout(500);
     await shot(`s${k}-times-up`);
     v = await view();
-    say(`Session ${k}: "¡Tiempo!" (${v.essence} Essence, ${v.species} species).`);
+    const turns = await page.evaluate(() => window.bioluma.dishStats?.turns ?? 0);
+    say(`Session ${k}: "¡Tiempo!" (${v.essence} Essence, ${v.species} species; ${turns} glass turns so far).`);
 
     // ── Summary ──
     for (let i = 0; i < 30 && !(await visible('.ss-layer [data-act="tree"]')); i++) {
@@ -561,7 +739,9 @@ async function runCase(c) {
     await settle(`tree ${k}`);
     await shot(`s${k}-tree`);
     await overlapCheck(`tree ${k}`);
-    const want = k === 1 ? ['worldCold', 'clock', 'dropper'] : ['clock', 'dropper', 'dish', 'culture', 'startEssence', 'worldGyro', 'fridge'];
+    // Session 2's tree buys «Placa más grande» first: the round dish must grow with it (ADR-025).
+    const want = k === 1 ? ['worldCold', 'clock', 'dropper'] : ['dish', 'clock', 'dropper', 'culture', 'startEssence', 'worldGyro', 'fridge'];
+    const dishBefore = await page.evaluate(() => Math.round(2 * (window.bioluma.dishAnim?.target.radius ?? 0)));
     let bought = 0;
     for (let tries = 0; tries < 6 && bought < 3; tries++) {
       await settle(`tree ${k}`);
@@ -598,6 +778,8 @@ async function runCase(c) {
         else {
           bought++;
           say(`Tree ${k}: bought «${id}» (${before} → ${after} Datos).`);
+          // The dish grows where the player sees it: when the tree and the start card are gone.
+          if (id === 'dish') dishGrewFrom = dishBefore;
         }
         await settle(`tree ${k}`);
         if (bought === 1) await shot(`s${k}-bought-${id}`);
