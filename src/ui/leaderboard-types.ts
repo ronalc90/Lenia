@@ -29,6 +29,7 @@ export function validateNickname(raw: string): 'ok' | 'short' | 'long' | 'invali
   const s = raw.trim();
   if (s.length < 3) return 'short';
   if (s.length > 16) return 'long';
-  if (!/^[\p{L}\p{N} _\-.]+$/u.test(s)) return 'invalid';
+  // Same character set as server/names.ts (letters, digits, space, _ and -).
+  if (!/^[\p{L}\p{N} _\-]+$/u.test(s)) return 'invalid';
   return 'ok';
 }
