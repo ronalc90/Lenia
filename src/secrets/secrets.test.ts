@@ -20,7 +20,7 @@ function swipe(dir: 'up' | 'down' | 'left' | 'right', x = 96, y = 120, len = 30)
 }
 
 describe('hidden species', () => {
-  it('registering Orbium ignis, phantasma or the cryptid reveals each secret once', () => {
+  it('registering Orbium ignis or phantasma reveals each secret once', () => {
     const w = fakeWorld();
     w.setView({ species: [species('a', 'Orbium unicaudatus'), species('b', 'Gyrorbium gyrans')] });
     w.advance(5);
@@ -29,12 +29,28 @@ describe('hidden species', () => {
     w.advance(1);
     expect(w.foundIds()).toEqual(['ignis']);
     expect(w.log.unlockCosmetic.map((c) => c.id)).toContain('ember');
-    w.setView({ species: [...w.view.species, species('c', 'Orbium phantasma'), species('d', 'Pyroscutium ambiguus')] });
+    w.setView({ species: [...w.view.species, species('c', 'Orbium phantasma')] });
     w.bus.emit('speciesNew', { speciesId: 'c', name: 'x', rarity: 'rare', x: 0, y: 0 });
-    expect(w.foundIds()).toEqual(['ignis', 'phantasma', 'cryptid']);
+    expect(w.foundIds()).toEqual(['ignis', 'phantasma']);
     w.advance(3);
-    expect(w.log.found).toHaveLength(3);
-    expect(w.log.grantJournal.map((j) => j.id)).toEqual(['secret.ignis', 'secret.phantasma', 'secret.cryptid']);
+    expect(w.log.found).toHaveLength(2);
+    expect(w.log.grantJournal.map((j) => j.id)).toEqual(['secret.ignis', 'secret.phantasma']);
+  });
+
+  it('the cryptid only shows itself at night: one of the Discos kind alive, under either catalog name', () => {
+    // By day (15:00, no full moon) a registered Pyroscutium ambiguus is not the cryptid yet.
+    const day = fakeWorld();
+    day.setView({ species: [species('d', 'Pyroscutium ambiguus')], creatures: [creature(1, 50, 50, { speciesId: 'd' })] });
+    day.advance(3);
+    expect(day.foundIds()).toEqual([]);
+    // After midnight it is, even when the detector registered the group as Discutium solidus.
+    const night = fakeWorld({ start: '2026-06-16T01:30:00' });
+    night.setView({ species: [species('s', 'Discutium solidus')], creatures: [] });
+    night.advance(2);
+    expect(night.foundIds()).toEqual([]);
+    night.setView({ creatures: [creature(1, 50, 50, { speciesId: 's' })] });
+    night.advance(1);
+    expect(night.foundIds()).toEqual(['cryptid']);
   });
 });
 
@@ -287,6 +303,16 @@ describe('patience', () => {
     expect(w.log.found).toHaveLength(0);
     w.setView({ creatures: [creature(1, 5, 5, { state: 'dead' })] });
     w.bus.emit('extinctionStart', { genome: 3 });
+    expect(w.foundIds()).toEqual(['sterile']);
+  });
+
+  it('ending a lab session with nothing alive also sterilises the sterile', () => {
+    const w = fakeWorld();
+    w.setView({ creatures: [creature(1, 5, 5)] });
+    w.bus.emit('sessionEnd', { n: 1, datos: 3, essence: 10, nightReady: false, early: true });
+    expect(w.log.found).toHaveLength(0);
+    w.setView({ creatures: [] });
+    w.bus.emit('sessionEnd', { n: 2, datos: 0, essence: 0, nightReady: false, early: true });
     expect(w.foundIds()).toEqual(['sterile']);
   });
 

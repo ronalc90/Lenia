@@ -60,7 +60,9 @@ import {
 } from './data';
 import { pointInPolygon, recognize, resample, swipeDirection, unwrapPath } from './gestures';
 import { FULL_MOON_ILLUMINATION, moonInfo } from './moon';
-import { SECRET_REGIMES } from './regimes';
+import { CATALOG } from '../sim/catalog';
+import { catalogGroup } from '../species/identity';
+import { cryptidAwake, SECRET_REGIMES } from './regimes';
 import type {
   CosmeticId,
   GridPt,
@@ -361,6 +363,20 @@ export function createSecrets(deps: SecretsDeps): Secrets {
     return true;
   }
 
+  function checkSterile(): void {
+    if (save.found.sterile !== undefined) return;
+    let v: GameView;
+    try {
+      v = deps.getView();
+    } catch {
+      return;
+    }
+    if (living(v).length === 0) {
+      fx({ kind: 'motes', count: 30, hue: 'silver', duration: 6, from: 'center' });
+      find('sterile');
+    }
+  }
+
   // ───────────── hidden species ─────────────
 
   const SPECIES_MOTES: Record<string, SecretEffect> = {
@@ -369,10 +385,30 @@ export function createSecrets(deps: SecretsDeps): Secrets {
     cryptid: { kind: 'motes', count: 60, hue: 'violet', duration: 7, from: 'top' },
   };
 
+  /**
+   * Latin names a hidden species can be registered under. The detector cannot tell some catalog
+   * species apart (species/identity CATALOG_GROUPS): Pyroscutium ambiguus is one Bestiary species
+   * with Discutium solidus, registered under whichever name the first match had.
+   */
+  const REGIME_NAMES: ReadonlyMap<SecretId, ReadonlySet<string>> = new Map(
+    SECRET_REGIMES.map((r) => [
+      r.secretId,
+      new Set([r.name, ...CATALOG.filter((e) => catalogGroup(e.code) === catalogGroup(r.code)).map((e) => e.name)]),
+    ]),
+  );
+
   function checkSpecies(v: GameView): void {
     for (const r of SECRET_REGIMES) {
       if (save.found[r.secretId] !== undefined) continue;
-      if (v.species.some((s) => s.catalogName === r.name)) {
+      const names = REGIME_NAMES.get(r.secretId)!;
+      const named = (id: string | null) => id !== null && names.has(v.species.find((s) => s.id === id)?.catalogName ?? '');
+      // The cryptid keeps hours: one of its kind alive on the dish at night or under a full moon
+      // (it lives in Mundo 5 · Discos, where it would otherwise be met by day, docs/CLARIDAD.md J-26).
+      const seen =
+        r.when === 'nightOrFullMoon'
+          ? cryptidAwake(now()) && v.creatures.some((c) => c.state === 'stable' && named(c.speciesId))
+          : v.species.some((s) => s.catalogName !== null && names.has(s.catalogName));
+      if (seen) {
         fx(SPECIES_MOTES[r.secretId]);
         find(r.secretId);
       }
@@ -596,19 +632,10 @@ export function createSecrets(deps: SecretsDeps): Secrets {
       save.goldenStreak = 0;
       persist();
     }),
-    deps.bus.on('extinctionStart', () => {
-      if (save.found.sterile !== undefined) return;
-      let v: GameView;
-      try {
-        v = deps.getView();
-      } catch {
-        return;
-      }
-      if (living(v).length === 0) {
-        fx({ kind: 'motes', count: 30, hue: 'silver', duration: 6, from: 'center' });
-        find('sterile');
-      }
-    }),
+    // Sterilising the sterile: an Extinction (classic loop) or the end of a lab session (sessions loop)
+    // with nothing alive on the dish.
+    deps.bus.on('extinctionStart', () => checkSterile()),
+    deps.bus.on('sessionEnd', () => checkSterile()),
     deps.bus.on('speciesNew', () => {
       try {
         checkSpecies(deps.getView());

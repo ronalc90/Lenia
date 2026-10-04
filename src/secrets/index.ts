@@ -40,3 +40,5 @@ export type { MoonInfo } from './moon';
 export { createShakeDetector, createJiggleDetector } from './shake';
 export { SECRET_ACHIEVEMENTS, earnedSecretAchievements } from './achievements';
 export type { SecretAchievementDef } from './achievements';
+export { createSecretJournal, SECRET_JOURNAL_KEY } from './journal';
+export type { SecretJournal } from './journal';

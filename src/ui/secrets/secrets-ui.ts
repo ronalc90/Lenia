@@ -30,6 +30,8 @@ export interface SecretsUIOptions {
   requestMotion?: (() => Promise<boolean>) | null;
   /** Print the devtools greeting once (default true). */
   consoleGreeting?: boolean;
+  /** While true, reveal cards wait (e.g. a Momento card is explaining something else). */
+  hold?: () => boolean;
 }
 
 export interface SecretsUI {
@@ -42,6 +44,8 @@ export interface SecretsUI {
   createBasement(): BasementPanel;
   /** Call after the dish element changes size, if no ResizeObserver. */
   resize(): void;
+  /** A reveal card is on screen. */
+  readonly busy: boolean;
   dispose(): void;
 }
 
@@ -81,6 +85,7 @@ export function createSecretsUI(root: HTMLElement, secrets: Secrets, opts: Secre
     host: cards,
     lang: opts.lang,
     reduceMotion: opts.reduceMotion,
+    hold: opts.hold,
     onShow: (item, seal, hue) => {
       syncRM();
       const cr = cards.getBoundingClientRect();
@@ -121,6 +126,9 @@ export function createSecretsUI(root: HTMLElement, secrets: Secrets, opts: Secre
     reveal: (secret, index, total) => reveals.push({ secret, index, total }),
     createBasement: () => createBasementPanel(secrets, { lang: opts.lang, requestMotion: opts.requestMotion ?? null }),
     resize: () => effects.resize(),
+    get busy() {
+      return reveals.visible;
+    },
     dispose() {
       offs.forEach((o) => o());
       reveals.dispose();

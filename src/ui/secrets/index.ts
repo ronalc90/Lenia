@@ -8,3 +8,5 @@ export type { SecretInputs, SecretInputsOptions, StrokeRecorder } from './inputs
 export { EffectsLayer, lifeStep } from './effects';
 export { glyphSVG } from './glyphs';
 export { colormapCSS } from './reveal';
+export { mountBasementEntry } from './settings-entry';
+export type { BasementEntry } from './settings-entry';

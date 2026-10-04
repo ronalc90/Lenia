@@ -9,6 +9,8 @@
  *   &reveal=<secretId>  &effect=<kind>  &basement=1  &hints=1 (climb some hint ladders)
  *   &colormap=<cosmeticId> (paint the fake dish with a palette)
  */
+// Art tokens (--bl-*) before every module stylesheet (docs/ARTE.md §12).
+import '../art/art.css';
 import { Bus, type GameEvents } from '../../core/bus';
 import { Camera } from '../../core/camera';
 import { MATTER_STOPS } from '../../core/palette';

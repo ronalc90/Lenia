@@ -34,17 +34,17 @@ const CSS = /* css */ `
 .bls-seal canvas{position:relative;z-index:1;width:78px;height:78px;border-radius:50%;
   filter:drop-shadow(0 0 10px rgba(var(--acc-rgb),.55));animation:bls-portrait 1.4s cubic-bezier(.2,0,0,1) both,bls-float 5s ease-in-out 1.4s infinite}
 
-.bls-kicker{font:600 .6875rem/1 'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;letter-spacing:.24em;text-transform:uppercase;
+.bls-kicker{font:600 .6875rem/1 var(--bl-font-ui,Inter,system-ui,sans-serif);letter-spacing:.24em;text-transform:uppercase;
   color:var(--acc);opacity:0;animation:bls-fade .6s .35s ease forwards}
 .bls-kicker .n{color:rgba(230,237,243,.55);letter-spacing:.12em}
 .bls-name{margin:9px 0 0;font-size:1.375rem;font-weight:650;letter-spacing:.01em;line-height:1.15;
   text-shadow:0 0 18px rgba(var(--acc-rgb),.35)}
 .bls-name .l{display:inline-block;opacity:0;filter:blur(6px);transform:translateY(4px);animation:bls-letter .7s cubic-bezier(.2,0,0,1) forwards}
-.bls-latin{margin-top:3px;font-style:italic;font-weight:500;font-size:.875rem;color:rgba(var(--acc-rgb),.92);opacity:0;animation:bls-fade .7s .95s ease forwards}
+.bls-latin{margin-top:3px;font-family:var(--bl-font-display,Georgia,serif);font-style:italic;font-weight:500;font-size:.875rem;color:rgba(var(--acc-rgb),.92);opacity:0;animation:bls-fade .7s .95s ease forwards}
 .bls-flavor{margin:9px auto 0;max-width:30ch;font-size:.875rem;line-height:1.4;color:#a9b6c3;opacity:0;animation:bls-fade .8s 1.1s ease forwards}
 .bls-reward{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:12px;opacity:0;animation:bls-fade .7s 1.45s ease forwards}
 .bls-chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:12px;
-  font:600 .6875rem/1 'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;letter-spacing:.04em;color:#e6edf3;
+  font:600 .6875rem/1 var(--bl-font-ui,Inter,system-ui,sans-serif);letter-spacing:.04em;color:#e6edf3;
   background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08)}
 .bls-chip .sw{width:22px;height:8px;border-radius:4px}
 .bls-chip.gold{color:#ffd166;border-color:rgba(255,209,102,.28);background:rgba(255,209,102,.07)}
@@ -71,13 +71,13 @@ const CSS = /* css */ `
 .bls-bh p{margin:3px 0 0;color:#8b98a5;font-style:italic;font-size:.8125rem}
 .bls-meter{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-items:center;margin:18px 0 6px;padding:12px 14px;border-radius:14px;
   background:#141a21;border:1px solid rgba(230,237,243,.08)}
-.bls-count{font:700 1.375rem/1 'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;color:#ffd166}
+.bls-count{font:700 1.375rem/1 var(--bl-font-ui,Inter,system-ui,sans-serif);color:#ffd166}
 .bls-count span{color:#5d6874;font-weight:600;font-size:.9375rem}
 .bls-bar{height:6px;border-radius:3px;background:rgba(255,255,255,.06);overflow:hidden}
 .bls-bar i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,#c9932f,#ffd166 70%,#fff1c4);box-shadow:0 0 12px rgba(255,209,102,.5);transition:width .6s cubic-bezier(.2,0,0,1)}
 .bls-bonus{grid-column:1/-1;color:#8b98a5;font-size:.75rem}
 .bls-bonus b{color:#e6edf3;font-weight:600}
-.bls-basement h3{display:flex;justify-content:space-between;align-items:baseline;margin:22px 2px 8px;font:600 .6875rem/1 'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+.bls-basement h3{display:flex;justify-content:space-between;align-items:baseline;margin:22px 2px 8px;font:600 .6875rem/1 var(--bl-font-ui,Inter,system-ui,sans-serif);
   letter-spacing:.2em;text-transform:uppercase;color:#8b98a5}
 .bls-basement h3 span{letter-spacing:.06em;color:#5d6874}
 .bls-swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
@@ -97,7 +97,7 @@ const CSS = /* css */ `
 .bls-item .tx b{display:block;font-weight:600;font-size:.9375rem}
 .bls-item .tx i{display:block;color:#ffd166;opacity:.85;font-size:.8125rem}
 .bls-item .tx p{margin:3px 0 0;color:#a9b6c3;font-size:.8125rem}
-.bls-item time{flex:none;color:#5d6874;font:500 .6875rem/1.6 'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace}
+.bls-item time{flex:none;color:#5d6874;font:500 .6875rem/1.6 var(--bl-font-ui,Inter,system-ui,sans-serif)}
 .bls-item.locked{background:rgba(20,26,33,.55);border-style:dashed;border-color:rgba(230,237,243,.09)}
 .bls-item.locked .gl{color:#4f5b67;background:rgba(255,255,255,.025)}
 .bls-item.locked .tx b{color:#5d6874;letter-spacing:.3em}

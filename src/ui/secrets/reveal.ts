@@ -91,11 +91,17 @@ export interface RevealDeps {
   reduceMotion: () => boolean;
   /** Called when a card appears (screen centre of the seal), for the mote burst and the sound. */
   onShow?: (item: RevealItem, seal: { x: number; y: number }, hue: MoteHue) => void;
+  /** While true, queued cards wait (another explainer owns the screen); checked every 400 ms. */
+  hold?: () => boolean;
 }
+
+/** How often a held queue checks again (ms). */
+const HOLD_RETRY_MS = 400;
 
 export class RevealQueue {
   private queue: RevealItem[] = [];
   private current: { el: HTMLElement; timer: number } | null = null;
+  private holdTimer = 0;
 
   constructor(private d: RevealDeps) {}
 
@@ -126,6 +132,8 @@ export class RevealQueue {
   }
 
   dispose(): void {
+    clearTimeout(this.holdTimer);
+    this.holdTimer = 0;
     if (this.current) {
       clearTimeout(this.current.timer);
       this.current.el.remove();
@@ -135,6 +143,14 @@ export class RevealQueue {
   }
 
   private next(): void {
+    if (!this.queue.length || this.holdTimer) return;
+    if (this.d.hold?.()) {
+      this.holdTimer = window.setTimeout(() => {
+        this.holdTimer = 0;
+        if (!this.current) this.next();
+      }, HOLD_RETRY_MS);
+      return;
+    }
     const item = this.queue.shift();
     if (!item) return;
     const el = this.build(item);
