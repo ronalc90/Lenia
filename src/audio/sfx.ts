@@ -47,7 +47,14 @@ export type SfxName =
   | 'extinction'
   | 'offline'
   | 'behavior'
-  | 'income';
+  | 'income'
+  | 'uiTap'
+  | 'uiTab'
+  | 'uiOpen'
+  | 'uiClose'
+  | 'uiToggle'
+  | 'uiHold'
+  | 'uiConfirm';
 
 // ───────────────────────────── helpers ─────────────────────────────
 
@@ -399,6 +406,60 @@ const income: SfxFn = (e, t) => {
   return e.inst.glint(e.out, t, m, 0.35);
 };
 
+// ───────────────────────────── interface sounds ─────────────────────────────
+// Very short and soft: they confirm a touch without competing with the music.
+
+const uiTap: SfxFn = (e, t) => {
+  const [m] = chordRun(e.chord, 86, 1);
+  return tone(e, t, midiToFreq(m), 0.05, 0.05, 'sine', 0.002);
+};
+
+const uiTab: SfxFn = (e, t) => {
+  const [a, b] = chordRun(e.chord, 79, 2);
+  tone(e, t, midiToFreq(a), 0.045, 0.06, 'triangle', 0.003);
+  return tone(e, t + 0.045, midiToFreq(b), 0.04, 0.07, 'triangle', 0.003);
+};
+
+const uiOpen: SfxFn = (e, t) => {
+  const [a, b, c] = chordRun(e.chord, 74, 3);
+  tone(e, t, midiToFreq(a), 0.035, 0.08, 'sine', 0.006);
+  tone(e, t + 0.035, midiToFreq(b), 0.035, 0.08, 'sine', 0.006);
+  return tone(e, t + 0.07, midiToFreq(c), 0.035, 0.12, 'sine', 0.006);
+};
+
+const uiClose: SfxFn = (e, t) => {
+  const [a, b] = chordRun(e.chord, 72, 2);
+  tone(e, t, midiToFreq(b), 0.035, 0.07, 'sine', 0.004);
+  return tone(e, t + 0.04, midiToFreq(a), 0.03, 0.1, 'sine', 0.004);
+};
+
+const uiToggle: SfxFn = (e, t) => {
+  const [m] = chordRun(e.chord, 81, 1);
+  tone(e, t, midiToFreq(m) * 2, 0.02, 0.015, 'square', 0.001, lowpass(e, 3200));
+  return tone(e, t, midiToFreq(m), 0.04, 0.04, 'sine', 0.002);
+};
+
+const uiHold: SfxFn = (e, t) => {
+  // A soft swell that rises over the 1.5 s hold of the extinction button.
+  const o = osc(e.ctx, 'triangle', midiToFreq(50), t);
+  o.frequency.exponentialRampToValueAtTime(midiToFreq(62), t + 1.5);
+  const g = vca(e.ctx);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.06, t + 1.4);
+  g.gain.exponentialRampToValueAtTime(EPS, t + 1.6);
+  o.connect(g).connect(lowpass(e, 900));
+  o.start(t);
+  o.stop(t + 1.62);
+  autoDisconnect(o, [o, g]);
+  return t + 1.62;
+};
+
+const uiConfirm: SfxFn = (e, t) => {
+  const notes = chordRun(e.chord, 69, 3);
+  notes.forEach((m, i) => fmBell(e, t + i * 0.03, m, 0.05, 0.6));
+  return t + 0.7;
+};
+
 export interface SfxDef {
   fn: SfxFn;
   channel: SfxChannel;
@@ -429,6 +490,13 @@ export const SFX: Record<SfxName, SfxDef> = {
   offline: { fn: offline, channel: 'room', priority: 6, minInterval: 2, gain: 1 },
   behavior: { fn: behavior, channel: 'echo', priority: 5, minInterval: 0.6, gain: 1 },
   income: { fn: income, channel: 'echo', priority: 0, minInterval: 4, gain: 0.5 },
+  uiTap: { fn: uiTap, channel: 'dry', priority: 1, minInterval: 0.05, gain: 1 },
+  uiTab: { fn: uiTab, channel: 'dry', priority: 2, minInterval: 0.08, gain: 1 },
+  uiOpen: { fn: uiOpen, channel: 'room', priority: 2, minInterval: 0.15, gain: 1 },
+  uiClose: { fn: uiClose, channel: 'room', priority: 2, minInterval: 0.15, gain: 1 },
+  uiToggle: { fn: uiToggle, channel: 'dry', priority: 2, minInterval: 0.06, gain: 1 },
+  uiHold: { fn: uiHold, channel: 'room', priority: 6, minInterval: 1, gain: 1 },
+  uiConfirm: { fn: uiConfirm, channel: 'echo', priority: 6, minInterval: 0.3, gain: 1 },
 };
 
 export const MAX_SFX_VOICES = 6;

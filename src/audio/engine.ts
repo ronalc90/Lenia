@@ -17,6 +17,22 @@ import { hash32 } from './motifs';
 import { SECONDS_PER_BAR, SECONDS_PER_BEAT, barInfo } from './progression';
 import { Composer, signatureFor, type NoteEvent, type Signature } from './score';
 import { EXTINCTION_NOTE_AT, EXTINCTION_SWEEP, SfxPlayer, SliderTone, type SfxName } from './sfx';
+
+/** Sounds the UI can request directly. */
+export type UISound = 'tap' | 'tab' | 'open' | 'close' | 'buy' | 'deny' | 'toggle' | 'hold' | 'confirm';
+
+/** 'buy' maps to nothing: purchases already sound through the upgradeBought event. */
+const UI_SFX: Record<UISound, SfxName | null> = {
+  tap: 'uiTap',
+  tab: 'uiTab',
+  open: 'uiOpen',
+  close: 'uiClose',
+  buy: null,
+  deny: 'seedDenied',
+  toggle: 'uiToggle',
+  hold: 'uiHold',
+  confirm: 'uiConfirm',
+};
 import { Instruments, Pad, VOICE_CAP, type NoiseBank } from './synth';
 import type { Chord } from './theory';
 
@@ -371,6 +387,13 @@ export class AudioCore {
   private play(name: SfxName, t: number, opts?: { gain?: number; pan?: number; key?: string; minInterval?: number }): void {
     if (this.vol.muted || this.vol.sfx <= 0) return;
     this.sfx.play(name, t, opts);
+  }
+
+  /** Interface sound (button taps, tabs, modals). */
+  playUI(kind: UISound, now: number): void {
+    if (this.disposed) return;
+    const name = UI_SFX[kind];
+    if (name) this.play(name, now + 0.005);
   }
 
   /** React to a game event at time `now`. */

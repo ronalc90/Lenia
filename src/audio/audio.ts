@@ -11,10 +11,11 @@
  * The AudioContext is created lazily on the first unlock() (autoplay policy).
  */
 import type { Bus, GameEvents } from '../core/bus';
-import { AudioCore } from './engine';
+import { AudioCore, type UISound } from './engine';
 import type { MusicState } from './intensity';
 
 export type { MusicState } from './intensity';
+export type { UISound } from './engine';
 
 export interface AudioEngine {
   /** Call on first user gesture (autoplay policy). Safe to call many times. */
@@ -32,6 +33,8 @@ export interface AudioEngine {
   setDishSize?(w: number, h: number): void;
   /** Optional: true once the AudioContext exists and is running. */
   readonly running?: boolean;
+  /** Optional: interface sound for a UI interaction. */
+  playUI?(kind: UISound): void;
 }
 
 /** Game events the audio reacts to. */
@@ -184,6 +187,10 @@ export function createAudio(bus: Bus<GameEvents>): AudioEngine {
     resume() {
       hidden = false;
       resumeCtx();
+    },
+
+    playUI(kind) {
+      if (core && ctx && ctx.state === 'running') core.playUI(kind, ctx.currentTime);
     },
 
     setDishSize(w) {
