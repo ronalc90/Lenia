@@ -13,7 +13,7 @@ export const SIG = {
   MASS: 0,
   /** radius of gyration / R. */
   RG: 1,
-  /** mass / area: mean matter inside the creature's mask. */
+  /** Mass-weighted mean matter Σv²/Σv (robust to how the edge falls on the snapshot grid). */
   DENSITY: 2,
   /** gradient sum · R / mass: how "edgy" the body is. */
   EDGE: 3,

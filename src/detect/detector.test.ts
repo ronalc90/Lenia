@@ -233,3 +233,43 @@ describe('detector: performance', () => {
     expect(mean).toBeLessThan(2);
   });
 });
+
+describe('detector: robustness', () => {
+  it('many faint specks before a creature (raster order) do not hide the creature', () => {
+    // 32×32 snapshot (64×64 dish). With R = 20 the speck threshold is 0.04·R² = 16 grid cells
+    // of mass: 5×5 specks at 0.11 (mass 11) are ignored, a 6×6 blob at 0.8 (mass 115) is not.
+    const w = 32;
+    const h = 32;
+    const value = new Float32Array(w * h);
+    const fill = (x0: number, y0: number, n: number, v: number) => {
+      for (let y = y0; y < y0 + n; y++) for (let x = x0; x < x0 + n; x++) value[y * w + x] = v;
+    };
+    fill(2, 2, 5, 0.11);
+    fill(10, 2, 5, 0.11);
+    fill(13, 20, 6, 0.8);
+    const snap: FieldSnapshot = { w, h, scale: 2, gridW: 64, gridH: 64, value, grad: new Float32Array(w * h), step: 0 };
+    const r = createDetector().update(snap, { ...ORBIUM, R: 20 });
+    expect(r.creatures.length).toBe(1);
+    expect(r.creatures[0].x).toBeCloseTo(32, 5); // blocks 13..18 → cells 26..37 → centre 32
+    expect(r.creatures[0].y).toBeCloseTo(46, 5);
+  });
+
+  it('re-feeding the same step (stalled or lost GPU) changes nothing and emits nothing', () => {
+    const params = paramsOf(catalogByCode('C0v')!);
+    const sim = new CpuLenia(64, 64, params);
+    placeRotated(sim.A, 64, 64, catalogPattern('C0v'), 32, 32, 0.7);
+    const det = createDetector();
+    const { last } = runSim(sim, params, { steps: 1200, detector: det });
+    expect(last.creatures[0].behavior).toBe('pulsing');
+    const frozen = snapshotFromCpu(sim.A, 64, 64, 2, sim.stepCount);
+    for (let i = 0; i < 300; i++) {
+      const r = det.update(frozen, params);
+      expect(r.events).toEqual([]);
+      expect(r.creatures.map((c) => [c.id, c.state, c.behavior])).toEqual(last.creatures.map((c) => [c.id, c.state, c.behavior]));
+    }
+    // Time moves again: the history was not flooded with copies, the pulse is still seen.
+    const after = runSim(sim, params, { steps: sim.stepCount + 200, detector: det });
+    expect(after.events.filter((e) => e.type === 'behavior')).toEqual([]);
+    expect(after.last.creatures[0].behavior).toBe('pulsing');
+  });
+});

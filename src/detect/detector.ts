@@ -203,7 +203,6 @@ interface Track {
   behavior: Behavior | null;
   cand: Behavior | null;
   candCount: number;
-  childIds: number[];
   lastDivision: number;
   /** Child of a division whose parent was stable (a true fission, not debris of an explosion). */
   fromFission: boolean;
@@ -261,6 +260,7 @@ class LeniaDetector implements Detector {
   private nextBlobUid = 1;
   private lastStep = -Infinity;
   private lastClassify = -Infinity;
+  private lastReport: DetectorReport | null = null;
 
   // Per-frame buffers (reallocated when the snapshot size changes).
   private w = 0;
@@ -308,11 +308,16 @@ class LeniaDetector implements Detector {
     this.nextId = 1;
     this.lastStep = -Infinity;
     this.lastClassify = -Infinity;
+    this.lastReport = null;
     this.hasPrev = false;
   }
 
   update(snap: FieldSnapshot, params: LeniaParams): DetectorReport {
     if (snap.step < this.lastStep) this.reset(); // time went backwards: a new dish
+    // The same step again (stalled or lost GPU context re-serving its last snapshot): nothing
+    // happened. Re-measuring would flood the histories with copies of one instant and skew the
+    // behaviour analysis (which assumes evenly spaced samples).
+    if (snap.step === this.lastStep && this.lastReport) return { ...this.lastReport, events: [] };
     this.ensureBuffers(snap.w, snap.h);
     const step = snap.step;
     const R = Math.max(1, params.R);
@@ -385,6 +390,7 @@ class LeniaDetector implements Detector {
         parentId: t.parentId,
       });
     }
+    this.lastReport = { step, creatures, events: [], totalMass, fill };
     return { step, creatures, events, totalMass, fill };
   }
 
@@ -441,6 +447,7 @@ class LeniaDetector implements Detector {
     lab.fill(-1);
     let nc = 0;
     let nCells = 0;
+    let rejected = false;
     for (let i = 0; i < N; i++) {
       if (lab[i] !== -1 || !(value[i] >= thr)) continue;
       const c = nc++;
@@ -503,8 +510,15 @@ class LeniaDetector implements Detector {
       this.compCy[c] = mod(cuy, h);
       const valid = m * s2 >= minMass && body >= 2;
       this.compValid[c] = valid ? 1 : 0;
-      if (!valid) for (let k = start; k < nCells; k++) lab[cellIdx[k]] = -1;
+      if (!valid) {
+        // Mark the speck as visited (-2), not unlabeled (-1): otherwise each of its other body
+        // cells would restart the same BFS, which costs O(body · size) and can overflow the cell
+        // buffer (sized N) so that a real creature later in raster order gets NaN mass and vanishes.
+        for (let k = start; k < nCells; k++) lab[cellIdx[k]] = -2;
+        rejected = true;
+      }
     }
+    if (rejected) for (let i = 0; i < N; i++) if (lab[i] === -2) lab[i] = -1;
     this.nComps = nc;
   }
 
@@ -523,7 +537,6 @@ class LeniaDetector implements Detector {
       behavior: null,
       cand: null,
       candCount: 0,
-      childIds: [],
       lastDivision: -Infinity,
       fromFission: false,
       hist: new History(),
@@ -823,7 +836,6 @@ class LeniaDetector implements Detector {
         } else {
           child = this.newTrack(b.detachedSince, t.id);
           child.fromFission = t.state === 'stable';
-          t.childIds.push(child.id);
           t.lastDivision = step;
           events.push({ type: 'divided', parentId: t.id, childIds: [child.id], x: t.x, y: t.y });
           child.announce = true;
