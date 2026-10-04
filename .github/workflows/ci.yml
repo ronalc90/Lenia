@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# One run per branch/PR; a newer push cancels the older run.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: CI only reads the repo. No secrets, no API keys (see CLAUDE.md, ADR-020).
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build (PWA, multi-file)
+        run: npm run build
+
+      - name: Build (single file, shareable test build)
+        run: SINGLE=1 npx vite build
+
+      - name: Upload single-file build
+        uses: actions/upload-artifact@v4
+        with:
+          name: bioluma-single-file
+          path: dist-single
+          if-no-files-found: error
+          retention-days: 14

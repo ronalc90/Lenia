@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Bioluma</title>
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="45%" r="75%">
+      <stop offset="0" stop-color="#131E29"/>
+      <stop offset="0.6" stop-color="#0D1219"/>
+      <stop offset="1" stop-color="#0B0E12"/>
+    </radialGradient>
+    <radialGradient id="dishFill" cx="50%" cy="46%" r="54%">
+      <stop offset="0" stop-color="#10202C"/>
+      <stop offset="0.65" stop-color="#0A151E"/>
+      <stop offset="1" stop-color="#060B10"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#D9F1FF" stop-opacity="0.85"/>
+      <stop offset="0.45" stop-color="#5BC0EB" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#7E93A6" stop-opacity="0.22"/>
+    </linearGradient>
+    <radialGradient id="halo" gradientUnits="userSpaceOnUse" cx="258" cy="250" r="190">
+      <stop offset="0" stop-color="#5BC0EB" stop-opacity="0.46"/>
+      <stop offset="0.45" stop-color="#3E7FD0" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#2B3A9A" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="crescent" gradientUnits="userSpaceOnUse" x1="344" y1="166" x2="224" y2="276">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.28" stop-color="#C9F5FF"/>
+      <stop offset="0.6" stop-color="#4FC8F0"/>
+      <stop offset="1" stop-color="#4A52D6"/>
+    </linearGradient>
+    <linearGradient id="tail" gradientUnits="userSpaceOnUse" x1="260" y1="248" x2="112" y2="336">
+      <stop offset="0" stop-color="#5CD0F5" stop-opacity="0"/>
+      <stop offset="0.2" stop-color="#6FDAF8" stop-opacity="0.9"/>
+      <stop offset="0.6" stop-color="#3F8FE0" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#3B3FB8" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="hole" gradientUnits="userSpaceOnUse" cx="265" cy="237" r="52">
+      <stop offset="0" stop-color="#2A2F8F" stop-opacity="0.42"/>
+      <stop offset="0.7" stop-color="#1B2468" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#1B2468" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="b1" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.6"/></filter>
+    <filter id="b3" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.5"/></filter>
+    <filter id="b10" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="11"/></filter>
+    <mask id="crescentMask" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <circle cx="282" cy="224" r="79" fill="#fff"/>
+      <circle cx="262" cy="240" r="61" fill="#000" filter="url(#b1)"/>
+    </mask>
+    <clipPath id="dishClip"><circle cx="256" cy="256" r="203"/></clipPath>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#bgGlow)"/>
+  <g>
+  <circle cx="256" cy="256" r="208" fill="url(#dishFill)"/>
+  
+  <g clip-path="url(#dishClip)"><g transform="translate(-34.4 -10.2) scale(1.1)">
+    <circle cx="258" cy="250" r="190" fill="url(#halo)"/>
+    <circle cx="282" cy="224" r="112" fill="none" stroke="#5BC0EB" stroke-opacity="0.10" stroke-width="2"/>
+    <circle cx="282" cy="224" r="142" fill="none" stroke="#5BC0EB" stroke-opacity="0.06" stroke-width="2"/>
+    <!-- tail -->
+    <path d="M 260 254 C 216 290 196 306 112 336
+  C 176 354 204 324 270 294 Z" fill="url(#tail)" filter="url(#b10)" opacity="0.8"/>
+    <path d="M 260 254 C 216 290 196 306 112 336
+  C 176 354 204 324 270 294 Z" fill="url(#tail)" filter="url(#b1)"/>
+    <!-- body: faint full disc, dark hole, glowing crescent -->
+    <circle cx="282" cy="224" r="79" fill="#4FC8F0" fill-opacity="0.07"/>
+    <circle cx="282" cy="224" r="79" fill="none" stroke="#7FD8F7" stroke-opacity="0.38" stroke-width="2.2" filter="url(#b1)"/>
+    <circle cx="265" cy="237" r="52" fill="url(#hole)"/>
+    <g filter="url(#b10)" opacity="0.95">
+      <g mask="url(#crescentMask)"><rect x="0" y="0" width="512" height="512" fill="url(#crescent)"/></g>
+    </g>
+    <g filter="url(#b3)" opacity="0.8">
+      <g mask="url(#crescentMask)"><rect x="0" y="0" width="512" height="512" fill="url(#crescent)"/></g>
+    </g>
+    <g mask="url(#crescentMask)">
+      <rect x="0" y="0" width="512" height="512" fill="url(#crescent)"/>
+    </g>
+    <!-- inner structure: a thin membrane arc hugging the hole, and a faint second ring -->
+    <path d="M 230 230 A 54 54 0 0 0 268 278" fill="none" stroke="#6FD6F6" stroke-opacity="0.5" stroke-width="2.4" stroke-linecap="round" filter="url(#b1)"/>
+    <path d="M 288 172 A 54 54 0 0 1 328 200" fill="none" stroke="#fff" stroke-opacity="0.5" stroke-width="2" stroke-linecap="round" filter="url(#b1)"/>
+    <!-- bright core of the leading edge -->
+    <ellipse cx="327" cy="190" rx="20" ry="9" transform="rotate(-37 327 190)" fill="#fff" opacity="0.9" filter="url(#b3)"/>
+    <!-- drifting matter -->
+    <g fill="#8EDDF8">
+      <circle cx="372" cy="334" r="3.2" opacity="0.55"/>
+      <circle cx="152" cy="176" r="2.6" opacity="0.45"/>
+      <circle cx="392" cy="170" r="2.2" opacity="0.4"/>
+      <circle cx="188" cy="392" r="2.4" opacity="0.4"/>
+      <circle cx="330" cy="372" r="1.8" opacity="0.35"/>
+      <circle cx="132" cy="262" r="1.8" opacity="0.3"/>
+    </g>
+  </g></g>
+  <circle cx="256" cy="256" r="208" fill="none" stroke="url(#rim)" stroke-width="7"/>
+  <circle cx="256" cy="256" r="195" fill="none" stroke="#CFEAFB" stroke-opacity="0.10" stroke-width="2"/>
+  <path d="M 120 176 A 170 170 0 0 1 226 98" fill="none" stroke="#fff" stroke-opacity="0.34" stroke-width="6" stroke-linecap="round" filter="url(#b1)"/>
+  <path d="M 396 372 A 170 170 0 0 1 350 414" fill="none" stroke="#fff" stroke-opacity="0.14" stroke-width="5" stroke-linecap="round" filter="url(#b1)"/></g>
+</svg>
