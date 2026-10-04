@@ -158,6 +158,12 @@ export function createGame(deps: GameDeps, save?: string): Game {
   // ── Transient (not saved) ──
   let creatures: Creature[] = [];
   const creatureSpecies = new Map<number, string>();
+  /** Stable creatures still waiting to be matched/registered as a species (rate-limited). */
+  const unassigned = new Set<number>();
+  /** Token bucket for NEW species registrations (see balance SPECIES_NEW_*). */
+  let newSpeciesTokens: number = B.SPECIES_NEW_BURST;
+  /** The dish is flooded (too much matter): nothing pays, nothing registers. */
+  let overgrown = false;
   const knownIds = new Set<number>();
   const lastBehavior = new Map<number, Behavior | null>();
   let perCreature = new Map<number, number>();
@@ -288,7 +294,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       crowdMult: 1 + B.SEED_CROWD * alive,
       freeSlots: slots,
       used,
-      satMult: Math.pow(B.SEED_SATURATION_GROWTH, Math.max(0, used - slots)),
+      satMult: Math.pow(B.SEED_SATURATION_GROWTH, Math.min(B.SEED_SATURATION_MAX_STEPS, Math.max(0, used - slots))),
       bigMult: (B.SEED_BIG_RADIUS * B.SEED_BIG_RADIUS) / (B.SEED_RADIUS * B.SEED_RADIUS),
       freeSeeds: s.charges.free,
     };
@@ -526,7 +532,28 @@ export function createGame(deps: GameDeps, save?: string): Game {
     }
     if (s.goldenTimer < 0) s.goldenTimer = between(B.GOLDEN_FIRST_DELAY);
     bus.emit('creatureStable', { id: c.id, x: c.x, y: c.y });
+    unassigned.add(c.id);
+    assignSpecies(c);
+  }
 
+  /** True when the creature is packed among several others (a fragment of a maze, not a fauna). */
+  function crowded(c: Creature): boolean {
+    const r = B.SPECIES_NEW_ISOLATION_R * s.calib.R;
+    let n = 0;
+    for (const o of creatures) {
+      if (o.id === c.id || o.state === 'dead') continue;
+      if (wrapDist(o.x, o.y, c.x, c.y, grid.w, grid.h) < r && ++n >= B.SPECIES_NEW_CROWD_NEIGHBORS) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Match a stable creature to a known species, or register a new one. New species need an
+   * isolated creature, a calm dish and a cooldown, so fragment storms can't flood the bestiary;
+   * a creature that doesn't qualify yet stays unassigned (pays as unknown) and is retried.
+   */
+  function assignSpecies(c: Creature): void {
+    if (overgrown) return;
     const sig = signatureOf(c);
     const idx = matchSignature(
       sig,
@@ -540,8 +567,11 @@ export function createGame(deps: GameDeps, save?: string): Game {
       blendSignature(sp, sig);
       expandRanges(sp);
     } else {
+      if (newSpeciesTokens < 1 || crowded(c)) return;
       sp = registerSpecies(c, sig, reveal);
+      newSpeciesTokens -= 1;
     }
+    unassigned.delete(c.id);
     creatureSpecies.set(c.id, sp.id);
     if (c.behavior) onBehavior(c);
   }
@@ -616,8 +646,26 @@ export function createGame(deps: GameDeps, save?: string): Game {
     }
   }
 
+  function updateOvergrown(fill: number): void {
+    const was = overgrown;
+    if (!overgrown && fill > B.DISH_OVERGROWN_FILL) overgrown = true;
+    else if (overgrown && fill < B.DISH_OVERGROWN_CLEAR) overgrown = false;
+    if (overgrown === was) return;
+    bus.emit('dishOvergrown', { on: overgrown });
+    if (overgrown) {
+      toast(
+        {
+          es: '¡La placa se desbordó! Demasiada materia sin forma no produce. Límpiala y siembra con calma.',
+          en: 'The dish overflowed! Shapeless matter produces nothing. Clean it and seed calmly.',
+        },
+        'warn',
+      );
+    }
+  }
+
   function processReport(report: DetectorReport): void {
     creatures = Array.isArray(report.creatures) ? report.creatures.filter((c) => c && Number.isFinite(c.x) && Number.isFinite(c.y)) : [];
+    updateOvergrown(Number.isFinite(report.fill) ? report.fill : 0);
     for (const c of creatures) {
       if (!knownIds.has(c.id)) {
         knownIds.add(c.id);
@@ -649,8 +697,10 @@ export function createGame(deps: GameDeps, save?: string): Game {
       }
     }
     for (const c of creatures) {
-      if (c.state === 'stable' && !creatureSpecies.has(c.id)) onStable(c);
-      else if (creatureSpecies.has(c.id) && c.behavior) onBehavior(c);
+      if (c.state !== 'stable') continue;
+      if (!creatureSpecies.has(c.id) && !unassigned.has(c.id)) onStable(c);
+      else if (unassigned.has(c.id)) assignSpecies(c);
+      else if (c.behavior) onBehavior(c);
     }
     // Forget creatures that are gone.
     const alive = new Set(creatures.map((c) => c.id));
@@ -658,6 +708,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       if (!alive.has(id)) {
         knownIds.delete(id);
         creatureSpecies.delete(id);
+        unassigned.delete(id);
         lastBehavior.delete(id);
         incomeAcc.delete(id);
       }
@@ -686,7 +737,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
   }
 
   function econTick(dt: number): void {
-    const prod = production();
+    const prod = overgrown ? { total: 0, per: new Map<number, number>(), symbiotic: 0 } : production();
     const bm = buffMult();
     baseEps = prod.total;
     eps = prod.total * bm;
@@ -944,6 +995,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
   function clearTransient(): void {
     creatures = [];
     creatureSpecies.clear();
+    unassigned.clear();
+    overgrown = false;
     knownIds.clear();
     lastBehavior.clear();
     incomeAcc.clear();
@@ -1170,6 +1223,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       era: s.era,
       seedCost: cost,
       seedPrice: seedPrice(),
+      overgrown,
       canSeed: free || s.essence >= cost,
       pipette: { active: pipetteReady() || (pipetteWanted() && s.pipetteTimer > 0), progress: Math.min(1, s.pipetteTimer / pipetteTime()) },
       tools: {
@@ -1453,6 +1507,13 @@ export function createGame(deps: GameDeps, save?: string): Game {
       s.settings[key] = value;
     },
 
+    sterilizeDish() {
+      // Free, any time: wipes the matter, keeps everything earned.
+      clearTransient();
+      bus.emit('dishClear', {});
+      toast({ es: 'Placa limpia. ¡A sembrar de nuevo!', en: 'Dish cleaned. Time to seed again!' }, 'good');
+    },
+
     setBuyQty(q: BuyQty) {
       if (q === 1 || q === 10 || q === 'max') s.buyQty = q;
     },
@@ -1487,6 +1548,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
     s.eraTime += dt;
     sinceNewSpecies += dt;
+    newSpeciesTokens = Math.min(B.SPECIES_NEW_BURST, newSpeciesTokens + dt / B.SPECIES_NEW_MIN_INTERVAL);
     saturatedToastT -= dt;
     for (const r of recentSeeds) r.t -= dt;
     recentSeeds = recentSeeds.filter((r) => r.t > 0);

@@ -332,6 +332,8 @@ export interface GameView {
   seedCost: number;
   /** (game) Why the seed costs what it costs, for the price explainer. */
   seedPrice?: SeedPriceView;
+  /** (game) The dish is flooded: nothing pays until it is cleaned (actions.sterilizeDish). */
+  overgrown?: boolean;
   canSeed: boolean;
   /** Emergency pipette: free seed refill when broke and nothing lives. */
   pipette: { active: boolean; progress: number };
@@ -441,6 +443,8 @@ export interface GameActions {
   setSetting<K extends keyof Settings>(key: K, value: Settings[K]): void;
   /** Buy quantity selector shared by upgrade lists. */
   setBuyQty(q: BuyQty): void;
+  /** (game) Wipe the dish for free (used when it overflows). Keeps everything earned. */
+  sterilizeDish?(): void;
   /** (game) Pick the Gotero seed shape (only unlocked shapes are accepted). */
   setSeedShape?(shape: SeedShapeChoice): void;
   /** (game) Pick a kernel ring preset from CalibrationView.ringsOptions. */

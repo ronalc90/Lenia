@@ -30,6 +30,8 @@ export interface GameEvents {
   calibrationChanged: { mu: number; sigma: number; R: number; dt: number };
   offlineReturn: { seconds: number; essence: number };
   toast: { text: Text; kind: 'info' | 'good' | 'warn' | 'bad' };
+  /** The dish flooded with shapeless matter (on) or recovered (off). */
+  dishOvergrown: { on: boolean };
   /** Ask the dish to be cleared (extinction, load). */
   dishClear: Record<string, never>;
   /** Ask the dish to apply seeds (auto-seeder, golden reward). */

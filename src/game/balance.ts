@@ -113,6 +113,30 @@ export const SEED_CROWD = 0.25;
  * with it population grows with income all Era long. 1 = pure doc formula. [bot]
  */
 export const SEED_SATURATION_GROWTH = 3;
+/**
+ * Cap on the saturation exponent: the price never exceeds growth^max for crowding. Without it a
+ * flooded dish priced a seed at 1e38. [play-test]
+ */
+export const SEED_SATURATION_MAX_STEPS = 4;
+/**
+ * Dish "overgrown" (desbordada): fraction of cells with matter above which the dish counts as
+ * flooded — every creature pays 0, no species are registered and the player is offered a free
+ * clean-up. Must match the detector's DISH_OVERGROWN_FILL. [play-test: budding/maze flood]
+ */
+export const DISH_OVERGROWN_FILL = 0.25;
+/** The overgrown state ends when the fill drops below this (hysteresis). [design] */
+export const DISH_OVERGROWN_CLEAR = 0.15;
+/**
+ * New species registrations are a token bucket: up to SPECIES_NEW_BURST at once, refilling one
+ * token every SPECIES_NEW_MIN_INTERVAL seconds, so fragment storms can't spam the bestiary. [play-test]
+ */
+export const SPECIES_NEW_BURST = 3;
+/** Seconds to refill one new-species token. [play-test] */
+export const SPECIES_NEW_MIN_INTERVAL = 15;
+/** Neighbours are counted within this many R of a creature. [play-test] */
+export const SPECIES_NEW_ISOLATION_R = 2.5;
+/** A creature with this many neighbours is part of a crowd (maze fragment) and can't found a species. [play-test] */
+export const SPECIES_NEW_CROWD_NEIGHBORS = 3;
 /** Newborn (not yet stable) creatures that do not count towards saturation: a short burst of taps is fine. [design] */
 export const SEED_NURSERY_FREE = 2;
 /** Long press seed radius multiplier (cost ×2.25 follows from the formula). [doc §7] */
