@@ -12,9 +12,17 @@ import { createGame } from './game/game';
 import { clearSave, loadSave, offlineSeconds, writeSave } from './game/save';
 import { createUI } from './ui/ui';
 import { createAudio } from './audio/audio';
-import { initPlatform, type Platform } from './platform/platform';
+import { detectPlatform, endingAchievementId, initPlatform, type Platform } from './platform/platform';
 import { createIntegrity } from './net/integrity';
 import { createLeaderboardClient } from './net/leaderboard';
+import { createPlayerIdentity } from './net/identity';
+import { setupCosmetics } from './app/cosmetics';
+import { createExtraJournal } from './app/journal';
+import { SUPPORTER_JOURNAL } from './store/catalog';
+import { setPortraitPalette } from './ui/portrait';
+import { createStory } from './story';
+import { createStoryUI, type StoryArchive, type StorySound } from './ui/story';
+import type { UI, UISound } from './ui/ui';
 
 /**
  * Ranking API origin. Set VITE_LEADERBOARD_URL at build time ('' = same origin);
@@ -22,6 +30,12 @@ import { createLeaderboardClient } from './net/leaderboard';
  */
 const LEADERBOARD_URL: string | undefined =
   import.meta.env.VITE_LEADERBOARD_URL ?? (location.hostname.endsWith('.vercel.app') ? '' : undefined);
+
+/**
+ * Store API origin (Cloudflare Pages Functions, docs/MONETIZACION.md). Same origin by default; it is only
+ * called where real or test payments are possible (src/store/flags.ts), never with the store off.
+ */
+const STORE_API_URL: string = import.meta.env.VITE_STORE_API_URL ?? '';
 
 /**
  * Base simulation rate (steps per second) at speed ×1. Orbium swims ~0.24
@@ -32,9 +46,19 @@ const STEPS_PER_SEC = 30;
 /** Detector cadence in simulation steps. */
 const DETECT_EVERY = 10;
 const AUTOSAVE_MS = 30_000;
+/** The dish itself is saved less often (a GPU readback); also on pagehide / tab hidden. */
+const DISH_SAVE_MS = 5 * 60_000;
 /** Kernel changes (R, rings) recompile the step shader; wait for the slider to settle. */
 const KERNEL_DEBOUNCE_MS = 350;
 const IDLE_AFTER_MS = 60_000;
+/** Frame interval while idle (30 fps). */
+const IDLE_FRAME_MS = 1000 / 30;
+
+/**
+ * Why the dish is frozen. The simulation and the economy stop while any source is active; the UI's
+ * pause button only reflects 'user' (moments, cinematics and the extinction ritual pause silently).
+ */
+export type PauseSource = 'user' | 'moment' | 'ritual' | 'cinematic';
 
 function pickQuality(setting: 'auto' | Quality): Quality {
   if (setting !== 'auto') return setting;
@@ -70,9 +94,18 @@ function boot(): void {
   glCanvas.className = 'gl-dish';
 
   let sim: ReturnType<typeof createSimulation> | null = null;
-  let paused = false;
+  const pauseSources = new Set<PauseSource>();
   /** Declared before anything can call save() (the boot-time offline grant does). */
   let saveWarned = false;
+  /** Any pause source active: no simulation steps, no detection, no income. */
+  const isPaused = () => pauseSources.size > 0;
+  function setPause(source: PauseSource, on: boolean): void {
+    if (on === pauseSources.has(source)) return;
+    if (on) pauseSources.add(source);
+    else pauseSources.delete(source);
+    game.isPaused = isPaused();
+    if (source === 'user') ui.setPaused(on);
+  }
   /**
    * Extinction ritual: the game resets at once, but the dish is wiped only when the
    * UI's white-out covers it. Until then the old dish is frozen (no steps, no
@@ -84,14 +117,77 @@ function boot(): void {
   let idle = false;
 
   const audio = createAudio(bus);
+  // Cosmetics need the leaderboard's equipped-profile getter and vice versa: late-bound closure.
+  let profileCosmetics: () => { badge?: string; frame?: string; nameColor?: string } | null = () => null;
   const leaderboard =
-    LEADERBOARD_URL === undefined ? undefined : createLeaderboardClient({ game, integrity, bus, baseUrl: LEADERBOARD_URL });
+    LEADERBOARD_URL === undefined
+      ? undefined
+      : createLeaderboardClient({ game, integrity, bus, baseUrl: LEADERBOARD_URL, profileCosmetics: () => profileCosmetics() });
+  const platformInfo = detectPlatform();
+  /** Extra Bitácora entries that live outside the game save (supporter thanks). */
+  const extraJournal = createExtraJournal();
+  const viewWithExtras = () => extraJournal.merge(game.view());
+  const cosmetics = setupCosmetics({
+    platform: platformInfo,
+    openExternal: (url) => platformRef?.openExternal(url),
+    // One identity per page: the ranking's when it exists, else the same storage keys standalone.
+    identity: leaderboard?.identity ?? createPlayerIdentity(),
+    lang: () => game.view().settings.lang,
+    reduceMotion: () => game.view().settings.reduceMotion,
+    playerName: () => leaderboard?.getName() ?? null,
+    previewMusic: () =>
+      audio.musicAudible && audio.previewAmbience ? (preset) => audio.previewAmbience?.(preset) : undefined,
+    sound: (k) => audio.playUI?.(k),
+    root: () => root,
+    apiBase: STORE_API_URL,
+  });
+  profileCosmetics = () => cosmetics.profileCosmetics();
+  let platformRef: Platform | null = null;
+
+  // ── Story layer (docs/STORY.md §7): dialogue scenes, the story-driven tutorial, endings. ──
+  let uiRef: UI | null = null;
+  /** Story scenes another surface is explaining right now (e.g. a "moment"): never two popups per event. */
+  const storySuppressed = new Set<string>();
+  const story = createStory({
+    bus,
+    getView: () => game.view(),
+    isBlocked: () => uiRef?.blocked() ?? true,
+    suppress: (id) => storySuppressed.has(id),
+  });
+  story.on('journal', ({ id, text }) => bus.emit('journalNew', { id, text }));
+  extraJournal.addSource(() => story.journalViews());
+  let storyArchive: StoryArchive | null = null;
+  /** A story scene or ending is on screen (late-bound: the story UI mounts after the game UI). */
+  let storyBusy = (): boolean => false;
 
   const ui = createUI(root, {
-    actions: game.actions,
+    actions: {
+      ...game.actions,
+      markJournalRead(id?: string) {
+        game.actions.markJournalRead(id);
+        if (id === undefined) {
+          extraJournal.markRead();
+          story.markJournalRead();
+        }
+      },
+    },
     camera,
     glCanvas,
     leaderboard,
+    // The story tutorial replaces the built-in coach marks (docs/STORY.md §7.4).
+    tutorial: false,
+    onRestartTutorial: () => story.restartTutorial(),
+    onTabOpen: (tab) => {
+      story.signal(`tab:${tab}`);
+      if (tab === 'calibrate') prewarmNearbyKernels();
+    },
+    isNarrating: () => storyBusy(),
+    settingsSections: (el) => {
+      storyArchive?.dispose();
+      storyArchive = storyUI.mountArchive(el);
+    },
+    openWardrobe: () => cosmetics.openWardrobe(),
+    openStore: cosmetics.openStore ? () => cosmetics.openStore?.() : undefined,
     onDishResize(cssW, cssH, dpr) {
       camera.setView(cssW, cssH);
       const r = Math.min(dpr, maxDpr);
@@ -109,7 +205,10 @@ function boot(): void {
     },
     onPrint(speciesId, x, y) {
       const spec = game.actions.printAt(speciesId, x, y);
-      if (spec) sim?.seed(spec);
+      if (spec) {
+        sim?.seed(spec);
+        story.notePrint();
+      }
     },
     onExtinguish() {
       ritual = true;
@@ -123,9 +222,7 @@ function boot(): void {
       audio.playUI?.(kind);
     },
     onPauseToggle() {
-      paused = !paused;
-      game.isPaused = paused;
-      ui.setPaused(paused);
+      setPause('user', !pauseSources.has('user'));
     },
     exportSave: () => game.exportString(),
     importSave(s) {
@@ -137,6 +234,7 @@ function boot(): void {
     resetSave() {
       clearSave();
       game.reset();
+      story.reset();
       save();
     },
     onUserGesture() {
@@ -144,6 +242,30 @@ function boot(): void {
       audio.unlock();
     },
   });
+
+  uiRef = ui;
+  const STORY_SOUND: Record<StorySound, UISound | null> = {
+    open: 'open',
+    blip: null,
+    choice: 'open',
+    chosen: 'confirm',
+    task: 'tap',
+    done: 'confirm',
+    ending: 'open',
+  };
+  const storyUI = createStoryUI(root, story, {
+    lang: () => game.view().settings.lang,
+    reduceMotion: () => game.view().settings.reduceMotion,
+    getTargetRect: (id) => ui.targetRect(id),
+    gridToClient: (x, y) => ui.gridToClient(x, y),
+    revealTarget: (id) => ui.reveal(id),
+    onSound: (kind) => {
+      const k = STORY_SOUND[kind];
+      if (k) audio.playUI?.(k);
+    },
+  });
+  let storyLang = game.view().settings.lang;
+  storyBusy = () => storyUI.busy;
 
   try {
     // Desktop GPUs handle full floats easily and match the CPU reference exactly;
@@ -171,7 +293,8 @@ function boot(): void {
   }
 
   const detector = createDetector();
-  const platform: Platform = initPlatform({ onPause: save });
+  const platform: Platform = initPlatform({ onPause: () => save('sync') });
+  platformRef = platform;
   game.setGridSize(gridW, gridH);
   audio.setDishSize?.(gridW, gridH);
 
@@ -216,8 +339,26 @@ function boot(): void {
     }
   });
   // Store achievements (Steam today; harmless no-op on the web).
-  bus.on('achievement', ({ id }) => platform.unlockAchievement(id));
-  platform.syncAchievements(game.view().achievements.filter((a) => a.done).map((a) => a.id));
+  story.on('ending', ({ id }) => platform.unlockAchievement(endingAchievementId(id)));
+  bus.on('achievement', ({ id }) => {
+    platform.unlockAchievement(id);
+    cosmetics.syncAchievements(doneAchievements());
+  });
+  const doneAchievements = () => game.view().achievements.filter((a) => a.done).map((a) => a.id);
+  platform.syncAchievements(doneAchievements());
+
+  // Cosmetics: free ones unlocked by achievements, equipped ones pushed to renderer, overlay,
+  // portraits and music. Purely visual/audible (ADR-021).
+  cosmetics.syncAchievements(doneAchievements());
+  cosmetics.bind({
+    sim: sim!,
+    overlay: ui,
+    portraits: { setPalette: (id, stops) => setPortraitPalette(id, stops) },
+    audio,
+  });
+  cosmetics.entitlements.on('supporterWelcome', () => {
+    if (extraJournal.add(SUPPORTER_JOURNAL.id)) bus.emit('journalNew', { id: SUPPORTER_JOURNAL.id, text: SUPPORTER_JOURNAL.text });
+  });
   let stablePeak = 0;
   let epsPeak = 0;
   function reportStats(): void {
@@ -235,17 +376,55 @@ function boot(): void {
       STAT_PLAY_MINUTES: Math.floor(v.stats.playTime / 60),
     });
   }
-  // Capture a portrait of every newly registered species.
-  bus.on('speciesNew', ({ speciesId, x, y }) => {
-    const size = Math.min(64, Math.ceil(sim!.params.R * 4));
-    game.setSpeciesPortrait(speciesId, sim!.capture(x, y, size));
-  });
+  // Species portraits: asynchronous GPU captures, never a synchronous readback in a frame (QA3 F2).
+  // Games that queue their own requests (founder + re-captures) are drained after each tick; older
+  // ones get one capture on 'speciesNew'.
+  const portraitRequests = (game as { takePortraitRequests?: () => { speciesId: string; creatureId: number; x: number; y: number; size: number }[] })
+    .takePortraitRequests;
+  const capturePortrait = (speciesId: string, x: number, y: number, size: number, creatureId?: number) => {
+    sim!
+      .captureAsync(x, y, size)
+      // The third argument (which creature) is optional: newer games use it to keep the best capture.
+      .then((p) => (game.setSpeciesPortrait as (id: string, pat: typeof p, creatureId?: number) => void)(speciesId, p, creatureId))
+      .catch((err) => console.warn('portrait capture failed', err));
+  };
+  if (!portraitRequests) {
+    bus.on('speciesNew', ({ speciesId, x, y }) => capturePortrait(speciesId, x, y, Math.min(64, Math.ceil(sim!.params.R * 4))));
+  }
 
-  function save(): void {
+  /**
+   * Compile the step shaders for R ± 1–2 ahead of the R slider (QA3 F11: 0.4–2 s per first use).
+   * One kernel per 400 ms so opening the tab never hitches.
+   */
+  let prewarmTimer: ReturnType<typeof setTimeout> | null = null;
+  function prewarmNearbyKernels(): void {
+    if (prewarmTimer || !sim) return;
+    const v = game.view();
+    const R = sim.params.R;
+    const range = v.calibration.RRange;
+    const want = [R + 1, R - 1, R + 2, R - 2].filter((r) => r >= 2 && (!range || (r >= range[0] && r <= range[1])));
+    const next = () => {
+      const r = want.shift();
+      if (r === undefined || !sim) {
+        prewarmTimer = null;
+        return;
+      }
+      sim.prewarmKernel(r);
+      prewarmTimer = setTimeout(next, 400);
+    };
+    prewarmTimer = setTimeout(next, 400);
+  }
+
+  /**
+   * Save. `dish`: 'sync' reads the dish now (page hidden, import, reset: rare, a hitch is fine),
+   * 'none' writes the game state only (the 30 s autosave), or a dish read asynchronously.
+   */
+  function save(dish: 'sync' | 'none' | Uint8Array = 'sync'): void {
     if (!sim) return;
     let ok = false;
     try {
-      ok = writeSave(game.serialize(), sim.exportState(), sim.gridW, sim.gridH);
+      const bytes = dish === 'sync' ? sim.exportState() : dish === 'none' ? undefined : dish;
+      ok = writeSave(game.serialize(), bytes, sim.gridW, sim.gridH);
     } catch (err) {
       console.warn('save failed', err);
     }
@@ -272,6 +451,9 @@ function boot(): void {
   let lastView = 0;
   let lastAudio = 0;
   let lastSave = performance.now();
+  let lastDishSave = performance.now();
+  let lastDraw = 0;
+  let lastUiFrame = performance.now();
   let lastRate = -1;
   const start = last;
 
@@ -318,7 +500,7 @@ function boot(): void {
     const s = sim!;
     syncParams(now);
 
-    if (!paused && !ritual && !document.hidden) {
+    if (!isPaused() && !ritual && !document.hidden) {
       acc += dt * STEPS_PER_SEC * game.speed;
       // Never fall into a spiral of death: cap work per frame.
       const whole = Math.floor(acc);
@@ -336,20 +518,30 @@ function boot(): void {
     for (let i = 0; i < n - 1; i++) game.tick(0, reports[i]);
     game.tick(dt, n ? reports[n - 1] : null);
     reports.length = 0;
+    if (portraitRequests) for (const r of portraitRequests.call(game)) capturePortrait(r.speciesId, r.x, r.y, r.size, r.creatureId);
 
-    const rate = paused || ritual ? 0 : STEPS_PER_SEC * game.speed;
+    const rate = isPaused() || ritual ? 0 : STEPS_PER_SEC * game.speed;
     if (rate !== lastRate) {
       lastRate = rate;
       (ui as { setSimRate?: (r: number) => void }).setSimRate?.(rate);
     }
-    s.render({ camera, time: (now - start) / 1000, quality });
-    ui.frame((now - start) / 1000, dt);
+    // Idle (no input for a minute, GDD §12): draw at 30 fps; the simulation keeps its real step rate.
+    if (!idle || now - lastDraw >= IDLE_FRAME_MS - 2) {
+      lastDraw = now;
+      s.render({ camera, time: (now - start) / 1000, quality });
+      ui.frame((now - start) / 1000, Math.min(0.25, (now - lastUiFrame) / 1000));
+      lastUiFrame = now;
+    }
 
     let view: ReturnType<typeof game.view> | null = null;
     if (now - lastView > 100) {
       lastView = now;
-      view = game.view();
+      view = viewWithExtras();
       ui.update(view);
+      if (view.settings.lang !== storyLang) {
+        storyLang = view.settings.lang;
+        storyUI.relabel();
+      }
     }
     if (now - lastAudio > 1000) {
       lastAudio = now;
@@ -364,7 +556,7 @@ function boot(): void {
         creatures: v.creatures.filter((c) => c.state === 'stable').length,
         era: v.era,
         behaviors: v.behaviorsSeen.length,
-        paused,
+        paused: pauseSources.has('user'),
       });
       const isIdle = now - lastInteraction > IDLE_AFTER_MS;
       if (isIdle !== idle) {
@@ -374,7 +566,13 @@ function boot(): void {
     }
     if (now - lastSave > AUTOSAVE_MS) {
       lastSave = now;
-      save();
+      // Game state every 30 s; the dish (a GPU readback) every 5 min, asynchronously (QA3 F2).
+      if (now - lastDishSave > DISH_SAVE_MS && !s.contextLost) {
+        lastDishSave = now;
+        s.exportStateAsync()
+          .then((bytes) => save(bytes))
+          .catch(() => save('none'));
+      } else save('none');
       reportStats();
     }
     requestAnimationFrame(frame);
@@ -395,11 +593,11 @@ function boot(): void {
       audio.resume();
     }
   });
-  window.addEventListener('pagehide', save);
+  window.addEventListener('pagehide', () => save('sync'));
 
   // Debug handle for development and e2e builds only.
   if (import.meta.env.DEV || import.meta.env.VITE_E2E === '1') {
-    integrity.guardDebugHandle(window, 'bioluma', { game, sim, detector, camera, bus });
+    integrity.guardDebugHandle(window, 'bioluma', { game, sim, detector, camera, bus, story, cosmetics });
   }
   leaderboard?.startAutoSubmit();
 
