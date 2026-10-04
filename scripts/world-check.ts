@@ -10,6 +10,12 @@
  *   npx vite-node scripts/world-check.ts --behaviors  how the real detector classifies each species of
  *                                                   each world AT the world's preset (ways of moving
  *                                                   a player can actually find; docs/CLARIDAD.md F-09)
+ *   npx vite-node scripts/world-check.ts --features what each world species LOOKS like at its world's preset
+ *                                                   (size in R and in cells, holes, bodies, elongation,
+ *                                                   polarity; src/species/look.ts) and whether it keeps
+ *                                                   the form the game reveals it by. Writes
+ *                                                   src/species/looks.json (--write) and the crops for
+ *                                                   the contact sheet (--crops=path.json); docs/ESPECIES.md
  *   options: --trials=120 (seeds per cell) --rows=0,1,2,3 (Gotero levels) --steps=700
  *            --world=cold (--seeds: that world's templates and seed help instead of the Clásico's)
  *
@@ -33,6 +39,11 @@ import { exactTurns, seedConfig } from '../src/game/tree';
 import { WORLDS, WORLD_BY_ID } from '../src/game/worlds';
 import { catalogGroup } from '../src/species/identity';
 import catalogSigs from '../src/detect/catalogSignatures.json';
+import { writeFileSync } from 'node:fs';
+import { placeRotated, runSim } from '../src/detect/harness';
+import { signatureDistance, SPECIES_MATCH_THRESHOLD } from '../src/detect/signature';
+import { averageLooks, measureLook, type Look } from '../src/species/look';
+import type { LeniaParams, Pattern } from '../src/core/types';
 
 declare const process: { argv: string[]; exitCode?: number };
 const arg = (k: string, d: string) => process.argv.find((a) => a.startsWith(`--${k}=`))?.split('=')[1] ?? d;
@@ -191,7 +202,118 @@ function worldBehaviors(): void {
   for (const b of ['still', 'pulsing', 'swimmer', 'spinner', 'divider', 'colony']) console.log(`  ${b.padEnd(8)} ${found.get(b)?.join(', ') ?? 'NONE — no world grows it'}`);
 }
 
+/** Static part of a signature (shape only: what a young creature is matched on). */
+const STATIC = 11;
+
+interface FeatureRow {
+  code: string;
+  world: string;
+  R: number;
+  behavior: string | null;
+  /** Static signature distance to the catalog reference (the game reveals it below CATALOG_MATCH_FACTOR). */
+  formDist: number;
+  look: Look;
+  /** Crop of the creature at the end of the run (contact sheet). */
+  crop: Pattern;
+}
+
+/** One creature of `code` at `p`, run `steps` steps with the game's detector; its look averaged over the last 300 steps. */
+export function measureSpecies(code: string, p: LeniaParams, steps = 1600, rotation = 0): Omit<FeatureRow, 'world'> | null {
+  const N = p.R <= 14 ? 128 : 256;
+  const sim = new CpuLenia(N, N, p);
+  placeRotated(sim.A, N, N, scaledTemplate(catalogByCode(code)!, p.R), N / 2, N / 2, rotation);
+  const looks: Look[] = [];
+  let crop: Pattern | null = null;
+  const S = Math.ceil(p.R * 6);
+  const r = runSim(sim, p, {
+    steps,
+    detector: createDetector(),
+    onReport: (rep, s) => {
+      if (s.stepCount < steps - 300 || s.stepCount % 50 !== 0) return;
+      const c = rep.creatures.filter((x) => x.state !== 'dead').sort((a, b) => b.mass - a.mass)[0];
+      if (!c) return;
+      const data = new Float32Array(S * S);
+      const x0 = Math.round(c.x - S / 2);
+      const y0 = Math.round(c.y - S / 2);
+      for (let j = 0; j < S; j++) {
+        for (let i = 0; i < S; i++) data[j * S + i] = s.A[(((y0 + j) % N) + N) % N * N + ((((x0 + i) % N) + N) % N)];
+      }
+      crop = { w: S, h: S, data };
+      looks.push(measureLook(crop, p.R));
+    },
+  });
+  const c = r.last.creatures.filter((x) => x.state !== 'dead').sort((a, b) => b.mass - a.mass)[0];
+  if (!c || !looks.length || !crop) return null;
+  const ref = (catalogSigs as { code: string; signature: number[] }[]).find((x) => x.code === code)!.signature;
+  return {
+    code,
+    R: p.R,
+    behavior: c.behavior,
+    formDist: signatureDistance(c.signature.slice(0, STATIC), ref.slice(0, STATIC)),
+    look: averageLooks(looks),
+    crop,
+  };
+}
+
+function worldFeatures(): void {
+  const steps = Number(arg('steps', '1600'));
+  const rows: FeatureRow[] = [];
+  let bad = 0;
+  for (const w of WORLDS) {
+    for (const code of [...w.species, ...(w.variants ?? [])]) {
+      const m = measureSpecies(code, w.params, steps);
+      const variant = !w.species.includes(code);
+      if (!m) {
+        console.log(`Mundo ${w.n} ${code.padEnd(6)} DIES${variant ? ' (variant)' : ''}`);
+        if (!variant) bad++;
+        continue;
+      }
+      const L = m.look;
+      const keeps = m.formDist < SPECIES_MATCH_THRESHOLD * B.CATALOG_MATCH_FACTOR;
+      if (!keeps && !variant) bad++;
+      rows.push({ ...m, world: w.id });
+      console.log(
+        `Mundo ${w.n} ${code.padEnd(6)}${variant ? '(var)' : '     '} R${String(w.params.R).padEnd(3)} ${String(m.behavior).padEnd(8)} ` +
+          `radius ${L.radiusR.toFixed(2)}R = ${(L.radiusR * w.params.R).toFixed(1)} cells · area ${L.areaR2.toFixed(2)}R² · holes ${L.holes} (${L.holeAreaR2.toFixed(2)}R²) · ` +
+          `bodies ${L.bodies} · long ${L.elongation.toFixed(2)} · polar ${L.polarity.toFixed(2)} · points ${L.points} · core ${L.core.toFixed(2)} · form d ${m.formDist.toFixed(2)}${keeps ? '' : '  ← CHANGED FORM'}`,
+      );
+    }
+  }
+  if (process.argv.includes('--write')) {
+    const out = rows.map((r) => ({
+      code: r.code,
+      world: r.world,
+      R: r.R,
+      behavior: r.behavior,
+      radiusR: +r.look.radiusR.toFixed(3),
+      areaR2: +r.look.areaR2.toFixed(3),
+      holes: r.look.holes,
+      holeAreaR2: +r.look.holeAreaR2.toFixed(3),
+      bodies: r.look.bodies,
+      elongation: +r.look.elongation.toFixed(3),
+      polarity: +r.look.polarity.toFixed(3),
+      points: r.look.points,
+      core: +r.look.core.toFixed(3),
+      formDist: +r.formDist.toFixed(3),
+    }));
+    writeFileSync(new URL('../src/species/looks.json', import.meta.url), JSON.stringify(out, null, 1) + '\n');
+    console.log('wrote src/species/looks.json');
+  }
+  const crops = arg('crops', '');
+  if (crops) {
+    writeFileSync(
+      crops,
+      JSON.stringify(rows.map((r) => ({ code: r.code, world: r.world, R: r.R, w: r.crop.w, h: r.crop.h, d: Array.from(r.crop.data, (v) => Math.round(v * 255)) }))),
+    );
+  }
+  if (bad) {
+    console.log(`\n${bad} world species die or change form at their world's preset.`);
+    process.exitCode = 1;
+  }
+}
+
 if (process.argv.includes('--seeds')) measureSeeds();
+else if (process.argv.includes('--features')) worldFeatures();
 else if (process.argv.includes('--yield')) worldYield();
 else if (process.argv.includes('--behaviors')) worldBehaviors();
 else checkWorlds();

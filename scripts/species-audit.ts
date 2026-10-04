@@ -13,6 +13,14 @@
  * Output (scratch dir or $AUDIT_OUT): species-<tag>.json, species-<tag>.html and a contact sheet
  * species-<tag>.png rendered with playwright-core + the preinstalled Chromium (never `playwright install`).
  * Not shipped; used to measure and to show before/after evidence.
+ *
+ *   npx vite-node scripts/species-audit.ts --sheet=crops.json [--out=dir] [--tag=after]
+ *
+ * Contact sheet of the Bestiary's species (docs/ESPECIES.md): every species of src/species/looks.ts
+ * at TRUE relative size on a phone-width page (the Ø128 start dish fills 358 CSS px), in its
+ * own colour family tint, with its feature chips, its comparison line against the species before it
+ * and its variants, plus the distinctiveness matrix. `crops.json` comes from
+ * `npx vite-node scripts/world-check.ts --features --crops=crops.json` (each form at its world's preset).
  */
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -440,8 +448,136 @@ function summarize(tag: string, results: PlayerResult[]): string[] {
 
 // ───────────────────────────── main ─────────────────────────────
 
+// ───────────────────────────── species contact sheet ─────────────────────────────
+
+interface SheetCrop {
+  code: string;
+  world: string;
+  R: number;
+  w: number;
+  h: number;
+  d: number[];
+}
+
+async function speciesSheet(cropsPath: string, out: string, tag: string): Promise<void> {
+  const L = await import('../src/species/looks');
+  const { tintRow, accentHueToOklch } = await import('../src/sim/tintlut');
+  const { CATALOG_REFS: refs } = await import('../src/detect/catalogRefs');
+  const { WORLD_BY_ID } = await import('../src/game/worlds');
+  const crops = JSON.parse(readFileSync(cropsPath, 'utf8')) as SheetCrop[];
+  const base = matterLUT();
+  const lutOf = (hue: number): number[] => {
+    const row = new Uint8Array(256 * 4);
+    tintRow(base, accentHueToOklch(hue), row, 0);
+    return Array.from(row);
+  };
+  const known: string[] = [];
+  const cards = L.SPECIES_LOOKS.map((sp) => {
+    const fam = L.speciesFamily(sp.code)!;
+    const crop = crops.find((c) => c.code === sp.code);
+    const m = L.measuredLook(sp.code);
+    const line = L.compareLine(sp.code, known);
+    const near = L.closestKnown(sp.code, known);
+    const diffs = near ? L.compareLooks(sp.code, near).filter((d) => d.kind !== 'colour') : [];
+    known.push(sp.code);
+    const variants = Object.entries(L.VARIANTS)
+      .filter(([, v]) => v.of === sp.code)
+      .map(([code, v]) => ({ code, note: v.note.es, crop: crops.find((c) => c.code === code) ?? null }));
+    const w = WORLD_BY_ID[(m?.world ?? 'classic') as keyof typeof WORLD_BY_ID];
+    return {
+      code: sp.code,
+      latin: refs.find((r) => r.code === sp.code)?.name ?? sp.code,
+      name: L.lookName(sp.code)!.es,
+      hue: fam.hue,
+      lut: lutOf(fam.hue),
+      world: w ? `Mundo ${w.n} · R ${w.params.R}` : '',
+      size: L.speciesSize(sp.code),
+      cells: m ? +(m.radiusR * m.R).toFixed(1) : 0,
+      chips: L.featureChips(sp.code).map((c) => c.label.es),
+      line: line.es,
+      near,
+      arrows: diffs.slice(0, 2).map((d) => ({ side: d.side, anchor: d.anchor, text: d.text.es })),
+      crop,
+      variants,
+    };
+  });
+  const codes = L.SPECIES_LOOKS.map((s) => s.code);
+  const matrix = codes.map((a) => codes.map((b) => (a === b ? null : +L.visualDistance(a, b).toFixed(1))));
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=390"><style>
+body{background:#0B0E12;color:#E6EDF3;font:13px/1.35 system-ui,sans-serif;margin:0;padding:12px 16px;width:358px}
+h1{font-size:18px;margin:4px 0 2px} .sub{color:#8B98A5;font-size:11px;margin-bottom:10px}
+.card{border-radius:14px;background:#121821;margin:10px 0;padding:10px;border:2px solid var(--c)}
+.top{display:flex;gap:10px;align-items:center}
+.pic{flex:none;width:120px;height:120px;border-radius:10px;background:#05070a;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.nm{font-weight:700;font-size:16px;color:var(--c)} .lat{font-style:italic;color:#8B98A5;font-size:12px}
+.meta{color:#8B98A5;font-size:11px}
+.chips{display:flex;gap:4px;flex-wrap:wrap;margin:5px 0}
+.chip{font-size:12px;padding:2px 8px;border-radius:10px;background:color-mix(in srgb,var(--c) 22%,#121821);color:var(--c);font-weight:600}
+.line{font-size:13px;margin-top:6px;background:#0B0E12;border-radius:8px;padding:6px 8px}
+.vars{display:flex;gap:6px;align-items:center;margin-top:6px;color:#8B98A5;font-size:11px;flex-wrap:wrap}
+.vars canvas{background:#05070a;border-radius:6px}
+.dish{position:relative;width:358px;min-height:200px;padding:6px 0;background:radial-gradient(#0d141c,#05070a);border-radius:12px;margin:8px 0;display:flex;align-items:center;justify-content:space-around;flex-wrap:wrap}
+table{border-collapse:collapse;font-size:11px;margin-top:6px} td,th{border:1px solid #1B232C;padding:2px 3px;text-align:center}
+.bad{background:#5a1f12;color:#ffb39c}.ok{color:#bdf59a}
+.arrow{position:absolute;font-size:11px;color:#fff;background:rgba(0,0,0,.55);border-radius:6px;padding:1px 4px;white-space:nowrap}
+</style></head><body><h1>Especies del Bestiario — ${tag}</h1>
+<div class=sub>Cada especie a su tamaño real en la placa de inicio del móvil (Ø128 celdas = 358 px), con su color, sus rasgos y la frase de comparación con la más parecida ya conocida.</div>
+<div class=dish id=dish></div>
+<div id=cards></div>
+<h1 style="margin-top:14px">Matriz de distinción</h1><div class=sub>Suma de diferencias visibles (sin contar el color). Rojo: un niño no las distingue (&lt; ${L.LOOKALIKE}).</div>
+<div id=mx></div>
+<script>
+const cards=${JSON.stringify(cards)};
+const codes=${JSON.stringify(codes)};
+const names=${JSON.stringify(cards.map((c) => c.name.split(' ')[0]))};
+const matrix=${JSON.stringify(matrix)};
+const PX=358/128; // CSS px per grid cell on a phone: the Ø128 start dish fills the width
+function draw(crop,lut,px,crop2){const t=crop2||0.2;const K=Math.floor(crop.w*t);const W=crop.w-2*K;const c=document.createElement('canvas');const dpr=2;c.width=Math.round(W*px*dpr);c.height=c.width;c.style.width=(W*px)+'px';c.style.height=(W*px)+'px';
+ const g=c.getContext('2d');const im=g.createImageData(c.width,c.height);const s=W/c.width;
+ for(let y=0;y<c.height;y++)for(let x=0;x<c.width;x++){const fx=K+x*s,fy=K+y*s;const x0=Math.floor(fx),y0=Math.floor(fy);const tx=fx-x0,ty=fy-y0;const at=(a,b)=>crop.d[Math.min(crop.h-1,b)*crop.w+Math.min(crop.w-1,a)]/255;
+ const v=(at(x0,y0)*(1-tx)+at(x0+1,y0)*tx)*(1-ty)+(at(x0,y0+1)*(1-tx)+at(x0+1,y0+1)*tx)*ty;const k=Math.round(v*255)*4;const i=(y*c.width+x)*4;
+ const a=lut[k+3]/255;im.data[i]=lut[k]*a+5*(1-a);im.data[i+1]=lut[k+1]*a+7*(1-a);im.data[i+2]=lut[k+2]*a+10*(1-a);im.data[i+3]=255;}
+ g.putImageData(im,0,0);return c;}
+const dish=document.getElementById('dish');
+for(const c of cards){if(c.crop){const cv=draw(c.crop,c.lut,PX,0.28);cv.title=c.name;dish.appendChild(cv);}}
+const root=document.getElementById('cards');
+for(const c of cards){const d=document.createElement('div');d.className='card';d.style.setProperty('--c','hsl('+c.hue+' 72% 62%)');
+ d.innerHTML='<div class=top><div class=pic></div><div><div class=nm>'+c.name+'</div><div class=lat>'+c.latin+'</div><div class=meta>'+c.world+' · radio '+c.cells+' celdas · '+c.size+'</div><div class=chips>'+c.chips.map(x=>'<span class=chip>'+x+'</span>').join('')+'</div></div></div><div class=line>'+c.line+'</div>';
+ const pic=d.querySelector('.pic');if(c.crop){const cv=draw(c.crop,c.lut,PX*1.5,0.22);pic.appendChild(cv);}
+ c.arrows.forEach((a,i)=>{const s=document.createElement('span');s.className='arrow';s.style.left='4px';s.style.top=(4+i*18)+'px';s.textContent='→ '+a.text;pic.appendChild(s);});
+ if(c.variants.length){const v=document.createElement('div');v.className='vars';v.innerHTML='Variantes (no son especie nueva):';
+  for(const x of c.variants){if(x.crop){const cv=draw(x.crop,c.lut,PX*0.75,0.22);v.appendChild(cv);}const sp=document.createElement('span');sp.textContent=x.code+' — '+x.note;v.appendChild(sp);}d.appendChild(v);}
+ root.appendChild(d);}
+const t=document.createElement('table');t.innerHTML='<tr><th></th>'+names.map(n=>'<th>'+n.slice(0,5)+'</th>').join('')+'</tr>'+matrix.map((r,i)=>'<tr><th>'+names[i].slice(0,7)+'</th>'+r.map(v=>v===null?'<td>·</td>':'<td class='+(v<${L.LOOKALIKE}?'bad':'ok')+'>'+v+'</td>').join('')+'</tr>').join('');
+document.getElementById('mx').appendChild(t);
+</script></body></html>`;
+  mkdirSync(out, { recursive: true });
+  const htmlPath = join(out, `species-sheet-${tag}.html`);
+  writeFileSync(htmlPath, html);
+  const { chromium } = await import('playwright-core');
+  const pw = '/opt/pw-browsers';
+  const dir = readdirSync(pw).find((d) => /^chromium-\d+$/.test(d));
+  if (!dir) throw new Error('no chromium under /opt/pw-browsers');
+  const exe = [join(pw, dir, 'chrome-linux', 'chrome'), join(pw, dir, 'chrome-linux64', 'chrome')].find(existsSync);
+  if (!exe) throw new Error('chrome binary not found');
+  const browser = await chromium.launch({ executablePath: exe, args: ['--no-sandbox'] });
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  await page.goto('file://' + htmlPath);
+  await page.waitForTimeout(300);
+  const png = join(out, `species-sheet-${tag}.png`);
+  await page.screenshot({ path: png, fullPage: true });
+  await browser.close();
+  console.log('species sheet:', png);
+}
+
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
+  const sheet = argv.find((a) => a.startsWith('--sheet='));
+  if (sheet) {
+    const val = (k: string, d: string) => argv.find((a) => a.startsWith(`--${k}=`))?.split('=')[1] ?? d;
+    await speciesSheet(sheet.split('=')[1], val('out', OUT), val('tag', 'after'));
+    return;
+  }
   const wi = argv.indexOf('--worker');
   if (wi >= 0) {
     const player = Number(argv[wi + 1]);

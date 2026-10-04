@@ -68,35 +68,87 @@ export const COLOR_FAMILIES: readonly ColorFamily[] = [
   { id: 'rosado', hue: 325, m: 'rosado', f: 'rosada', en: 'pink' },
 ];
 
-/** Preferred colour family of each curated catalog species (used when it is free and well apart). */
+/**
+ * Preferred colour family of each catalog species. World species and their look-alikes match
+ * FIXED_COLORS (and always get it); the others use it when it is free and well apart (classic loop).
+ */
 export const CATALOG_COLORS: Readonly<Record<string, string>> = {
   O2u: 'celeste',
   O2b: 'celeste',
-  O2ui: 'rosado',
-  O2p: 'indigo',
-  O4s: 'turquesa',
-  O4i: 'dorado',
+  O2ui: 'celeste',
+  O2p: 'celeste',
+  O4s: 'celeste',
+  O4i: 'celeste',
   OG2g: 'violeta',
-  OG2r: 'malva',
-  O4d: 'jade',
-  O4a: 'lima',
-  H3cp: 'azul',
+  OG2r: 'violeta',
+  O4d: 'celeste',
+  O4a: 'celeste',
+  H3cp: 'turquesa',
   H3s: 'celeste',
   H5s: 'rosado',
   P3sp: 'turquesa',
-  P4cp: 'azul',
+  P4cp: 'dorado',
   PG1c: 'malva',
-  PG1a: 'rosado',
-  S1s: 'jade',
-  S1v: 'turquesa',
+  PG1a: 'coral',
+  S1s: 'coral',
+  S1v: 'coral',
   'SN+': 'verde',
-  S2s: 'indigo',
-  PS3am: 'indigo',
+  S2s: 'coral',
+  PS3am: 'coral',
   S3s: 'violeta',
-  C0v: 'celeste',
-  '3GH2n': 'azul',
+  C0v: 'verde',
+  '3GH2n': 'rosado',
   K4d: 'coral',
 };
+
+/**
+ * The Bestiary species' OWN colour, fixed from the first time they are seen (docs/ESPECIES.md §3):
+ * one family each, Bestiary neighbours ≥ 60° apart; their look-alike forms (species/looks VARIANTS,
+ * `LOOKALIKE_OF`) wear the same colour. `speciesHue` returns it whatever else is in the Bestiary.
+ */
+export const FIXED_COLORS: Readonly<Record<string, string>> = {
+  O2u: 'celeste',
+  C0v: 'verde',
+  OG2g: 'violeta',
+  S2s: 'coral',
+  H3cp: 'turquesa',
+  P4cp: 'dorado',
+  '3GH2n': 'rosado',
+};
+
+/**
+ * Catalog forms a child cannot tell from a Bestiary species (measured, docs/ESPECIES.md §2): the
+ * Orbium family and its pairs look like the Nadadora, the small Scutium cups like the Escudo, etc.
+ * They count as that species (a "variante"), never as a new one. Notes: species/looks VARIANTS.
+ */
+export const LOOKALIKE_OF: Readonly<Record<string, string>> = {
+  O2b: 'O2u',
+  O2ui: 'O2u',
+  O2p: 'O2u',
+  O4s: 'O2u',
+  O4i: 'O2u',
+  O4d: 'O2u',
+  O4a: 'O2u',
+  OG2r: 'OG2g',
+  PS3am: 'S2s',
+  S1s: 'S2s',
+  S1v: 'S2s',
+  PG1a: 'S2s',
+  P3sp: 'H3cp',
+};
+
+/** The Bestiary species a catalog form counts as by its LOOK (itself, its detector group, or the species it looks like). */
+export function lookalikeOf(code: string): string {
+  const g = catalogGroup(code);
+  return LOOKALIKE_OF[code] ?? LOOKALIKE_OF[g] ?? g;
+}
+
+/** The fixed colour family of a catalog form (its species'), or null when it has none. */
+export function fixedFamily(code: string | null | undefined): ColorFamily | null {
+  if (!code) return null;
+  const id = FIXED_COLORS[lookalikeOf(code)];
+  return id ? COLOR_FAMILIES.find((f) => f.id === id)! : null;
+}
 
 /** FNV-1a over a string → uint32. */
 export function hashString(s: string): number {
@@ -132,7 +184,8 @@ export function colorFamily(hue: number): ColorFamily {
 const SEPARATION_KEEP = 0.75;
 
 /**
- * Accent hue (degrees) of a new species. `taken` = hues of the species already in the bestiary.
+ * Accent hue (degrees) of a new species. A World species (FIXED_COLORS, and the forms that look like
+ * one) always gets its own family. Others: `taken` = hues of the species already in the bestiary.
  * While a colour family is free the hue is a family hue: among the free families whose distance to
  * every taken hue is at least SEPARATION_KEEP of the best possible, the one nearest to the species'
  * preference (its catalog colour, else a hash of its signature) wins — so the first species keep
@@ -140,6 +193,9 @@ const SEPARATION_KEEP = 0.75;
  * the most separated hue of the wheel. Deterministic for the same inputs.
  */
 export function speciesHue(sig: readonly number[], catalogCode: string | null = null, taken: readonly number[] = []): number {
+  // A Bestiary species (or a form that looks like one) has its own colour from first sight.
+  const fixed = fixedFamily(catalogCode);
+  if (fixed) return fixed.hue;
   const prefId = catalogCode ? CATALOG_COLORS[catalogGroup(catalogCode)] ?? CATALOG_COLORS[catalogCode] : undefined;
   const pref = prefId
     ? COLOR_FAMILIES.find((f) => f.id === prefId)!.hue

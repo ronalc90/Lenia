@@ -7,7 +7,11 @@ import {
   CATALOG_COLORS,
   CATALOG_GROUPS,
   COLOR_FAMILIES,
+  FIXED_COLORS,
+  LOOKALIKE_OF,
   catalogGroup,
+  fixedFamily,
+  lookalikeOf,
   colorFamily,
   commonName,
   formatLatin,
@@ -30,18 +34,36 @@ describe('species colour', () => {
     expect(speciesHue(sig('O2u'), 'O2u', [])).toBe(speciesHue(sig('O2u'), 'O2u', []));
   });
 
-  it('no two species share a colour family until all 12 are used, and the first ones are far apart', () => {
-    // Worst case for colour: twelve species that all prefer the same colour.
+  it('a World species has its own colour from first sight, whatever is already in the Bestiary', () => {
+    const fams = new Set<string>();
+    for (const [code, fam] of Object.entries(FIXED_COLORS)) {
+      expect(fams.has(fam), code).toBe(false);
+      fams.add(fam);
+      const want = COLOR_FAMILIES.find((f) => f.id === fam)!.hue;
+      expect(speciesHue(sig(code), code, [])).toBe(want);
+      expect(speciesHue(sig(code), code, COLOR_FAMILIES.map((f) => f.hue))).toBe(want);
+      expect(CATALOG_COLORS[code]).toBe(fam);
+    }
+    // Its look-alikes wear its colour (Orbium bicaudatus, the Orbium pairs… are Nadadora variants).
+    for (const [code, of] of Object.entries(LOOKALIKE_OF)) {
+      expect(fixedFamily(code)?.id, code).toBe(FIXED_COLORS[of]);
+      expect(lookalikeOf(code)).toBe(of);
+    }
+  });
+
+  it('no two discoveries share a colour family until all 12 are used, and the first ones are far apart', () => {
+    // Worst case for colour: twelve discoveries that all prefer the same colour.
+    const s0 = sig('OG2g').map((v, i) => v * (1 + 0.21 * (i % 4)));
     const taken: number[] = [];
     for (let i = 0; i < COLOR_FAMILIES.length; i++) {
-      const h = speciesHue(sig('O2u'), 'O2u', taken);
+      const h = speciesHue(s0, null, taken);
       expect(FAMILY_HUES.has(h)).toBe(true);
       expect(taken.map((x) => colorFamily(x).id)).not.toContain(colorFamily(h).id);
       if (taken.length >= 1 && taken.length < 4) expect(Math.min(...taken.map((x) => hueDistance(x, h)))).toBeGreaterThanOrEqual(45);
       taken.push(h);
     }
     // A 13th still lands as far as possible from the rest.
-    const h13 = speciesHue(sig('S1s'), 'S1s', taken);
+    const h13 = speciesHue(sig('H3s'), 'H3s', taken);
     expect(Math.min(...taken.map((x) => hueDistance(x, h13)))).toBeGreaterThanOrEqual(10);
   });
 
