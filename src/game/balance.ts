@@ -128,9 +128,10 @@ export const DISH_OVERGROWN_FILL = 0.25;
 export const DISH_OVERGROWN_CLEAR = 0.15;
 /**
  * A dish that stays overgrown this many active seconds cleans itself for free (owner play-test:
- * the flooded dish soft-locked the game before the "Limpiar placa" button shipped). [play-test]
+ * the flooded dish soft-locked the game before the "Limpiar placa" button shipped; 20 s still felt
+ * stuck in the tutorial, v0.008). [play-test]
  */
-export const OVERGROWN_AUTO_CLEAN = 20;
+export const OVERGROWN_AUTO_CLEAN = 8;
 /**
  * New species registrations are a token bucket: up to SPECIES_NEW_BURST at once, refilling one
  * token every SPECIES_NEW_MIN_INTERVAL seconds, so fragment storms can't spam the bestiary. [play-test]

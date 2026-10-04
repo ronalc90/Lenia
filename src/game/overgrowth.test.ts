@@ -21,7 +21,8 @@ describe('dish overgrowth (play-test: flood unlocked everything in seconds)', ()
     const { bus, count } = recordingBus();
     const game = createGame({ bus, rng: seededRng(11) });
     const before = game.view();
-    run(game, 10, mazeReport(80, 0.5));
+    // Shorter than the free auto-clean, which would end the flood.
+    run(game, B.OVERGROWN_AUTO_CLEAN - 2, mazeReport(80, 0.5));
     const v = game.view();
     expect(v.overgrown).toBe(true);
     expect(v.essencePerSec).toBe(0);
