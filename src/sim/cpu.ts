@@ -1,6 +1,6 @@
 import { cellInDish, type DishShape } from '../core/dish';
 import type { LeniaParams, Pattern } from '../core/types';
-import { rotateDiscCpu, type Turn } from './deflect';
+import { lysisPenalty, rotateDiscCpu, type LysisDisc, type Turn } from './deflect';
 
 /**
  * Reference Lenia on the CPU (FFT convolution). Used by unit tests, the detector
@@ -23,6 +23,10 @@ export class CpuLenia {
   /** 1 for cells inside the dish (null = toroidal, every cell is inside). */
   private mask: Uint8Array | null = null;
   private scratch: Float32Array | null = null;
+  /** Active lysis discs (deflect.ts LysisPlanner); empty = none. */
+  private lysis: LysisDisc[] = [];
+  /** Per-cell lysis penalty, rebuilt when the discs change. */
+  private lysisMap: Float32Array | null = null;
   private kre: Float64Array;
   private kim: Float64Array;
   private re: Float64Array;
@@ -73,6 +77,18 @@ export class CpuLenia {
     for (let y = 0; y < this.h; y++) for (let x = 0; x < this.w; x++) m[y * this.w + x] = cellInDish(shape, x, y) ? 1 : 0;
     this.mask = m;
     this.applyMask();
+  }
+
+  /** Lysis discs (growth penalty, deflect.ts) applied from the next step on; [] clears them. */
+  setLysis(discs: readonly LysisDisc[]): void {
+    this.lysis = discs.map((d) => ({ ...d }));
+    if (!this.lysis.length) {
+      this.lysisMap = null;
+      return;
+    }
+    const m = this.lysisMap ?? new Float32Array(this.w * this.h);
+    for (let y = 0; y < this.h; y++) for (let x = 0; x < this.w; x++) m[y * this.w + x] = lysisPenalty(x + 0.5, y + 0.5, this.lysis);
+    this.lysisMap = m;
   }
 
   /** Rigid rotations from the glass deflector (deflect.ts), applied in order. */
@@ -137,6 +153,7 @@ export class CpuLenia {
       }
       fft2(this.re, this.im, this.w, this.h, true);
       const mask = this.mask;
+      const lys = this.lysisMap;
       for (let i = 0; i < N; i++) {
         if (mask && !mask[i]) {
           this.A[i] = 0; // outside the glass: always empty (seeds written past the rim vanish)
@@ -145,7 +162,7 @@ export class CpuLenia {
         const u = this.re[i];
         const d = u - mu;
         const q = Math.max(0, 1 - d * d * inv9s2);
-        const g = 2 * q * q * q * q - 1;
+        const g = 2 * q * q * q * q - 1 - (lys ? lys[i] : 0);
         const v = this.A[i] + dt * g;
         this.A[i] = v < 0 ? 0 : v > 1 ? 1 : v;
       }

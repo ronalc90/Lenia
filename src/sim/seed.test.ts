@@ -124,3 +124,30 @@ describe('seed CPU mirror', () => {
     expect(vnoise(4, 5, 1)).toBeCloseTo(hash2(4, 5, 1), 12);
   });
 });
+
+describe('seeding in the round dish', () => {
+  it('does not wrap across the grid edge and leaves the outside of the glass empty', () => {
+    const w = 64;
+    const h = 64;
+    const dish = { cx: 32, cy: 32, radius: 24 };
+    const torus = new Float32Array(w * h);
+    const round = new Float32Array(w * h);
+    const spec = { x: 2, y: 32, radius: 5.5, density: 1, noise: 0, shape: 'blob' as const, rngSeed: 1 };
+    applySeedCpu(torus, w, h, spec);
+    applySeedCpu(round, w, h, spec, 1, { dish });
+    expect(torus[32 * w + 62]).toBeGreaterThan(0); // the torus wraps to the far edge
+    expect(round.reduce((a, v) => a + v, 0)).toBe(0); // outside the glass: nothing
+    const inside = { ...spec, x: 50, radius: 6 }; // reaches the right rim (x = 56)
+    applySeedCpu(round, w, h, inside, 1, { dish });
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) if (Math.hypot(x + 0.5 - 32, y + 0.5 - 32) >= 24) expect(round[y * w + x]).toBe(0);
+    expect(round.reduce((a, v) => a + v, 0)).toBeGreaterThan(10);
+    // Erase without wrap: erasing past the left edge does not reach the right rim (the torus would).
+    const before = round.slice();
+    applyEraseCpu(round, w, h, -4, 32, 10, { dish });
+    expect(Array.from(round)).toEqual(Array.from(before));
+    const wrapped = round.slice();
+    applyEraseCpu(wrapped, w, h, -4, 32, 10);
+    expect(wrapped.reduce((a, v) => a + v, 0)).toBeLessThan(round.reduce((a, v) => a + v, 0));
+  });
+});

@@ -49,4 +49,33 @@ describe('camera (grid ⇄ CSS pixels)', () => {
     expect(wrapDelta(-60, 64)).toBe(4);
     expect(Math.abs(wrapDelta(32, 64))).toBe(32);
   });
+
+  it('round dish: fits the circle, never wraps, keeps the view over the glass', () => {
+    const cam = new Camera(232, 232, 400, 800);
+    cam.setDish({ cx: 116, cy: 116, radius: 48 });
+    // The 96-cell disc plus the glass margin spans the 400 px width.
+    expect(cam.scale).toBeCloseTo(400 / (96 * (1 + Camera.DISH_FIT_MARGIN)), 9);
+    expect(cam.gridToScreen(116, 116)).toEqual({ x: 200, y: 400 });
+    // No wrapped copies: a point at the far grid edge stays far away.
+    expect(cam.gridToScreen(231, 116).x).toBeGreaterThan(400);
+    const g = cam.screenToGrid(-50, 400);
+    expect(g.x).toBeLessThan(116 - 48); // not folded back into the grid
+    expect(cam.isOnDish(200, 400)).toBe(true);
+    expect(cam.isOnDish(200, 400 - 47 * cam.scale)).toBe(true);
+    expect(cam.isOnDish(200, 400 - 50 * cam.scale)).toBe(false);
+    // Zoom 1 recentres on the dish; zoomed in, panning stops at the rim.
+    cam.panBy(1000, 0);
+    expect([cam.cx, cam.cy]).toEqual([116, 116]);
+    cam.zoomAt(2, 200, 400);
+    cam.panBy(-100000, 0);
+    expect(cam.cx - 116).toBeCloseTo(48 * (1 + Camera.DISH_FIT_MARGIN) * 0.5, 6);
+    // A larger fit radius (the dish grew) zooms out.
+    const s0 = cam.scale;
+    cam.setDish({ cx: 116, cy: 116, radius: 64 }, 64);
+    expect(cam.scale).toBeCloseTo((s0 * 48) / 64, 9);
+    // Back to the torus.
+    cam.setDish(null);
+    cam.zoomAt(0.1, 0, 0);
+    expect(cam.scale).toBeCloseTo(400 / 232, 9);
+  });
 });

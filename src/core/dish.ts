@@ -169,3 +169,104 @@ export function easeOutCubic(t: number): number {
 export function sameDish(a: DishShape, b: DishShape): boolean {
   return Math.abs(a.cx - b.cx) < 1e-6 && Math.abs(a.cy - b.cy) < 1e-6 && Math.abs(a.radius - b.radius) < 1e-6;
 }
+
+// ───────────────────────────── Sizes and growth ─────────────────────────────
+
+/**
+ * Rim diameters (cells) of the growing dish, smallest first (docs/DISH.md §6). Which index the
+ * player has reached is game logic; the largest one a device can run is `maxDiameter`
+ * (sim/perf.ts QUALITY_DISH).
+ */
+export const DISH_DIAMETERS: readonly number[] = [96, 128, 160, 192, 224];
+
+/** Seconds the rim takes to grow to a new size (the camera follows a little slower). */
+export const DISH_GROW_SECONDS = 1.5;
+/** The camera's ease-out lasts this much longer than the rim's, so the glass visibly expands first. */
+export const DISH_CAMERA_LAG = 1.25;
+
+/** Diameter for a size index, clamped to the ladder and to the device cap. */
+export function dishDiameterFor(index: number, maxDiameter = Infinity): number {
+  const i = Math.max(0, Math.min(DISH_DIAMETERS.length - 1, Math.floor(index)));
+  let d = DISH_DIAMETERS[i];
+  if (d > maxDiameter) {
+    // Largest ladder size that fits the device (at least the smallest one).
+    d = DISH_DIAMETERS[0];
+    for (const x of DISH_DIAMETERS) if (x <= maxDiameter) d = x;
+  }
+  return d;
+}
+
+function easeInOutCubic(t: number): number {
+  const k = Math.min(1, Math.max(0, t));
+  return k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+}
+
+/**
+ * Rim growth animation shared by the simulation (mask radius), the camera (fit radius) and the
+ * renderer (growth glow). Call `update(dt)` once per frame and read `rim`, `fit`, `glow`.
+ */
+export class DishAnimator {
+  /** Rim the simulation uses right now (matter is never outside it). */
+  rim: DishShape;
+  /** Radius the camera fits at zoom 1 right now (lags the rim while growing). */
+  fit: number;
+  /** 0..1 growth glow for the renderer (0 when idle). */
+  glow = 0;
+  private from: DishShape;
+  private to: DishShape;
+  private fitFrom: number;
+  private t = 1;
+  private duration = DISH_GROW_SECONDS;
+
+  constructor(initial: DishShape) {
+    this.rim = { ...initial };
+    this.from = { ...initial };
+    this.to = { ...initial };
+    this.fit = initial.radius;
+    this.fitFrom = initial.radius;
+  }
+
+  /** Target shape; `animate` = false jumps there at once (loading a save, a new era). */
+  setTarget(target: DishShape, animate = true, seconds = DISH_GROW_SECONDS): void {
+    if (sameDish(target, this.to) && (animate || this.done)) return;
+    this.from = { ...this.rim };
+    this.fitFrom = this.fit;
+    this.to = { ...target };
+    this.duration = Math.max(1e-3, seconds);
+    this.t = animate ? 0 : DISH_CAMERA_LAG;
+    if (!animate) this.apply(DISH_CAMERA_LAG);
+  }
+
+  get target(): DishShape {
+    return this.to;
+  }
+
+  /** True when no growth is in progress. */
+  get done(): boolean {
+    return this.t >= DISH_CAMERA_LAG;
+  }
+
+  /** Advance the animation; returns true while the rim or the camera fit changed. */
+  update(dt: number): boolean {
+    if (this.done) {
+      this.glow = 0;
+      return false;
+    }
+    this.t = Math.min(DISH_CAMERA_LAG, this.t + dt / this.duration);
+    this.apply(this.t);
+    return true;
+  }
+
+  private apply(t: number): void {
+    this.rim = lerpDish(this.from, this.to, easeOutCubic(t));
+    const ft = easeInOutCubic(t / DISH_CAMERA_LAG);
+    this.fit = this.fitFrom + (this.to.radius - this.fitFrom) * ft;
+    const growing = this.to.radius > this.from.radius;
+    this.glow = growing && t < 1 ? Math.sin(Math.PI * Math.min(1, t)) : 0;
+    if (t >= DISH_CAMERA_LAG) {
+      this.rim = { ...this.to };
+      this.fit = this.to.radius;
+      this.glow = 0;
+    }
+  }
+}

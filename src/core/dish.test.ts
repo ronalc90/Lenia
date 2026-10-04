@@ -4,6 +4,8 @@ import {
   clampToDish,
   DISH_GRID_MARGIN,
   dishArea,
+  dishDiameterFor,
+  DishAnimator,
   dishCellCount,
   dishDist,
   dishForGrid,
@@ -109,5 +111,46 @@ describe('dish geometry', () => {
     expect(easeOutCubic(0)).toBe(0);
     expect(easeOutCubic(1)).toBe(1);
     expect(easeOutCubic(0.5)).toBeGreaterThan(0.5);
+  });
+});
+
+describe('dish growth', () => {
+  it('maps size indices to ladder diameters capped by the device', () => {
+    expect(dishDiameterFor(0)).toBe(96);
+    expect(dishDiameterFor(4)).toBe(224);
+    expect(dishDiameterFor(9)).toBe(224);
+    expect(dishDiameterFor(4, 160)).toBe(160);
+    expect(dishDiameterFor(1, 100)).toBe(96);
+  });
+
+  it('grows the rim first and lets the camera catch up, keeping every intermediate rim inside the target', () => {
+    const a = dishForGrid(232, 232, 96);
+    const b = dishForGrid(232, 232, 128);
+    const anim = new DishAnimator(a);
+    anim.setTarget(b);
+    let sawLag = false;
+    let maxGlow = 0;
+    let prev = a.radius;
+    for (let i = 0; i < 200 && anim.update(1 / 60); i++) {
+      expect(anim.rim.radius).toBeGreaterThanOrEqual(prev - 1e-9); // monotonic growth
+      expect(anim.rim.radius).toBeLessThanOrEqual(b.radius + 1e-9);
+      prev = anim.rim.radius;
+      if (anim.fit < anim.rim.radius - 1) sawLag = true;
+      maxGlow = Math.max(maxGlow, anim.glow);
+    }
+    expect(anim.done).toBe(true);
+    expect(anim.rim).toEqual(b);
+    expect(anim.fit).toBe(b.radius);
+    expect(anim.glow).toBe(0);
+    expect(sawLag).toBe(true);
+    expect(maxGlow).toBeGreaterThan(0.9);
+  });
+
+  it('jumps without animation when asked (loading a save)', () => {
+    const anim = new DishAnimator(dishForGrid(232, 232, 224));
+    anim.setTarget(dishForGrid(232, 232, 96), false);
+    expect(anim.rim.radius).toBe(48);
+    expect(anim.fit).toBe(48);
+    expect(anim.update(0.1)).toBe(false);
   });
 });

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { dishForGrid } from '../core/dish';
 import { CATALOG, catalogPattern, paramsOf } from './catalog';
 import { CpuLenia } from './cpu';
-import { angleDelta, type Body, Deflector, reflect, rotateDiscCpu, turnWeight } from './deflect';
+import { angleDelta, awayFrom, type Body, Deflector, LYSIS, LysisPlanner, lysisPenalty, reflect, rotateDiscCpu, turnWeight } from './deflect';
 
 const dish = { cx: 64, cy: 64, radius: 48 };
 
@@ -29,6 +29,15 @@ describe('glass deflection', () => {
     expect(r.vy).toBeCloseTo(1, 12);
     expect(reflect(-1, 0, 1, 0)).toEqual({ vx: -1, vy: 0 }); // moving away: untouched
     expect(angleDelta(Math.PI - 0.1, -Math.PI + 0.1)).toBeCloseTo(0.2, 12);
+  });
+
+  it('makes encounters a clear swerve: at least minAway below the tangent, speed kept', () => {
+    const v = awayFrom({ vx: 1, vy: -0.05 }, 0, 1, 0.45); // drifting almost parallel, slightly away
+    expect(v.vy).toBeCloseTo(-Math.sin(0.45) * Math.hypot(1, 0.05), 9);
+    expect(Math.hypot(v.vx, v.vy)).toBeCloseTo(Math.hypot(1, -0.05), 9);
+    expect(v.vx).toBeGreaterThan(0); // keeps its general direction (shorter rotation)
+    const far = { vx: 0, vy: -1 };
+    expect(awayFrom(far, 0, 1, 0.45)).toBe(far); // already heading away
   });
 
   it('turns a swimmer heading for the rim to the mirror direction, a bounded step per update', () => {
@@ -141,5 +150,51 @@ describe('glass deflection', () => {
     expect(end.m / m0).toBeLessThan(1.25);
     expect(turns).toBeGreaterThan(5); // it really met the glass several times
     expect(closest).toBeLessThan(20); // its outline (≈ 10.6 cells) came within a few cells of the glass
+  });
+});
+
+describe('lysis', () => {
+  it('penalises growth most at the centre of a disc and not at all outside', () => {
+    const discs = [{ x: 10, y: 10, radius: 5, strength: 1 }];
+    expect(lysisPenalty(10, 10, discs)).toBe(1);
+    expect(lysisPenalty(12.5, 10, discs)).toBeCloseTo(0.75, 12);
+    expect(lysisPenalty(16, 10, discs)).toBe(0);
+    expect(lysisPenalty(10, 10, [])).toBe(0);
+  });
+
+  it('starts a disc once per blob, keeps it while reported, and lets it expire', () => {
+    const lp = new LysisPlanner();
+    const blob = { id: 7, x: 50, y: 40, radius: 6, mass: 400, reason: 'runaway' };
+    let r = lp.update([blob], 100, 13);
+    expect(r.started.map((e) => e.id)).toEqual([7]);
+    expect(r.discs).toHaveLength(1);
+    expect(r.discs[0].radius).toBeCloseTo(LYSIS.radiusK * 6 + LYSIS.padR * 13, 9);
+    r = lp.update([{ ...blob, x: 52 }], 110, 13);
+    expect(r.started).toEqual([]); // already dissolving: no second announcement
+    expect(r.discs[0].x).toBe(52);
+    r = lp.update([], 110 + LYSIS.holdSteps, 13);
+    expect(r.discs).toEqual([]);
+    // Never more than maxDiscs at once.
+    const many = Array.from({ length: LYSIS.maxDiscs + 3 }, (_, i) => ({ ...blob, id: 100 + i }));
+    expect(lp.update(many, 500, 13).discs).toHaveLength(LYSIS.maxDiscs);
+  });
+
+  it('dissolves a blob on the CPU reference while a creature far away is untouched', () => {
+    const n = 128;
+    const sim = new CpuLenia(n, n, paramsOf(CATALOG.find((c) => c.code === 'O2u')!));
+    sim.setDish({ cx: 64, cy: 64, radius: 48 });
+    sim.placeCentered(catalogPattern('O2u'), 50, 64);
+    sim.placeCentered(catalogPattern('O2u'), 84, 64);
+    const half = (x0: number, x1: number) => {
+      let m = 0;
+      for (let y = 0; y < n; y++) for (let x = x0; x < x1; x++) m += sim.A[y * n + x];
+      return m;
+    };
+    const right0 = half(67, n);
+    sim.setLysis([{ x: 50, y: 64, radius: 16, strength: LYSIS.strength }]);
+    sim.step(30);
+    expect(half(0, 67)).toBeLessThan(1);
+    expect(half(67, n) / right0).toBeGreaterThan(0.8);
+    sim.setLysis([]);
   });
 });

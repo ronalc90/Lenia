@@ -61,6 +61,12 @@ export interface DeflectOptions {
   margin: number;
   /** Extra clearance (cells) kept between two bodies' outlines (turn while still well apart). */
   bodyMargin: number;
+  /**
+   * After an encounter a body must head away from the other at least this much (radians below the
+   * tangent): two swimmers drifting side by side get a clear swerve instead of a nudge (Lenia
+   * matter attracts at close range, so a nudge still ends in a merge).
+   */
+  minAway: number;
   /** Bodies slower than this (cells/step) are not steered (still, pulsing, spinning in place). */
   minSpeed: number;
   /** Only react to the rim when moving towards it with at least this share of the speed. */
@@ -86,6 +92,7 @@ export const DEFLECT: DeflectOptions & { feather: number } = {
   maxTurn: Math.PI / 3,
   margin: 3,
   bodyMargin: 8,
+  minAway: 0.45,
   minSpeed: 0.04,
   minApproach: 0.15,
   minClosing: 0.02,
@@ -110,6 +117,21 @@ interface Track {
 export function angleDelta(a: number, b: number): number {
   const d = b - a;
   return Math.atan2(Math.sin(d), Math.cos(d));
+}
+
+/**
+ * Turn velocity v (keeping its speed) so it heads away from unit direction n by at least `minAway`
+ * radians below the tangent (v·n ≤ −sin(minAway)·|v|), rotating the shorter way.
+ */
+export function awayFrom(v: { vx: number; vy: number }, nx: number, ny: number, minAway: number): { vx: number; vy: number } {
+  const sp = Math.hypot(v.vx, v.vy);
+  if (sp === 0 || v.vx * nx + v.vy * ny <= -Math.sin(minAway) * sp) return v;
+  // Heading angle relative to −n; clamp it into ±(π/2 − minAway).
+  const back = Math.atan2(-ny, -nx);
+  const rel = angleDelta(back, Math.atan2(v.vy, v.vx));
+  const lim = Math.PI / 2 - minAway;
+  const a = back + Math.max(-lim, Math.min(lim, rel === 0 ? 0 : rel));
+  return { vx: sp * Math.cos(a), vy: sp * Math.sin(a) };
 }
 
 /** Velocity reflected off a surface with unit normal (nx, ny) (only if moving into it). */
@@ -212,7 +234,7 @@ export class Deflector {
           const gap = d - ext - c.radius * o.extentK - o.bodyMargin;
           if (gap < -ext) continue; // already merged: too late, let Lenia decide
           const t = Math.max(0, gap) / closing;
-          const r = reflect(b.vx, b.vy, nx, ny);
+          const r = awayFrom(reflect(b.vx, b.vy, nx, ny), nx, ny, o.minAway);
           const need = updatesFor(angleDelta(Math.atan2(b.vy, b.vx), Math.atan2(r.vy, r.vx))) * interval + interval;
           if (t <= need && (!best || t < best.t)) best = { ...r, t };
         }
@@ -295,5 +317,92 @@ export function rotateDiscCpu(
       }
       A[j * w + i] = v;
     }
+  }
+}
+
+// ───────────────────────────── Lysis (maze safety net) ─────────────────────────────
+
+/**
+ * Lysis: the lab dissolves a blob that grows out of control before it seeds the worm maze.
+ * docs/DISH.md §5: no carrying capacity stops the maze without killing the fauna (an established
+ * maze survives a growth penalty of 0.3), but a local −1 growth for 60 steps on the runaway blob
+ * stopped 7/7 nucleations. It is gated by the caller (the game passes only components the detector
+ * flags as runaway/exploded while the dish is not already overgrown: overgrown keeps its free
+ * sterilise), so healthy creatures are never touched.
+ *
+ * Growth inside a disc: G ← G − strength·max(0, 1 − (d / radius)²) (strongest at the centre).
+ */
+export const LYSIS = {
+  /** Growth removed at the disc centre (G ∈ [−1, 1]; 1 dissolves anything in ~10–20 steps). */
+  strength: 1,
+  /** Steps a disc stays after its blob was last reported. */
+  holdSteps: 60,
+  /** Disc radius = radiusK × radius of gyration + padR × R. */
+  radiusK: 2,
+  padR: 1,
+  /** At most this many discs at once (GPU uniform array). */
+  maxDiscs: 8,
+} as const;
+
+export interface LysisDisc {
+  x: number;
+  y: number;
+  radius: number;
+  strength: number;
+}
+
+/** A blob the caller wants dissolved (detector centroid / radius / mass). */
+export interface LysisTarget {
+  id: number;
+  x: number;
+  y: number;
+  /** Radius of gyration in cells. */
+  radius: number;
+  mass: number;
+  /** Why (shown to the player), e.g. 'runaway' or 'oversize'. */
+  reason: string;
+}
+
+/** Emitted once when a blob starts being dissolved (for the game's explanation). */
+export interface LysisEvent extends LysisTarget {
+  step: number;
+}
+
+/** Growth penalty at (x, y) from a set of discs (CPU mirror of the step shader). */
+export function lysisPenalty(x: number, y: number, discs: readonly LysisDisc[]): number {
+  let p = 0;
+  for (const d of discs) {
+    const q = Math.hypot(x - d.x, y - d.y) / d.radius;
+    if (q < 1) p = Math.max(p, d.strength * (1 - q * q));
+  }
+  return p;
+}
+
+/**
+ * Keeps the active lysis discs: `update` with the blobs to dissolve now (others expire after
+ * `holdSteps`). Returns the discs to upload and the blobs that just started dissolving.
+ */
+export class LysisPlanner {
+  private active = new Map<number, { disc: LysisDisc; until: number }>();
+
+  reset(): void {
+    this.active.clear();
+  }
+
+  get discs(): LysisDisc[] {
+    return [...this.active.values()].map((a) => a.disc);
+  }
+
+  update(targets: readonly LysisTarget[], step: number, R: number): { discs: LysisDisc[]; started: LysisEvent[] } {
+    const started: LysisEvent[] = [];
+    for (const t of targets) {
+      const disc: LysisDisc = { x: t.x, y: t.y, radius: LYSIS.radiusK * t.radius + LYSIS.padR * R, strength: LYSIS.strength };
+      const had = this.active.has(t.id);
+      if (!had && this.active.size >= LYSIS.maxDiscs) continue;
+      this.active.set(t.id, { disc, until: step + LYSIS.holdSteps });
+      if (!had) started.push({ ...t, step });
+    }
+    for (const [id, a] of this.active) if (a.until <= step) this.active.delete(id);
+    return { discs: this.discs, started };
   }
 }

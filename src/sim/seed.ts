@@ -1,3 +1,4 @@
+import { cellInDish, type DishShape } from '../core/dish';
 import type { Pattern, SeedSpec } from '../core/types';
 
 /**
@@ -23,7 +24,15 @@ import type { Pattern, SeedSpec } from '../core/types';
  * rescaled automatically (spores must keep their 1 cell = 1 cell size). With no
  * rotation and scale 1 the template is snapped to whole cells, exactly like
  * CpuLenia.placeCentered (so printed creatures are pixel exact).
+ *
+ * Round dish (ADR-022): with a dish the offset d is the plain difference (no wrap) and cells
+ * outside the glass stay 0 (`SeedOptions.dish`); without one, offsets wrap on the torus.
  */
+
+/** Topology of a CPU seed/erase: a round dish (no wrap, masked) or the torus (default). */
+export interface SeedOptions {
+  dish?: DishShape | null;
+}
 
 /** Optional extension of SeedSpec understood by the simulation. */
 export interface SeedSpecExt extends SeedSpec {
@@ -176,15 +185,15 @@ export function sampleTemplate(p: Pattern, lx: number, ly: number): number {
   return top + (bot - top) * fy;
 }
 
-/** Seed value at a cell centre (px, py) for a grid of gridW×gridH. */
-export function seedValueAt(s: ResolvedSeed, px: number, py: number, gridW: number, gridH: number): number {
-  const dx = wrapDelta(px - s.cx, gridW);
-  const dy = wrapDelta(py - s.cy, gridH);
+/** Seed value at a cell centre (px, py) for a grid of gridW×gridH (`wrap` = toroidal offsets). */
+export function seedValueAt(s: ResolvedSeed, px: number, py: number, gridW: number, gridH: number, wrap = true): number {
+  const dx = wrap ? wrapDelta(px - s.cx, gridW) : px - s.cx;
+  const dy = wrap ? wrapDelta(py - s.cy, gridH) : py - s.cy;
   const q = Math.hypot(dx, dy) / s.radius;
   let tmpl = 0;
   if (s.pattern) {
-    const tdx = wrapDelta(px - s.tx, gridW);
-    const tdy = wrapDelta(py - s.ty, gridH);
+    const tdx = wrap ? wrapDelta(px - s.tx, gridW) : px - s.tx;
+    const tdy = wrap ? wrapDelta(py - s.ty, gridH) : py - s.ty;
     const lx = (s.cos * tdx + s.sin * tdy) / s.scale + s.pattern.w / 2;
     const ly = (-s.sin * tdx + s.cos * tdy) / s.scale + s.pattern.h / 2;
     tmpl = sampleTemplate(s.pattern, lx, ly);
@@ -219,12 +228,24 @@ export function seedValueAt(s: ResolvedSeed, px: number, py: number, gridW: numb
 }
 
 /** Apply a seed to a CPU field (max-combine), same result as the GPU `seed()`. */
-export function applySeedCpu(A: Float32Array, w: number, h: number, spec: SeedSpecExt, fallbackSeed = 1): void {
+export function applySeedCpu(
+  A: Float32Array,
+  w: number,
+  h: number,
+  spec: SeedSpecExt,
+  fallbackSeed = 1,
+  opts: SeedOptions = {},
+): void {
   const s = resolveSeed(spec, fallbackSeed);
+  const dish = opts.dish ?? null;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
-      const v = seedValueAt(s, x + 0.5, y + 0.5, w, h);
       const k = y * w + x;
+      if (dish && !cellInDish(dish, x, y)) {
+        A[k] = 0;
+        continue;
+      }
+      const v = seedValueAt(s, x + 0.5, y + 0.5, w, h, !dish);
       if (v > A[k]) A[k] = v;
     }
   }
@@ -235,12 +256,21 @@ export function eraseFactor(q: number): number {
   return smoothstep(0.6, 1, q);
 }
 
-export function applyEraseCpu(A: Float32Array, w: number, h: number, x: number, y: number, radius: number): void {
+export function applyEraseCpu(
+  A: Float32Array,
+  w: number,
+  h: number,
+  x: number,
+  y: number,
+  radius: number,
+  opts: SeedOptions = {},
+): void {
   const r = Math.max(0.5, radius);
+  const wrap = !opts.dish;
   for (let j = 0; j < h; j++) {
     for (let i = 0; i < w; i++) {
-      const dx = wrapDelta(i + 0.5 - x, w);
-      const dy = wrapDelta(j + 0.5 - y, h);
+      const dx = wrap ? wrapDelta(i + 0.5 - x, w) : i + 0.5 - x;
+      const dy = wrap ? wrapDelta(j + 0.5 - y, h) : j + 0.5 - y;
       A[j * w + i] *= eraseFactor(Math.hypot(dx, dy) / r);
     }
   }
