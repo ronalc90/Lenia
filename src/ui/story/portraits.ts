@@ -32,6 +32,17 @@ export interface PortraitState {
   /** Ages (s) of the Choir's rings. */
   pulses: number[];
   reduceMotion: boolean;
+  /** (VELA) accessories to draw; defaults to the global wardrobe (setVelaWear). */
+  wear?: readonly string[];
+}
+
+/** VELA's wardrobe, unlocked by Encargos ('scarf' | 'medal' | 'flower'). Shared by every VELA portrait. */
+let velaWear: readonly string[] = [];
+export function setVelaWear(list: readonly string[]): void {
+  velaWear = [...list];
+}
+export function getVelaWear(): readonly string[] {
+  return velaWear;
 }
 
 const TAU = Math.PI * 2;
@@ -66,6 +77,152 @@ function sparkle(ctx: CanvasRenderingContext2D, x: number, y: number, r: number,
   ctx.quadraticCurveTo(x, y, x, y + r);
   ctx.quadraticCurveTo(x, y, x - r, y);
   ctx.quadraticCurveTo(x, y, x, y - r);
+  ctx.fill();
+  ctx.restore();
+}
+
+
+// ═══════════════════════════════ VELA's wardrobe ═══════════════════════════════
+
+/** A knitted scarf around the flask's neck, two striped tails fluttering on the left. */
+function drawScarf(ctx: CanvasRenderingContext2D, t: number, rm: boolean): void {
+  const flap = rm ? 0 : Math.sin(t * 2.6) * 1.6;
+  const knit = (path: () => void, base: string) => {
+    ctx.save();
+    path();
+    ctx.fillStyle = base;
+    ctx.fill();
+    ctx.clip();
+    // Stripes.
+    ctx.fillStyle = 'rgba(255, 209, 102, 0.85)';
+    for (let y = 20; y < 70; y += 5) ctx.fillRect(0, y, 100, 1.6);
+    ctx.restore();
+    ctx.save();
+    path();
+    ctx.strokeStyle = 'rgba(80, 20, 10, 0.55)';
+    ctx.lineWidth = 0.7;
+    ctx.stroke();
+    ctx.restore();
+  };
+  // Tails first (behind the wrap).
+  knit(() => {
+    ctx.beginPath();
+    ctx.moveTo(43.5, 38.5);
+    ctx.quadraticCurveTo(36, 42 + flap * 0.3, 29.5, 49 + flap);
+    ctx.lineTo(33.5, 51.5 + flap);
+    ctx.quadraticCurveTo(38, 45, 45, 41.5);
+    ctx.closePath();
+  }, '#E4572E');
+  knit(() => {
+    ctx.beginPath();
+    ctx.moveTo(44.5, 40);
+    ctx.quadraticCurveTo(40, 46 - flap * 0.2, 37.5, 54 - flap * 0.6);
+    ctx.lineTo(41.2, 55 - flap * 0.6);
+    ctx.quadraticCurveTo(42.5, 47, 46.5, 41.5);
+    ctx.closePath();
+  }, '#D9482A');
+  // Fringe.
+  ctx.save();
+  ctx.strokeStyle = '#FFD166';
+  ctx.lineWidth = 0.8;
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 3; i++) {
+    ctx.beginPath();
+    ctx.moveTo(30 + i * 1.4, 49.5 + flap + i * 0.9);
+    ctx.lineTo(29 + i * 1.4, 52 + flap + i * 0.9);
+    ctx.moveTo(38 + i * 1.3, 54.5 - flap * 0.6 + i * 0.3);
+    ctx.lineTo(37.6 + i * 1.3, 57 - flap * 0.6 + i * 0.3);
+    ctx.stroke();
+  }
+  ctx.restore();
+  // The wrap around the neck.
+  knit(() => {
+    ctx.beginPath();
+    ctx.roundRect(40.5, 35.5, 19, 7, 3.4);
+  }, '#F06A3E');
+}
+
+/** The Committee's medal, pinned on the glass. */
+function drawMedal(ctx: CanvasRenderingContext2D, t: number, rm: boolean): void {
+  const sway = rm ? 0 : Math.sin(t * 1.9) * 0.08;
+  ctx.save();
+  ctx.translate(65.5, 70);
+  ctx.rotate(sway);
+  // Ribbon.
+  ctx.fillStyle = '#5BC0EB';
+  ctx.beginPath();
+  ctx.moveTo(-3.6, -8);
+  ctx.lineTo(-0.4, -8);
+  ctx.lineTo(-1.2, -1.5);
+  ctx.lineTo(-3.6, -2.2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#E4572E';
+  ctx.beginPath();
+  ctx.moveTo(0.4, -8);
+  ctx.lineTo(3.6, -8);
+  ctx.lineTo(3.6, -2.2);
+  ctx.lineTo(1.2, -1.5);
+  ctx.closePath();
+  ctx.fill();
+  // Disc.
+  ctx.shadowColor = '#FFD166';
+  ctx.shadowBlur = 6;
+  const g = ctx.createRadialGradient(-1.2, 0.8, 0.3, 0, 2, 4.6);
+  g.addColorStop(0, '#FFF4C8');
+  g.addColorStop(0.55, '#FFD166');
+  g.addColorStop(1, '#C88A1E');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(0, 2, 4.4, 0, TAU);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  // Star.
+  ctx.fillStyle = 'rgba(140, 90, 10, 0.75)';
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    const r = i % 2 ? 1.1 : 2.6;
+    const x = Math.cos(a) * r;
+    const y = 2 + Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+  // Glint.
+  const glint = rm ? 0.5 : Math.max(0, Math.sin(t * 1.3)) ** 8;
+  if (glint > 0.05) sparkle(ctx, 2.2, -0.4, 1.8, glint);
+  ctx.restore();
+}
+
+/** A glowing flower tucked into the cork. */
+function drawFlower(ctx: CanvasRenderingContext2D, x: number, y: number, t: number, rm: boolean): void {
+  const nod = rm ? 0 : Math.sin(t * 1.4) * 0.12;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-0.5 + nod);
+  ctx.strokeStyle = '#8AE234';
+  ctx.lineWidth = 1.1;
+  ctx.beginPath();
+  ctx.moveTo(0, 7);
+  ctx.quadraticCurveTo(1.5, 3, 0, 0);
+  ctx.stroke();
+  ctx.fillStyle = '#8AE234';
+  ctx.beginPath();
+  ctx.ellipse(1.8, 4.2, 1.9, 0.9, -0.6, 0, TAU);
+  ctx.fill();
+  glowDisc(ctx, 0, 0, 7, 'rgba(255,143,171,0.9)', 0.45);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * TAU;
+    ctx.fillStyle = i % 2 ? '#FFB3C7' : '#FF8FAB';
+    ctx.beginPath();
+    ctx.ellipse(Math.cos(a) * 2.3, Math.sin(a) * 2.3, 2.1, 1.3, a, 0, TAU);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#FFE9A8';
+  ctx.beginPath();
+  ctx.arc(0, 0, 1.2, 0, TAU);
   ctx.fill();
   ctx.restore();
 }
@@ -364,6 +521,11 @@ export function drawVela(ctx: CanvasRenderingContext2D, s: PortraitState, t: num
   ctx.lineTo(50, neckTop - 9.5);
   ctx.stroke();
   ctx.restore();
+
+  const wear = s.wear ?? velaWear;
+  if (wear.includes('scarf')) drawScarf(ctx, t, rm);
+  if (wear.includes('medal')) drawMedal(ctx, t, rm);
+  if (wear.includes('flower')) drawFlower(ctx, 40.5, 24.5, t, rm);
 
   // Face.
   const eyeY = 53;
