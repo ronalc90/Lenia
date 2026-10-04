@@ -137,6 +137,7 @@ try {
         lost.lostCalls === 1 && lost.restoredCalls === 1 && Math.abs(lost.massAfterRestore - lost.massBefore) < 0.5 && lost.massAfter10More > 0,
         JSON.stringify(lost),
       );
+    if (!lost.skipped) check('context loss before any backup: dish comes back empty', lost.massNoBackup === 0, `mass ${lost.massNoBackup}`);
 
     // ── performance ──
     const perf = await run('perf', 192, 240, 13, quick ? 1500 : 3000, {});

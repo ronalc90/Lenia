@@ -192,12 +192,15 @@ export class WebGLSimulation implements Simulation {
     this.onRestored = () => {
       if (this.disposed) return;
       console.info('[sim] WebGL context restored; rebuilding GPU state');
+      // Clear the flag first: initGL's storage round-trip test runs real seed()/clear() passes,
+      // which are no-ops while `lost` is set (the probe pattern would stay in the dish).
+      this.lost = false;
       try {
         this.initGL();
         this.restoreBackup();
-        this.lost = false;
         this.opts.onContextRestored?.();
       } catch (err) {
+        this.lost = true;
         console.error('[sim] could not rebuild after context restore', err);
       }
     };
@@ -868,7 +871,13 @@ export class WebGLSimulation implements Simulation {
   private program(fs: string): Prog {
     const gl = this.gl;
     const vs = compile(gl, gl.VERTEX_SHADER, VERT);
-    const f = compile(gl, gl.FRAGMENT_SHADER, fs);
+    let f: WebGLShader;
+    try {
+      f = compile(gl, gl.FRAGMENT_SHADER, fs);
+    } catch (err) {
+      gl.deleteShader(vs); // a storage candidate that fails to compile must not leak shaders
+      throw err;
+    }
     const p = gl.createProgram()!;
     gl.attachShader(p, vs);
     gl.attachShader(p, f);

@@ -307,12 +307,26 @@ async function contextLoss() {
   sim.advance(10);
   const after2 = sum(sim.readState());
   sim.dispose();
+
+  // A dish lost before any readback (no backup, no snapshot) must come back empty, not with
+  // the storage round-trip probe pattern left in it.
+  const c2 = makeCanvas(64, 64);
+  const sim2 = createSimulation(c2, { gridW: 64, gridH: 64, params: P });
+  const ext2 = (c2.getContext('webgl2') as WebGL2RenderingContext).getExtension('WEBGL_lose_context')!;
+  ext2.loseContext();
+  await new Promise((r) => setTimeout(r, 50));
+  const restored2 = new Promise<void>((r) => c2.addEventListener('webglcontextrestored', () => setTimeout(r, 10), { once: true }));
+  ext2.restoreContext();
+  await restored2;
+  const massNoBackup = sum(sim2.readState());
+  sim2.dispose();
   return {
     lostCalls,
     restoredCalls,
     massBefore: before,
     massAfterRestore: after,
     massAfter10More: after2,
+    massNoBackup,
     snapLostW: snapLost.w,
     exportedLost,
   };
