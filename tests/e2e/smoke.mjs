@@ -66,6 +66,18 @@ try {
     await page.waitForTimeout(800);
     if (shotsDir) await page.screenshot({ path: `${shotsDir}/${vp.name}-0-start.png` });
 
+    // Title screen, then skip the tutorial (QA selectors exposed by the UI).
+    const splash = page.locator('[data-testid="splash"]');
+    if (await splash.isVisible().catch(() => false)) {
+      await splash.click();
+      await page.waitForTimeout(700);
+    }
+    const skip = page.locator('[data-testid="tutorial-skip"]');
+    if (await skip.isVisible().catch(() => false)) {
+      await skip.click();
+      await page.waitForTimeout(400);
+    }
+
     // Seed by tapping the dish a few times (real input path).
     const box = await page.locator('canvas.gl-dish').boundingBox();
     if (!box) throw new Error('dish canvas not found');
