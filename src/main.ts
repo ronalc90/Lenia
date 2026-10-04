@@ -12,6 +12,7 @@ import { createGame } from './game/game';
 import { clearSave, loadSave, offlineSeconds, writeSave } from './game/save';
 import { createUI } from './ui/ui';
 import { createAudio } from './audio/audio';
+import { initPlatform, type Platform } from './platform/platform';
 
 /**
  * Base simulation rate (steps per second) at speed ×1. Orbium swims ~0.24
@@ -150,6 +151,7 @@ function boot(): void {
   }
 
   const detector = createDetector();
+  const platform: Platform = initPlatform({ onPause: save });
   game.setGridSize(gridW, gridH);
   audio.setDishSize?.(gridW, gridH);
 
@@ -193,6 +195,26 @@ function boot(): void {
       clearDish();
     }
   });
+  // Store achievements (Steam today; harmless no-op on the web).
+  bus.on('achievement', ({ id }) => platform.unlockAchievement(id));
+  platform.syncAchievements(game.view().achievements.filter((a) => a.done).map((a) => a.id));
+  let stablePeak = 0;
+  let epsPeak = 0;
+  function reportStats(): void {
+    const v = game.view();
+    platform.reportStats({
+      STAT_SEEDS: v.stats.seeds,
+      STAT_SPECIES: v.species.length,
+      STAT_CATALOG_SPECIES: v.species.filter((sp) => sp.catalogName).length,
+      STAT_BEHAVIORS: v.behaviorsSeen.length,
+      STAT_ERA: v.era,
+      STAT_GENOME_NODES: v.genomeNodes.filter((n) => n.owned).length,
+      STAT_STABLE_PEAK: stablePeak,
+      STAT_EPS_PEAK: Math.floor(epsPeak),
+      STAT_ESSENCE_LOG10: v.stats.totalEssence > 0 ? Math.floor(Math.log10(v.stats.totalEssence)) : 0,
+      STAT_PLAY_MINUTES: Math.floor(v.stats.playTime / 60),
+    });
+  }
   // Capture a portrait of every newly registered species.
   bus.on('speciesNew', ({ speciesId, x, y }) => {
     const size = Math.min(64, Math.ceil(sim!.params.R * 4));
@@ -313,6 +335,8 @@ function boot(): void {
     if (now - lastAudio > 1000) {
       lastAudio = now;
       const v = view ?? game.view();
+      stablePeak = Math.max(stablePeak, v.creatures.filter((c) => c.state === 'stable').length);
+      epsPeak = Math.max(epsPeak, v.essencePerSec);
       const st = v.settings;
       audio.setVolumes(st.sfxVolume, st.musicVolume, st.muted);
       audio.setState({
@@ -332,6 +356,7 @@ function boot(): void {
     if (now - lastSave > AUTOSAVE_MS) {
       lastSave = now;
       save();
+      reportStats();
     }
     requestAnimationFrame(frame);
   }
@@ -358,7 +383,7 @@ function boot(): void {
     (window as unknown as { bioluma: unknown }).bioluma = { game, sim, detector, camera, bus };
   }
 
-  registerServiceWorker();
+  if (platform.shouldRegisterServiceWorker()) registerServiceWorker();
 }
 
 function registerServiceWorker(): void {
