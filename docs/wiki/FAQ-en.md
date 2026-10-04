@@ -35,13 +35,13 @@ If you clear the site's data or play in a **private window**, the game **is lost
 ### How do I start from scratch?
 **Settings → Save data → Delete save.** It asks you to tap twice so you do not delete by accident.
 
-## Time away (offline)
+## Time away
 
-### Do I keep earning Essence when I am not playing?
-**For a while.** When you come back you get part of what you would have earned: half of your recent production, up to a maximum of **2 hours**. The **Reserve** upgrade raises the maximum up to **24 hours**.
+### Does it keep playing when I am away?
+**No.** The lab works in **sessions** with a clock, and the clock only runs while you play. If you close the game in the middle of a session, when you come back it **carries on where you left it**, with the same time.
 
-### Does it discover species or buy upgrades by itself?
-**No.** Only you do that. Golden Sparks do not show up while you are away either.
+### Do I lose anything if I leave?
+**No.** Your Data, the Tree, the Bestiary and your worlds stay with you. Golden Sparks do not show up while you are away either.
 
 ### Can I play without internet?
 Yes, once the game has loaded. If you **install** it (see [[Platforms|Platforms-en]]), it works even better offline. The pretty fonts are swapped for the system ones, but everything else works the same.
@@ -62,7 +62,7 @@ Yes, once the game has loaded. If you **install** it (see [[Platforms|Platforms-
 Yes. **Settings → Appearance → Theme:** *Auto*, *Dark* or *Light*. The dish always looks dark, like under a microscope.
 
 ### How do I turn the sound off?
-Tap the **speaker** at the top, or press **M** on a computer. In **Settings → Audio** you can lower just the **effects** or just the **ambience**. Every sound is made on the spot: there are no recordings.
+In **Settings → Audio**, or press **M** on a computer (on a wide screen the **speaker** is also at the top). In **Settings → Audio** you can lower just the **effects** or just the **ambience**. Every sound is made on the spot: there are no recordings.
 
 ### The game makes me dizzy or runs slowly
 Try this in **Settings**:
@@ -86,7 +86,7 @@ Your browser has no WebGL2. Update it, try another one, and check that **hardwar
 ## Leaderboard and fair play
 
 ### Is there a leaderboard?
-Yes, **optional**. It has three boards: **Lifetime Essence**, **Species** and **Eras**. To appear you choose a **scientist name** (3 to 16 characters). It asks for no email or anything else. Until you choose one, **nothing is sent**.
+Yes, **optional**. It has three boards: **Lifetime Essence**, **Species** and **Nights**. To appear you choose a **scientist name** (3 to 16 characters). It asks for no email or anything else. Until you choose one, **nothing is sent**.
 
 If you do not see the trophy button at the top, your version does not have it switched on yet.
 
@@ -110,14 +110,17 @@ None by default. The **Anonymous analytics** setting is **off**; if you turn it 
 ### Why does almost everything dissolve at the start?
 Because it is **real science**: most blobs of light do not find their shape. Keep seeding. The ones that do, glow!
 
-### I changed μ and σ and my creature vanished
-That is normal. Each rule has its own creatures. Seed again, or save named settings (Calibrator II) to go back to the ones you like.
+### Why does the dish start empty every session?
+Each session is a fresh stint in the lab. **Your species are not lost**: they are kept in the **Bestiary**. With the Tree's **Fridge**, your best creatures start the next session with you.
 
-### How do I get more Samples?
-**By discovering.** Each new species gives Samples, and so does seeing a new behaviour in a species.
+### I changed worlds and my favourite creature does not hatch
+That is normal: **each world has its own creatures**. Pick its world on the start card. Each species' card says **where it lives**. See [[Worlds|Worlds-en]].
 
-### Will I lose everything if I do an Extinction?
-**No.** You keep your Bestiary, your achievements and your Genome. See [[Prestige and Genome|Prestige-and-Genome-en]].
+### How do I get more Data?
+By collecting Essence (**every 250 makes 1 Data**) and by **discovering**: each new species gives +5 Data, each new way of moving +3 and each request +2. **Fertiliser** and the **Spark** help you collect more Essence.
+
+### What happened to the Lab, Calibrate, Genome and Extinction?
+They belonged to an earlier version. Now everything is upgraded in the [[Tree|Tree-en]], the rules are the [[Worlds|Worlds-en]] and the [[Night|Night-en]] replaces Extinction, **without erasing anything**. If you had an old save, it was turned into Data and upgrades.
 
 ## Something is not working?
 

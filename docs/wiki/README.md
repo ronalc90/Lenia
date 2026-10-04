@@ -8,9 +8,11 @@
 |---|---|---|
 | Portada | `Home.md` | `Home-en.md` |
 | Cómo jugar / How to play | `Cómo-jugar.md` | `How-to-play-en.md` |
-| Mejoras / Upgrades | `Mejoras.md` | `Upgrades-en.md` |
+| Árbol / Tree | `Árbol.md` | `Tree-en.md` |
+| Mundos / Worlds | `Mundos.md` | `Worlds-en.md` |
 | Especies / Species | `Especies.md` | `Species-en.md` |
-| Prestigio / Prestige | `Prestigio-y-Genoma.md` | `Prestige-and-Genome-en.md` |
+| Noche / Night | `Noche.md` | `Night-en.md` |
+| (old pages that point to the new ones) | `Mejoras.md`, `Prestigio-y-Genoma.md` | `Upgrades-en.md`, `Prestige-and-Genome-en.md` |
 | Logros / Achievements | `Logros.md` | `Achievements-en.md` |
 | Secretos / Secrets | `Secretos.md` | `Secrets-en.md` |
 | Preguntas / FAQ | `Preguntas-frecuentes.md` | `FAQ-en.md` |
@@ -26,4 +28,4 @@
 - `{{GAME_URL}}` is replaced when publishing with the repository variable `GAME_URL`. Do not hard-code the game's address here.
 - Tone: short sentences, friendly, understandable by a 5-year-old, and a bit of fun. Spanish first; keep both languages in sync.
 - **`Secretos` / `Secrets` must stay spoiler-free.** Never describe hidden content in the wiki.
-- Images live in `images/` and are generated from the real game: `node tests/e2e/wiki-shots.mjs` (see the header of that file). Keep each PNG under 400 KB.
+- Images live in `images/` and are generated from the real game, played like a player: `node tests/e2e/wiki-shots.mjs` (it runs `tests/e2e/session-play.mjs`; see the header of both files). Names: `m-NN-*` Spanish phone, `en-NN-*` English phone, `d-NN-*` desktop. Keep each PNG under 400 KB.

@@ -17,16 +17,16 @@
 | **App Store** (iPhone) | Próximamente | En preparación. |
 | **itch.io** y **galaxy.click** | Próximamente | Para juegos de navegador. |
 
-<p align="center"><img src="images/d-02-play.png" alt="Bioluma en el navegador de un computador" width="100%"><br><i>Bioluma en el navegador de un computador.</i></p>
+<p align="center"><img src="images/d-04-clock-running.png" alt="Bioluma en el navegador de un computador" width="100%"><br><i>Bioluma en el navegador de un computador.</i></p>
 
 <table>
   <tr>
     <td align="center" width="50%"><img src="images/d-01-title.png" alt="Pantalla de título en el computador" width="100%"><br>La pantalla de título</td>
-    <td align="center" width="50%"><img src="images/d-03-bestiary.png" alt="El Bestiario en el computador" width="100%"><br>El Bestiario</td>
+    <td align="center" width="50%"><img src="images/d-17-bestiary.png" alt="El Bestiario en el computador" width="100%"><br>El Bestiario</td>
   </tr>
   <tr>
-    <td align="center"><img src="images/d-04-calibrate.png" alt="Calibrar en el computador" width="100%"><br>Calibrar</td>
-    <td align="center"><img src="images/d-05-genome.png" alt="Genoma en el computador" width="100%"><br>Genoma</td>
+    <td align="center"><img src="images/d-09-tree.png" alt="El Árbol en el computador" width="100%"><br>El Árbol</td>
+    <td align="center"><img src="images/d-12-start-card.png" alt="La tarjeta de inicio en el computador" width="100%"><br>Una sesión nueva</td>
   </tr>
   <tr>
     <td align="center" colspan="2"><img src="images/d-06-settings.png" alt="Ajustes en el computador" width="50%"><br>Ajustes</td>

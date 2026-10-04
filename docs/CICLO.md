@@ -22,9 +22,8 @@ Todos los números viven en [`src/game/cycleBalance.ts`](../src/game/cycleBalanc
 Sustituye al ciclo continuo de la GDD (§5 Muestras/Genoma, §8 Laboratorio, §10 Extinción, Calibrar) — ver el ADR-026
 propuesto en §16. Los textos siguen [`docs/CLARIDAD.md`](CLARIDAD.md) (sin jerga; un test lo vigila).
 
-**Estado (Fase 2A, hecho):** el ciclo corre dentro de `createGame({ bus, cycle: 'sessions' })` (sesiones, Árbol,
-mundos, noches, Nevera, Abono, guardado v2). Por defecto `createGame` sigue en el ciclo **clásico**, que es el que usa
-hoy la interfaz viva; la Fase 2B cambia `main.ts`/`ui.ts` y borra el clásico (§15).
+**Estado (Fases 2A y 2B, hechas):** el juego vivo corre `createGame({ bus, cycle: 'sessions' })` (sesiones, Árbol,
+mundos, noches, Nevera, Abono, guardado v2) con su interfaz (§15.2). El ciclo clásico solo queda para las pruebas.
 
 ## Índice
 
@@ -421,6 +420,15 @@ casillas se midieron con 100 semillas cada una (±5 %) más 13 barridos de sesgo
 un ajuste logístico de todas ellas para que cada nivel lea más que el anterior. **Fase 2:** volver a medir con la GPU y la
 placa redonda (la detección real decide qué es «criatura»).
 
+**Frío (2B, medido):** el juego de prueba de sesiones encontró el Mundo 2 vacío: con la semilla del Clásico prende el 3 %
+(`world-check.ts --seeds --world=cold`, 20 semillas por especie: Orbium ignis 0 %, Synorbium solidus 5 %, Orbium phantasma
+5 %); hasta la plantilla pura a un ángulo libre vive solo 5–65 %, porque el giro bilineal emborrona su borde fino. En
+Frío (`WORLD_SEED_HELP`) la semilla gira en **cuartos de vuelta exactos** (`rotateQuarter`, una copia celda a celda) y
+lleva +0,07 de sesgo y −0,12 de ruido: Gotero 0/I/II/III → **30/47/57/83 %**, maestro 93 % (30 semillas por casilla).
+Las semillas de plantilla pura (seguras, Nevera, copias) giran en cuartos de vuelta en todos los mundos: viven siempre.
+Los demás mundos con la semilla del Clásico (20 por especie): Remolinos 35 %, Escudos 49 %, Discos 41 %, Patas 55 %,
+Gigantes 100 %. El bot ya suponía el porcentaje del Clásico en todos (es estadístico): su informe no cambia.
+
 ### 4.6 De las mejoras antiguas a los nodos
 
 | Antes | Ahora |
@@ -536,8 +544,8 @@ Accesible: cada nodo es un botón con nombre y nivel; teclado (Tab/Enter, flecha
 
 `npx vite-node scripts/session-bot.ts [sesiones=40] [corridas=3] [--verbose] [--policy=planner|greedy|kid] [--trace=N] [--runs]`.
 Juega el **juego integrado** (`createGame({ cycle: 'sessions' })`): reloj, cartera, precio y sitio de las semillas,
-Destello, Abono, Árbol, mundos, noches y Nevera son el código del juego. Solo la placa es un modelo (el estadístico de
-`balance-bot.ts`): una semilla vive con la probabilidad **medida** (§4.5) y se convierte en la especie de la plantilla que
+Destello, Abono, Árbol, mundos, noches y Nevera son el código del juego. Solo la placa es un modelo (el estadístico del antiguo
+`balance-bot.ts`, copiado en `session-bot.ts`; el bot del ciclo clásico se borró en 2B): una semilla vive con la probabilidad **medida** (§4.5) y se convierte en la especie de la plantilla que
 eligió el juego; las maneras de moverse son las medidas en cada mundo (§4.3). Políticas: **planner** (un jugador
 sensato: lo que llena la placa primero, cada mundo nuevo en cuanto se abre, llena la placa y luego Abono), **greedy** (lo
 más barato primero), **kid** (siembra cada 0,6 s donde sea, compra al azar, mundo al azar, atrapa menos destellos, casi
@@ -611,8 +619,8 @@ S18 80 · S21 97 · **S24 117 (noche 7 lista)**.
 
 ### 11.3 Límites del modelo
 
-La placa estadística no tiene geometría (el sitio la limita por número); muertes y choques siguen el modelo de
-`balance-bot.ts`; Encargos de la historia y la Bitácora no entran (solo los objetivos del juego). Fase 2B: medir con la
+La placa estadística no tiene geometría (el sitio la limita por número); muertes y choques siguen el modelo del antiguo
+`balance-bot.ts` (borrado en 2B); Encargos de la historia y la Bitácora no entran (solo los objetivos del juego). Fase 2B: medir con la
 GPU y la placa redonda.
 
 ## 12. Anti-frustración
@@ -691,39 +699,38 @@ Nevera en el primer `tick` (la placa ya existe).
 - Textos según CLARIDAD (filas en el informe de la Fase 2A) y guardia de jerga. Historia: `t_tree`, `t_world`,
   `a1_night`; condiciones con `nightReady`/`nightProgress`; Encargos con `classic`.
 
-### 15.2 Fase 2B — pendiente (interfaz e integración)
+### 15.2 Fase 2B — hecho (interfaz e integración)
 
-**`src/main.ts`**: `createGame({ bus, cycle: 'sessions' }, save)`; ciclo de vida (tarjeta de inicio → sesión → resumen
-→ Árbol → `startSession()`); pausa del reloj con resumen, Árbol, Momentos y diálogos (`game.isPaused`); la placa ya se
-congela sola (`speed` 0); `sim.setParams(game.simParams)` en `calibrationChanged` (lo emite el cambio de mundo); restaurar
-la placa guardada solo si la sesión seguía (`game.session.phase !== 'ready'` o el primer `tick` emite `dishClear`); guardar
-al cerrar cada sesión; sonidos con `sessionClock`/`sessionExtended`/`sessionEnd`/`boostBought`; el manejador de
-`seedBlocked` muestra `TEXT.dishFull(view.seedPrice.capacity)` con el motivo `full`; `grantEncargo` ya existe en `Game`
-(el respaldo de `main.ts` se puede quitar).
-
-**`src/ui/ui.ts`**: quitar las pestañas **Laboratorio**, **Calibrar** (borrar `panel-calibrate.ts`, `calKey`,
-`prefs.calKey`, arte `calibrate`) y **Genoma** (+ mejoras de Muestras del Bestiario); montar las cuatro pantallas de
-sesión con **`createSessionFlow`** (`src/ui/session/flow.ts`, ya hecho: HUD + vista previa, tarjeta de inicio, resumen y
-Árbol cableados al `Game` y al bus; el anfitrión llama `flow.update(view)` cada fotograma y pausa la placa mientras
-`flow.busy`; `onPreview` → `createPriceSheet` con `datosExplain`) **sin saltos de maquetación**; Abono (botón con
-`view.boost`, textos `SESSION_UI.boostDesc/boostPrice`); «Terminar ahora» en el menú de pausa (`SESSION_UI.endNow`,
-`endNowConfirm`). *Hecho en 2A:* las cuatro pantallas usan el arte (`--bl-*`, iconos de `src/ui/art`, tarjetas de Mundo
-pintadas, un solo color de acción); la cabecera del Árbol ya no tapa el nodo superior (se mide) y el botón fijo del
-resumen ya no tapa el total de Datos;
-`targetRect('tree.node.<id>' | 'start.world' | 'hud.clock' | 'hud.datos')` para las escenas (CLARIDAD B-19); textos que
-faltan J-160…J-170 (ya en `SESSION_UI`/`TEXT`). **`src/ui/ctx.ts`**: `TABS = ['bestiary']`. **`src/ui/i18n.ts`**: quitar
-Calibrar, Genoma, Muestras, Laboratorio, Pipeta, offline y los carteles del tutorial (CLARIDAD B-01…B-08).
-
-**`src/story/story.ts`**: `era` = noche (`view.era` ya lo es); hook `nightStart` (ritual de la lámpara, como
-`extinctionStart`); en partidas veteranas sin historia marcar también `a1_night` como hecha; `{first}`/`{best}` con el
-nombre común (J-128); `TargetId` con los focos nuevos; los Momentos de sesión 1 en modo breve (CLARIDAD §3.3).
-
-**Borrar el clásico** (todo lo marcado `PHASE-2B-REMOVE`): en `game.ts` `ranges`, `ringOptions`, `calibrationView`
-(dejar `{mu, sigma, R, dt, rings}` de lectura), `setCalibration`, `setRings`, `saveRegime`, `loadRegime`, `deleteRegime`,
-Extinción/Genoma, Muestras, offline, objetivos clásicos, `level`/`has`; en `content.ts` `UPGRADE_TEXT`, `GENOME_TEXT`,
-`*_LEVEL_TEXT`, `OBJECTIVE_TEXT`, `CLASSIC_ONLY_TEXT`, `CLASSIC_ACHIEVEMENT_TEXT`; en `encargoScript.ts` los `classic`;
-en `script.ts` `CLASSIC_ONLY_SCENES`; en `balance.ts` las constantes de Laboratorio, Calibrar, Genoma, Turno y offline;
-`defs.ts`. **Bots**: `balance-bot.ts` se retira.
+- **`src/main.ts`**: `createGame({ bus, cycle: 'sessions' })`; `createSessionFlow` monta el reloj en el centro del HUD, la
+  vista previa de Datos en la barra de abajo, la tarjeta de inicio, «¡Tiempo!», el resumen y el Árbol; la placa y el reloj
+  se paran mientras hay una tarjeta o el Árbol (`PauseSource 'cards'`). Partida vieja → `migrateLegacy` → tarjeta única
+  de VELA «¡Bienvenida al laboratorio nuevo!» (`src/ui/session/welcome.ts`). Sin ritual de Extinción ni precarga de
+  núcleos de Calibrar. Los Encargos y los Secretos esperan bajo las tarjetas; la historia no empieza escenas sobre ellas
+  (`t_tree` y `t_world` hablan solo con el Árbol abierto: `StoryDeps.ui('tree')`).
+- **`src/ui/ui.ts`**: tres filas fijas (HUD · placa · barra de abajo) en teléfono y escritorio, sin columna lateral; la
+  barra de abajo tiene **Bestiario** (cajón: hoja inferior en teléfono, lateral en escritorio, sobre la placa), **Abono**
+  durante la sesión («Abono» sobre «×1,25 · 💧 20», «×1,25 · en 0:12» o «Falta vida», y una pista única J-163) o
+  **Árbol** entre sesiones, y la vista previa «+12 Datos al terminar». Pausa con tarjeta («Seguir» · «Terminar ahora» → «¿Terminar ya? Te llevas N
+  Datos.», J-162). Borrados: `panel-lab.ts`, `panel-calibrate.ts`, `panel-genome.ts`, `tutorial.ts`, `upgrades.ts`, las
+  pestañas, el resumen de Era y el ritual del `overlay.ts`, Muestras/Genoma del HUD; `i18n.ts` sin B-01…B-03.
+- **Juego**: Calibrar fuera (`ranges`, `CALIBRATOR_RANGES`, `RING_PRESETS`, regímenes, `setCalibration`, `setRings`;
+  `CalibrationView` = reglas de lectura); textos y avisos retirados (B-11, B-17); `SpeciesView.world` y `copyCost`
+  /`copyBlocked`; `ResearchView.encargoReward` (los Encargos muestran «+2 Datos» y «+N s» sin adivinar en la UI) y
+  `dishLevel` (costura para la placa redonda); Abono solo con criaturas que dan Esencia (`BoostView.needsLife`).
+- **Comprobación de jugador**: `tests/e2e/session-play.mjs` juega las sesiones 1–3 con toques (teléfono y escritorio,
+  claro y oscuro, es y en) y hace las fotos de la wiki (`tests/e2e/wiki-shots.mjs`). Lo que encontró y se arregló: el
+  Mundo 2 no prendía (§4.5, «Frío»); un Encargo del Árbol durante la sesión dice «Al terminar: …»; el resumen de la
+  sesión 1 llama «primeras metas» a sus pasos silenciosos (sembrar, la primera criatura); la tarjeta «¡Mejora
+  comprada!» salía en la sesión siguiente y ahora es una línea en la hoja del nodo (J-120); los secretos esperan a que
+  termine la sesión 1 y al cajón del Bestiario; el Árbol vuelve a encuadrarse al abrirse; la píldora de tarea de VELA
+  se aparta mientras la hoja de un nodo está abierta; un nombre por criatura (las copias del toro ponían un segundo
+  nombre sin criatura) y lejos de las píldoras; un Encargo que es un objetivo del juego se contaba dos veces en el
+  resumen («12 × 2 encargos», `gameGrantOf`); la tarjeta de inicio espera a la de bienvenida de una partida vieja;
+  la barra del Encargo se aparta bajo una tarjeta de Momento; las notas y avisos esperan mientras un Momento está por
+  abrirse o hay una tarjeta de sesión.
+- **Sigue en el código (solo pruebas y bots)**: el ciclo clásico de `game.ts` (Laboratorio, Genoma, Extinción, Muestras,
+  offline) aún existe para sus pruebas unitarias; ningún jugador lo ve. Borrarlo entero es una tarea aparte (convertir
+  las pruebas de siembra, especies y economía al ciclo de sesiones).
 
 ## 16. ADR propuesto y preguntas abiertas
 
@@ -747,6 +754,6 @@ de era/Extinción/Calibrar.
   principio aceptando algún bajón en la mediana?
 - **Mundos sin «late», «se divide» ni «colonia»** (§4.3, medido): ¿un mundo futuro con una especie que lata o se divida
   (p. ej. con las caídas del catálogo), o se quitan esas maneras de la Guía para siempre?
-- **Abono**: ¿un icono propio (brote) y un sitio fijo en el HUD? (Fase 2B).
+- **Abono**: hecho en 2B, botón fijo en el centro de la barra de abajo; solo se vende con criaturas que dan Esencia.
 - **Incubadora**: acelera toda la simulación mientras nacen semillas (`game.speed`); comprobar los 30 fps en móvil.
 - **Esencia de Encargos y objetivos**: cuenta como ganada (para los Datos); con 10–20 s de Esencia el efecto es pequeño.

@@ -7,8 +7,8 @@
 # Bioluma
 
 **You sow light. Real life is born.**
-The creatures swim, spin, pulse and divide. Nobody drew them: they are born on their own inside the game!
-It is free, has no ads and is played with one finger.
+The creatures swim, spin and glow. Nobody drew them: they are born on their own inside the game!
+It is played in short lab sessions, with one finger and no ads.
 
 ## [▶ Play now!]({{GAME_URL}})
 
@@ -20,21 +20,22 @@ It is free, has no ads and is played with one finger.
 
 <table>
   <tr>
-    <td align="center" width="25%"><img src="images/en-03-seeding.png" alt="A finger taps the dish and a creature is born" width="180"><br><b>1. Tap</b><br>Sow a little drop of light.</td>
-    <td align="center" width="25%"><img src="images/en-05-tutorial-life.png" alt="A creature glows with a ring" width="180"><br><b>2. Watch</b><br>Some seeds come alive.</td>
-    <td align="center" width="25%"><img src="images/en-12-lab.png" alt="The Lab with upgrades" width="180"><br><b>3. Upgrade</b><br>Spend Essence on cool things.</td>
-    <td align="center" width="25%"><img src="images/en-13-bestiary.png" alt="The Bestiary with creature portraits" width="180"><br><b>4. Discover</b><br>Collect new species.</td>
+    <td align="center" width="25%"><img src="images/en-04-clock-running.png" alt="The dish with creatures and the session clock" width="180"><br><b>1. Sow</b><br>Tap the dish: the clock starts.</td>
+    <td align="center" width="25%"><img src="images/en-08-summary.png" alt="End of the session: your Essence becomes Data" width="180"><br><b>2. Time!</b><br>Your Essence becomes Data.</td>
+    <td align="center" width="25%"><img src="images/en-09-tree.png" alt="The Tree with upgrades" width="180"><br><b>3. Upgrade</b><br>Data grows the Tree.</td>
+    <td align="center" width="25%"><img src="images/en-17-bestiary.png" alt="The Bestiary with creature portraits" width="180"><br><b>4. Discover</b><br>New worlds and species.</td>
   </tr>
 </table>
 
-When you have lots of creatures, you can **start over, but stronger**. That is the most fun part!
+Every session earns more than the one before. And when your lab grows, **the night moves on** and new upgrades open. You never lose anything!
 
 ## Start here
 
 - [[How to play|How-to-play-en]]: Learn to play step by step, with pictures
-- [[Upgrades|Upgrades-en]]: Know what each button buys
+- [[Tree|Tree-en]]: Know what each upgrade does
+- [[Worlds|Worlds-en]]: Choose where to play
 - [[Species|Species-en]]: Meet the critters of light
-- [[Prestige and Genome|Prestige-and-Genome-en]]: Understand how to start over
+- [[Night|Night-en]]: Understand how the night moves on
 - [[Achievements|Achievements-en]]: See the medals I can earn
 - [[Secrets|Secrets-en]]: Find out there are secrets (no spoilers)
 - [[FAQ|FAQ-en]]: Answer a question
@@ -48,7 +49,7 @@ When you have lots of creatures, you can **start over, but stronger**. That is t
 - **Life is real.** Every creature comes out of a math rule running live. None of them is hand-animated.
 - **Everything glows and sounds.** Each tap makes ripples of light and musical notes made on the spot.
 - **Something is always happening.** Golden sparks, new creatures, prizes, medals.
-- **You decide.** Change the rules of the universe? Start over? Every game turns out different.
+- **You decide.** What do you upgrade first? Which world do you play today? Every game turns out different.
 
 ---
 

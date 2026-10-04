@@ -21,7 +21,7 @@ And what comes out? Suddenly **blobs of light that move on their own** appear. T
 
 ## What μ and σ are
 
-When you move the sliders in **Calibrate**, you change these numbers:
+Each **world** in the game is a mix of these numbers (that is why each world has its own creatures):
 
 | Letter | Said | Means… |
 |---|---|---|
@@ -30,7 +30,7 @@ When you move the sliders in **Calibrate**, you change these numbers:
 | **R** | "R" | **How far it looks.** The size of the ring of neighbours. With a bigger R, creatures are bigger. |
 | **dt** | "dee tee" | **How fast time passes** in each step. Too high breaks delicate creatures. |
 
-Every pair of μ and σ is **a different universe**, with its own critters. That is why changing the rules is the fastest way to discover new species.
+Every pair of μ and σ is **a different universe**, with its own critters. That is why opening a new world is the fastest way to discover new species.
 
 ## Who invented this?
 
@@ -56,7 +56,7 @@ Thank you, Bert! More thanks in [[Credits|Credits-en]].
 
 ## Mini experiments
 
-1. **Move μ very slowly** in Calibrate and watch a swimming creature. Does it melt? Does it change shape?
+1. **Play the same species in two worlds.** Moving μ and σ a little changes which shapes live. Which ones hold on?
 2. **Watch a creature leave one side** of the dish and come back in through the other. The dish is like a donut.
 3. **Seed twice on the same spot.** Do they come out the same? (Spoiler: almost never.)
 4. **Make something divide**, and watch the dish fill up!

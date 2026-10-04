@@ -11,12 +11,12 @@ Esta página solo tiene **pistas suaves**. Ninguna te dice qué hay. Todas te di
 
 ## Pistas suaves
 
-1. **Los científicos curiosos prueban todo.** Tocar, esperar, mover los deslizadores, volver a mirar.
+1. **Los científicos curiosos prueban todo.** Tocar, esperar, cambiar de mundo, volver a mirar.
 2. **No todo se ve a la primera.** Algunas cosas piden paciencia. Otras, curiosidad.
 3. **Vuelve otro día.** Las aventuras largas se disfrutan en pedacitos.
 4. **Lee la Bitácora.** A veces cuenta más de lo que parece.
 5. **Escucha.** La música cambia con lo que pasa en la placa.
-6. **Empezar de nuevo no es perder.** (Piensa en las Extinciones.)
+6. **Una noche nueva no es perder.** (Piensa en la lámpara de VELA.)
 7. **Mira el Bestiario completo.** Las siluetas con "?" están ahí por algo.
 
 ## Reglas de oro de los secretos
@@ -32,12 +32,12 @@ Son cosas que están a la vista y casi nadie prueba. ¿Cuántas has hecho?
 
 - [ ] Ponerle **tu propio nombre** a una especie (el lápiz de su ficha).
 - [ ] Seguir a una criatura con la cámara (**Seguir**).
-- [ ] Mover μ y σ hasta los extremos y ver qué pasa.
+- [ ] Jugar una sesión en cada mundo que tengas.
 - [ ] Cambiar al **tema claro** en Ajustes (¡la placa siempre queda oscura!).
 - [ ] Ver cómo nace una criatura **divisora**.
 - [ ] **Pausar** el juego y mirar la placa quieta.
 - [ ] Atrapar un **Destello** en el último segundo.
-- [ ] Hacer una Extinción y ver cuántas cosas **se quedan** contigo.
+- [ ] Avanzar la noche y ver cuántas cosas **se quedan** contigo.
 - [ ] Jugar **en inglés** y en español.
 
 **[▶ ¡A explorar!]({{GAME_URL}})**

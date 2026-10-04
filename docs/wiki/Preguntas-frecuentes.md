@@ -35,13 +35,13 @@ Si borras los datos del sitio o juegas en una **ventana privada**, la partida **
 ### ¿Cómo empiezo de cero?
 **Ajustes → Partida → Borrar partida.** Te pide tocar dos veces para no borrar por accidente.
 
-## Tiempo sin jugar (offline)
+## Tiempo sin jugar
 
-### ¿Sigue ganando Esencia cuando no juego?
-**Un ratito.** Al volver recibes una parte de lo que habrías ganado: la mitad de tu producción reciente, hasta un máximo de **2 horas**. La mejora **Reserva** sube el máximo hasta **24 horas**.
+### ¿Sigue jugando cuando no estoy?
+**No.** El laboratorio trabaja en **sesiones** con reloj, y el reloj solo corre mientras juegas. Si cierras el juego a mitad de una sesión, al volver **sigue donde la dejaste**, con el mismo tiempo.
 
-### ¿Descubre especies o compra mejoras sola?
-**No.** Eso solo lo haces tú. Tampoco aparecen Destellos dorados mientras no estás.
+### ¿Pierdo algo si me voy?
+**No.** Tus Datos, el Árbol, el Bestiario y los mundos se quedan contigo. Tampoco aparecen Destellos mientras no estás.
 
 ### ¿Se puede jugar sin internet?
 Sí, una vez que el juego cargó. Si lo **instalas** (mira [[Plataformas]]), funciona aún mejor sin conexión. Las letras bonitas se cambian por las del sistema, pero todo lo demás funciona igual.
@@ -58,15 +58,15 @@ Sí, una vez que el juego cargó. Si lo **instalas** (mira [[Plataformas]]), fun
 ### ¿Cómo cambio el idioma?
 **Ajustes → Idioma → Español / English.** Al abrir por primera vez, el juego usa el idioma de tu navegador.
 
-<p align="center"><img src="images/m-22-english-bestiary.png" alt="El Bestiario en inglés" width="210"><br><i>El mismo Bestiario, en inglés.</i></p>
+<p align="center"><img src="images/en-17-bestiary.png" alt="El Bestiario en inglés y con el tema claro" width="210"><br><i>El mismo Bestiario, en inglés.</i></p>
 
 ### ¿Hay modo oscuro y modo claro?
 Sí. **Ajustes → Apariencia → Tema:** *Auto*, *Oscuro* o *Claro*. La placa siempre se ve oscura, como bajo un microscopio.
 
-<p align="center"><img src="images/m-21-light-lab.png" alt="El Laboratorio con el tema claro: la placa sigue oscura" width="210"><br><i>Tema claro: la placa sigue oscura.</i></p>
+<p align="center"><img src="images/en-14-session-2.png" alt="Una sesión con el tema claro: la placa sigue oscura" width="210"><br><i>Tema claro: la placa sigue oscura.</i></p>
 
 ### ¿Cómo apago el sonido?
-Toca el **altavoz** de arriba, o la tecla **M** en el computador. En **Ajustes → Sonido** puedes bajar solo los **efectos** o solo la **música ambiente**. Todos los sonidos se inventan en el momento: no hay grabaciones.
+En **Ajustes → Sonido**, o con la tecla **M** en el computador (en una pantalla ancha también está el **altavoz** de arriba). En **Ajustes → Sonido** puedes bajar solo los **efectos** o solo la **música ambiente**. Todos los sonidos se inventan en el momento: no hay grabaciones.
 
 ### El juego me marea o va lento
 Prueba en **Ajustes**:
@@ -90,7 +90,7 @@ Tu navegador no tiene WebGL2. Actualízalo, prueba con otro, y revisa que esté 
 ## Ranking y juego limpio
 
 ### ¿Hay ranking?
-Sí, **opcional**. Tiene tres tablas: **Esencia de toda la vida**, **Especies** y **Eras**. Para aparecer eliges un **nombre de científico** (3 a 16 caracteres). No pide correo ni nada más. Hasta que lo eliges, **no se envía nada**.
+Sí, **opcional**. Tiene tres tablas: **Esencia de toda la vida**, **Especies** y **Noches**. Para aparecer eliges un **nombre de científico** (3 a 16 caracteres). No pide correo ni nada más. Hasta que lo eliges, **no se envía nada**.
 
 Si no ves el botón del trofeo arriba, tu versión todavía no lo tiene activado.
 
@@ -114,14 +114,17 @@ Ninguno por defecto. El ajuste **Analítica anónima** viene **apagado**; si lo 
 ### ¿Por qué casi todo se deshace al principio?
 Porque es **ciencia de verdad**: la mayoría de las manchas de luz no encuentra su forma. Sigue sembrando. Las que sí, ¡brillan!
 
-### Cambié μ y σ y mi criatura desapareció
-Es normal. Cada regla tiene sus propias criaturas. Vuelve a sembrar, o guarda ajustes con nombre (Calibrador II) para regresar a los que te gustan.
+### ¿Por qué la placa empieza vacía en cada sesión?
+Cada sesión es un rato nuevo de laboratorio. **Tus especies no se pierden**: están guardadas en el **Bestiario**. Con la **Nevera** del Árbol, tus mejores criaturas empiezan contigo la sesión siguiente.
 
-### ¿Cómo consigo más Muestras?
-**Descubriendo.** Cada especie nueva da Muestras, y también ver un comportamiento nuevo en una especie.
+### Cambié de mundo y no nace mi criatura favorita
+Es normal: **cada mundo tiene sus propias criaturas**. Elige su mundo en la tarjeta de inicio. La ficha de cada especie dice **dónde vive**. Mira [[Mundos]].
 
-### ¿Perderé todo si hago una Extinción?
-**No.** Te quedas con tu Bestiario, tus logros y tu Genoma. Mira [[Prestigio y Genoma]].
+### ¿Cómo consigo más Datos?
+Juntando Esencia (**por cada 250, 1 Dato**) y **descubriendo**: cada especie nueva da +5 Datos, cada manera de moverse nueva +3 y cada encargo +2. El **Abono** y el **Destello** ayudan a juntar más Esencia.
+
+### ¿Qué pasó con el Laboratorio, Calibrar, el Genoma y la Extinción?
+Eran de una versión anterior. Ahora todo se mejora en el [[Árbol]], las reglas son los [[Mundos]] y la [[Noche]] reemplaza a la Extinción, **sin borrar nada**. Si tenías una partida vieja, se convirtió en Datos y mejoras.
 
 ## ¿Algo no funciona?
 

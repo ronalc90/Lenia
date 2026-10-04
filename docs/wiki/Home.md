@@ -7,8 +7,8 @@
 # Bioluma
 
 **Tú siembras luz. Nace vida de verdad.**
-Las criaturas nadan, giran, laten y se dividen. Nadie las dibujó: ¡nacen solas dentro del juego!
-Es gratis, no tiene anuncios y se juega con un solo dedo.
+Las criaturas nadan, giran y brillan. Nadie las dibujó: ¡nacen solas dentro del juego!
+Se juega en sesiones cortas de laboratorio, con un solo dedo y sin anuncios.
 
 ## [▶ ¡Jugar ahora!]({{GAME_URL}})
 
@@ -20,23 +20,24 @@ Es gratis, no tiene anuncios y se juega con un solo dedo.
 
 <table>
   <tr>
-    <td align="center" width="25%"><img src="images/m-03-seeding.png" alt="Un dedo toca la placa y nace una criatura" width="180"><br><b>1. Toca</b><br>Siembra una gotita de luz.</td>
-    <td align="center" width="25%"><img src="images/m-05-tutorial-life.png" alt="Una criatura brilla con un anillo" width="180"><br><b>2. Mira</b><br>Algunas siembras cobran vida.</td>
-    <td align="center" width="25%"><img src="images/m-12-lab.png" alt="El Laboratorio con mejoras" width="180"><br><b>3. Mejora</b><br>Gasta Esencia en cosas geniales.</td>
-    <td align="center" width="25%"><img src="images/m-13-bestiary.png" alt="El Bestiario con retratos de criaturas" width="180"><br><b>4. Descubre</b><br>Colecciona especies nuevas.</td>
+    <td align="center" width="25%"><img src="images/m-04-clock-running.png" alt="La placa con criaturas y el reloj de la sesión" width="180"><br><b>1. Siembra</b><br>Toca la placa: el reloj empieza.</td>
+    <td align="center" width="25%"><img src="images/m-08-summary.png" alt="Fin de la sesión: tu Esencia se vuelve Datos" width="180"><br><b>2. ¡Tiempo!</b><br>Tu Esencia se vuelve Datos.</td>
+    <td align="center" width="25%"><img src="images/m-09-tree.png" alt="El Árbol con mejoras" width="180"><br><b>3. Mejora</b><br>Con Datos, el Árbol crece.</td>
+    <td align="center" width="25%"><img src="images/m-17-bestiary.png" alt="El Bestiario con retratos de criaturas" width="180"><br><b>4. Descubre</b><br>Mundos y especies nuevas.</td>
   </tr>
 </table>
 
-Cuando ya tienes muchas criaturas, puedes **empezar de nuevo, pero más fuerte**. ¡Eso es lo más divertido!
+Cada sesión rinde más que la anterior. Y cuando tu laboratorio crece, **la noche avanza** y se abren mejoras nuevas. ¡Nunca pierdes nada!
 
 ## Empieza por aquí
 
 | Quiero… | Página |
 |---|---|
 | Aprender a jugar paso a paso, con fotos | [[Cómo jugar]] |
-| Saber qué compra cada botón | [[Mejoras]] |
+| Saber qué hace cada mejora | [[Árbol]] |
+| Elegir dónde jugar | [[Mundos]] |
 | Conocer a los bichos de luz | [[Especies]] |
-| Entender cómo se empieza de nuevo | [[Prestigio y Genoma]] |
+| Entender cómo avanza la noche | [[Noche]] |
 | Ver las medallas que puedo ganar | [[Logros]] |
 | Descubrir que hay secretos (sin spoilers) | [[Secretos]] |
 | Resolver una duda | [[Preguntas frecuentes]] |
@@ -50,7 +51,7 @@ Cuando ya tienes muchas criaturas, puedes **empezar de nuevo, pero más fuerte**
 - **La vida es real.** Cada criatura sale de una regla matemática que corre en vivo. Ninguna está animada a mano.
 - **Todo brilla y suena.** Cada toque hace ondas de luz y notas de música que se inventan en el momento.
 - **Siempre pasa algo.** Chispas doradas, criaturas nuevas, premios, medallas.
-- **Tú decides.** ¿Cambias las reglas del universo? ¿Empiezas de nuevo? Cada partida sale distinta.
+- **Tú decides.** ¿Qué mejoras primero? ¿En qué mundo juegas hoy? Cada partida sale distinta.
 
 ---
 

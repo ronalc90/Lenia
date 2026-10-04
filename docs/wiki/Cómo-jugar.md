@@ -2,9 +2,11 @@
 
 # Cómo jugar
 
-¡Es muy fácil! Solo necesitas **un dedo**. Aquí tienes todo el juego, paso a paso.
+¡Es muy fácil! Solo necesitas **un dedo**.
 
-<p align="center"><img src="images/m-08-dish-alive.png" alt="La placa llena de criaturas de luz" width="300"></p>
+Bioluma se juega en **sesiones** cortas de laboratorio, con un **reloj**. En cada sesión siembras vida y juntas **Esencia**. Al terminar, tu Esencia se vuelve **Datos**, y con los Datos mejoras el **Árbol**. La sesión siguiente rinde más. ¡Y la otra, más todavía!
+
+<p align="center"><img src="images/m-04-clock-running.png" alt="Una sesión en marcha: la Esencia arriba a la izquierda, el reloj en el centro y la placa con criaturas" width="300"></p>
 
 ---
 
@@ -14,11 +16,11 @@
 <tr>
 <td valign="top">
 
-Verás a Bioluma brillar.
+Verás a Bioluma brillar. **Toca la pantalla** para entrar.
 
-**Toca la pantalla** para empezar.
+Te saluda **VELA**, la ayudante del laboratorio. **Toca su globo** para leer lo siguiente.
 
-Un tutorial corto te enseña los primeros pasos. Si ya sabes jugar, lo puedes saltar. Después lo puedes repetir desde **Ajustes**.
+¿Ya sabes jugar? Toca **«Saltar tutorial»**. Puedes repetirlo cuando quieras desde **Ajustes**.
 
 </td>
 <td width="254" align="center" valign="top">
@@ -31,22 +33,24 @@ Un tutorial corto te enseña los primeros pasos. Si ya sabes jugar, lo puedes sa
 
 ---
 
-## Paso 1 · Toca la placa 🌱
+## Paso 1 · Toca la placa 🌱 y el reloj empieza
 
 <table>
 <tr>
 <td valign="top">
 
-La **placa** es el cuadro oscuro del medio. Es como una gotita de laboratorio.
+La **placa** es el cuadro oscuro del medio.
 
-**Tócala.** ¡Acabas de sembrar!
+**Tócala.** ¡Acabas de poner una **semilla de luz**!
 
-Sembrar cuesta un poquito de **Esencia**. Es la moneda de Bioluma. Empiezas con 20, así que puedes sembrar muchas veces.
+Tu primera semilla es **gratis** y vive seguro.
+
+Arriba, en el centro, está el **reloj** de la sesión: **2:00**. Espera quieto hasta tu primera semilla. Entonces empieza a correr.
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/m-02-tutorial-seed.png" alt="El tutorial dice: Siembra vida. Toca la placa para sembrar materia." width="230">
+<img src="images/m-02-vela-hello.png" alt="VELA saluda: esto es la Estación Vigilia" width="230">
 
 </td>
 </tr>
@@ -54,37 +58,24 @@ Sembrar cuesta un poquito de **Esencia**. Es la moneda de Bioluma. Empiezas con 
 
 ---
 
-## Paso 2 · Mira qué pasa
+## Paso 2 · Mira cómo nace
 
 <table>
 <tr>
 <td valign="top">
 
-La luz se mueve. Algunas siembras se **deshacen**. Otras se **inflan** demasiado.
+La primera vez, el juego **se para** y VELA te lo explica con una tarjeta. Toca **«¡Entendido!»** para seguir.
 
-¡Eso es normal! Es ciencia de verdad. **Sigue tocando.**
+Encima de cada semilla verás **«Naciendo 62 %»**. Si se queda con forma, ¡es una **criatura**! Dirá **«Viva»**.
 
-Si ves un **anillo de puntitos**, quiere decir *"estoy naciendo"*. Espera un momento.
+Algunas semillas se apagan. **Es normal.** Prueba en otro sitio.
 
-</td>
-<td width="254" align="center" valign="top">
-
-<img src="images/m-03-seeding.png" alt="Una siembra recién hecha, con la criatura formándose" width="230">
-
-</td>
-</tr>
-</table>
-
-<table>
-<tr>
-<td valign="top">
-
-**Consejo del tutorial:** casi todo se disuelve o explota. Cuando algo se queda, ¡ahí empieza la diversión!
+Si tocas muy cerca de otra criatura, verás **«Muy cerca: se fundirían»**. ¡Siembra separado!
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/m-04-tutorial-wait.png" alt="Consejo del tutorial: casi todo se disuelve o explota, es normal" width="230">
+<img src="images/m-03-moment-seed.png" alt="Tarjeta de VELA: ¡Una semilla! Cada toque pone una semilla de luz" width="230">
 
 </td>
 </tr>
@@ -92,22 +83,36 @@ Si ves un **anillo de puntitos**, quiere decir *"estoy naciendo"*. Espera un mom
 
 ---
 
-## Paso 3 · ¡Vida!
+## Paso 3 · Junta Esencia 💧
+
+Cada criatura viva te da **Esencia** cada segundo. Arriba a la izquierda ves cuánta tienes.
+
+**«+1/s»** quiere decir **1 de Esencia cada segundo**.
+
+Con Esencia siembras más. El precio está en la píldora de abajo de la placa: **cada semilla que compras hoy cuesta un poquito más**. En la sesión siguiente vuelve al precio de siempre.
+
+En la placa caben **5 criaturas** al principio. Si está llena, verás **«¡Placa llena!»**. La mejora **Placa más grande** del Árbol da más sitio.
+
+---
+
+## Paso 4 · El reloj ⏱
 
 <table>
 <tr>
 <td valign="top">
 
-Cuando una criatura **se queda sana**, brilla con un anillo. ¡Está viva!
+El reloj marca tu **tiempo de laboratorio**.
 
-Ahora te da **Esencia sin parar**.
+- Cada **especie nueva** suma **+5 segundos**.
+- Cuando queda un minuto, verás **«¡Último minuto!»**.
+- Al llegar a **0:00**, la placa se para: **«¡TIEMPO!»**.
 
-**Tócala** y verás su ficha: cómo se llama, qué hace y cuánta Esencia te regala. Algunas nadan, otras giran, otras laten.
+**No pierdes nada.** Tu Esencia se cuenta y se vuelve Datos.
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/m-05-tutorial-life.png" alt="Una criatura estable con un anillo brillante y el mensaje ¡Vida!" width="230">
+<img src="images/m-07-times-up.png" alt="Sello ¡TIEMPO! sobre la placa" width="230">
 
 </td>
 </tr>
@@ -115,24 +120,28 @@ Ahora te da **Esencia sin parar**.
 
 ---
 
-## Paso 4 · Junta Esencia
+## Paso 5 · Tu Esencia se vuelve Datos 📊
 
 <table>
 <tr>
 <td valign="top">
 
-Arriba a la izquierda está tu **Esencia**. Debajo dice cuánta ganas **cada segundo**.
+Al final de cada sesión, una tarjeta hace la cuenta paso a paso:
 
-Más criaturas sanas, más Esencia.
+- **Por cada 250 de Esencia, 1 Dato.**
+- **+5 Datos** por cada especie nueva.
+- **+3 Datos** por cada manera de moverse nueva.
+- **+2 Datos** por cada encargo cumplido (en la sesión 1 se llaman **primeras metas**: sembrar y tu primera criatura).
+- Y más por los **récords**.
 
-La Esencia sirve para dos cosas: **sembrar** y **comprar mejoras**.
+**Los Datos no se pierden nunca.** Tus especies nuevas quedan **guardadas en el Bestiario**.
 
-¿Te quedaste sin nada y no hay nada vivo? No te preocupes: la **pipeta de emergencia** te regala una siembra de vez en cuando. Nunca te quedas atascado.
+Luego toca **«Ir al Árbol»**.
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/m-06-tutorial-essence.png" alt="El tutorial señala el contador de Esencia" width="230">
+<img src="images/m-08-summary.png" alt="Fin de la sesión: la cuenta de los Datos" width="230">
 
 </td>
 </tr>
@@ -140,26 +149,56 @@ La Esencia sirve para dos cosas: **sembrar** y **comprar mejoras**.
 
 ---
 
-## Paso 5 · Compra mejoras
+## Paso 6 · Mejora el Árbol 🌳
 
 <table>
 <tr>
 <td valign="top">
 
-Abre el **Laboratorio** (el frasco, abajo).
+En el **Árbol** gastas tus Datos.
 
-Cada tarjeta es una mejora. Toca el botón azul para comprarla.
+Las mejoras que **laten en verde** las puedes comprar. **Toca una.**
 
-- El **Gotero** hace siembras que funcionan más.
-- El **Sembrador automático** siembra solito.
-- La **Placa** da más espacio.
+Verás **«AHORA → CON UN NIVEL MÁS»**: gris es lo que tienes, verde es lo que tendrás. Toca **«Comprar»**.
 
-Las mejoras nuevas aparecen cuando haces cosas nuevas. Mira la lista completa en [[Mejoras]].
+Cada mejora es **tuya para siempre**. La próxima sesión ya lo notas.
+
+Todo sobre las mejoras: [[Árbol]].
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/m-12-lab.png" alt="El Laboratorio con una lista de mejoras y sus botones azules de compra" width="230">
+<img src="images/m-09-tree.png" alt="El Árbol con mejoras que laten en verde" width="230">
+
+</td>
+</tr>
+</table>
+
+<p align="center"><img src="images/m-10-node-sheet.png" alt="La hoja de una mejora: ahora y con un nivel más, y el botón Comprar" width="260"></p>
+
+---
+
+## Paso 7 · Una sesión nueva
+
+<table>
+<tr>
+<td valign="top">
+
+Toca **«Nueva sesión»**. Una tarjeta te dice:
+
+- cuánto tiempo tienes hoy,
+- qué te **regala el Árbol** (Esencia de inicio, siembras gratis, criaturas de la Nevera),
+- lo **nuevo** desde la última vez,
+- y tu **encargo**.
+
+Cuando tengas otro **Mundo**, elige su tarjeta: otras reglas, otras criaturas. Mira [[Mundos]].
+
+Toca **«¡Empezar!»**. Recuerda: **el reloj empieza con tu primera semilla**.
+
+</td>
+<td width="254" align="center" valign="top">
+
+<img src="images/m-12-start-card.png" alt="La tarjeta de inicio de la sesión 2" width="230">
 
 </td>
 </tr>
@@ -167,40 +206,22 @@ Las mejoras nuevas aparecen cuando haces cosas nuevas. Mira la lista completa en
 
 ---
 
-## Paso 6 · Descubre especies
+## Paso 8 · Abono, encargos y el Destello
 
 <table>
 <tr>
 <td valign="top">
 
-Cada criatura **distinta** entra al **Bestiario**, con su retrato y su nombre científico.
+**Abono 🌿** (el botón del centro, abajo, desde la primera sesión). Cuando tus criaturas ya dan Esencia y el reloj lleva medio minuto, se enciende en verde: **todo da Esencia ×1,25 hasta el final de la sesión**. Cuesta 20 segundos de tu Esencia. El siguiente de la misma sesión cuesta el doble. Sin criaturas vivas dice **«Falta vida»**.
 
-Cada especie nueva te da:
+**Encargos** (desde la sesión 2). VELA te pide favores en la barra de arriba de la placa: «Ten 3 criaturas vivas a la vez». Cumplirlo da Esencia, **+2 Datos** y **+5 segundos** de reloj. Si el favor es del Árbol, empieza con **«Al terminar:»**: el Árbol se abre cuando acaba el reloj.
 
-- **Muestras** (una moneda especial);
-- un **multiplicador** que te da más Esencia **para siempre**.
-
-¡Colecciónalas todas! Conoce más en [[Especies]].
+**El Destello ✨** (desde la sesión 2). A veces una chispa dorada cruza la placa. **¡Tócala rápido!** Te regala **30 segundos de tu Esencia**, y tu próxima semilla vivirá seguro.
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/m-13-bestiary.png" alt="El Bestiario: una cuadrícula con retratos de criaturas" width="230">
-
-</td>
-</tr>
-</table>
-
-<table>
-<tr>
-<td valign="top">
-
-Toca un retrato y verás la **ficha de la especie**: su nombre en latín, qué hace, qué tan rara es y cuánto vale.
-
-</td>
-<td width="254" align="center" valign="top">
-
-<img src="images/m-14-species-card.png" alt="La ficha de una especie" width="230">
+<img src="images/m-14-session-2.png" alt="La sesión 2 con un encargo arriba y el Abono abajo" width="230">
 
 </td>
 </tr>
@@ -208,42 +229,22 @@ Toca un retrato y verás la **ficha de la especie**: su nombre en latín, qué h
 
 ---
 
-## Paso 7 · ¡Atrapa la chispa dorada! ✨
+## Paso 9 · El Bestiario 📖
 
 <table>
 <tr>
 <td valign="top">
 
-De vez en cuando cruza una **chispa dorada**. Se llama **Destello**.
+El botón **Bestiario** está abajo a la izquierda. Ahí se guarda **cada especie** que descubres, para siempre.
 
-**¡Tócala antes de que se vaya!** Te da un premio sorpresa:
+Toca una para ver su ficha: su retrato, su nombre, **cómo se mueve**, **dónde vive** y **cuánta Esencia da**.
 
-- **Floración:** ganas **×7** Esencia durante 30 segundos.
-- **Esencia de golpe:** un montón de Esencia de una vez.
-- **Lluvia de esporas:** 5 siembras gratis.
-- **Mutágeno:** tus próximas 3 siembras salen bien seguro.
-
-Si se escapa, no pasa nada. Vendrá otra.
+Más en [[Especies]].
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/m-10-golden-spark.png" alt="Una chispa dorada cruzando la placa" width="230">
-
-</td>
-</tr>
-</table>
-
-<table>
-<tr>
-<td valign="top">
-
-¡Premio! Aquí el Destello acaba de regalar algo.
-
-</td>
-<td width="254" align="center" valign="top">
-
-<img src="images/m-11-golden-reward.png" alt="El premio del Destello aparece en pantalla" width="230">
+<img src="images/m-17-bestiary.png" alt="El Bestiario abierto desde abajo" width="230">
 
 </td>
 </tr>
@@ -251,22 +252,28 @@ Si se escapa, no pasa nada. Vendrá otra.
 
 ---
 
-## Paso 8 · Cambia las reglas del universo
+## Paso 10 · La noche avanza 🌙
+
+Después de unas sesiones y unas especies, **el centro del Árbol brilla en dorado**: ¡la noche puede avanzar!
+
+Tócalo. **No se borra nada.** Se abren mejoras nuevas y cada noche da **más Datos**. Todo en [[Noche]].
+
+---
+
+## La pausa ⏸
 
 <table>
 <tr>
 <td valign="top">
 
-Cuando descubres tu primera especie, puedes comprar el **Calibrador** en el Laboratorio. Eso abre la pestaña **Calibrar**, con deslizadores. Se llaman **μ** (mu) y **σ** (sigma).
+El botón de **pausa** (arriba a la izquierda de la placa) para la placa **y el reloj**.
 
-Muévelos y **cambias las reglas**. Cada regla tiene sus propias criaturas. ¡Puedes encontrar bichos que nunca viste!
-
-⚠️ Cuidado: cambiar las reglas puede deshacer la vida que tienes. Es parte de la aventura.
+Toca **«Seguir»** para volver. Si quieres acabar ya, **«Terminar ahora»** te dice cuántos Datos te llevas antes de confirmar.
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/m-15-calibrate.png" alt="La pestaña Calibrar con los deslizadores de μ y σ" width="230">
+<img src="images/m-19-pause.png" alt="La tarjeta de pausa: Seguir o Terminar ahora" width="230">
 
 </td>
 </tr>
@@ -274,84 +281,12 @@ Muévelos y **cambias las reglas**. Cada regla tiene sus propias criaturas. ¡Pu
 
 ---
 
-## Paso 9 · Empieza de nuevo, pero más fuerte 🧬
+## Trucos 💡
 
-<table>
-<tr>
-<td valign="top">
+- **Siembra separado.** Dos semillas que se tocan se funden y pierden la forma.
+- **¿Se apagaron todas?** Verás **«¡Toca aquí otra vez!»**. Siembra de nuevo: es barato.
+- **Compra primero lo que late en verde.** El **Gotero** hace que vivan más semillas; **Más tiempo** alarga cada sesión.
+- **Los mundos nuevos traen especies nuevas**: cada especie nueva da Datos y segundos de reloj.
+- **Nada se pierde**: ni los Datos, ni el Árbol, ni el Bestiario.
 
-Cuando ya ganaste mucha Esencia, aparece la pestaña **Genoma** y se activa el botón **Extinguir**.
-
-**Mantenlo apretado 1,5 segundos.** La placa se pone blanca y se vacía.
-
-¡Pero **no pierdes lo importante**! Te quedas con todos tus descubrimientos. Y ganas **Genoma**, que compra reglas nuevas.
-
-Así cada vez llegas más lejos y más rápido. Lo explicamos en [[Prestigio y Genoma]].
-
-</td>
-<td width="254" align="center" valign="top">
-
-<img src="images/m-16-genome.png" alt="La pestaña Genoma con el botón Extinguir" width="230">
-
-</td>
-</tr>
-</table>
-
-<table>
-  <tr>
-    <td align="center"><img src="images/m-23-extinction-ritual.png" alt="La placa se vuelve blanca durante la Extinción" width="220"><br>La placa se vacía…</td>
-    <td align="center"><img src="images/m-24-era-summary.png" alt="Resumen de la Era con el Genoma ganado" width="220"><br>…y ganas Genoma.</td>
-  </tr>
-</table>
-
----
-
-## Trucos
-
-- **Si no sale nada, sigue tocando.** Fallar es parte del juego.
-- **La placa es como un donut.** Lo que sale por un lado entra por el otro.
-- **Toca una criatura** para ver su ficha. El botón **Seguir** hace que la cámara la acompañe.
-
-<table>
-<tr>
-<td valign="top">
-
-- **Mantén el dedo apretado** en la placa (desde el Gotero II): siembra grande.
-- **Arrastra** (desde el Gotero III): ¡pincel de materia!
-- **Pellizca con dos dedos** para acercar y alejar.
-- Botones de la placa: **Pausa**, **Borrar** (quita materia) y **Velocidad** (más rápido, cuando compres la Incubadora).
-- La primera vez que abres una pestaña, arriba hay una frasecita que explica para qué sirve. Toca **Entendido** y se va.
-- El **libro** de arriba es la **Bitácora**: guarda frases del científico y tus **logros**. Mira [[Logros]].
-
-</td>
-<td width="254" align="center" valign="top">
-
-<img src="images/m-09-creature-card.png" alt="La ficha de una criatura sobre la placa" width="230">
-
-</td>
-</tr>
-</table>
-
-### En el computador
-
-<p align="center"><img src="images/d-02-play.png" alt="Bioluma en el navegador de un computador" width="100%"></p>
-
-| Haz | Para |
-|---|---|
-| Clic | Sembrar |
-| Clic derecho | Borrar |
-| Rueda del ratón | Acercar o alejar |
-| Teclas **1 2 3 4** | Cambiar de pestaña |
-| **Espacio** | Pausa |
-| **E** · **J** · **M** | Borrar · Bitácora · Silencio |
-| **+** · **-** · **0** | Acercar · alejar · volver |
-
-## Mientras no estás
-
-Si cierras el juego, la placa **sigue trabajando un ratito**. Al volver te espera un regalo de Esencia. No descubre especies ni compra cosas por ti: eso solo lo haces tú. Más detalles en [[Preguntas frecuentes]].
-
-## ¿Quieres más?
-
-[[Mejoras]] · [[Especies]] · [[Prestigio y Genoma]] · [[Logros]] · [[Secretos]]
-
-## [▶ ¡A jugar!]({{GAME_URL}})
+Más preguntas: [[Preguntas frecuentes]].

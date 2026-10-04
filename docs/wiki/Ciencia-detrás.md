@@ -21,7 +21,7 @@ Eso pasa en todos los cuadritos a la vez, una y otra vez, unas 30 veces por segu
 
 ## Qué son μ y σ
 
-Cuando mueves los deslizadores de **Calibrar**, cambias estos números:
+Cada **mundo** del juego es una combinación de estos números (por eso cada mundo tiene sus criaturas):
 
 | Letra | Se lee | Quiere decir… |
 |---|---|---|
@@ -30,7 +30,7 @@ Cuando mueves los deslizadores de **Calibrar**, cambias estos números:
 | **R** | "erre" | **Hasta dónde mira.** El tamaño del anillo de vecinas. Con R más grande, las criaturas son más grandes. |
 | **dt** | "de te" | **Qué tan rápido pasa el tiempo** en cada paso. Muy alto rompe a las criaturas delicadas. |
 
-Cada par de μ y σ es **un universo distinto**, con sus propios bichos. Por eso cambiar las reglas es la forma más rápida de descubrir especies nuevas.
+Cada par de μ y σ es **un universo distinto**, con sus propios bichos. Por eso abrir un mundo nuevo es la forma más rápida de descubrir especies nuevas.
 
 ## ¿Quién inventó esto?
 
@@ -56,7 +56,7 @@ Bert Chan encontró cientos de criaturas y las puso en un **catálogo** con nomb
 
 ## Mini-experimentos
 
-1. **Mueve μ muy despacito** en Calibrar y mira qué pasa con una criatura que nada. ¿Se deshace? ¿Cambia de forma?
+1. **Juega la misma especie en dos mundos.** Cambiar μ y σ un poquito cambia qué formas viven. ¿Cuáles aguantan?
 2. **Mira cómo sale una criatura por un lado** de la placa y vuelve a entrar por el otro. La placa es como un donut.
 3. **Siembra dos veces en el mismo sitio.** ¿Salen iguales? (Spoiler: casi nunca.)
 4. **Haz que algo se divida**, ¡y mira cómo se llena la placa!

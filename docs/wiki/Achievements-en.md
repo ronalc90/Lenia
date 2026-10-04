@@ -2,69 +2,54 @@
 
 # Achievements: medals to collect
 
-**Achievements** are medals. Each time you earn one a little bell rings and you get a **small, permanent Essence bonus**.
+**Achievements** are medals. Each time you earn one a little bell rings and you get a **small, permanent** Essence bonus.
 
-<table>
-<tr>
-<td valign="top">
-
-- You see them in the **Journal** (the book at the top), in the **Achievements** tab.
-- Your achievements **stay forever**, even after an Extinction.
+- They are in the **Journal**: tap your Essence, top left, or the book at the top.
+- Your achievements **stay forever**: no new night erases them.
 - No achievement is required: they are a gift for playing and exploring.
-- If you earn **all 34**, your Essence grows **+91%**.
+- If you get **all 31**, your Essence grows **+83%**.
 
 *(There are also hidden things that are not on this list. See [[Secrets|Secrets-en]].)*
-
-</td>
-<td width="254" align="center" valign="top">
-
-<img src="images/en-17-achievements.png" alt="The achievements list in the Journal" width="230">
-
-</td>
-</tr>
-</table>
 
 ## First steps
 
 | Achievement | How to get it | Bonus |
 |---|---|---|
-| **First drop** | Seed for the first time. | +1% |
-| **Something stayed** | Get a stable creature. | +2% |
-| **Steady hand** | Seed 100 times. | +2% |
-| **Steady rain** | Seed 1,000 times. | +3% |
+| **First seed** | Sow for the first time. | +1% |
+| **Something stayed** | Get a living creature. | +2% |
+| **Steady hand** | Sow 100 times. | +2% |
+| **Steady rain** | Sow 1,000 times. | +3% |
 
 ## Species collection
 
 | Achievement | How to get it | Bonus |
 |---|---|---|
-| **Naturalist** | Register 3 species. | +2% |
-| **Taxonomist** | Register 10 species. | +3% |
-| **A fauna of my own** | Register 20 species. | +5% |
-| **Rarity** | Register a rare species. | +3% |
-| **Jewel** | Register a very rare species. | +5% |
+| **Naturalist** | Discover 3 species. | +2% |
+| **Collector** | Discover 10 species. | +3% |
+| **A family of my own** | Discover 20 species. | +5% |
+| **Rarity** | Discover a rare species. | +3% |
+| **Jewel** | Discover a very rare species. | +5% |
+| **Variation** | Find a copy that came out different. | +3% |
 
-## Behaviours
-
-| Achievement | How to get it | Bonus |
-|---|---|---|
-| **Swimmer** | Observe a swimming creature. | +2% |
-| **Whirl** | Observe a spinning creature. | +2% |
-| **Heartbeat** | Observe a pulsing creature. | +2% |
-| **Mitosis** | Observe a dividing creature. | +3% |
-| **Colony** | Form a colony. | +3% |
-| **Ethologist** | Observe all 6 behaviours. | +5% |
-
-## Production
+## Ways of moving
 
 | Achievement | How to get it | Bonus |
 |---|---|---|
-| **Productive** | Reach 10 Essence per second. | +2% |
-| **Flourishing** | Reach 100 Essence per second. | +3% |
-| **Ecosystem** | Reach 1,000 Essence per second. | +5% |
+| **Swimmer** | See a creature that swims. | +2% |
+| **Whirl** | See a creature that spins. | +2% |
+| **Watcher** | See every way of moving. | +5% |
+
+## Essence
+
+| Achievement | How to get it | Bonus |
+|---|---|---|
+| **Productive** | Earn 10 Essence per second. | +2% |
+| **Flourishing** | Earn 100 Essence per second. | +3% |
+| **Garden of light** | Earn 1,000 Essence per second. | +5% |
 | **Ten thousand** | Earn 10,000 Essence in total. | +2% |
 | **Millionaire** | Earn 1,000,000 Essence in total. | +3% |
 
-## Golden sparks
+## Sparks
 
 | Achievement | How to get it | Bonus |
 |---|---|---|
@@ -72,30 +57,29 @@
 | **Light catcher** | Catch 10 Sparks. | +3% |
 | **Moth** | Catch 50 Sparks. | +5% |
 
-## A dish full of life
+## The dish
 
 | Achievement | How to get it | Bonus |
 |---|---|---|
-| **Living dish** | Have 5 stable creatures at once. | +2% |
-| **Bustle** | Have 10 stable creatures at once. | +3% |
+| **Living dish** | Have 5 living creatures at once. | +2% |
+| **Bustle** | Have 10 living creatures at once. | +3% |
+| **Friendship** | Put two friend species together. | +3% |
+| **Copycat** | Make a copy with the Copier. | +1% |
 
-## Scientist skills
-
-| Achievement | How to get it | Bonus |
-|---|---|---|
-| **Printer** | Print a species. | +1% |
-| **Fine tuning** | Change the calibration. | +1% |
-| **Archivist** | Save a regime (a named setting). | +1% |
-| **Variation** | Register a mutated variant. | +3% |
-| **Symbiosis** | Form a symbiotic pair. | +3% |
-
-## A long life
+## Worlds, Tree and nights
 
 | Achievement | How to get it | Bonus |
 |---|---|---|
-| **Tabula rasa** | Trigger an Extinction. | +5% |
-| **Heritage** | Buy a Genome node. | +2% |
-| **Back again** | Return after being away. | +1% |
+| **Traveller** | Visit 3 worlds. | +1% |
+| **Archivist** | Find every species of one world. | +1% |
+| **Gardener** | Buy 10 upgrades in the Tree. | +2% |
+| **First night** | Start a new night. | +5% |
+
+## Keep going
+
+| Achievement | How to get it | Bonus |
+|---|---|---|
+| **Back again** | Come back to play another day. | +1% |
 | **Patience** | Play for an hour. | +2% |
 
 **[▶ Go collect medals!]({{GAME_URL}})**

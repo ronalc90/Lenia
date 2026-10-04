@@ -24,7 +24,7 @@ Las ideas del detector (muerta, explotó, estable, nada, gira, late, se divide) 
 
 - **Equipo Flowers (Inria)**: [sensorimotor-lenia-search](https://github.com/flowersteam/sensorimotor-lenia-search)
 - **Leniabreeder**, de Maxence Faldor y Antoine Cully (ALIFE 2024): [github.com/maxencefaldor/Leniabreeder](https://github.com/maxencefaldor/Leniabreeder)
-- Los rangos del Calibrador siguen el barrido publicado por Hudcova y colaboradores ([arXiv:2601.01932](https://arxiv.org/abs/2601.01932)).
+- Los rangos del antiguo Calibrador (versiones anteriores) siguieron el barrido publicado por Hudcova y colaboradores ([arXiv:2601.01932](https://arxiv.org/abs/2601.01932)).
 
 ## Letras
 

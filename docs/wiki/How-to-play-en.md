@@ -2,9 +2,11 @@
 
 # How to play
 
-It is very easy! You only need **one finger**. Here is the whole game, step by step.
+It is very easy! You only need **one finger**.
 
-<p align="center"><img src="images/en-08-dish-alive.png" alt="The dish full of creatures made of light" width="300"></p>
+Bioluma is played in short lab **sessions**, with a **clock**. In each session you sow life and collect **Essence**. At the end, your Essence becomes **Data**, and Data grows the **Tree**. The next session earns more. And the one after that, even more!
+
+<p align="center"><img src="images/en-04-clock-running.png" alt="A session running: Essence top left, the clock in the middle and the dish with creatures" width="300"></p>
 
 ---
 
@@ -14,11 +16,11 @@ It is very easy! You only need **one finger**. Here is the whole game, step by s
 <tr>
 <td valign="top">
 
-You will see Bioluma glow.
+You will see Bioluma glow. **Tap the screen** to come in.
 
-**Tap the screen** to begin.
+**VELA**, the lab assistant, says hello. **Tap her bubble** to read on.
 
-A short tutorial shows you the first steps. If you already know how to play, you can skip it. You can replay it later from **Settings**.
+Already know how to play? Tap **"Skip tutorial"**. You can replay it any time from **Settings**.
 
 </td>
 <td width="254" align="center" valign="top">
@@ -31,22 +33,24 @@ A short tutorial shows you the first steps. If you already know how to play, you
 
 ---
 
-## Step 1 · Tap the dish 🌱
+## Step 1 · Tap the dish 🌱 and the clock starts
 
 <table>
 <tr>
 <td valign="top">
 
-The **dish** is the dark square in the middle. It is like a little lab droplet.
+The **dish** is the dark box in the middle.
 
-**Tap it.** You just seeded it!
+**Tap it.** You just dropped a **seed of light**!
 
-Seeding costs a little **Essence**. That is Bioluma's money. You start with 20, so you can seed many times.
+Your first seed is **free** and always lives.
+
+At the top, in the middle, is the session **clock**: **2:00**. It waits until your first seed. Then it starts running.
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/en-02-tutorial-seed.png" alt="The tutorial says: Seed life. Tap the dish to seed matter." width="230">
+<img src="images/en-02-vela-hello.png" alt="VELA says hello: this is Vigil Station" width="230">
 
 </td>
 </tr>
@@ -54,37 +58,24 @@ Seeding costs a little **Essence**. That is Bioluma's money. You start with 20, 
 
 ---
 
-## Step 2 · Watch what happens
+## Step 2 · Watch it hatch
 
 <table>
 <tr>
 <td valign="top">
 
-The light moves. Some seeds **melt away**. Others **swell** too much.
+The first time, the game **pauses** and VELA explains it with a card. Tap **"Got it!"** to go on.
 
-That is normal! It is real science. **Keep tapping.**
+Above each seed you will see **"Hatching 62%"**. If it keeps its shape, it is a **creature**! It will say **"Alive"**.
 
-If you see a **ring of dots**, it means *"I am being born"*. Wait a moment.
+Some seeds fade away. **That is normal.** Try another spot.
 
-</td>
-<td width="254" align="center" valign="top">
-
-<img src="images/en-03-seeding.png" alt="A fresh seed, with the creature forming" width="230">
-
-</td>
-</tr>
-</table>
-
-<table>
-<tr>
-<td valign="top">
-
-**Tutorial tip:** almost everything dissolves or blows up. When something stays, the fun begins!
+If you tap too close to another creature, you will see **"Too close: they would melt"**. Sow apart!
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/en-04-tutorial-wait.png" alt="Tutorial tip: almost everything dissolves or explodes, that is normal" width="230">
+<img src="images/en-03-moment-seed.png" alt="VELA's card: A seed! Each tap drops a seed of light" width="230">
 
 </td>
 </tr>
@@ -92,22 +83,36 @@ If you see a **ring of dots**, it means *"I am being born"*. Wait a moment.
 
 ---
 
-## Step 3 · Life!
+## Step 3 · Collect Essence 💧
+
+Every living creature gives you **Essence** every second. Top left shows how much you have.
+
+**"+1/s"** means **1 Essence every second**.
+
+Essence buys more seeds. The price is on the pill under the dish: **each seed you buy today costs a tiny bit more**. Next session it goes back to the usual price.
+
+The dish holds **5 creatures** at first. When it is full you will see **"Dish full!"**. The **Bigger dish** upgrade in the Tree gives more room.
+
+---
+
+## Step 4 · The clock ⏱
 
 <table>
 <tr>
 <td valign="top">
 
-When a creature **stays healthy**, it glows with a ring. It is alive!
+The clock is your **lab time**.
 
-Now it gives you **Essence non-stop**.
+- Each **new species** adds **+5 seconds**.
+- With one minute left you will see **"Last minute!"**.
+- At **0:00** the dish stops: **"TIME!"**.
 
-**Tap it** to see its card: its name, what it does and how much Essence it gives you. Some swim, some spin, some pulse.
+**You lose nothing.** Your Essence is counted and becomes Data.
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/en-05-tutorial-life.png" alt="A stable creature with a glowing ring and the message Life!" width="230">
+<img src="images/en-07-times-up.png" alt="The TIME! stamp over the dish" width="230">
 
 </td>
 </tr>
@@ -115,24 +120,28 @@ Now it gives you **Essence non-stop**.
 
 ---
 
-## Step 4 · Collect Essence
+## Step 5 · Your Essence becomes Data 📊
 
 <table>
 <tr>
 <td valign="top">
 
-Your **Essence** is at the top left. Under it you see how much you earn **every second**.
+At the end of each session a card does the maths step by step:
 
-More healthy creatures, more Essence.
+- **For every 250 Essence, 1 Data.**
+- **+5 Data** for each new species.
+- **+3 Data** for each new way of moving.
+- **+2 Data** for each request done (in session 1 they are called **first goals**: sowing and your first creature).
+- And more for **records**.
 
-Essence is for two things: **seeding** and **buying upgrades**.
+**Data is never lost.** Your new species are **kept in the Bestiary**.
 
-Out of Essence and nothing alive? Do not worry: the **emergency pipette** gives you a free seed now and then. You never get stuck.
+Then tap **"Go to the Tree"**.
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/en-06-tutorial-essence.png" alt="The tutorial points at the Essence counter" width="230">
+<img src="images/en-08-summary.png" alt="End of the session: how your Data was counted" width="230">
 
 </td>
 </tr>
@@ -140,26 +149,56 @@ Out of Essence and nothing alive? Do not worry: the **emergency pipette** gives 
 
 ---
 
-## Step 5 · Buy upgrades
+## Step 6 · Grow the Tree 🌳
 
 <table>
 <tr>
 <td valign="top">
 
-Open the **Lab** (the flask, at the bottom).
+The **Tree** is where you spend your Data.
 
-Each card is an upgrade. Tap the blue button to buy it.
+Upgrades that **glow green** can be bought. **Tap one.**
 
-- The **Dropper** makes seeds that work more often.
-- The **Auto-seeder** seeds by itself.
-- The **Dish** gives you more room.
+You will see **"NOW → WITH ONE MORE LEVEL"**: grey is what you have, green is what you will get. Tap **"Buy"**.
 
-New upgrades appear when you do new things. See the full list in [[Upgrades|Upgrades-en]].
+Every upgrade is **yours forever**. You will notice it next session.
+
+All about upgrades: [[Tree|Tree-en]].
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/en-12-lab.png" alt="The Lab with a list of upgrades and their blue buy buttons" width="230">
+<img src="images/en-09-tree.png" alt="The Tree with upgrades glowing green" width="230">
+
+</td>
+</tr>
+</table>
+
+<p align="center"><img src="images/en-10-node-sheet.png" alt="An upgrade's sheet: now and with one more level, and the Buy button" width="260"></p>
+
+---
+
+## Step 7 · A new session
+
+<table>
+<tr>
+<td valign="top">
+
+Tap **"New session"**. A card tells you:
+
+- how much time you have today,
+- what the **Tree gives you** (starting Essence, free seeds, creatures from the Fridge),
+- what is **new** since last time,
+- and your **request**.
+
+Once you have another **World**, pick its card: other rules, other creatures. See [[Worlds|Worlds-en]].
+
+Tap **"Start!"**. Remember: **the clock starts with your first seed**.
+
+</td>
+<td width="254" align="center" valign="top">
+
+<img src="images/en-12-start-card.png" alt="The start card of session 2" width="230">
 
 </td>
 </tr>
@@ -167,40 +206,22 @@ New upgrades appear when you do new things. See the full list in [[Upgrades|Upgr
 
 ---
 
-## Step 6 · Discover species
+## Step 8 · Fertiliser, requests and the Spark
 
 <table>
 <tr>
 <td valign="top">
 
-Every **different** creature goes into the **Bestiary**, with its portrait and its scientific name.
+**Fertiliser 🌿** (the middle button, at the bottom, from the first session). Once your creatures make Essence and the clock has run half a minute, it lights up green: **everything gives Essence ×1.25 until the session ends**. It costs 20 seconds of your Essence. The next one in the same session costs double. With nothing alive it says **"Needs life"**.
 
-Every new species gives you:
+**Requests** (from session 2). VELA asks for favours in the bar at the top of the dish: "Have 3 living creatures at once". Doing one gives Essence, **+2 Data** and **+5 seconds** of clock. A favour for the Tree starts with **"After the session:"**: the Tree opens when the clock ends.
 
-- **Samples** (a special coin);
-- a **multiplier** that gives you more Essence **forever**.
-
-Collect them all! Learn more in [[Species|Species-en]].
+**The Spark ✨** (from session 2). Now and then a golden spark crosses the dish. **Tap it quickly!** It gives you **30 seconds of your Essence**, and your next seed will surely live.
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/en-13-bestiary.png" alt="The Bestiary: a grid of creature portraits" width="230">
-
-</td>
-</tr>
-</table>
-
-<table>
-<tr>
-<td valign="top">
-
-Tap a portrait to see the **species card**: its Latin name, what it does, how rare it is and how much it is worth.
-
-</td>
-<td width="254" align="center" valign="top">
-
-<img src="images/en-14-species-card.png" alt="A species card" width="230">
+<img src="images/en-14-session-2.png" alt="Session 2 with a request at the top and Fertiliser at the bottom" width="230">
 
 </td>
 </tr>
@@ -208,42 +229,22 @@ Tap a portrait to see the **species card**: its Latin name, what it does, how ra
 
 ---
 
-## Step 7 · Catch the golden spark! ✨
+## Step 9 · The Bestiary 📖
 
 <table>
 <tr>
 <td valign="top">
 
-Now and then a **golden spark** drifts across the dish. It is called the **Spark**.
+The **Bestiary** button is at the bottom left. Every species you discover is **kept there forever**.
 
-**Tap it before it goes!** It gives you a surprise prize:
+Tap one to see its card: its portrait, its name, **how it moves**, **where it lives** and **how much Essence it gives**.
 
-- **Bloom:** you earn **×7** Essence for 30 seconds.
-- **Essence lump:** a pile of Essence at once.
-- **Spore rain:** 5 free seeds.
-- **Mutagen:** your next 3 seeds are sure to take.
-
-If it gets away, no problem. Another one will come.
+More in [[Species|Species-en]].
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/en-10-golden-spark.png" alt="A golden spark drifting across the dish" width="230">
-
-</td>
-</tr>
-</table>
-
-<table>
-<tr>
-<td valign="top">
-
-Prize! Here the Spark just handed something over.
-
-</td>
-<td width="254" align="center" valign="top">
-
-<img src="images/en-11-golden-reward.png" alt="The Spark reward shown on screen" width="230">
+<img src="images/en-17-bestiary.png" alt="The Bestiary opened from the bottom" width="230">
 
 </td>
 </tr>
@@ -251,22 +252,28 @@ Prize! Here the Spark just handed something over.
 
 ---
 
-## Step 8 · Change the rules of the universe
+## Step 10 · The night moves on 🌙
+
+After some sessions and some species, **the centre of the Tree glows gold**: the night can move on!
+
+Tap it. **Nothing is erased.** New upgrades open and every night gives **more Data**. All in [[Night|Night-en]].
+
+---
+
+## Pause ⏸
 
 <table>
 <tr>
 <td valign="top">
 
-When you discover your first species, you can buy the **Calibrator** in the Lab. That opens the **Calibrate** tab, with sliders. They are called **μ** (mu) and **σ** (sigma).
+The **pause** button (top left of the dish) stops the dish **and the clock**.
 
-Move them and you **change the rules**. Each rule has its own creatures. You can find critters you have never seen!
-
-⚠️ Careful: changing the rules can melt the life you have. It is part of the adventure.
+Tap **"Keep playing"** to go back. If you want to finish now, **"End now"** tells you how much Data you take before you confirm.
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/en-15-calibrate.png" alt="The Calibrate tab with the μ and σ sliders" width="230">
+<img src="images/en-19-pause.png" alt="The pause card: Keep playing or End now" width="230">
 
 </td>
 </tr>
@@ -274,84 +281,12 @@ Move them and you **change the rules**. Each rule has its own creatures. You can
 
 ---
 
-## Step 9 · Start over, but stronger 🧬
+## Tips 💡
 
-<table>
-<tr>
-<td valign="top">
+- **Sow apart.** Two seeds that touch melt together and lose their shape.
+- **Did they all fade?** You will see **"Tap here again!"**. Sow again: it is cheap.
+- **Buy what glows green first.** The **Dropper** makes more seeds live; **More time** makes every session longer.
+- **New worlds bring new species**: each new species gives Data and clock seconds.
+- **Nothing is lost**: not your Data, not the Tree, not the Bestiary.
 
-When you have earned a lot of Essence, the **Genome** tab appears and the **Extinguish** button turns on.
-
-**Hold it for 1.5 seconds.** The dish turns white and empties.
-
-But you **keep what matters**! You keep all your discoveries. And you earn **Genome**, which buys new rules.
-
-So each time you go farther and faster. We explain it in [[Prestige and Genome|Prestige-and-Genome-en]].
-
-</td>
-<td width="254" align="center" valign="top">
-
-<img src="images/en-16-genome.png" alt="The Genome tab with the Extinguish button" width="230">
-
-</td>
-</tr>
-</table>
-
-<table>
-  <tr>
-    <td align="center"><img src="images/en-23-extinction-ritual.png" alt="The dish turns white during Extinction" width="220"><br>The dish empties…</td>
-    <td align="center"><img src="images/en-24-era-summary.png" alt="Era summary with the Genome earned" width="220"><br>…and you earn Genome.</td>
-  </tr>
-</table>
-
----
-
-## Tips
-
-- **If nothing shows up, keep tapping.** Failing is part of the game.
-- **The dish is like a donut.** What leaves one side comes back on the other.
-- **Tap a creature** to see its card. The **Follow** button makes the camera go with it.
-
-<table>
-<tr>
-<td valign="top">
-
-- **Press and hold** on the dish (from Dropper II): big seed.
-- **Drag** (from Dropper III): a matter brush!
-- **Pinch with two fingers** to zoom in and out.
-- Dish buttons: **Pause**, **Erase** (removes matter) and **Speed** (faster, once you buy the Incubator).
-- The first time you open a tab, a little sentence at the top says what it is for. Tap **Got it** and it goes away.
-- The **book** at the top is the **Journal**: it keeps the scientist's notes and your **achievements**. See [[Achievements|Achievements-en]].
-
-</td>
-<td width="254" align="center" valign="top">
-
-<img src="images/en-09-creature-card.png" alt="A creature card over the dish" width="230">
-
-</td>
-</tr>
-</table>
-
-### On a computer
-
-<p align="center"><img src="images/d-02-play.png" alt="Bioluma in a computer's browser" width="100%"></p>
-
-| Do | To |
-|---|---|
-| Click | Seed |
-| Right-click | Erase |
-| Mouse wheel | Zoom in or out |
-| Keys **1 2 3 4** | Switch tab |
-| **Space** | Pause |
-| **E** · **J** · **M** | Erase · Journal · Mute |
-| **+** · **-** · **0** | Zoom in · out · reset |
-
-## While you are away
-
-If you close the game, the dish **keeps working for a while**. When you come back, a gift of Essence is waiting. It does not discover species or buy things for you: only you do that. More in the [[FAQ|FAQ-en]].
-
-## Want more?
-
-[[Upgrades|Upgrades-en]] · [[Species|Species-en]] · [[Prestige and Genome|Prestige-and-Genome-en]] · [[Achievements|Achievements-en]] · [[Secrets|Secrets-en]]
-
-## [▶ Play now!]({{GAME_URL}})
+More questions: [[FAQ|FAQ-en]].

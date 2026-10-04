@@ -24,7 +24,7 @@ The detector's ideas (dead, exploded, stable, swims, spins, pulses, divides) are
 
 - **Flowers team (Inria)**: [sensorimotor-lenia-search](https://github.com/flowersteam/sensorimotor-lenia-search)
 - **Leniabreeder**, by Maxence Faldor and Antoine Cully (ALIFE 2024): [github.com/maxencefaldor/Leniabreeder](https://github.com/maxencefaldor/Leniabreeder)
-- The Calibrator ranges follow the sweep published by Hudcova and colleagues ([arXiv:2601.01932](https://arxiv.org/abs/2601.01932)).
+- The old Calibrator ranges (earlier versions) followed the sweep published by Hudcova and colleagues ([arXiv:2601.01932](https://arxiv.org/abs/2601.01932)).
 
 ## Fonts
 
