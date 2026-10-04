@@ -32,8 +32,8 @@ export const S = {
 
 export function secretHint(lang: Lang, p: { species: number; speciesTotal: number; behaviors: number; behaviorsTotal: number; answered: boolean }): string {
   return lang === 'es'
-    ? `Especies semilla ${p.species}/${p.speciesTotal} · Comportamientos ${p.behaviors}/${p.behaviorsTotal}${p.answered ? ' · Contestaste' : ' · ¿Contestaste?'}`
-    : `Seed species ${p.species}/${p.speciesTotal} · Behaviours ${p.behaviors}/${p.behaviorsTotal}${p.answered ? ' · You answered' : ' · Did you answer?'}`;
+    ? `Especies de Albor ${p.species}/${p.speciesTotal} · Maneras de moverse ${p.behaviors}/${p.behaviorsTotal}${p.answered ? ' · Contestaste' : ' · ¿Contestaste?'}`
+    : `Albor’s species ${p.species}/${p.speciesTotal} · Ways of moving ${p.behaviors}/${p.behaviorsTotal}${p.answered ? ' · You answered' : ' · Did you answer?'}`;
 }
 
 export const tr = (text: Text, lang: Lang): string => text[lang] ?? text.es;

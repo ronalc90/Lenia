@@ -68,7 +68,8 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
 
   // ───────────── DOM ─────────────
   const layer = document.createElement('div');
-  layer.className = 'sty';
+  // VELA speaks from the night lab in both themes (art tokens resolve dark here, docs/ARTE.md §3).
+  layer.className = 'sty art-force-dark';
   try {
     if (getComputedStyle(root).position === 'static') layer.style.position = 'fixed';
   } catch {
@@ -337,7 +338,12 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
       if (tg) {
         const cx = tg.rect.x + tg.rect.w / 2;
         x = Math.min(Math.max(10, cx - pw / 2), W - pw - 10);
-        if (big) y = tg.rect.y + 18;
+        // Inside a big target (the dish): below the game's floating objective bar (--sty-top), never over it.
+        // And below an Encargo bubble hanging from that bar (--enc-bottom), so the two never stack.
+        if (big) {
+          const rs = document.documentElement.style;
+          y = Math.max(tg.rect.y + 18, parseFloat(rs.getPropertyValue('--sty-top')) || 0, (parseFloat(rs.getPropertyValue('--enc-bottom')) || -8) + 8);
+        }
         else if (tg.rect.y + tg.rect.h + 44 + ph < H - 8) y = tg.rect.y + tg.rect.h + 44;
         else y = Math.max(8, tg.rect.y - 44 - ph);
       }

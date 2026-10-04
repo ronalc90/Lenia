@@ -12,6 +12,8 @@
  *   ?gallery=1                  all portraits in all moods
  *   ?freeze=<sec>               freeze the animation clock
  */
+// Art tokens (--bl-*) before every module stylesheet (docs/ARTE.md §12).
+import '../art/art.css';
 import { Bus, type GameEvents } from '../../core/bus';
 import type { CreatureView, GameView, Lang } from '../../core/types';
 import { createStory } from '../../story/story';

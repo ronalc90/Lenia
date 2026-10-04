@@ -393,10 +393,12 @@ describe('story: pacing and text', () => {
 
   it('tokens resolve to the player\'s own species and rhythm', () => {
     const h = veteran(['t_intro', 't_stable', 't_essence'], { tutorialSkipped: false });
-    h.set({ species: [species('Orbium unicaudatus')], tabs: { lab: false, bestiary: true, calibrate: false, genome: false } });
+    h.set({ species: [{ ...species('Orbium unicaudatus'), name: 'Nadadora celeste' }], tabs: { lab: false, bestiary: true, calibrate: false, genome: false } });
     h.wait(5);
     expect(h.id()).toBe('t_bestiary');
-    expect(h.story.current()!.line!.text.es).toContain('Orbium unicaudatus');
+    // The common name, the same one the Bestiary shows (not the Latin).
+    expect(h.story.current()!.line!.text.es).toContain('Nadadora celeste');
+    expect(h.story.current()!.line!.text.es).not.toContain('Orbium');
 
     const r = veteran(['a2_constellation']);
     for (let i = 0; i < 5; i++) seed(r);

@@ -29,6 +29,11 @@ export interface EncargoUIOptions {
   /** A story dialogue / choice / ending is on screen: bubbles wait (pass storyUI.busy). */
   busy?(): boolean;
   onSound?(kind: 'offer' | 'done'): void;
+  /**
+   * Sessions cycle: what every Encargo adds besides its Esencia (Datos at the end of the session and
+   * seconds on the clock, docs/CICLO.md §6). Null in the classic loop (then Samples are shown).
+   */
+  sessionRewards?(): { datos: number; seconds: number } | null;
 }
 
 export interface EncargoBadge {
@@ -81,7 +86,7 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
   const rm = () => opts.reduceMotion?.() ?? false;
 
   const layer = document.createElement('div');
-  layer.className = 'enc';
+  layer.className = 'enc art-force-dark';
   const fx = document.createElement('canvas');
   fx.className = 'enc-fx';
   const bubble = document.createElement('div');
@@ -124,7 +129,12 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
     };
     const n = (x: number) => (L() === 'es' ? x.toLocaleString('es-ES') : x.toLocaleString('en-US'));
     if (r.essence > 0) chip('ess', `${icon('essence', 16)}<b>+${n(r.essence)}</b>`);
-    if (r.samples > 0) chip('smp', `${icon('samples', 16)}<b>+${n(r.samples)}</b>`);
+    // Sessions: Datos and seconds instead of Samples (CLARIDAD J-37); classic: Samples.
+    const ses = opts.sessionRewards?.() ?? null;
+    if (ses) {
+      if (ses.datos > 0) chip('dat', `${icon('datos', 16)}<b>+${n(ses.datos)} ${L() === 'es' ? 'Datos' : 'Data'}</b>`);
+      if (ses.seconds > 0) chip('sec', `${icon('time', 16)}<b>+${n(ses.seconds)} s</b>`);
+    } else if (r.samples > 0) chip('smp', `${icon('samples', 16)}<b>+${n(r.samples)}</b>`);
     if (r.cosmetic) chip('cos', `<i class="enc-gift"></i><b></b>`);
     if (r.journal) chip('jrn', `${icon('journal', 16)}<b></b>`);
     const cos = row.querySelector('.cos b');
@@ -178,7 +188,8 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
     ask.className = 'enc-ask';
     ask.textContent = tr(d.thanks.text, L());
     body.append(head, ask, rewardChips(d.reward, true));
-    face.set(d.thanks.who, d.thanks.who === 'committee' || d.thanks.who === 'albor' ? 'neutral' : 'happy');
+    // A request done: VELA is proud of it (docs/ARTE.md §6); the Committee and Albor stay as they are.
+    face.set(d.thanks.who, d.thanks.who === 'committee' || d.thanks.who === 'albor' ? 'neutral' : 'proud');
     bubble.setAttribute('aria-label', `${tr(L10N.done, L())} ${tr(d.thanks.text, L())}`);
   }
 
@@ -199,6 +210,18 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
     bubble.style.left = `${x.toFixed(1)}px`;
     bubble.style.top = `${a.y.toFixed(1)}px`;
     bubble.style.setProperty('--ax', `${(a.x - x).toFixed(1)}px`);
+    // Where the bubble ends, for VELA's task pill to sit below it instead of on top (no stacked bubbles).
+    const bottom = `${(a.y + (bubble.offsetHeight || 0)).toFixed(0)}`;
+    if (bottom !== encBottom) {
+      encBottom = bottom;
+      document.documentElement.style.setProperty('--enc-bottom', bottom);
+    }
+  }
+  let encBottom = '';
+  function clearBottom(): void {
+    if (!encBottom) return;
+    encBottom = '';
+    document.documentElement.style.removeProperty('--enc-bottom');
   }
 
   // ───────────── particles ─────────────
@@ -243,6 +266,14 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
     ctx.clearRect(0, 0, W, H);
     if (!particles.length) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Confetti stays on the dish: it never flies over the HUD (docs/ARTE.md §2.13).
+    const dish = opts.getTargetRect?.('dish') ?? null;
+    ctx.save();
+    if (dish && dish.width > 0) {
+      ctx.beginPath();
+      ctx.rect(dish.left - r0.left, dish.top - r0.top, dish.width, dish.height);
+      ctx.clip();
+    }
     for (const p of particles) {
       p.life += dt;
       p.vy += 420 * dt;
@@ -265,6 +296,7 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
       } else ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.restore();
     ctx.globalAlpha = 1;
     ctx.shadowBlur = 0;
     particles = particles.filter((p) => p.life < p.max);
@@ -310,7 +342,10 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
     bubble.classList.remove('in');
     bubble.classList.add(tuck && !rm() ? 'tuck' : 'out');
     window.setTimeout(() => {
-      if (!showing) bubble.hidden = true;
+      if (!showing) {
+        bubble.hidden = true;
+        clearBottom();
+      }
       next();
       kick();
     }, 380);
@@ -339,7 +374,7 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
       face.state.reduceMotion = rm();
       face.frame(clock, dt, target, talking);
       if (showing.kind === 'cheer' && age > 0.45 && age - dt <= 0.45) face.set(showing.done.thanks.who, 'awed');
-      if (showing.kind === 'cheer' && age > 1.4 && age - dt <= 1.4) face.set(showing.done.thanks.who, showing.done.thanks.who === 'vela' ? 'happy' : 'neutral');
+      if (showing.kind === 'cheer' && age > 1.4 && age - dt <= 1.4) face.set(showing.done.thanks.who, showing.done.thanks.who === 'vela' ? 'proud' : 'neutral');
       place();
       if (!hold && (now - shownAtMs) / 1000 > duration) hide(showing.kind === 'offer');
     }

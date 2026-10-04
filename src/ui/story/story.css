@@ -5,19 +5,23 @@
    ────────────────────────────────────────────────────────────────────────── */
 
 .sty {
-  --sty-bg: #0b0e12;
-  --sty-panel: rgba(14, 19, 27, 0.94);
-  --sty-line: rgba(91, 192, 235, 0.28);
-  --sty-text: #e6edf3;
-  --sty-dim: #8b98a5;
-  --sty-accent: #5bc0eb;
-  --sty-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --sty-font: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --sty-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
-  --sty-mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+  /* Art tokens (src/ui/art/art.css; the layer is .art-force-dark: VELA speaks from the night lab). */
+  --sty-bg: var(--bl-bg, #0b0e12);
+  --sty-panel: var(--bl-surface2, rgba(14, 19, 27, 0.94));
+  --sty-line: rgba(255, 184, 107, 0.22);
+  --sty-text: var(--bl-text, #e6edf3);
+  --sty-dim: var(--bl-text2, #a7b3bf);
+  --sty-accent: var(--bl-accent, #5bc0eb);
+  --sty-candle: var(--bl-candle, #ffb86b);
+  --sty-ease: var(--bl-ease-enter, cubic-bezier(0.2, 0.8, 0.2, 1));
+  --sty-font: var(--bl-font-ui, Inter, system-ui, sans-serif);
+  --sty-serif: var(--bl-font-display, Georgia, serif);
+  /* The Committee's telex is an instrument: the only mono voice. */
+  --sty-mono: var(--bl-font-mono, 'JetBrains Mono', ui-monospace, monospace);
   position: absolute;
   inset: 0;
-  z-index: 45;
+  /* VELA's dialogue layer (docs/ARTE.md §10, --bl-z-dialogue): above the HUD and toasts, below modals. */
+  z-index: var(--bl-z-dialogue, 50);
   pointer-events: none;
   font-family: var(--sty-font);
   color: var(--sty-text);
@@ -61,14 +65,15 @@
   min-height: 92px;
   padding: 12px 14px 14px 112px;
   border-radius: 18px;
+  /* surface2 with a warm candle edge (docs/ARTE.md §12): VELA's light, not a cold cyan glow. */
   background:
-    radial-gradient(120% 140% at 0% 100%, rgba(64, 72, 210, 0.18), transparent 60%),
-    linear-gradient(180deg, #19212a, #0e131a);
+    radial-gradient(120% 140% at 0% 100%, rgba(255, 184, 107, 0.08), transparent 60%),
+    linear-gradient(180deg, var(--bl-surface2, #1b232c), var(--bl-surface, #141a21));
   border: 1px solid var(--sty-line);
   box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 184, 107, 0.12),
     0 10px 40px rgba(0, 0, 0, 0.55),
-    0 0 26px rgba(91, 192, 235, 0.12),
+    0 0 26px rgba(255, 184, 107, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
   pointer-events: auto;
   cursor: pointer;
@@ -142,7 +147,8 @@
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--sty-accent);
+  /* VELA's name in candle light (docs/ARTE.md §12). */
+  color: var(--sty-candle);
   text-shadow: 0 0 10px currentColor;
 }
 .sty-name .rec {
@@ -718,7 +724,8 @@
 .enc {
   position: absolute;
   inset: 0;
-  z-index: 44;
+  /* Encargo bubbles: toast level (docs/ARTE.md §10), under VELA's dialogue and any modal. */
+  z-index: calc(var(--bl-z-toast, 40) + 4);
   pointer-events: none;
   font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: #e6edf3;
@@ -901,7 +908,9 @@
   padding: 0 8px 0 6px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.06);
-  font: 600 12.5px/1 'JetBrains Mono', ui-monospace, monospace;
+  /* Numbers in Inter with tabular figures, not the instrument mono (docs/ARTE.md §4). */
+  font: 600 12.5px/1 var(--bl-font-ui, Inter, system-ui, sans-serif);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .enc-chip.ess {
@@ -909,6 +918,12 @@
 }
 .enc-chip.smp {
   color: #8ae234;
+}
+.enc-chip.dat {
+  color: var(--bl-aurora, #5ee6c8);
+}
+.enc-chip.sec {
+  color: var(--bl-frost, #cfe8f5);
 }
 .enc-chip.cos {
   color: #ff9f80;
@@ -1004,7 +1019,8 @@
 }
 .enc-badge-num {
   flex: none;
-  font: 600 11.5px/1 'JetBrains Mono', ui-monospace, monospace;
+  font: 600 12px/1 var(--bl-font-ui, Inter, system-ui, sans-serif);
+  font-variant-numeric: tabular-nums;
   color: var(--c);
 }
 .enc-badge-bar {

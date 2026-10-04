@@ -109,6 +109,11 @@ export interface Story {
   /** Start any scene for real, ignoring its conditions (dev tools). */
   play(sceneId: string): boolean;
   /**
+   * Scenes told elsewhere (a Momentos card, docs/MOMENTOS.md §2): mark them done without playing
+   * them. One thing per event: the tutorial chain continues as if they had played.
+   */
+  consume(sceneIds: string[]): void;
+  /**
    * Say a few lines now as an ad-hoc scene (e.g. an Encargo's "Why?"): no waits,
    * no choices, no state changes. Refused (false) while a real scene is on screen.
    */
@@ -354,7 +359,8 @@ export function createStory(deps: StoryDeps): Story {
     if (!v.species.length) return 'Orbium';
     let sp = v.species[0];
     if (pick === 'best') for (const s of v.species) if (s.mult > sp.mult) sp = s;
-    return sp.catalogName ?? sp.name;
+    // The common name the Bestiary shows ("Nadadora celeste"); the Latin stays small on its card (CLARIDAD J-128).
+    return sp.name;
   }
 
   function resolveText(text: Text, v: GameView): Text {
@@ -667,6 +673,12 @@ export function createStory(deps: StoryDeps): Story {
     st.eraStartAt = now();
     st.lastEra = era;
   });
+  // Sessions cycle: a new night is the story's new era (docs/CICLO.md §5; nothing is wiped).
+  on('nightStart', ({ night }) => {
+    bump('extDone');
+    st.eraStartAt = now();
+    st.lastEra = night;
+  });
   on('offlineReturn', () => bump('offline'));
 
   // ───────────── boot ─────────────
@@ -683,6 +695,7 @@ export function createStory(deps: StoryDeps): Story {
       }
       if (v.era >= 2) {
         st.done.add('a1_extinction');
+        st.done.add('a1_night');
         st.done.add('a1_committee');
       }
     } catch {
@@ -829,6 +842,24 @@ export function createStory(deps: StoryDeps): Story {
       suspended = null;
       start(def, false);
       return true;
+    },
+    consume(ids) {
+      let changed = false;
+      for (const id of ids) {
+        if (!SCENE_BY_ID.has(id) || st.done.has(id)) continue;
+        if (active && active.def.id === id && !active.replay) {
+          finish(active, true);
+          continue;
+        }
+        if (suspended?.def.id === id) suspended = null;
+        // No doneAt: it was never watched, so it stays out of the Historia archive.
+        st.done.add(id);
+        changed = true;
+      }
+      if (changed) {
+        persist();
+        events.emit('change', {});
+      }
     },
     speak(id, title, lines) {
       if (!lines.length || (active && !active.replay)) return false;

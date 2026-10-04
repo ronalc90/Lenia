@@ -11,7 +11,8 @@ import type { GameView, Text } from '../core/types';
 
 /** Cast. `you` is the player-scientist (journal voice). */
 export type Speaker = 'vela' | 'albor' | 'committee' | 'coro' | 'you';
-export type Mood = 'neutral' | 'happy' | 'worried' | 'awed';
+/** VELA's face. 'sleepy' (back after a while, long sessions) and 'proud' (a purchase, a request done, a new night) come with the art direction (docs/ARTE.md §6). */
+export type Mood = 'neutral' | 'happy' | 'worried' | 'awed' | 'sleepy' | 'proud';
 export type Act = 1 | 2 | 3 | 4;
 
 /**
@@ -30,7 +31,18 @@ export type TargetId =
   | 'tab.genome'
   | 'extinguish'
   /** The objective bar (Encargos). */
-  | 'objective';
+  | 'objective'
+  // ── Sessions cycle (docs/CICLO.md; scenes t_tree, t_world, a1_night) ──
+  /** The session clock in the HUD. */
+  | 'hud.clock'
+  /** The summary's "Ir al Árbol" button. */
+  | 'tree.open'
+  /** The centre of the research tree (the night node). */
+  | 'tree.center'
+  /** The first tree node the player can buy now (it glows green). */
+  | 'tree.next'
+  /** The world picker on the session start card. */
+  | 'world.picker';
 
 export const TARGET_IDS: readonly TargetId[] = [
   'dish',
@@ -44,6 +56,11 @@ export const TARGET_IDS: readonly TargetId[] = [
   'tab.genome',
   'extinguish',
   'objective',
+  'hud.clock',
+  'tree.open',
+  'tree.center',
+  'tree.next',
+  'world.picker',
 ];
 
 /** Environmental hints: overlay effects drawn over the dish, never changes to the simulation (pillar 1). */
