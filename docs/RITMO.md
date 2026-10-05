@@ -94,6 +94,7 @@ Un aviso fijo de 30 s pinta de ámbar una partida de 15 s desde el principio. Ah
 | Cuenta atrás (`countdownSeconds`) | ⅓ de la partida, entre 3 y 10 s | 5 s | 10 s | 10 s |
 | Recta final (`sprintSeconds`) | ¼ de la partida, como mucho 30 s | 3,75 s | 11 s | 30 s |
 | «¡Último minuto!» | solo si la partida dura más de 65 s | — | — | 60 s |
+| Pausa explicativa del reloj | cuando el reloj se vuelve ámbar (*Corrección v0.016*, QA4 F-08: era «queda un minuto» fijo) | 4 s | 11 s | 30 s |
 | Sello «¡Tiempo!» | `SESSION_TIMESUP_HOLD` | 1,2 s | 1,2 s | 1,2 s |
 
 ## 4. La vida a cámara rápida (ADR-027)
@@ -122,10 +123,10 @@ paga a algo que no es estable**.
 | **Cámara rápida en una partida** | **×1,5 = 45 pasos/s** (era ×3) | `SESSION_SIM_PACE` | el dueño (v0.014): «se mueve muy rápido»; a ×3 una Nadadora cruzaba la placa en 2 s. El arranque lo sostiene la criatura incubada |
 | Tope de velocidad | ×4 = 120 pasos/s | `SIM_PACE_MAX` | 2 pasos/fotograma a 60 fps, 4 a 30 fps; una instantánea cada 10 pasos (≤ 12/s), nunca una por fotograma |
 | Edad estable | **400 pasos (sin cambio)** → **4,4 s** | `STABLE_AGE_STEPS` | no se toca la ciencia |
-| Registro de especie nueva | 800 pasos estable (sin cambio) → **8,9 s** después | `balance.SPECIES_MIN_STABLE_STEPS` | la criatura de inicio se registra a los ~9 s del reloj: «¡Especie nueva! +3 s» dentro de la partida 1 |
+| Registro de especie nueva | 800 pasos estable (sin cambio), y además su forma de moverse leída (~1000 pasos de historia) | `balance.SPECIES_MIN_STABLE_STEPS` | *(Corrección v0.016, QA4 F-04: con 420 pasos de incubación la criatura de inicio se registraba a los 17,8 s de reloj, después del final de una partida de 15 s, y las semillas del jugador la fundían antes: la especie del Mundo 1 no entraba nunca.)* Con 1250 pasos de incubación la criatura de inicio llega al reloj ya observada y se registra en la partida 1 |
 | Incubadora | ×1 → ×7/6 → ×4/3 sobre la cámara rápida: nacen en **8,9 → 7,6 → 6,7 s** (a ×3 eran 4,4 → 3,8 → 3,3 s) | `MATURE_SPEED_BY_LEVEL` | antes ×2/×3 a 30 pasos/s; ahora el tope de 120 pasos/s; la hoja enseña «Nacen en 4,4 s → 3,8 s» |
 | Criaturas vivas al empezar | **1** + Nevera (1/2/3) | `STARTER_CREATURES`, `FRIDGE_PER_LEVEL` | partida 1 con un Orbium pagando desde el segundo 0 |
-| Incubación previa | 420 pasos bajo la tarjeta de inicio (o al final del resumen) | `PREINCUBATE_STEPS` | ya estables al arrancar el reloj; no pagan hasta entonces (la producción solo corre con el reloj) |
+| Incubación previa | **1250** pasos bajo la tarjeta de inicio (o bajo las primeras frases de VELA) *(Corrección v0.016: eran 420)* | `PREINCUBATE_STEPS` | estables, con su movimiento leído y registrables al arrancar el reloj; no pagan hasta entonces (la producción solo corre con el reloj). 32 fotogramas de ≤ 40 pasos |
 | Semilla segura si nada vive | a los **8 s** (antes 45) | `SESSION_PITY_AFTER` | dos nacimientos |
 | Una semilla reserva su sitio | **5 s** (antes 12) | `SESSION_RECENT_SEED_MEMORY` | un nacimiento + 0,5 s |
 
@@ -163,8 +164,12 @@ y la CLAUDE.md prohíbe pagar a lo que no es estable o «mejorar» la regla de L
 pasos/s; con la Incubadora, como mucho `SIM_PACE_MAX` = 4 → 120 pasos/s). La regla de actualización, `dt`, el núcleo, el
 crecimiento, el toro, el estado RGBA16F, el detector (400 pasos para «estable», 800 para especie nueva) y la puerta «solo
 paga lo estable» **no cambian**: solo hay más pasos por segundo, como un time-lapse de microscopio. Cada partida empieza
-con `STARTER_CREATURES` = 1 criatura (más la Nevera) de plantilla pura, **incubada** `PREINCUBATE_STEPS` = 420 pasos de
-simulación real bajo la tarjeta de inicio; no produce hasta que corre el reloj.
+con `STARTER_CREATURES` = 1 criatura (más la Nevera) de plantilla pura, **incubada** `PREINCUBATE_STEPS` = 1250 pasos de
+simulación real bajo la tarjeta de inicio (Corrección v0.016: eran 420, QA4 F-04); no produce hasta que corre el reloj.
+*(Corrección v0.016, QA4 F-02.)* El reloj de la partida cuenta **tiempo de placa**: los pasos que la placa corrió ÷ los
+pasos por segundo del ritmo (`src/game/dishClock.ts`). Un móvil lento tiene un reloj más lento, nunca menos vida por
+segundo de reloj; una partida de 15 s son siempre 15 s de placa. Si la placa va por debajo del 75 % del tiempo real, un
+aviso lo dice una vez.
 *Consecuencias:* (1) la simulación hace ~3× más trabajo por segundo: el suelo de **30 fps en el Playwright móvil** de
 la CLAUDE.md se vuelve a medir **con la cámara rápida** (si no llega, bajar la calidad de la cuadrícula en móvil, no la
 cámara rápida); la regla «una instantánea cada 10 pasos, ningún `readPixels` por fotograma» se mantiene (a 120 pasos/s y
@@ -224,6 +229,7 @@ inicio se incuban antes del reloj.
 | Partida 1 | 0:15 | ✅ 0:15 (0:18 con su especie) | ✅ | ✅ |
 | Primera criatura estable en la partida 1 | ≤ 5 s de reloj | ✅ 0,5 s (la de inicio) | ✅ | ✅ |
 | Primera compra | ~30 s de juego | ✅ **27 s** | ✅ 27 s | ✅ 27 s |
+| Primera especie en el Bestiario *(Corrección v0.016, QA4 F-04)* | partida 1 o 2 | ✅ **P1** en 7/7 (antes P2) | ✅ P1 (antes P2) | ✅ P1 en 7/7 (antes P3: 4/5/2/2/5/3/2) |
 | Las partidas crecen y nunca se acortan | 0:15 → 2–3 min | ✅ 0:15 → 0:35 → 0:45 → 1:15 → 2:00 → 2:30 (juega ~3:00) | ✅ | ✅ (hasta 2:10) |
 | Compras tras cada partida | ≥ 2 | ✅ mín. 2; primeras diez 4/2/5/5/4/9/18/3/3/5 | ✅ mín. 2; 8/13/3/… | mín. 1 (compra al azar) |
 | Esencia por partida, noches 1–2 | ×1,5–3 («que exploten») | ✅ ×2,36 | ×2,48 | ×1,63 |
@@ -234,6 +240,13 @@ inicio se incuban antes del reloj.
 | Mínimo de Datos por partida | ≥ 3 | 14 | 17 | 5 |
 | **REGLA DURA: la mediana nunca rinde menos que la partida anterior** | 0 bajones | ✅ **0** | 1 (P3 −4 %) | 14 (elige mundos viejos al azar, como antes) |
 | Corridas sueltas por debajo de la anterior (información) | | 15 de 273 pares (5 %) | | |
+
+*(Corrección v0.016, QA4.)* El bot deja ahora desconocidos los rasgos de movimiento de una forma hasta sus 1000 pasos
+de historia, como el detector real (antes registraba especies que el juego no podía registrar), y la incubación previa
+es de 1250 pasos. Re-medido con `npx vite-node scripts/session-bot.ts 80 7`: partida 1 en 0:18 (su especie +3 s), 72
+Esencia y 21 Datos (antes 39 y 5), primera compra a los 27 s, primera especie en la partida 1 en todas las corridas de las
+tres políticas, final de la historia a 1,80 h (planner) y 1,82 h (greedy), **regla dura 0 bajones**. Con 7 corridas el
+planner tiene una visita (P11) con mediana de 1 compra; con 15 corridas, mínimo 2.
 
 **Lectura.** El principio es Nodebuster: 15 s, cuatro compras de tiempo, 35 s, otra vez. La primera explosión llega con
 el Mundo 2 (P6: tres especies nuevas, ×6) y el Reloj grande. El centro (noches 3–5) crece ×1,1–1,9 por partida con 3–8
@@ -266,8 +279,8 @@ ya los modela).
    detector cada `DETECT_EVERY` pasos como siempre (≈ 42 instantáneas, una sola vez por partida, con una carta encima).
    Sin cobrar: `game.tick(0, report)` (la producción solo corre con la fase `running`).
 2. El bucle ya multiplica por `game.speed`; el tope `4 * game.speed` pasos por fotograma (= 12 a ×3) basta. Si el
-   móvil no llega, el acumulador ya descarta el atraso (la vida nace algo más despacio en segundos reales; el reloj sigue
-   siendo real): medirlo en el Playwright móvil (ADR-027).
+   móvil no llega, el acumulador ya descarta el atraso (la vida nace algo más despacio en segundos reales; *Corrección
+   v0.016:* el reloj va con ella, cuenta tiempo de placa): medirlo en el Playwright móvil (ADR-027).
 
 **`src/ui/session/hud.ts`**
 1. `hudState` (l. 78–79): `remaining <= countdownSeconds(limit + bonus)` → `'count'`; `remaining <= warnSeconds(limit + bonus)`

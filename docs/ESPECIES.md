@@ -179,3 +179,6 @@ Cambios (todos en `src/game/cycleBalance.ts`, con su comentario):
   ningún preajuste actual). Hace falta decidir dónde encontrarlos.
 - El tinte en materia muy brillante (el Anillo es casi todo materia a 1) está limitado por la gama: se ve blanco con
   borde verde. Subí el tinte del núcleo (80 %, croma 0,15); más exige bajar la luz del núcleo teñido (ARTE §8.2).
+  *(Corrección v0.016, QA4: seguía leyéndose blanco.)* Ahora toda la criatura toma su color (croma 0,19) y la luz del
+  color teñido se limita (OKLCH L ≤ 0,80 en el cuerpo, subiendo a 0,88 en la materia más caliente): el Anillo verde es
+  verde de dentro afuera y su núcleo sigue siendo lo más brillante (`src/sim/tintlut.ts`, prueba en `tintlut.test.ts`).

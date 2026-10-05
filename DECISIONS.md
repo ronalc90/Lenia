@@ -482,3 +482,15 @@ ADR that supersedes the old one.
   not the time-lapse); one snapshot every 10 steps and no `readPixels` per frame still hold (120 steps/s at 30 fps is
   4 steps a frame). (2) Creatures move and collide 3× more per real second; the session bot models it per step.
   (3) Hard gates gain one line: the fps floor is measured at `SESSION_SIM_PACE`.
+- **Amendment v0.016 (QA4 F-02, F-04, F-07):** (a) the run clock counts **dish time** (steps run ÷ steps per second
+  at the current pace, `src/game/dishClock.ts`), not wall time: a phone that cannot hold the pace gets a slower clock,
+  never a starved dish; one honest notice says so when the dish runs below 75 % of real time. (b)
+  `PREINCUBATE_STEPS` 420 → **1250**: a new species needs its behaviour read (~1000 steps of history) and 800 stable
+  steps, so the 420-step starter registered at 17.8 s of clock, after a 15 s run, and the player's seeds sown on its
+  path often fused with it first; the World 1 swimmer never entered the Bestiary. The detector, its 400/800-step gates
+  and "only stable pays" are unchanged; the starter is simply watched longer before the clock (real steps, 32 frames).
+  Measured on the real pipeline in `tests/unit/first-species.test.ts`; session bot: first species median S2 (planner) /
+  S3 (kid) → S1 for every run of every policy; HARD rule OK before and after. (c) The glass deflector's bodies are
+  extrapolated to the current step with the heading the last turns gave them (`src/sim/extrapolate.ts`): with the
+  async readback the stale heading put a turn's pivot ~6 cells off the centroid and tore the starter apart before the
+  first seed (`tests/unit/starter-lag.test.ts`).
