@@ -5,6 +5,8 @@
  * all three policies, many sessions each, submitted the way the client does (runStatsOf).
  */
 import { describe, expect, it } from 'vitest';
+import { Bus, type GameEvents } from '../../src/core/bus';
+import { createGame } from '../../src/game/game';
 import { runPolicy, type PolicyName } from '../../scripts/sessionBotCore';
 import type { GameState } from '../../src/game/state';
 import { createIntegrity, runStatsOf } from '../../src/net/integrity';
@@ -103,7 +105,8 @@ describe('tampered sessions-cycle submissions are still caught', () => {
   it.each<[string, (s: RunStats) => Partial<RunStats>, string]>([
     ['a million times the Esencia (and a peak to match)', (s) => ({ lifetimeEssence: s.lifetimeEssence * 1e6, eraEssence: s.lifetimeEssence * 1e6, epsPeak: s.epsPeak * 1e6 }), 'essence_rate'],
     ['a thousand times the production peak', (s) => ({ epsPeak: s.epsPeak * 1000 }), 'eps_peak'],
-    ['Night 6 after three sessions', () => ({ era: 6, sessions: 3 }), 'night_gate'],
+    // (With less Esencia than the 5 classic Extinctions a migrated Night 6 would have needed: RF-01b.)
+    ['Night 6 after three sessions', () => ({ era: 6, sessions: 3, lifetimeEssence: 900_000, eraEssence: 900_000 }), 'night_gate'],
     ['a night beyond the last one', () => ({ era: 99 }), 'night_max'],
     ['more sessions than the play time allows', (s) => ({ sessions: s.sessions! + Math.ceil(s.playTimeSec) }), 'sessions_rate'],
     ['a hundred times the Datos the Esencia pays', (s) => ({ datos: (s.datos ?? 0) * 100 + 1e5 }), 'datos_max'],
@@ -152,5 +155,63 @@ describe('tampered sessions-cycle submissions are still caught', () => {
     const prev: Baseline = { ...s.stats, at: s.serverNow - 5 * 60_000, clientTime: s.serverNow - 5 * 60_000 };
     expect(judge({ cycle: undefined }, prev).hard).toContain('cycle_back');
     expect(judge({ datos: undefined }).hard).toContain('sessions_fields');
+  });
+});
+
+describe('a classic save migrated to the sessions cycle (RF-01b)', () => {
+  // The reviewer's case (docs/qa/REVISION-FINAL.md §7.3): Era 3, 800 000 Esencia, Genome 4 + 7 spent — a
+  // coherent classic save the classic rules accept.
+  const BASE = Date.UTC(2026, 9, 1);
+  const NOW = BASE + 4 * 3600_000;
+  function migrated() {
+    const classic = createGame({ bus: new Bus<GameEvents>(), cycle: 'classic', now: () => BASE + 3 * 3600_000 });
+    const st = classic.state as GameState;
+    st.genome = 4;
+    st.genomeSpent = 7;
+    st.era = 3;
+    st.eraEssence = 50_000;
+    st.stats.totalEssence = 800_000;
+    st.stats.playTime = 3 * 3600;
+    st.createdAt = BASE;
+    st.stats.epsPeak = 200;
+    st.stats.seeds = 300;
+    expect(validateSubmission(null, runStatsOf(st), NOW).verdict).toBe('accept');
+    const g = createGame({ bus: new Bus<GameEvents>(), cycle: 'sessions', now: () => NOW }, classic.serialize());
+    expect(g.migration).not.toBeNull();
+    return g;
+  }
+
+  it('the Genome was paid out as Datos: the save holds none, and the submission is accepted', () => {
+    const g = migrated();
+    expect(g.state.genome).toBe(0);
+    expect(g.state.genomeSpent).toBe(0);
+    const s = runStatsOf(g.state as GameState);
+    expect(s).toMatchObject({ cycle: 'sessions', genome: 0, era: 3 });
+    expect(validateSubmission(null, s, NOW)).toEqual({ verdict: 'accept', hard: [], soft: [] });
+  });
+
+  it('a sessions save always reports genome 0, even if an older migration left Genome in it', () => {
+    const g = migrated();
+    const st = g.state as GameState;
+    st.genome = 4;
+    st.genomeSpent = 7;
+    expect(runStatsOf(st).genome).toBe(0);
+  });
+
+  it('importing the migrated save on another device does not mark the player as tampered', () => {
+    const g = migrated();
+    const store = new Map<string, string>();
+    const integrity = createIntegrity({
+      storage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => void store.set(k, v), removeItem: (k) => void store.delete(k) },
+      dateNow: () => NOW,
+      perfNow: () => 0,
+    });
+    integrity.noteImport(g.exportString());
+    expect(integrity.report().tampered, integrity.reasons().join(',')).toBe(false);
+  });
+
+  it('a night that neither the sessions nor a classic prestige could reach is still rejected', () => {
+    const s = { ...runStatsOf(migrated().state as GameState), era: 6 };
+    expect(validateSubmission(null, s, NOW).hard).toContain('night_gate');
   });
 });

@@ -87,7 +87,8 @@ export function runStatsOf(s: Readonly<GameState>): RunStats {
     ...(r ? { cycle: 'sessions' as const, sessions: r.sessions, datos: r.datosEarned } : {}),
     lifetimeEssence: s.stats.totalEssence,
     eraEssence: s.eraEssence,
-    genome: s.genome + s.genomeSpent,
+    // Nothing pays Genome in the sessions cycle; a migrated save's was paid out as Datos (RF-01b).
+    genome: r ? 0 : s.genome + s.genomeSpent,
     speciesCount: s.species.length,
     behaviorsCount: s.behaviorsSeen.length,
     era: s.era,

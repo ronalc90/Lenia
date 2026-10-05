@@ -241,7 +241,7 @@ export interface Game {
   dishLost(): void;
   /**
    * (sessions) The largest dish this device shows (QUALITY_DISH maxDiameter, RF-04): Placa levels past
-   * it give no room and cost nothing (tree.ts setDishLevelLimit). Call once at boot.
+   * it give no room and are not on sale here, at their real price (tree.ts setDishLevelLimit, RF-12). Call once at boot.
    */
   setDeviceDish(maxDiameter: number): void;
   view(): GameView;
@@ -2052,6 +2052,9 @@ export function createGame(deps: GameDeps, save?: string): Game {
       const m = migrateLegacy(s);
       s.research = m.research;
       migration = m.report;
+      // The Genome was paid out as Datos (LEGACY_DATOS_PER_GENOME): it no longer exists in this cycle (RF-01b).
+      s.genome = 0;
+      s.genomeSpent = 0;
     }
     s.session = null;
   }

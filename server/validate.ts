@@ -356,7 +356,9 @@ function checkSessionsAbsolute(s: RunStats, hard: string[], soft: string[]): voi
     return;
   }
   if (s.era > C.NIGHT_MAX) hard.push('night_max');
-  else if (s.era > nightsAllowed(sessions)) hard.push('night_gate');
+  // A night past the session gates is only possible for a classic save migrated with its Era (legacy.ts:
+  // the Era becomes the night), and every classic Era past the first needed EXTINCTION_ESSENCE (RF-01b).
+  else if (s.era > nightsAllowed(sessions) && s.lifetimeEssence < (s.era - 1) * EXTINCTION_ESSENCE * (1 - 1e-9)) hard.push('night_gate');
   if (s.genome > 0) hard.push('genome_max'); // nothing pays Genome in this cycle
   if (sessions > LIMITS.SESSIONS_BURST + s.playTimeSec / LIMITS.SESSION_MIN_SEC) hard.push('sessions_rate');
   if (datos > maxSessionDatos(s) * LIMITS.ESSENCE_HARD_MARGIN + LIMITS.ESSENCE_SLACK) hard.push('datos_max');
