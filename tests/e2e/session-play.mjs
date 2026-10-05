@@ -773,7 +773,7 @@ async function runCase(c) {
       const before = (await view()).datos;
       const levelOf = (nid) => page.evaluate((nid) => window.bioluma.game.research.levels[nid] ?? 0, nid);
       const lv0 = await levelOf(id);
-      // A Placa level this device cannot show is free (RF-04): it must still be bought, at no cost.
+      // A Placa level this device cannot show is not on sale (RF-12): its button is disabled and says so.
       const free = await page.evaluate(() => !!document.querySelector('.rt-sheet.show')?.textContent?.match(/ya tiene la placa más grande|already has the biggest dish/));
       if (await visible('.rt-buy:not(:disabled)')) {
         await tapSel('.rt-buy');

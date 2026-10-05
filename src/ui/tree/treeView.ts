@@ -43,7 +43,7 @@ import {
   type TreeCtx,
   type TreeNodeDef,
 } from '../../game/tree';
-import { BRANCH_TEXT, DATOS_NAME, SESSION_UI, TREE_UI, type BranchId } from '../../game/treeText';
+import { BRANCH_TEXT, DATOS_NAME, SESSION_UI, TREE_UI, VALUE_TEXT, type BranchId } from '../../game/treeText';
 import type { WorldId } from '../../game/worlds';
 import { fmt, fmtShort } from '../format';
 import { createPriceSheet, PriceTicker, type PriceExplain } from '../moments/price';
@@ -877,7 +877,11 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
         } else {
           body += haveBox(st, l);
           body += `<button type="button" class="rt-buy" data-buy="${def.id}"${st.affordable ? '' : ' disabled'}>${
-            st.affordable ? `${esc(tx(TREE_UI.buy, l))} · ${treeIcon('datos', 22)}<b>${fmt(st.cost, l)}</b>` : esc(tx(TREE_UI.missing(fmt(st.missingDatos, l), null), l))
+            st.affordable
+              ? `${esc(tx(TREE_UI.buy, l))} · ${treeIcon('datos', 22)}<b>${fmt(st.cost, l)}</b>`
+              : st.block === 'device'
+                ? esc(tx(VALUE_TEXT.deviceDishMax, l)) // RF-12: real price, not on sale on this device
+                : esc(tx(TREE_UI.missing(fmt(st.missingDatos, l), null), l))
           }</button>`;
         }
         body += priceBox(def, l) + barsBox(def, st, l);

@@ -5,6 +5,7 @@ import { createGame } from './game';
 import type { GameState } from './state';
 import { creature, recordingBus, report, run, seededRng } from './testUtil';
 import { WORLD_BY_ID } from './worlds';
+import { TREE_BY_ID } from './tree';
 import { scaledTemplate } from './seeding';
 import { catalogByCode } from '../sim/catalog';
 
@@ -368,3 +369,37 @@ describe('sessions cycle: the device caps the dish (RF-04)', () => {
     }
   });
 });
+
+describe('sessions cycle: a low-quality device never gives the big dish away (RF-12)', () => {
+  it("the reviewer's sequence: Placa gigante on Low with 5 Datos, then the same save on Medium", () => {
+    const { g } = sessionsGame();
+    try {
+      g.setDeviceDish(160);
+      const r = g.research as unknown as { datos: number; sessions: number; levels: Record<string, number> };
+      r.datos = 5;
+      r.sessions = 500;
+      const lv: Record<string, number> = {};
+      for (const id of Object.keys(TREE_BY_ID)) if (id !== 'dishXL' && id !== 'eternalLife') lv[id] = TREE_BY_ID[id].maxLevel;
+      lv.dish = 1; // what a Low device could buy
+      r.levels = lv;
+      expect(g.buyNode('dishXL').ok).toBe(false);
+      expect(g.buyNode('dish').ok).toBe(false);
+      expect(g.research!.datos).toBe(5);
+      const { g: g2 } = sessionsGame(1, g.serialize());
+      g2.setDeviceDish(224);
+      expect(g2.research!.levels.dishXL ?? 0).toBe(0);
+      expect(g2.effects!.dishLevel).toBe(1);
+      // On Medium the next Placa level is on sale at its real price.
+      const r2 = g2.research as unknown as { datos: number };
+      r2.datos = 5;
+      expect(g2.buyNode('dish').ok).toBe(false);
+      r2.datos = 1e6;
+      const before = r2.datos;
+      expect(g2.buyNode('dish').ok).toBe(true);
+      expect(g2.research!.datos).toBeLessThan(before);
+    } finally {
+      g.setDeviceDish(Infinity);
+    }
+  });
+});
+

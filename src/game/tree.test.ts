@@ -401,16 +401,28 @@ describe('a device that cannot show a bigger dish (RF-04, low quality)', () => {
     expect(treeEffects({ dish: 2 }).capacity).toBe(C.DISH_CAPACITY[2]);
   });
 
-  it('a dish level the device cannot show costs nothing and says so (the route stays open)', () => {
+  it('a dish level the device cannot show keeps its real price but cannot be bought, and says why (RF-12)', () => {
+    const full = { dish: nodeCost('dish', 1), dishXL: nodeCost('dishXL', 0) };
     limited(() => {
       expect(nodeCost('dish', 0)).toBeGreaterThan(0);
-      expect(nodeCost('dish', 1)).toBe(0);
-      expect(nodeCost('dishXL', 0)).toBe(0);
+      // Never free (v0.017 sold them for 0, and a Medium device then showed the unpaid dish).
+      expect(nodeCost('dish', 1)).toBe(full.dish);
+      expect(nodeCost('dishXL', 0)).toBe(full.dishXL);
       const ba = beforeAfter({ dish: 1 }, 'dish');
       expect(ba.better).toBe(false);
       expect(ba.after?.es).toMatch(/aparato/);
       expect(ba.after?.en).toMatch(/device/);
+      const all: Record<string, number> = { lab: C.NIGHT_MAX };
+      for (const d of TREE_NODES) if (d.id !== 'dishXL' && d.id !== 'ecosystem' && d.id !== 'lab') all[d.id] = d.maxLevel;
+      all.dish = 1;
+      const ctx: TreeCtx = { levels: all, datos: 1e9, sessions: 999, species: 99 };
+      const st = treeStates(ctx);
+      expect(st.get('dish')).toMatchObject({ block: 'device', affordable: false, cost: full.dish });
+      expect(st.get('dishXL')).toMatchObject({ block: 'device', affordable: false });
+      expect(buyNode(ctx, 'dishXL').ok).toBe(false);
+      // The route goes on: the next node does not wait for a dish this device cannot show.
+      expect(st.get('ecosystem')).toMatchObject({ status: 'available', block: null, missingRequires: [] });
     });
-    expect(nodeCost('dish', 1)).toBeGreaterThan(0);
+    expect(treeStates({ levels: { lab: C.NIGHT_MAX, dish: 1 }, datos: 1e9, sessions: 999, species: 99 }).get('dish')!.block).toBeNull();
   });
 });

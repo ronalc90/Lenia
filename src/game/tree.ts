@@ -452,7 +452,11 @@ function dishLevelAfter(id: string, level: number): number | null {
   if (id === 'dishXL') return C.DISH_XL_LEVEL;
   return null;
 }
-/** One more level of this Placa node gives a dish the device cannot show: it is free, and says so. */
+/**
+ * One more level of this Placa node gives a dish the device cannot show. It keeps its real price but is
+ * not on sale here (BuyBlock 'device', «Tu aparato ya tiene la placa más grande»), and the route goes on
+ * past it (`requirementMet`). RF-12: v0.017 sold it for 0 and a Medium device then showed the unpaid dish.
+ */
 export function beyondDevice(id: string, level: number): boolean {
   const next = dishLevelAfter(id, level);
   return next !== null && next > dishLevelLimit;
@@ -512,7 +516,6 @@ export function nodeCost(id: string, level: number): number {
   const def = TREE_BY_ID[id];
   if (!def) return Infinity;
   if (level >= def.maxLevel) return Infinity;
-  if (beyondDevice(id, level)) return 0;
   const r = priceRule(id);
   // The centre: level = night; the first move (night 1 → 2) costs `start`.
   const n = id === 'lab' ? Math.max(0, level - 1) : Math.max(0, level);
@@ -568,7 +571,17 @@ export interface TreeCtx {
 }
 
 export type NodeStatus = 'owned' | 'available' | 'locked' | 'mystery' | 'hidden';
-export type BuyBlock = 'maxed' | 'hidden' | 'locked' | 'night' | 'gate' | 'datos' | 'unknown';
+export type BuyBlock = 'maxed' | 'hidden' | 'locked' | 'night' | 'gate' | 'datos' | 'device' | 'unknown';
+
+/**
+ * A prerequisite is met when it is owned, or when it is a Placa node this device cannot show at all (its
+ * first level is past the device's dish): the next node of the route (Ecosistema after Placa gigante)
+ * stays reachable on a Low-quality device without selling a dish it cannot show (RF-12). On a bigger
+ * device the node is simply on sale again, at its real price.
+ */
+function requirementMet(levels: Readonly<Record<string, number>>, id: string): boolean {
+  return nodeLevel(levels, id) >= 1 || beyondDevice(id, 0);
+}
 
 export interface NodeState {
   id: string;
@@ -631,7 +644,7 @@ export function treeStates(ctx: TreeCtx): Map<string, NodeState> {
     const level = nodeLevel(ctx.levels, def.id);
     const maxed = level >= def.maxLevel || (level > 0 && isSuperseded(ctx.levels, def.id));
     const cost = maxed ? Infinity : def.id === 'lab' ? ni.cost : nodeCost(def.id, level);
-    const missingRequires = def.requires.filter((r) => nodeLevel(ctx.levels, r) < 1);
+    const missingRequires = def.requires.filter((r) => !requirementMet(ctx.levels, r));
     const prevShown = def.requires.some((r) => {
       const s = out.get(r)?.status;
       return s === 'owned' || s === 'available' || s === 'locked';
@@ -654,6 +667,7 @@ export function treeStates(ctx: TreeCtx): Map<string, NodeState> {
     else if (nightNeeded !== null) block = 'night';
     else if (status === 'mystery' || missingRequires.length) block = 'locked';
     else if (def.id === 'lab' && !ni.gateMet) block = 'gate';
+    else if (beyondDevice(def.id, level)) block = 'device';
     else if (!(ctx.datos >= cost)) block = 'datos';
     out.set(def.id, {
       id: def.id,
