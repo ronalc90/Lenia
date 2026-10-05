@@ -4052,10 +4052,36 @@
 }
 
 /* ───────────── Clean dish + overflow banner ───────────── */
+/* Top right, far from the seed bar and the eraser (QA4 F-10); it cleans only on a long press: the ring
+   fills while it is held (--hold-ms, balance CLEAN_HOLD_MS). */
 .fab-clean {
-  bottom: 66px;
+  top: 10px;
   right: 10px;
   color: var(--dim);
+}
+.fab-speed:not([hidden]) ~ .fab-clean {
+  top: 66px;
+}
+.fab-clean.holding {
+  color: var(--warn);
+  border-color: rgba(var(--warn-rgb), 0.7);
+  background: conic-gradient(rgba(var(--warn-rgb), 0.45) var(--hold, 0%), rgba(var(--warn-rgb), 0.12) 0);
+  animation: bl-clean-hold var(--hold-ms, 1200ms) linear forwards;
+}
+@property --hold {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 0%;
+}
+@keyframes bl-clean-hold {
+  to {
+    --hold: 100%;
+  }
+}
+/* "Centrar": back to the whole dish, under the pause button (QA4 F-09). */
+.fab-centre {
+  top: 66px;
+  left: 10px;
 }
 .fab-clean.armed {
   color: var(--warn);

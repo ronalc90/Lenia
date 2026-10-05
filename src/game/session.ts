@@ -358,12 +358,14 @@ export function boostMult(s: SessionState | null): number {
 }
 
 /**
- * Abono: Esencia the next one costs at `eps` Esencia/s ("20 s de tu Esencia", at least
- * BOOST_MIN_COST), ×2 per Abono already bought this session — the floor doubles too.
+ * Abono, one rule the player can read (QA4 F-17): it costs what the dish earns in BOOST_SECONDS at
+ * its best this run (the run's peak Esencia/s, so a dip never makes it cheaper and the price only moves
+ * up), at least BOOST_MIN_COST, ×BOOST_GROWTH per Abono already bought this session (the floor too).
  */
 export function boostCost(s: SessionState | null, eps: number): number {
   const k = s ? s.boosts : 0;
-  const e = Number.isFinite(eps) && eps > 0 ? eps : 0;
+  const now = Number.isFinite(eps) && eps > 0 ? eps : 0;
+  const e = Math.max(now, s && Number.isFinite(s.peakEps) ? s.peakEps : 0);
   return Math.round(Math.max(C.BOOST_MIN_COST, C.BOOST_SECONDS * e) * Math.pow(C.BOOST_GROWTH, k));
 }
 

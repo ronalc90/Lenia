@@ -415,3 +415,16 @@ describe('Datos preview before the clock runs out', () => {
     expect(p.goal!.missing).toBe(Math.max(0, C.TREE_RING_START[2] - 1 - 9));
   });
 });
+
+describe('Abono price: one rule, never jumping down (QA4 F-17)', () => {
+  it('costs BOOST_SECONDS of the run’s best Esencia/s, ×BOOST_GROWTH per Abono bought: a dip never makes it cheaper', async () => {
+    const { boostCost } = await import('./session');
+    const b = beginSession(freshResearch(), treeEffects({}));
+    const s = b.session;
+    s.peakEps = 5;
+    expect(boostCost(s, 2)).toBe(Math.round(C.BOOST_SECONDS * 5));
+    expect(boostCost(s, 6)).toBe(Math.round(C.BOOST_SECONDS * 6));
+    s.boosts = 1;
+    expect(boostCost(s, 2)).toBe(Math.round(C.BOOST_SECONDS * 5 * C.BOOST_GROWTH));
+  });
+});

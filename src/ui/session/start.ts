@@ -8,7 +8,7 @@ import type { Lang, Pattern, Text } from '../../core/types';
 import type { SessionStart } from '../../game/session';
 import { TREE_BY_ID, nodeText } from '../../game/tree';
 import { SESSION_UI, WORLD_TEXT } from '../../game/treeText';
-import { WORLD_BY_ID, type WorldId } from '../../game/worlds';
+import { WORLD_BY_ID, bestWorld, type WorldId } from '../../game/worlds';
 import { fmt, fmtClock } from '../format';
 import { renderPattern } from '../portrait';
 import { Portrait } from '../story/portraits';
@@ -26,6 +26,8 @@ export interface SessionStartOptions {
   worldSpecies?(world: WorldId): { code: string; portrait: Pattern | null; found: boolean }[];
   /** The player tapped a world card (the host stores it: session.researchPickWorld). */
   onPickWorld?(world: WorldId): void;
+  /** A kept species lives in this world (the Nevera only brings those back; the others stay kept). */
+  livesIn?(speciesId: string, world: WorldId): boolean;
   onGo(): void;
 }
 
@@ -89,6 +91,8 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
 
   /** The world cards: species portraits, "Encontradas 1/2" or "+2 especies", "¡Nuevo!". */
   function worldsHtml(start: SessionStart, l: Lang): string {
+    // The world that pays most, said on its card (QA4 F-14); a world with species still to find says so too.
+    const best = start.worlds.length > 1 ? bestWorld(start.worlds) : null;
     const one = (w: WorldId) => {
       const def = WORLD_BY_ID[w];
       const sp = opts.worldSpecies?.(w) ?? def.species.map((code) => ({ code, portrait: null, found: false }));
@@ -101,7 +105,9 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
       return `<button type="button" class="ss-world art-force-dark${picked ? ' on' : ''}" data-world="${w}" style="--wc:${worldColors(w).ring}" aria-pressed="${picked}">${worldArt(w)}
         <span class="ss-wtop">${artIcon(WORLD_ICON[w], 18, 'ss-wic')}<b>${esc(WORLD_TEXT[w].name[l])}</b>${
           picked ? `<span class="ss-wpick">${treeIcon('check', 16)}</span>` : ''
-        }</span>${isNew ? `<em class="ss-wnew">${esc(SESSION_UI.worldNew[l])}</em>` : ''}
+        }</span>${isNew ? `<em class="ss-wnew">${esc(SESSION_UI.worldNew[l])}</em>` : ''}${
+          w === best ? `<em class="ss-wbest">${esc(SESSION_UI.worldBest[l])}</em>` : ''
+        }
         <span class="ss-wdesc">${esc(WORLD_TEXT[w].desc[l])}</span>
         <span class="ss-wsp">${cells}</span>
         <span class="ss-wfoot">${esc(foot)}</span>
@@ -139,6 +145,7 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
         );
       if (start.fridgeSlots > 0 || start.fridge.length) {
         const minis = start.fridge
+          .filter((id) => opts.livesIn?.(id, start.world) ?? true)
           .map((id) => {
             const info = opts.speciesInfo?.(id);
             return `<span class="mini" style="--hue:${info?.hue ?? 195}" data-sp="${esc(id)}"></span>`;

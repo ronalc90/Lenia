@@ -16,12 +16,16 @@ import type { GameView, Lang, Pattern, Text } from '../../core/types';
 import type { Game } from '../../game/game';
 import { treeCtxOf } from '../../game/session';
 import { nextGoal, nodeText, sessionsToAfford } from '../../game/tree';
-import { WORLD_BY_ID, type WorldId } from '../../game/worlds';
+import { WORLD_BY_ID, worldOfSpecies, type WorldId } from '../../game/worlds';
 import { catalogGroup, catalogPortrait } from '../../species';
 import { createTreeView, type TreeSound, type TreeView } from '../tree';
 import { createSessionHud, hudViewOf, type SessionHud, type SessionHudSound } from './hud';
 import { createSessionStart, type SessionStartView } from './start';
+import { celebrateNight } from './night';
 import { createSessionSummary, type SessionSummaryView, type SummarySound } from './summary';
+
+/** The Tree's button when it was opened from the dock before the first seed. */
+const TREE_BACK: Text = { es: 'A la placa', en: 'To the dish' };
 
 /** Every sound the session screens ask for (the host maps them to src/audio). */
 export type SessionFlowSound = SessionHudSound | SummarySound | TreeSound;
@@ -69,6 +73,12 @@ export interface SessionFlow {
 
 export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
   const { game, bus } = o;
+  /** The run whose start card the player already closed with "¡Empezar!" (0 = none). */
+  let startDoneFor = 0;
+  /** The run the last 'sessionStart' set up: the same number again is the same run set up anew. */
+  let lastStartN = 0;
+  /** The night's celebration is on screen (it counts as a card). */
+  let celebrating = false;
   const sound = (k: SessionFlowSound) => o.onSound?.(k);
   let stamping = false;
 
@@ -104,7 +114,14 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
     speciesInfo,
     worldSpecies,
     onPickWorld: (w) => void game.actions.pickWorld?.(w),
-    onGo: () => start.hide(),
+    livesIn: (id, w) => {
+      const code = game.state.species.find((x) => x.id === id)?.catalogCode;
+      return !!code && worldOfSpecies(code) === w;
+    },
+    onGo: () => {
+      startDoneFor = game.session?.n ?? 0;
+      start.hide();
+    },
   });
 
   const tree: TreeView = createTreeView(o.root, {
@@ -113,6 +130,9 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
     onBuy: (id) => game.buyNode(id),
     onNewSession: () => {
       tree.close();
+      // The Tree opened from the dock while this run waits for its first seed: back to the dish, the run
+      // is already set up (QA4 F-06). After a summary: the next run.
+      if (game.session?.phase === 'ready' && !summary.isOpen && startDoneFor === game.session.n) return;
       summary.hide();
       game.actions.startSession?.();
     },
@@ -120,6 +140,8 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
     onSound: (k) => sound(k),
     worldSpecies,
     dishDiameter: o.dishDiameter,
+    // Opened from the dock while the run waits: the button goes back to the dish (QA4 F-06).
+    goText: () => (game.session?.phase === 'ready' && !summary.isOpen && startDoneFor === game.session.n ? TREE_BACK : null),
   });
 
   const summary: SessionSummaryView = createSessionSummary(o.root, {
@@ -176,11 +198,17 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
   }
 
   const offs = [
-    bus.on('sessionStart', () => {
+    bus.on('sessionStart', ({ n }) => {
+      const again = n === lastStartN;
+      lastStartN = n;
+      tree.update(treeData());
+      // The same run set up anew while it waits (a node bought, a world picked): the player stays where
+      // they are (QA4 F-06: each purchase in the dock's Tree closed it and brought the start card back).
+      if (again && startDoneFor === n) return;
+      if (again && tree.isOpen && !start.isOpen) return;
       // However the new session was asked for (summary, tree, host), the cards from the last one close.
       if (tree.isOpen) tree.close();
       if (summary.isOpen) summary.hide();
-      tree.update(treeData());
       showStart();
     }),
     bus.on('sessionExtended', ({ seconds, reason }) => hud.extended(seconds, reason, reason === 'species' && game.state.species.length <= 1)),
@@ -194,11 +222,19 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
         showSummary();
       });
     }),
-    bus.on('nodeBought', () => tree.update(treeData())),
+    bus.on('nodeBought', ({ id, level }) => {
+      tree.update(treeData());
+      // The night moves on: celebrate it (QA4 F-12).
+      if (id === 'lab') {
+        celebrating = true;
+        void celebrateNight(o.root, level, { lang: o.lang, reduceMotion: o.reduceMotion, onSound: (k) => k === 'close' && sound('close') }).then(() => (celebrating = false));
+      }
+    }),
   ];
 
   // A game loaded with a session waiting (not the first) opens on its start card.
   showStart();
+  lastStartN = game.session?.n ?? 0;
 
   return {
     update(v) {
@@ -211,7 +247,7 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
     },
     get busy() {
       // A start card waiting for its turn (behind the welcome card) counts: nothing slips in between.
-      return stamping || startPending || start.isOpen || summary.isOpen || tree.isOpen;
+      return stamping || startPending || celebrating || start.isOpen || summary.isOpen || tree.isOpen;
     },
     get treeOpen() {
       return tree.isOpen;
@@ -220,7 +256,7 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
       return tree.sheetOpen;
     },
     get cardOpen() {
-      return stamping || startPending || start.isOpen || (summary.isOpen && !tree.isOpen);
+      return stamping || startPending || celebrating || start.isOpen || (summary.isOpen && !tree.isOpen);
     },
     openTree,
     relabel() {

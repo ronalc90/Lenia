@@ -101,8 +101,15 @@ export const SIM_PACE_MAX = 4;
  * Nevera / starter creatures are pre-incubated: the integrator runs the dish this many steps under
  * the start card (or the end of the previous summary) so they are already stable when the clock
  * starts. They pay nothing until then (production only runs with the clock). [RITMO §4.2; ADR-027]
+ * QA4 F-04: was 420 (stable at the clock's start, but a new species needs its behaviour read, ~1000
+ * steps of history, and 800 stable steps: the starter registered at 17.8 s of clock, after a 15 s run
+ * had ended, and the player's own first seeds, sown on its path along the glass, often fused with it
+ * first). 1250 real steps (1000 for the behaviour + 850 stable, with a margin for the detector's
+ * classification cadence): the starter has been watched long enough before the clock starts, so a new
+ * world's starter registers under the start card / VELA's first lines and is never lost to a seed
+ * (measured, tests/unit/first-species.test.ts). 32 frames of incubation at 40 steps a frame.
  */
-export const PREINCUBATE_STEPS = 420;
+export const PREINCUBATE_STEPS = 1250;
 /**
  * Creatures every session starts with, alive (pure templates of the world's species, pre-incubated):
  * even run 1 has an Orbium paying from its first second. The Nevera node adds to it. [owner: "empezar
@@ -120,6 +127,8 @@ export const SEED_BLOOM_MS = 350;
 export const CREATURE_ALIVE_MS = 450;
 /** A dead creature / dissolved seed fades out this long (the sim matter dissolves on its own). [design] */
 export const DISSOLVE_MS = 600;
+/** The night moves on: the celebration over the Tree (moon, stars, VELA), unless tapped away. [QA4 F-12] */
+export const NIGHT_CELEBRATION_MS = 3200;
 /** Floating "+N" income numbers of one creature, at most one per this many seconds (balance INCOME_POP_INTERVAL 1,5 s outside sessions). [design: Esencia must be seen flowing from second 1] */
 export const SESSION_INCOME_POP_INTERVAL = 0.8;
 /** A fresh seed blocks its spot this long (balance RECENT_SEED_MEMORY 12 s was ~1 birth at 30 steps/s; one birth at pace 3 is 4,4 s). [design] */

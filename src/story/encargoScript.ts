@@ -216,6 +216,8 @@ export const CHAIN: EncargoDef[] = [
     why: t('Cada especie tiene nombre. ¡Vamos a conocerla!', 'Every species has a name. Let\'s meet it!'),
     thanks: t('Qué nombre tan elegante. Anotado.', 'What a fancy name. Noted.'),
     goal: { metric: 'speciesSeen', target: 1 },
+    // Only with a species in the Bestiary to look at (QA4 F-04: it was asked over an empty Bestiary).
+    available: (v) => v.species.length > 0,
     reward: { objective: 'look' },
   },
   {

@@ -446,9 +446,10 @@ export const SCENES: SceneDef[] = [
     priority: 60,
     after: ['t_stable'],
     title: t('La lámpara', 'The lamp'),
-    when: (c) => sessions(c) && !!c.v.research?.nightReady && c.era <= 1,
+    // In the Tree, where the night's node is (QA4 F-01: it played over the dish and sat on the seed bar).
+    when: (c) => sessions(c) && c.ui('tree') && !!c.v.research?.nightReady && c.era <= 1,
     lines: [
-      vela('happy', '¡La noche puede avanzar! Mira el centro del Árbol.', 'The night can move on! Look at the centre of the Tree.'),
+      vela('happy', '¡La noche puede avanzar! Mira el centro del Árbol.', 'The night can move on! Look at the centre of the Tree.', at('tree.center')),
       vela('neutral', 'No se borra nada. Se abren mejoras nuevas.', 'Nothing gets wiped. New upgrades open.'),
       vela('worried', 'Albor dejaba la lámpara encendida. «Para que no se vayan a oscuras».', 'Albor left the lamp on. "So they don\'t leave in the dark."'),
     ],

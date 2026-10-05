@@ -99,6 +99,8 @@ interface Ripple {
   width: number;
   /** Successful-seed ripple drawn with an equipped trail skin (src/store/draw.ts). */
   skin?: TrailStyle;
+  /** Creature id this ring sits on: it follows the creature as it swims (QA4 F-13). */
+  follow?: number;
 }
 
 /** A seed-trail particle of an equipped skin, anchored to a grid point. */
@@ -151,6 +153,8 @@ interface Label {
   sub: string;
   color: string;
   glyph: Behavior | null;
+  /** Creature id the label sits on: it follows the creature (QA4 F-13). */
+  follow?: number;
 }
 
 /** A seed that landed away from the tap (spacing rule): arrow from the finger to the seed. */
@@ -531,18 +535,22 @@ export class Overlay {
    * A tap with no room (it would fuse with nearby matter): a red "no" ring where the finger was, and the
    * reason pinned to the spot (one label at a time). Nothing was charged.
    */
-  seedBlocked(x: number, y: number, text: string, sub: string, near?: { x: number; y: number; r: number }): void {
+  seedBlocked(x: number, y: number, text: string, sub: string, near?: { x: number; y: number; r: number; id?: number }): void {
     const base = Math.max(22, 13 * this.camera.scale * 1.25);
+    const follow = near?.id;
     if (near) {
       // The ring sits on the matter in the way (owner: "a veces dice que hay entidades al lado estando la
-      // placa vacía"); a small tick marks the finger.
-      this.ripples.push({ x: near.x, y: near.y, t0: this.now, dur: 0.7, color: C.danger, maxR: Math.max(base * 0.8, near.r * this.camera.scale * 1.15), rings: 2, width: 2.6 });
+      // placa vacía") and follows it while it swims on (QA4 F-13: a swimmer moved off and the ring was left
+      // over an empty spot); a small tick marks the finger.
+      this.ripples.push({ x: near.x, y: near.y, t0: this.now, dur: 0.7, color: C.danger, maxR: Math.max(base * 0.8, near.r * this.camera.scale * 1.15), rings: 2, width: 2.6, follow });
       this.ripples.push({ x, y, t0: this.now, dur: 0.4, color: C.danger, maxR: base * 0.45, rings: 1, width: 2 });
     } else this.ripples.push({ x, y, t0: this.now, dur: 0.55, color: C.danger, maxR: base * 0.95, rings: 2, width: 2.6 });
     if (this.ripples.length > 24) this.ripples.shift();
     if (this.now - this.lastBlockedLabel < BLOCKED_LABEL_GAP_S) return;
     this.lastBlockedLabel = this.now;
-    this.labels.push({ x, y, t0: this.now, dur: 2.4, text, sub, color: C.danger, glyph: null });
+    // The reason next to the creature in the way when there is one, else at the finger.
+    if (near) this.labels.push({ x: near.x, y: near.y, t0: this.now, dur: 2.4, text, sub, color: C.danger, glyph: null, follow });
+    else this.labels.push({ x, y, t0: this.now, dur: 2.4, text, sub, color: C.danger, glyph: null });
   }
 
   /** The seed was moved to the nearest spot with room: a short arrow from the tap to where it landed. */
@@ -1351,6 +1359,10 @@ export class Overlay {
         this.ripples.splice(i, 1);
         continue;
       }
+      if (rp.follow !== undefined) {
+        const c = this.creaturePos(rp.follow);
+        if (c) ((rp.x = c.x), (rp.y = c.y));
+      }
       const p = this.camera.gridToScreen(rp.x, rp.y);
       if (rp.skin) {
         drawTrailRipple(ctx, p.x, p.y, time - rp.t0, rp.maxR, rp.skin, rp.dur);
@@ -1684,6 +1696,10 @@ export class Overlay {
       if (t >= 1) {
         this.labels.splice(i, 1);
         continue;
+      }
+      if (L.follow !== undefined) {
+        const c = this.creaturePos(L.follow);
+        if (c) ((L.x = c.x), (L.y = c.y));
       }
       const p = this.camera.gridToScreen(L.x, L.y);
       const a = t < 0.1 ? t / 0.1 : t > 0.75 ? 1 - (t - 0.75) / 0.25 : 1;

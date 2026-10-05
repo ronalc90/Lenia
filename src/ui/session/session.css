@@ -1092,3 +1092,58 @@
 .ss-plus.long {
   animation-duration: 3.1s;
 }
+
+/* The night moves on (QA4 F-12): a short celebration over the Tree. */
+.ss-night {
+  position: fixed;
+  inset: 0;
+  z-index: var(--bl-z-celebration, 70);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  cursor: pointer;
+}
+.ss-night.show {
+  opacity: 1;
+}
+.ss-night-sky {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.ss-night-text {
+  position: relative;
+  margin: 0 16px max(28px, env(safe-area-inset-bottom));
+  max-width: 420px;
+  text-align: center;
+  color: var(--bl-text, #e6edf3);
+}
+.ss-night-text h2 {
+  margin: 0 0 6px;
+  font: 800 2.4rem/1.1 var(--bl-font-display, Georgia, serif);
+  color: #ffe6b0;
+  text-shadow: 0 0 18px rgba(255, 200, 120, 0.6);
+}
+.ss-night-text p {
+  margin: 0 0 10px;
+  font: 600 1.05rem/1.35 var(--bl-font-ui, system-ui, sans-serif);
+}
+.ss-night-text small {
+  color: var(--bl-text2, #a7b3bf);
+}
+/* The world that pays most (QA4 F-14). */
+.ss-wbest {
+  flex: none;
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--bl-candle, #ffb86b);
+  color: var(--bl-night, #0b0e12);
+  font: 800 0.66rem/1 var(--bl-font-ui);
+  font-style: normal;
+  letter-spacing: 0.03em;
+}

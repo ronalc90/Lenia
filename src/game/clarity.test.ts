@@ -129,3 +129,27 @@ describe('clarity: no jargon in what the player reads', () => {
     expect(problems('x', { es: 'Arriba: «+1/s» es tu Esencia.', en: 'Up top: "+1/s" is your Essence.' })).toEqual([]);
   });
 });
+
+describe('the night requirement reads right in both languages (QA4 F-19)', () => {
+  it('one species is singular: "1 especie", "1 species"; one session too', async () => {
+    const { TREE_UI } = await import('./treeText');
+    const { TEXT } = await import('./content');
+    const g = TREE_UI.nightGate(4, 1, 6);
+    expect(g.es).toContain('4 sesiones y 1 especie ');
+    expect(g.es).not.toMatch(/1 especies/);
+    const r = TEXT.nightRequirement(2, 1, 1);
+    expect(r.es).toBe('Noche 2: 1 sesión y 1 especie');
+    expect(r.en).toBe('Night 2: 1 session and 1 species');
+    expect(TREE_UI.nightProgress(1, 4, 0, 1).es).toContain('Especies 0/1');
+  });
+});
+
+describe('the node sheet counts in words, never as fractions (QA4 F-15)', () => {
+  it('"Tienes 3 · Cuesta 2", "Nivel 0 de 6" and "mejora 1 de 7"', async () => {
+    const { TREE_UI } = await import('./treeText');
+    expect(TREE_UI.haveCost('3', '2').es).toBe('Tienes 3 · Cuesta 2');
+    expect(TREE_UI.haveCost('3', '2').en).not.toContain('/');
+    expect(TREE_UI.levelOf(0, '6').es).toBe('Nivel 0 de 6');
+    expect(TREE_UI.step(1, 7).es).toBe('mejora 1 de 7');
+  });
+});

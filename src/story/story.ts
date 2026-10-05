@@ -490,7 +490,8 @@ export function createStory(deps: StoryDeps): Story {
     a.phase = 'wait';
     a.wait = w;
     a.waitStart = now();
-    a.base = { ...st.counters };
+    // Counted from the scene's start (QA4 F-03): a tap made while VELA was still talking ("¡Toca la
+    // placa!") is the tap she asked for; the player is never asked twice.
     signals = new Set();
     events.emit('sceneWait', { scene: a.view, text: w.text, target: w.target ?? null });
     checkWait();
@@ -508,7 +509,14 @@ export function createStory(deps: StoryDeps): Story {
 
   function checkWait(): void {
     const a = active;
-    if (!a || a.phase !== 'wait') return;
+    if (!a) return;
+    // The player already did what the scene's task asks while VELA was still talking: the scene is over.
+    const w = a.def.wait;
+    if (a.phase === 'lines' && !a.replay && !a.def.choice && w?.event && st.counters[w.event] - a.base[w.event] >= (w.count ?? 1)) {
+      finish(a, false);
+      return;
+    }
+    if (a.phase !== 'wait') return;
     if (waitSatisfied(a, view())) finish(a, false);
   }
 
@@ -596,7 +604,7 @@ export function createStory(deps: StoryDeps): Story {
     const v = view();
     trackEra(v);
     const t = now();
-    if (active?.phase === 'wait') checkWait();
+    if (active) checkWait();
     if (st.enabled && !(deps.isBlocked?.() ?? false)) {
       if (!active) {
         const def = pickScene(v, t, false);

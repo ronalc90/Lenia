@@ -417,3 +417,28 @@ describe('story: pacing and text', () => {
     expect(h.id()).toBeNull();
   });
 });
+
+describe('story: the tutorial follows the player (QA4 F-03)', () => {
+  it('tapping the dish while VELA says "¡Toca la placa!" ends t_intro: no second tap, no stale pill', async () => {
+    const h = harness();
+    h.wait(5);
+    expect(h.id()).toBe('t_intro');
+    // The player taps the dish before tapping VELA's bubble (her lines are still on screen).
+    seed(h);
+    await Promise.resolve();
+    h.wait(1);
+    expect(h.id()).not.toBe('t_intro');
+    expect(h.story.serialize().done).toContain('t_intro');
+  });
+
+  it('a tap during the lines also counts once the lines are read', async () => {
+    const h = harness();
+    h.wait(5);
+    for (let i = 0; i < 1 && h.story.current()?.phase === 'lines'; i++) h.story.advance();
+    seed(h);
+    await Promise.resolve();
+    h.playLines();
+    h.wait(1);
+    expect(h.story.serialize().done).toContain('t_intro');
+  });
+});

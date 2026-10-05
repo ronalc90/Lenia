@@ -617,3 +617,23 @@ export const ACHIEVEMENTS: (MetricGoal & { bonus: number })[] = [
   { id: 'returned', metric: 'returns', target: 1, bonus: 0.01 },
   { id: 'hour', metric: 'playTime', target: 3600, bonus: 0.02 },
 ];
+
+/**
+ * "Limpiar placa" wipes every creature: it fires only after the button is held this long (QA4 F-10: a
+ * child mashing near the seed bar wiped the dish with two quick taps). [QA4; design]
+ */
+export const CLEAN_HOLD_MS = 1200;
+/** The dish's "Centrar" button shows above this zoom (QA4 F-09: a child's taps left the dish zoomed in). [QA4] */
+export const RECENTER_MIN_ZOOM = 1.05;
+/**
+ * A seed keeps clear of where a swimmer will be, not only where it is: its path over this many
+ * simulation steps counts as matter in the way (QA4: a child's seeds stamped in front of the starter
+ * swimmer fused with it; at 0.6 cells/step and 45 steps/s that is ~1.3 s, ~36 cells ahead). [QA4;
+ * measured on the CPU dish, tests/unit/realDish.ts]
+ */
+export const SEED_PATH_LOOKAHEAD_STEPS = 60;
+/**
+ * After a card closes, the dock ignores taps this long: the second tap of an impatient double tap on
+ * "¡Entendido!" landed on the Tree button under it and opened the Tree (QA4 replay, F-05). [QA4]
+ */
+export const CARD_TAP_GUARD_MS = 500;

@@ -120,3 +120,12 @@ describe('worlds (the rules as cards, no knobs)', () => {
     }
   });
 });
+
+describe('the start card recommends the world that pays most (QA4 F-14)', () => {
+  it('the open world with the biggest Esencia multiplier; the only one when there is one', async () => {
+    const { bestWorld } = await import('./worlds');
+    expect(bestWorld(['classic'])).toBe('classic');
+    expect(bestWorld(['classic', 'cold'])).toBe('cold');
+    expect(bestWorld(['classic', 'cold', 'gyro', 'giants'])).toBe('giants');
+  });
+});

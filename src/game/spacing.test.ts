@@ -41,6 +41,9 @@ describe('seed spacing (spores stamped next to other matter fuse into a maze)', 
     expect(g.actions.seedAt(96, 120)).toBeNull();
     expect(count('seedBlocked')).toBe(1);
     expect((log.get('seedBlocked') as GameEvents['seedBlocked'][])[0]).toMatchObject({ x: 96, y: 120, reason: 'tooClose', near: { x: expect.any(Number), y: expect.any(Number) } });
+    // QA4 F-13: it names the creature in the way, so the warning follows it as it swims on.
+    const near = (log.get('seedBlocked') as GameEvents['seedBlocked'][])[0].near!;
+    expect(crowd.map((c) => c.id)).toContain(near.id);
     expect(count('seed')).toBe(0);
     expect(g.state.essence).toBe(before.essence);
     expect(st(g).charges).toEqual(before.charges);
@@ -133,5 +136,23 @@ describe('dissolved matter is not a dead creature', () => {
     g.tick(0.1, report([], [{ type: 'died', id: 10, x: 50, y: 50 }]));
     expect(count('creatureDied')).toBe(1);
     expect(g.state.stats.deaths).toBe(1);
+  });
+});
+
+describe('a seed never lands in front of a swimmer (QA4: the starter died fused with a child\'s seeds)', () => {
+  it('a tap on the path a swimmer will take in the next second is moved off it or refused', () => {
+    const { bus } = recordingBus();
+    const g = createGame({ bus, rng: seededRng(7), grid: { w: 192, h: 240 } });
+    st(g).charges = { free: 0, guaranteed: 0 };
+    st(g).essence = 1000;
+    const c = creature({ id: 1, x: 60, y: 120, radius: 6, vx: 0.6, vy: 0 });
+    g.tick(0.1, report([c]));
+    // 50 cells ahead: outside the plain spacing ring, but the swimmer gets there in ~80 steps.
+    const spec = g.actions.seedAt(110, 120);
+    if (spec) {
+      // Wherever it landed, it is clear of the swimmer's next second (its path, not only where it is now).
+      for (let k = 0; k <= B.SEED_PATH_LOOKAHEAD_STEPS; k += 10) expect(Math.abs(spec.y - 120) + Math.abs(spec.x - (60 + 0.6 * k)) > 2 * R).toBe(true);
+      expect(Math.hypot(spec.x - 110, spec.y - 120)).toBeGreaterThan(1);
+    }
   });
 });

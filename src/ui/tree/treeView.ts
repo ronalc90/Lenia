@@ -76,6 +76,8 @@ export interface TreeViewOptions {
   onNewSession?(): void;
   /** Optional × (e.g. looking at the tree from the summary). */
   onClose?(): void;
+  /** The go button's label when it is not "Nueva sesión" (e.g. back to a run that waits); null = default. */
+  goText?(): Text | null;
   onSound?(kind: TreeSound): void;
   /** Species of a world for its node sheet (portraits; unfound ones as silhouettes). */
   worldSpecies?(world: WorldId): { code: string; name: string; portrait: Pattern | null; found: boolean }[];
@@ -357,8 +359,13 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
   function freeArea(): { cx: number; cy: number; w: number; h: number; top: number } {
     const { w, h } = vpSize();
     const bar = topBar.getBoundingClientRect();
-    const top = Math.max(78, bar.height > 0 ? bar.bottom - vp.getBoundingClientRect().top + 10 : 0);
-    let bottom = 18;
+    const vpTop = vp.getBoundingClientRect().top;
+    let top = Math.max(78, bar.height > 0 ? bar.bottom - vpTop + 10 : 0);
+    // VELA docked at the top of the Tree (QA4 F-01) is part of the bar: no node under her bubble.
+    const dock = document.querySelector('.sty.sty-docked .sty-box:not([hidden])')?.getBoundingClientRect();
+    if (dock && dock.height > 0) top = Math.max(top, dock.bottom - vpTop + 10);
+    // Room for the hint pill at the bottom (bigger on the first visit, QA4 F-11): no node under it.
+    let bottom = hint.offsetHeight > 0 ? hint.offsetHeight + 28 : 18;
     let right = 0;
     if (selected && open) {
       if (desktop()) right = 410;
@@ -499,6 +506,9 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     suppressClickUntil = performance.now() + 450;
     if (d.node) tapNode(d.node);
     else if (selected) api.select(null);
+    // First visit, nothing bought yet (QA4 F-11): a tap anywhere on the tree opens the green node the
+    // hand points at, so a child who taps "somewhere" still finds the sheet with its big "Comprar".
+    else if (guideNode()) tapNode(guideNode()!);
   };
   vp.addEventListener('pointerup', end);
   vp.addEventListener('pointercancel', end);
@@ -645,7 +655,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     if (night.ready && night.next) parts.push(`<b>${esc(tx(TREE_UI.nightReady, l))}</b>`);
     if (ready) parts.push(`<b>${esc(tx(TREE_UI.affordable(ready), l))}</b>`);
     titleP.innerHTML = parts.join(' · ');
-    goLbl.textContent = tx(TREE_UI.newSession, l);
+    goLbl.textContent = tx(opts.goText?.() ?? TREE_UI.newSession, l);
     goBtn.hidden = !opts.onNewSession;
     hint.textContent = tx(TREE_UI.hint, l);
     for (const { b, l: lab } of branchEls) lab.textContent = tx(BRANCH_TEXT[b].name, l);
@@ -750,9 +760,8 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
         ? '¡Puedes comprarlo!'
         : 'You can buy it!'
       : tx(TREE_UI.missing(fmt(missing, l), n ? tx(TREE_UI.sessions(n), l) : null), l);
-    return `<div class="rt-have${ok ? ' ok' : ''}"><div class="row"><span>${esc(tx(DATOS_NAME, l))}</span><b>${fmt(data.datos, l)} / ${fmt(
-      st.cost,
-      l,
+    return `<div class="rt-have${ok ? ' ok' : ''}"><div class="row"><span>${esc(tx(DATOS_NAME, l))}</span><b>${esc(
+      tx(TREE_UI.haveCost(fmt(data.datos, l), fmt(st.cost, l)), l),
     )}</b></div><div class="track"><div class="fill" style="width:${(k * 100).toFixed(1)}%"></div></div><div class="why">${esc(why)}</div></div>`;
   }
 
@@ -838,7 +847,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       chips.push(
         st.maxed
           ? `<span class="rt-chip done">${treeIcon('check', 14)}${esc(tx(TREE_UI.maxed, l))}</span>`
-          : `<span class="rt-chip lv">${esc(tx(TREE_UI.level, l))} ${st.level}/${def.maxLevel >= 99 ? '∞' : def.maxLevel}</span>`,
+          : `<span class="rt-chip lv">${esc(tx(TREE_UI.levelOf(st.level, def.maxLevel >= 99 ? '∞' : String(def.maxLevel)), l))}</span>`,
       );
     }
     let body = '';
@@ -1022,12 +1031,39 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     renderSheet(true);
   }
 
+  /**
+   * The node the first-visit guide points at (QA4 F-11): nothing bought yet and something affordable,
+   * the cheapest green node (ties: the Clock first, it is what the first run teaches). null otherwise.
+   */
+  function guideNode(): string | null {
+    if (Object.entries(data.levels).some(([k, n]) => k !== 'lab' && n > 0)) return null;
+    let best: string | null = null;
+    let cost = Infinity;
+    for (const [id, st] of states) {
+      if (id === 'lab' || !st.affordable || st.status === 'hidden') continue;
+      if (st.cost < cost || (st.cost === cost && id === 'clock')) {
+        best = id;
+        cost = st.cost;
+      }
+    }
+    return best;
+  }
+
+  /** The animated hand over the guide's node and the big "¡Toca el nodo verde!" (first visit only). */
+  function renderGuide(): void {
+    const id = open ? guideNode() : null;
+    el.classList.toggle('rt-first', !!id);
+    for (const n of nodes.values()) n.el.classList.toggle('guide', n.def.id === id);
+    hint.textContent = tx(id ? TREE_UI.hintFirst : TREE_UI.hint, lang());
+  }
+
   function recompute(): void {
     states = treeStates(ctxOf(data));
     renderNodes();
     renderEdges();
     renderGates();
     renderTop();
+    renderGuide();
     tweenDatos(data.datos);
     renderSheet();
   }
@@ -1039,6 +1075,11 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     applyCam();
   };
   window.addEventListener('resize', onResize);
+  // VELA docks at the top of the Tree or leaves: fit the tree to the room that is left.
+  const onDock = () => {
+    if (open) requestAnimationFrame(() => fitView(!rm()));
+  };
+  window.addEventListener('bl-story-dock', onDock);
 
   const api: TreeView = {
     el,
@@ -1099,6 +1140,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       cancelAnimationFrame(camAnim);
       cancelAnimationFrame(datosTween);
       window.removeEventListener('resize', onResize);
+      window.removeEventListener('bl-story-dock', onDock);
       priceSheet.dispose();
       el.remove();
     },

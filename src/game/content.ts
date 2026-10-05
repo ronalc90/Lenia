@@ -402,7 +402,10 @@ export const TEXT = {
   multEcosystem: t('Placa variada', 'Mixed dish'),
   multSprint: t('Recta final', 'Final stretch'),
   nightRequirement: (night: number, sessions: number, species: number) =>
-    t(`Noche ${night}: ${sessions} sesiones y ${species} especies`, `Night ${night}: ${sessions} sessions and ${species} species`),
+    t(
+      `Noche ${night}: ${sessions} ${sessions === 1 ? 'sesión' : 'sesiones'} y ${species} ${species === 1 ? 'especie' : 'especies'}`,
+      `Night ${night}: ${sessions} ${sessions === 1 ? 'session' : 'sessions'} and ${species} species`,
+    ),
   /** A copy of a species that does not live in this session's world would melt at once. */
   printOtherWorld: (n: number) => t(`Esta especie vive en el Mundo ${n}: cópiala allí.`, `This species lives in World ${n}: copy it there.`),
   nightReady: (night: number) => t(`¡La Noche ${night} está lista! Ábrela en el centro del Árbol.`, `Night ${night} is ready! Open it at the centre of the Tree.`),

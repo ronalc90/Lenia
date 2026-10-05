@@ -562,6 +562,8 @@ export interface ResearchView {
   recentDatos: number[];
   /** What every Encargo done in a session adds: Datos to the summary and seconds to the clock. */
   encargoReward?: { datos: number; seconds: number };
+  /** What a species new to the Bestiary adds, with the tree's upgrades (Cuaderno): Datos and seconds (QA4 F-18). */
+  speciesReward?: { datos: number; seconds: number };
   /** Round dish size index (Placa route: TreeEffects.dishLevel → core/dish DISH_DIAMETERS, capped by quality in main). */
   dishLevel?: number;
 }

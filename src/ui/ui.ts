@@ -12,6 +12,7 @@ import { BEHAVIOR_COLOR } from '../core/palette';
 import type { Behavior, BuyQty, GameActions, GameView, Lang, Text } from '../core/types';
 import { TABS, type Ctx, type Panel, type TabId, type TextSize, type ThemePref, type ToastKind } from './ctx';
 import { h, ic, loadJSON, reconcile, saveJSON, setAttr, setHTML, setStyle, setText, show, toggle, vibrate } from './dom';
+import * as B from '../game/balance';
 import { fmt, fmtClock, fmtDuration, fmtRate, fmtShort } from './format';
 import { behaviorName, getLang, setLang, stateName, t, tx } from './i18n';
 import { icon, logo } from './icons';
@@ -33,6 +34,14 @@ import { createSplash, type Splash } from './splash';
 import { Toasts } from './toasts';
 import { SESSION_UI } from '../game/treeText';
 import { MOMENT_MIN_RUN_SECONDS, SESSION_TOAST_MAX_MS } from '../game/cycleBalance';
+
+/**
+ * The Esencia counter in whole drops (QA4: "3.7", "1.7" next to "16" read as two kinds of number). Seeds
+ * and the Abono cost whole Esencia, so the floor is what can be spent.
+ */
+function essenceText(n: number, lang: Lang): string {
+  return fmt(n < 1000 ? Math.floor(n + 1e-9) : n, lang);
+}
 
 export interface UIDeps {
   actions: GameActions;
@@ -128,6 +137,12 @@ export interface UI {
   /** Per animation frame, for the overlay canvas (halos, ripples, floating numbers, golden spark). */
   frame(timeSec: number, dtSec: number): void;
   setPaused(p: boolean): void;
+  /** The whole dish again: zoom 1, centred, not following (QA4 F-09). */
+  resetView(): void;
+  /** Close what was opened from the dish (a creature's card): a session card is coming (QA4 F-05). */
+  closeTransient(): void;
+  /** A card just closed: the dock ignores taps for a moment (the rest of a double tap). */
+  guardTaps(ms?: number): void;
   showOfflineCard(seconds: number, essence: number): void;
   /** No WebGL2 screen. */
   showUnsupported(reason: string): void;
@@ -274,6 +289,10 @@ class BiolumaUI implements UI {
   private fabErase!: HTMLButtonElement;
   private fabClean!: HTMLButtonElement;
   private cleanArmed = 0;
+  private tapGuardUntil = 0;
+  private cleanHold = 0;
+  private cleanHeld = false;
+  private fabCentre!: HTMLButtonElement;
   private dropOvergrownToast = false;
   /** Last seed cost shown, to animate changes (green ↓ cheaper, amber ↑ pricier). */
   private lastSeedCost = -1;
@@ -530,8 +549,20 @@ class BiolumaUI implements UI {
     this.fabErase = h('button', { type: 'button', class: 'fab fab-erase round danger', hidden: true, html: icon('eraser') });
     this.fabErase.addEventListener('click', () => this.toggleErase());
     // "Clean dish": always there next to the eraser, two taps (arm, then confirm) so it never fires by accident.
+    // Away from the seed bar, and only on a long press (QA4 F-10); a keyboard still arms and confirms.
     this.fabClean = h('button', { type: 'button', class: 'fab fab-clean round', html: icon('broom'), 'data-testid': 'clean-dish' });
-    this.fabClean.addEventListener('click', () => this.onCleanTap());
+    this.fabClean.style.setProperty('--hold-ms', `${B.CLEAN_HOLD_MS}ms`);
+    this.fabClean.addEventListener('pointerdown', (e) => this.onCleanDown(e));
+    for (const ev of ['pointerup', 'pointerleave', 'pointercancel'] as const) this.fabClean.addEventListener(ev, () => this.onCleanUp());
+    this.fabClean.addEventListener('click', (e) => {
+      if ((e as MouseEvent).detail === 0) this.onCleanTap();
+    });
+    // "Centrar": back to the whole dish (QA4 F-09), shown only when zoomed in or following a creature.
+    this.fabCentre = h('button', { type: 'button', class: 'fab fab-centre', hidden: true, 'data-testid': 'recenter' }, ic('centre', 22), h('span', { class: 'fab-label' }, t('recenter')));
+    this.fabCentre.addEventListener('click', () => {
+      this.sound('tap');
+      this.resetView();
+    });
     // Overflow banner (view.overgrown): prominent, but the dish stays usable underneath.
     const cleanBig = h('button', { type: 'button', class: 'btn primary og-btn', 'data-testid': 'overgrown-clean' }, ic('broom', 24), h('span', { class: 'og-btn-l' }));
     cleanBig.addEventListener('click', () => {
@@ -568,6 +599,7 @@ class BiolumaUI implements UI {
       this.fabSpeed,
       this.fabErase,
       this.fabClean,
+      this.fabCentre,
       this.buffsEl,
       this.modePill,
       this.overgrownEl,
@@ -581,17 +613,21 @@ class BiolumaUI implements UI {
     this.bestiaryLabel = h('span', { class: 'dock-l' });
     this.bestiaryBtn = h('button', { type: 'button', class: 'dock-btn dock-bestiary', 'data-tab': 'bestiary' }, ic('bestiary', 26), this.bestiaryLabel, this.bestiaryDot);
     this.bestiaryBtn.addEventListener('click', () => {
+      if (this.tapGuarded()) return;
       this.sound(this.bestiaryOpen ? 'close' : 'open');
       this.openBestiary(!this.bestiaryOpen);
     });
     this.treeLabel = h('span', { class: 'dock-l' });
     this.treeBtn = h('button', { type: 'button', class: 'dock-btn dock-main dock-tree', hidden: true }, ic('tree', 26), this.treeLabel);
     this.treeBtn.addEventListener('click', () => {
+      if (this.tapGuarded()) return;
       this.sound('open');
       this.deps.onOpenTree?.();
     });
     this.boostBtn = h('button', { type: 'button', class: 'dock-btn dock-main dock-boost', hidden: true });
-    this.boostBtn.addEventListener('click', () => this.onBoostTap());
+    this.boostBtn.addEventListener('click', () => {
+      if (!this.tapGuarded()) this.onBoostTap();
+    });
     this.dock = h(
       'nav',
       { class: 'bl-dock' },
@@ -743,6 +779,7 @@ class BiolumaUI implements UI {
     }
     this.overlay.draw(timeSec, dtSec);
     this.tweenEssence(dtSec);
+    this.updateCentre();
     this.positionCard();
   }
 
@@ -907,13 +944,14 @@ class BiolumaUI implements UI {
     const lang = this.lang;
     if (this.dispEssence < 0 || performance.now() - this.lastFrameAt > 500) {
       this.dispEssence = v.essence;
-      setText(this.essVal, fmt(v.essence, lang));
+      setText(this.essVal, essenceText(v.essence, lang));
     }
     const buffMult = v.buffs.reduce((m, b) => (b.mult > 1 ? m * b.mult : m), 1);
-    const rateHTML =
-      `+${fmtRate(v.essencePerSec, lang)}${t('perSec')}` + (buffMult > 1 ? `<span class="buffx">×${fmtShort(buffMult, lang)}</span>` : '');
+    // Honest HUD (QA4 F-20): before the first seed the clock and the Esencia wait, so nothing is earned.
+    const eps = v.session && v.session.phase !== 'running' ? 0 : v.essencePerSec;
+    const rateHTML = `+${fmtRate(eps, lang)}${t('perSec')}` + (buffMult > 1 && eps > 0 ? `<span class="buffx">×${fmtShort(buffMult, lang)}</span>` : '');
     setHTML(this.essRate, rateHTML);
-    toggle(this.essRate, 'zero', v.essencePerSec <= 0);
+    toggle(this.essRate, 'zero', eps <= 0);
     setAttr(this.essVal.parentElement!.parentElement!, 'aria-label', t('essAria', { n: fmt(v.essence, lang), r: fmtRate(v.essencePerSec, lang) }));
     // Multiplier breakdown (QA3 F13), when the game exposes it: tooltip on the essence counter.
     const mu = v.multipliers;
@@ -956,7 +994,7 @@ class BiolumaUI implements UI {
       this.dispEssence += (target - this.dispEssence) * k;
       if (target - this.dispEssence < Math.max(0.5, target * 0.0005)) this.dispEssence = target;
     }
-    setText(this.essVal, fmt(this.dispEssence, this.lang));
+    setText(this.essVal, essenceText(this.dispEssence, this.lang));
   }
 
   // ───────────────────────────── objective ─────────────────────────────
@@ -1105,7 +1143,7 @@ class BiolumaUI implements UI {
     if (b.affordable && !this.prefs.hints.includes('boost') && !this.deps.isNarrating?.() && !this.splash?.visible) {
       this.prefs.hints.push('boost');
       this.savePrefs();
-      this.showDockTip(this.boostBtn, `${tx(SESSION_UI.boostDesc)} ${tx(SESSION_UI.boostPrice)}`);
+      this.showDockTip(this.boostBtn, this.boostTip());
     }
     const bk = `${b.cost}|${b.count}|${b.affordable}|${wait}|${b.needsLife}|${lang}`;
     if (bk === this.boostKey) return;
@@ -1131,6 +1169,18 @@ class BiolumaUI implements UI {
     );
     setAttr(this.boostBtn, 'aria-label', `${tx(TEXT.boost)} ${mult}: ${fmt(b.cost, lang)} ${t('essence')}. ${tx(SESSION_UI.boostDesc)}`);
     setAttr(this.boostBtn, 'title', `${tx(SESSION_UI.boostDesc)} ${tx(SESSION_UI.boostPrice)}`);
+  }
+
+  /** What Abono is, what it changes ("ahora +2/s → +2,5/s") and its one price rule (QA4 F-17). */
+  private boostTip(): string {
+    const v = this.v;
+    const b = v?.boost;
+    const base = `${tx(SESSION_UI.boostDesc)} ${tx(SESSION_UI.boostPrice)}`;
+    if (!v || !b || !(v.essencePerSec > 0) || !(b.mult > 0)) return base;
+    const after = (v.essencePerSec * b.nextMult) / b.mult;
+    const l = this.lang;
+    const ba = l === 'es' ? `Ahora +${fmtRate(v.essencePerSec, l)}/s → con Abono +${fmtRate(after, l)}/s.` : `Now +${fmtRate(v.essencePerSec, l)}/s → with Fertiliser +${fmtRate(after, l)}/s.`;
+    return `${ba} ${base}`;
   }
 
   /** A one-time line over a dock button (what it does), gone after a few seconds or a tap. */
@@ -1181,7 +1231,7 @@ class BiolumaUI implements UI {
       'info',
       'nutrient',
     );
-    if (wait === 0) this.showDockTip(this.boostBtn, `${tx(SESSION_UI.boostDesc)} ${tx(SESSION_UI.boostPrice)}`);
+    if (wait === 0) this.showDockTip(this.boostBtn, this.boostTip());
   }
 
   // ───────────────────────────── pause card ─────────────────────────────
@@ -1267,6 +1317,61 @@ class BiolumaUI implements UI {
     this.mode = 'print';
     this.closeCard();
     if (this.v) this.updateDishUI(this.v);
+  }
+
+  /** A long press on "Limpiar placa" cleans; a short tap only says how (QA4 F-10). */
+  private onCleanDown(e: PointerEvent): void {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    window.clearTimeout(this.cleanHold);
+    this.cleanHeld = true;
+    this.fabClean.classList.add('holding');
+    this.cleanHold = window.setTimeout(() => {
+      if (!this.cleanHeld) return;
+      this.cleanHeld = false;
+      this.fabClean.classList.remove('holding');
+      this.sound('confirm');
+      this.vibrate(20);
+      this.actions.sterilizeDish?.();
+    }, B.CLEAN_HOLD_MS);
+  }
+
+  private onCleanUp(): void {
+    if (!this.cleanHeld) return;
+    this.cleanHeld = false;
+    window.clearTimeout(this.cleanHold);
+    this.fabClean.classList.remove('holding');
+    this.sound('tap');
+    this.toasts.push(t('cleanHold'), 'info', 'broom');
+  }
+
+  closeTransient(): void {
+    if (this.card) this.closeCard();
+  }
+
+  /** A card just closed: the dock ignores taps for a moment (the rest of a double tap). */
+  guardTaps(ms = B.CARD_TAP_GUARD_MS): void {
+    this.tapGuardUntil = Math.max(this.tapGuardUntil, performance.now() + ms);
+  }
+
+  private tapGuarded(): boolean {
+    return performance.now() < this.tapGuardUntil;
+  }
+
+  /** The whole dish again: zoom 1, centred, not following anyone (QA4 F-09). Each session starts so. */
+  resetView(): void {
+    this.follow = null;
+    const cam = this.camera;
+    if (cam.zoom !== 1) cam.zoomAt(1 / cam.zoom, cam.viewW / 2, cam.viewH / 2);
+    cam.cx = cam.homeX;
+    cam.cy = cam.homeY;
+    cam.clamp();
+    if (this.card) this.renderCardFollow();
+    this.updateCentre();
+  }
+
+  private updateCentre(): void {
+    // Not while a Momento owns the camera (it zooms in to explain, then eases back by itself).
+    show(this.fabCentre, !this.deps.cameraBusy?.() && (this.camera.zoom > B.RECENTER_MIN_ZOOM || this.follow !== null));
   }
 
   private onCleanTap(): void {
@@ -1399,8 +1504,9 @@ class BiolumaUI implements UI {
 
     // First-run hint: "¡Toca aquí!" until the first tap.
     // Also at the start of every later session: the clock waits for a tap on the dish.
-    const waiting = !!v.session && v.session.phase === 'ready' && v.session.n > 1 && !this.deps.isNarrating?.();
-    const wantHint = (!this.firstTapDone && v.stats.seeds === 0 && v.creatures.length === 0) || waiting;
+    // Never under a creature's card (QA4 F-05: card text over "¡Toca aquí!"): one layer at a time.
+    const waiting = !!v.session && v.session.phase === 'ready' && v.session.n > 1 && !this.deps.isNarrating?.() && !this.card;
+    const wantHint = ((!this.firstTapDone && v.stats.seeds === 0 && v.creatures.length === 0) || waiting) && !this.card;
     // Everything faded and no tap for a while: the finger comes back, "¡Toca aquí otra vez!" (CLARIDAD J-164).
     let anyone = false;
     for (const c of v.creatures) if (c.state !== 'dead') anyone = true;

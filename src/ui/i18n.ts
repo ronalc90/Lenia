@@ -84,6 +84,8 @@ const S = {
   overgrownText: { es: 'La materia sin forma no da Esencia.', en: 'Shapeless matter gives no Essence.' },
   cleanDish: { es: 'Limpiar placa', en: 'Clean dish' },
   cleanConfirm: { es: '¿Limpiar? Toca otra vez', en: 'Clean? Tap again' },
+  cleanHold: { es: 'Mantén pulsado para limpiar la placa', en: 'Hold to clean the dish' },
+  recenter: { es: 'Centrar', en: 'Centre' },
   lockBestiary: { es: 'Se abre con tu primera criatura', en: 'Opens with your first creature' },
 
   // Bestiary

@@ -25,7 +25,7 @@ import { BRANCHES, TREE_BY_ID, TREE_NODES, nightInfo, seedSuccess, treeStates } 
 import { WORLDS, WORLD_BY_ID, type WorldId } from '../src/game/worlds';
 import { catalogGroup } from '../src/species/identity';
 import { CATALOG, catalogByCode } from '../src/sim/catalog';
-import { SIG_SCALES } from '../src/detect/signature';
+import { SIG, SIG_SCALES } from '../src/detect/signature';
 import catalogSigJson from '../src/detect/catalogSignatures.json';
 
 // ──────────────── dish model (from the retired balance-bot.ts) ────────
@@ -37,6 +37,8 @@ let TRACE = -1;
 const DT = 0.5;
 const BORN_STEPS = C.STABLE_AGE_STEPS;
 const CLASSIFY_STEPS = 1000;
+/** First dynamic feature of a signature (signature.ts SIG.SPEED). */
+const SIG_DYNAMIC_FROM = SIG.SPEED;
 const BASE_HAZARD = 1 / 2400;
 /**
  * Crowded movers die sooner. the retired balance-bot.ts used 1/600 (CPU audit); here 1/90 s, closer to QA3 F5's
@@ -338,7 +340,12 @@ class Dish {
       stableSteps: b.state === 'stable' ? Math.max(0, b.steps - BORN_STEPS) : 0,
       vx: 0,
       vy: 0,
-      signature: b.species ? b.species.sig.map((v, i) => Math.max(0, v + (b.sigNoise[i] ?? 0))) : new Array(SIG_LEN).fill(0.05),
+      // Like the real detector (signature.ts): the dynamic features (speed, turn, pulse) stay unknown (-1)
+      // until the track is classified (CLASSIFY_STEPS of history), so a young form cannot found a species
+      // (game finishedForm). QA4 F-04: the bot used to register species the real game could not.
+      signature: (b.species ? b.species.sig.map((v, i) => Math.max(0, v + (b.sigNoise[i] ?? 0))) : new Array(SIG_LEN).fill(0.05)).map((v, i) =>
+        i >= SIG_DYNAMIC_FROM && !(b.steps >= CLASSIFY_STEPS) ? -1 : v,
+      ),
       parentId: null,
     }));
     const events = this.events;
@@ -735,6 +742,15 @@ for (const policy of policies) {
     const lim = Array.from({ length: N }, (_, i) => med(res.map((r) => r.rows[i].limit)));
     const longest = Math.max(...lim);
     checks.push(`${tag} runs grow 0:15 → 2–3 min and never shrink: ${lim.every((x, i) => i === 0 || x >= lim[i - 1]) && longest >= 120 && longest <= 185 ? 'OK' : 'FAIL'} (${lim.map(fmtClock).filter((x, i, a) => i === 0 || x !== a[i - 1]).join(' → ')})`);
+  }
+  {
+    // QA4 F-04: the first species must enter the Bestiary in session 1 or 2 (planner and kid).
+    const firstSp = res.map((r) => {
+      const i = r.rows.findIndex((x) => x.species >= 1);
+      return i < 0 ? Infinity : i + 1;
+    });
+    const mfs = med(firstSp);
+    checks.push(`${tag} the first species registers in session 1 or 2 (median): ${mfs <= 2 ? 'OK' : 'FAIL'} (median S${Number.isFinite(mfs) ? mfs : '—'}; runs ${firstSp.map((x) => (Number.isFinite(x) ? x : '—')).join('/')})`);
   }
   checks.push(`${tag} never a session below ${C.DATOS_MIN} Datos: ${minD >= C.DATOS_MIN ? 'OK' : 'FAIL'} (${minD})`);
   if (policy !== 'kid') {

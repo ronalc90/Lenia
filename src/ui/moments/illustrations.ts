@@ -795,7 +795,8 @@ const species: IllusDef = {
     }
     if (inBook) {
       // A new species pays Datos at the end of the session (cycleBalance; CLARIDAD J-33).
-      badge(ctx, L(env, `+${DATOS_PER_NEW_SPECIES} Datos`, `+${DATOS_PER_NEW_SPECIES} Data`), bx, by - 40, UI.good, pop(seg(u, 2.6, 3.0)));
+      const dz = env.data.amount ?? DATOS_PER_NEW_SPECIES;
+      badge(ctx, L(env, `+${dz} Datos`, `+${dz} Data`), bx, by - 40, UI.good, pop(seg(u, 2.6, 3.0)));
       text(ctx, L(env, 'Bestiario', 'Bestiary'), bx, by + 36, { size: 11, color: UI.good });
       for (let i = 0; i < 4; i++) sparkle(ctx, bx + Math.cos(i * 1.7 + u * 2) * 34, by + Math.sin(i * 1.7 + u * 2) * 26, 3, '#D9FFB8', seg(u, 2.5, 2.8) * (1 - seg(u, 3.6, 4.2)));
     }
@@ -1897,7 +1898,7 @@ const compare: IllusDef = {
 // ───────────────────────────── clock (the lab session) ─────────────────────────────
 
 /**
- * The session clock: a creature works on the dish while the dial runs from 1:00 to 0:00; drops fly
+ * The session clock: a creature works on the dish while the dial runs from the seconds left to 0:00; drops fly
  * into the counter and at 0:00 a check says it was all kept ("¡No pierdes nada!").
  */
 const clock: IllusDef = {
@@ -1912,7 +1913,7 @@ const clock: IllusDef = {
     clipRound(ctx, 14, 18, 104, 104, 14);
     drawClip(ctx, c, fi(c, u, 0.6, 6), 14, 18, 104, 104, { cells: 44, center: 'centroid' });
     ctx.restore();
-    // The dial: one minute running out.
+    // The dial: the run's last seconds running out.
     const cx = 188;
     const cy = 64;
     const R = 40;
@@ -1929,7 +1930,9 @@ const clock: IllusDef = {
     ctx.arc(cx, cy, R, -Math.PI / 2, -Math.PI / 2 + TAU * (1 - k));
     ctx.stroke();
     ctx.restore();
-    const secs = Math.max(0, Math.ceil(60 * (1 - k)));
+    // The dial counts down the seconds the real clock had left when the card opened (QA4 F-08).
+    const from = Math.max(1, Math.round(env.data.seconds ?? 10));
+    const secs = Math.max(0, Math.ceil(from * (1 - k)));
     text(ctx, `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`, cx, cy, { size: 17, mono: true, weight: 800, color: k >= 1 ? UI.good : UI.text });
     // Essence drops from the creature to the dial while it runs.
     for (let i = 0; i < 3; i++) {

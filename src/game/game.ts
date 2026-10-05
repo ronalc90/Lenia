@@ -834,12 +834,23 @@ export function createGame(deps: GameDeps, save?: string): Game {
    * BODY_FROM_RG × its radius of gyration, at least half a kernel) and every seed placed in the
    * last SEED_SPACING_MEMORY seconds that the detector has not reported yet.
    */
-  function seedObstacles(extra: { x: number; y: number; r: number }[] = []): { x: number; y: number; r: number }[] {
+  function seedObstacles(extra: { x: number; y: number; r: number }[] = []): { x: number; y: number; r: number; id?: number }[] {
     const R = s.calib.R;
-    const out: { x: number; y: number; r: number }[] = [];
+    const out: { x: number; y: number; r: number; id?: number }[] = [];
     for (const c of creatures) {
       if (c.state === 'dead') continue;
-      out.push({ x: c.x, y: c.y, r: Math.max(B.SEED_BODY_MIN_R * R, B.SEED_BODY_FROM_RG * (Number.isFinite(c.radius) ? c.radius : 0)) });
+      const r = Math.max(B.SEED_BODY_MIN_R * R, B.SEED_BODY_FROM_RG * (Number.isFinite(c.radius) ? c.radius : 0));
+      out.push({ id: c.id, x: c.x, y: c.y, r });
+      // Where it is going (QA4): points along its path, every half kernel, inside the glass.
+      const sp = Math.hypot(c.vx, c.vy);
+      if (!(sp > 0.02) || c.state === 'exploded') continue;
+      const reach = sp * B.SEED_PATH_LOOKAHEAD_STEPS;
+      for (let d = R / 2; d <= reach; d += R / 2) {
+        let px = c.x + (c.vx / sp) * d;
+        let py = c.y + (c.vy / sp) * d;
+        if (dish) ({ x: px, y: py } = clampToDish(dish, px, py, r));
+        out.push({ id: c.id, x: px, y: py, r });
+      }
     }
     for (const r of recentSeeds) {
       if (recentMemory() - r.t > B.SEED_SPACING_MEMORY) continue;
@@ -876,14 +887,14 @@ export function createGame(deps: GameDeps, save?: string): Game {
   }
 
   /** The body nearest a refused tap (what the red ring points at), null when none is listed. */
-  function nearestObstacle(x: number, y: number): { x: number; y: number; r: number } | null {
-    let best: { x: number; y: number; r: number } | null = null;
+  function nearestObstacle(x: number, y: number): { x: number; y: number; r: number; id?: number } | null {
+    let best: { x: number; y: number; r: number; id?: number } | null = null;
     let bestD = Infinity;
     for (const o of seedObstacles()) {
       const d = gdist(x, y, o.x, o.y) - o.r;
       if (d < bestD) {
         bestD = d;
-        best = { x: o.x, y: o.y, r: o.r };
+        best = o.id !== undefined ? { x: o.x, y: o.y, r: o.r, id: o.id } : { x: o.x, y: o.y, r: o.r };
       }
     }
     return best;
@@ -2118,6 +2129,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
         capacity: room(),
         recentDatos: recentDatos(r),
         encargoReward: { datos: C.DATOS_PER_ENCARGO, seconds: fx.timePerEncargo },
+        speciesReward: { datos: fx.datosPerSpecies, seconds: fx.timePerSpecies },
         dishLevel: fx.dishLevel,
       },
       // Session 1 hides the Datos pill: the player does not know what a Dato is yet (CLARIDAD §3.3).

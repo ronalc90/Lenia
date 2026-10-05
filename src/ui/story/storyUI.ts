@@ -42,6 +42,13 @@ export interface StoryUIOptions {
    * sheet's own button is the next step, and the pill would sit on its head). It keeps waiting.
    */
   hideTask?(target: string | null): boolean;
+  /**
+   * One layer at a time (QA4 F-01): 'hide' = a screen of its own is up (the summary, the start card,
+   * the Tree for a scene that is not about it): the scene waits, invisible and untappable, and comes
+   * back when the player leaves that screen. 'dock' = the scene belongs to that screen (VELA in the
+   * Tree): her bubble sits at the top, never over the screen's buttons. null = normal.
+   */
+  hold?(sceneId: string | null): 'hide' | 'dock' | null;
 }
 
 export interface StoryUI {
@@ -293,16 +300,38 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
   }
 
   let taskTucked = false;
+  let held: 'hide' | 'dock' | null = null;
+  /** Apply the host's hold (QA4 F-01); true while the scene is hidden. */
+  function applyHold(): boolean {
+    const want = !box.hidden || !task.hidden || !choice.hidden ? (opts.hold?.(scene?.id ?? null) ?? null) : null;
+    if (want !== held) {
+      held = want;
+      layer.classList.toggle('sty-held', held === 'hide');
+      layer.classList.toggle('sty-docked', held === 'dock');
+      // The Tree makes room under a docked bubble (src/ui/tree: freeArea).
+      try {
+        window.dispatchEvent(new Event('bl-story-dock'));
+      } catch {
+        /* non-DOM test env */
+      }
+    }
+    return held === 'hide';
+  }
+
   function place(r0: DOMRect): void {
     const W = r0.width;
     const H = r0.height;
+    if (applyHold()) {
+      spot.set(null);
+      return;
+    }
     const curTarget = line?.target ?? (taskInfo ? taskInfo.target : null);
     const tg = targetRect(curTarget, r0);
     const big = !!tg && (tg.id === 'dish' || tg.rect.w * tg.rect.h > W * H * 0.3);
 
     // Dialogue box: bottom, unless the target sits low on the screen.
     if (!box.hidden) {
-      const wantTop = !!tg && !big && tg.rect.y + tg.rect.h / 2 > H * 0.55;
+      const wantTop = held === 'dock' || (!!tg && !big && tg.rect.y + tg.rect.h / 2 > H * 0.55);
       if (wantTop !== boxTop) {
         boxTop = wantTop;
         box.classList.toggle('at-top', boxTop);
@@ -328,7 +357,10 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
     }
 
     // A task pill out of the way while the host says so (and its spotlight with it).
-    const tuck = !task.hidden && !line && !!opts.hideTask?.(tg?.id ?? curTarget?.[0] ?? null);
+    // Also a pill whose target is not on screen and lives in the Tree (e.g. "look at the centre of the
+    // Tree" while the player is on the dish): it waits for the Tree instead of covering the seed bar.
+    const offScreen = !tg && !!curTarget?.length && curTarget.every((id) => id.startsWith('tree.'));
+    const tuck = !task.hidden && !line && (offScreen || !!opts.hideTask?.(tg?.id ?? curTarget?.[0] ?? null));
     if (tuck !== taskTucked) {
       taskTucked = tuck;
       task.style.visibility = tuck ? 'hidden' : '';
@@ -569,6 +601,7 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
     story.on('sceneEnd', () => {
       scene = null;
       hideAll();
+      applyHold();
       opts.onSound?.('done');
       kick();
     }),

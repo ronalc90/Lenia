@@ -26,7 +26,8 @@ export function harness(over: Partial<MomentsDeps> = {}, view: Partial<GameView>
   const blocked = { on: false };
   const h = {
     bus,
-    view: makeView(view),
+    // A player who has sown (most moments are about what their seeds did).
+    view: makeView({ stats: { ...makeView().stats, seeds: 1 }, ...view }),
     storage,
     blocked,
   } as Harness;

@@ -86,6 +86,16 @@
     border-color 300ms;
   touch-action: manipulation;
 }
+/* One layer at a time (QA4 F-01): a scene waiting behind the summary, the start card or the Tree. */
+.sty.sty-held .sty-box,
+.sty.sty-held .sty-task,
+.sty.sty-held .sty-choice,
+.sty.sty-held .sty-scrim,
+.sty.sty-held canvas {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 .sty-box[hidden] {
   display: none;
 }

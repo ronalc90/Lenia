@@ -81,6 +81,20 @@ export function worldEssenceMult(id: WorldId): number {
   return w ? (1 + WORLD_ESSENCE_STEP * (w.n - 1)) * (w.essenceMult ?? 1) : 1;
 }
 
+/**
+ * The open world that pays most for a full dish (QA4 F-14: World 2 paid 108–171 Esencia a run, World 1
+ * 13–20, and nothing said so). WORLDS is ordered by measured yield (world-check --yield: a newer world
+ * never pays less), so it is the newest open one.
+ */
+export function bestWorld(open: readonly string[]): WorldId {
+  let best: WorldDef = WORLDS[0];
+  for (const id of open) {
+    const w = WORLD_BY_ID[id as WorldId];
+    if (w && w.n > best.n) best = w;
+  }
+  return best.id;
+}
+
 /** Creatures the dish holds in a world: the tree's room × the world's share (never fewer than 3). */
 export function worldRoom(id: WorldId, capacity: number): number {
   const m = WORLD_BY_ID[id]?.roomMult ?? 1;

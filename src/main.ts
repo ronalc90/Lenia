@@ -9,6 +9,7 @@ import { matterLUT } from './core/palette';
 import { createSimulation } from './sim/webgl';
 import { QUALITY_DISH } from './sim/perf';
 import { Deflector } from './sim/deflect';
+import { BodyExtrapolator } from './sim/extrapolate';
 import { mustWaitForDetection } from './sim/detectGate';
 import { DishAnimator, dishDiameterFor, dishForGrid, type DishShape } from './core/dish';
 import { ART_RENDER_STYLE } from './ui/art/matter';
@@ -54,6 +55,7 @@ import { attachSecretInputs, createSecretsUI, createStrokeRecorder, mountBasemen
 import { createSessionFlow, createWelcomeCard, datosExplain, type SessionFlow, type SessionFlowSound } from './ui/session';
 import { computeDatos } from './game/session';
 import { PREINCUBATE_STEPS } from './game/cycleBalance';
+import { dishSeconds } from './game/dishClock';
 import { nodeText } from './game/tree';
 
 /**
@@ -87,8 +89,14 @@ const KERNEL_DEBOUNCE_MS = 350;
 const IDLE_AFTER_MS = 60_000;
 /** Frame interval while idle (30 fps). */
 const IDLE_FRAME_MS = 1000 / 30;
+/** Seconds of running clock over which the dish pace is measured, and the dish/wall ratio called "slow" (QA4 F-02). */
+const SLOW_DISH_WINDOW_S = 4;
+const SLOW_DISH_RATIO = 0.75;
 /** At most one "why was my tap refused" hint in this many ms (a player tapping fast gets one, not ten). */
 const SEED_BLOCKED_HINT_MS = 2500;
+
+/** Story scenes about the research tree: they play in the Tree, docked at the top (QA4 F-01). */
+const TREE_SCENES = new Set(['t_tree', 't_world', 'a1_night']);
 
 /**
  * Why the dish is frozen. The simulation and the economy stop while any source is active; the UI's
@@ -260,7 +268,9 @@ function boot(): void {
     getView: () => game.view(),
     // Never over a Momento (queued or open), a price / behaviour sheet, a secret's reveal card or a
     // session card ("¡Tiempo!", the summary, the start card); over the Tree it may (t_tree points at it).
-    isBlocked: () => (uiRef?.blocked() ?? true) || moments.isBusy() || sheetOpen() || secretShowing() || encargoShowing() || (flowRef?.cardOpen ?? false) || welcomeOpen() || introOpen(),
+    // Nor over the Bestiary drawer (QA4 F-04: "your first one, hello little one" over an empty Bestiary).
+    isBlocked: () =>
+      (uiRef?.blocked() ?? true) || moments.isBusy() || sheetOpen() || secretShowing() || encargoShowing() || (flowRef?.cardOpen ?? false) || welcomeOpen() || introOpen() || (uiRef?.drawerOpen ?? false),
     suppress: (id) => storySuppressed.has(id) || (bridge?.suppresses(id) ?? false),
     ui: (name) => (name === 'tree' ? (flowRef?.treeOpen ?? false) : false),
   });
@@ -507,6 +517,14 @@ function boot(): void {
     // A tree node's sheet is open: its "Comprar" is the next step and the pill would sit on its head
     // (only the Tree's own tasks run while the Tree is up: «Compra una mejora.» has no target).
     hideTask: () => flowRef?.treeSheetOpen ?? false,
+    // One layer at a time (QA4 F-01): never over the summary, the start card, "¡Tiempo!" or the welcome
+    // card (the scene waits); in the Tree only the scenes about the Tree, docked at the top.
+    hold: (id) => {
+      const f = flowRef;
+      if (f?.treeOpen) return id && TREE_SCENES.has(id) ? 'dock' : 'hide';
+      if (f?.cardOpen || f?.busy || welcomeOpen()) return 'hide';
+      return null;
+    },
     onSound: (kind) => {
       // Mute the blips while the Momentos bridge consumes a scene it already told.
       if (bridge?.consuming) return;
@@ -544,6 +562,8 @@ function boot(): void {
     },
   });
   momentsUIRef = momentsUI;
+  // The second tap of a double tap on "¡Entendido!" must not open what lies under the card.
+  moments.on('close', () => ui.guardTaps());
   let momentsLang = game.view().settings.lang;
 
   // Seed price: slot dots + "why it changed" chip next to the price, and the sheet behind ONE tap on the
@@ -623,7 +643,11 @@ function boot(): void {
     bus,
     lang: () => game.view().settings.lang,
     reduceMotion: () => game.view().settings.reduceMotion,
-    encargo: () => encargos.current()?.ask ?? null,
+    // Only a request still to do (QA4 F-16: the card showed "Compra el Gotero" already bought).
+    encargo: () => {
+      const c = encargos.current();
+      return c && c.progress.frac < 1 ? c.ask : null;
+    },
     onSound: (k) => {
       const u = FLOW_SOUND[k];
       if (u) audio.playUI?.(u);
@@ -718,6 +742,8 @@ function boot(): void {
   audio.setDishSize?.(gridW, gridH);
   /** Glass deflection: swimmers turn away from the rim and from each other (src/sim/deflect.ts). */
   const deflector = new Deflector();
+  /** Bodies moved on to the dish's current step for the deflector (async readback lag). */
+  const extrapolator = new BodyExtrapolator();
   /** Push the rim to everything that uses it (sim mask, camera fit, detector fill, game spots, sound). */
   function applyDish(): void {
     const d = dishAnim.rim;
@@ -749,7 +775,18 @@ function boot(): void {
     // A seed while the run waits (the Nevera's plants on the start card) incubates under the card.
     if (game.session?.phase === 'ready') preincubate = PREINCUBATE_STEPS;
   });
-  bus.on('sessionStart', () => (preincubate = PREINCUBATE_STEPS));
+  // "¡Tiempo!": the sheets and cards opened from the dish close, so the summary is the one layer (QA4 F-05).
+  bus.on('sessionEnd', () => {
+    momentsUI.closeSheets();
+    priceSheet.close();
+    ui.closeTransient();
+    ui.resetView();
+  });
+  bus.on('sessionStart', () => {
+    preincubate = PREINCUBATE_STEPS;
+    // Every run starts on the whole dish (QA4 F-09: a child's taps left it zoomed in for good).
+    ui.resetView();
+  });
   // A refused tap (spacing rule, full nursery) always says why; nothing is charged and nothing lands.
   // 'tooClose': the UI draws a red ring and the reason at the spot. 'growing': the seed pill is grey
   // ("Espera…") and its reason chip says why, right above the price (no toast, no layout shift).
@@ -765,6 +802,7 @@ function boot(): void {
     sim!.clear();
     detector.reset();
     deflector.reset();
+    extrapolator.reset();
     epoch++; // drop snapshots requested before the clear
     reports.length = 0;
   }
@@ -927,9 +965,9 @@ function boot(): void {
   // ── Main loop ──
   /**
    * Development / e2e builds only (the debug handle): run time faster so a player test can play
-   * whole sessions (tests/e2e/session-play.mjs). `lockstep`: the game's clock follows the steps the
-   * dish really ran (a software-rendered test browser runs far below 30 steps/s; without it the clock
-   * would end sessions before anything grows). Always { scale: 1, lockstep: false } in a release.
+   * whole sessions (tests/e2e/session-play.mjs). `lockstep`: the detector reads every snapshot
+   * synchronously (a software-rendered test browser). The game clock always follows the steps the dish
+   * really ran (dishSeconds, QA4 F-02). Always { scale: 1, lockstep: false } in a release.
    */
   const debugTime = { scale: 1, lockstep: false };
   /**
@@ -1028,21 +1066,16 @@ function boot(): void {
     // move on by the steps run since the snapshot; every turn is told to the detector, so a bouncing
     // swimmer stays a swimmer (§7). Exploded matter and colonies are obstacles, never steered; the
     // spinner label is never used (real spinners are left alone by the deflector's curl filter).
-    const lag = Math.max(0, s.stepCount - report.step);
-    const bodies = [];
+    const live = [];
     for (const c of report.creatures) {
       if (c.state === 'dead') continue;
-      bodies.push({
-        id: c.id,
-        x: c.x + c.vx * lag,
-        y: c.y + c.vy * lag,
-        vx: c.vx,
-        vy: c.vy,
-        radius: c.radius,
-        steerable: c.state !== 'exploded' && c.behavior !== 'colony',
-      });
+      live.push({ id: c.id, x: c.x, y: c.y, vx: c.vx, vy: c.vy, radius: c.radius, steerable: c.state !== 'exploded' && c.behavior !== 'colony' });
     }
+    // Moved on to the step the dish is at now, with the heading the deflector's last turns gave them
+    // (QA4 F-07: a stale heading put the pivot off the centroid and tore the starter apart).
+    const bodies = extrapolator.bodies(live, report.step, s.stepCount);
     const turns = deflector.update(bodies, dish, s.stepCount, DETECT_EVERY);
+    extrapolator.noteTurns(turns);
     if (turns.length) {
       s.applyTurns(turns);
       for (const t of turns) detector.noteTurn(t.id, t.angle);
@@ -1114,6 +1147,32 @@ function boot(): void {
     });
   }
 
+  /**
+   * Honest clock (QA4 F-02): when this device runs the dish clearly slower than real time, say once that
+   * the clock counts dish time (it waits for the creatures; nothing is lost).
+   */
+  let paceDish = 0;
+  let paceWall = 0;
+  let paceTold = false;
+  function noteDishPace(dishDt: number, wallDt: number): void {
+    if (paceTold || game.session?.phase !== 'running' || isPaused() || document.hidden) return;
+    paceDish += dishDt;
+    paceWall += wallDt;
+    if (paceWall < SLOW_DISH_WINDOW_S) return;
+    if (paceDish < SLOW_DISH_RATIO * paceWall) {
+      paceTold = true;
+      bus.emit('toast', {
+        kind: 'info',
+        text: {
+          es: 'Este aparato va despacio: el reloj cuenta el tiempo de la placa, así tus criaturas no pierden ni un segundo.',
+          en: 'This device runs slowly: the clock counts dish time, so your creatures never lose a second.',
+        },
+      });
+    }
+    paceDish = 0;
+    paceWall = 0;
+  }
+
   function frame(now: number): void {
     const dt = Math.min(0.25, (now - last) / 1000);
     last = now;
@@ -1165,8 +1224,11 @@ function boot(): void {
     const n = reports.length;
     for (let i = 0; i < n; i++) dissolveShapeless(reports[i]);
     for (let i = 0; i < n - 1; i++) game.tick(0, reports[i]);
-    const gameDt = debugTime.lockstep ? (game.speed > 0 ? stepped / (STEPS_PER_SEC * game.speed) : isPaused() ? 0 : dt) : dt * ts * debugTime.scale;
+    // Game time is DISH time (QA4 F-02): the steps the dish really ran this frame, so a slow phone gets a
+    // slower clock instead of a starved dish (a 15 s run is always 15 s of dish life).
+    const gameDt = dishSeconds({ stepped, speed: game.speed, wallDt: dt * ts * debugTime.scale, paused: isPaused() });
     game.tick(gameDt, n ? reports[n - 1] : null);
+    noteDishPace(gameDt, dt * ts * debugTime.scale);
     reports.length = 0;
     if (portraitRequests) for (const r of portraitRequests.call(game)) capturePortrait(r.speciesId, r.x, r.y, r.size, r.creatureId);
 

@@ -134,6 +134,7 @@ describe('story bridge: one thing per event', () => {
     const s = setup(false);
     s.advance(5000);
     expect(s.bridge.storyShowing()).toBe(true); // t_intro lines on screen
+    s.setView({ stats: { playTime: 0, totalEssence: 0, eraEssence: 0, seeds: 1, creaturesBorn: 1 } });
     s.bus.emit('creatureDied', { id: 1, x: 5, y: 5 });
     s.advance(3000);
     expect(s.moments.current()).toBeNull();

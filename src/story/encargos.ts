@@ -498,7 +498,9 @@ export function createEncargos(deps: EncargosDeps): Encargos {
     const def = chainDef(v);
     if (def) {
       if (st.chainOfferedAt === null) {
-        if (t >= nextOfferAt) offerMain(v);
+        // A step that cannot be done yet (e.g. "look at your creature in the Bestiary" with an empty
+        // Bestiary, QA4 F-04) waits until it can.
+        if (t >= nextOfferAt && (!def.available || def.available(v))) offerMain(v);
       } else {
         const target = targetOf(def.goal, v);
         const view = makeView(def, 'main', v, target, st.chainBase);

@@ -12,6 +12,7 @@ import { BEHAVIOR_COLOR, UI } from '../core/palette';
 import type { Behavior, GameView, Lang, Text } from '../core/types';
 import { GOLDEN_LIFE, OFFLINE_RATE, SAMPLES_NEW_BEHAVIOR, SAMPLES_NEW_SPECIES } from '../game/balance';
 import { DATOS_PER_NEW_BEHAVIOR, DATOS_PER_NEW_SPECIES, SESSION_TIME_PER_SPECIES } from '../game/cycleBalance';
+import { warnSeconds } from '../game/session';
 import { fmt, fmtDuration, fmtRate } from '../ui/format';
 import { closestKnown } from '../species/looks';
 import { behaviorGuide, bonusText } from './behaviors';
@@ -83,11 +84,10 @@ const genomeChip = (n: number): Chip => chip(both((l) => `+${fmt(n, l)} ${l === 
 const zeroChip = chip(t('0 Esencia/s', '0 Essence/s'), 'grey', 'x');
 
 /** Seconds left on the session clock when its Momento explains it (the HUD's "¡Último minuto!"). */
-const CLOCK_MOMENT_S = 60;
 /** The lab session in the view (sessions loop; absent in the classic loop). */
-function sessionOf(v: GameView): { phase: string; remaining: number } | null {
-  const s = (v as { session?: { phase: string; remaining: number } | null }).session;
-  return s ?? null;
+function sessionOf(v: GameView): { phase: string; remaining: number; limit: number; bonus: number } | null {
+  const s = (v as { session?: { phase: string; remaining: number; limit?: number; bonus?: number } | null }).session;
+  return s ? { phase: s.phase, remaining: s.remaining, limit: s.limit ?? s.remaining, bonus: s.bonus ?? 0 } : null;
 }
 
 /** The seed price split the way the player sees it. */
@@ -220,7 +220,9 @@ export const MOMENTS: MomentDef[] = [
     icon: 'fade',
     mood: 'worried',
     color: '#9AA6B2',
-    trigger: onEvent('creatureDied'),
+    // Only a fade the player can relate to: never before their first seed (QA4 F-07: the starter faded
+    // under VELA's first lines and the first thing a new player saw was "Se apagó").
+    trigger: onEvent('creatureDied', (_p, c) => c.view().stats.seeds > 0),
     build: from('creatureDied', (p) => ({ focus: at(p.x, p.y, 2.2), chips: [zeroChip], data: {} })),
     delayMs: 300,
     story: ['t_fail'],
@@ -312,12 +314,22 @@ export const MOMENTS: MomentDef[] = [
       const v = c.view();
       const near = nearestCreature(v, p.x, p.y);
       const name = chip(t(p.name, p.name), 'info', 'check');
-      if (sessionsLoop(v))
+      if (sessionsLoop(v)) {
+        // What the summary will really pay, the tree's Cuaderno included (QA4 F-18: the card said +10, the summary +12).
+        const rw = v.research?.speciesReward ?? { datos: DATOS_PER_NEW_SPECIES, seconds: SESSION_TIME_PER_SPECIES };
+        const extra = rw.datos - DATOS_PER_NEW_SPECIES;
         return {
           focus: at(p.x, p.y, 2.2, near?.id ?? null, ['tab.bestiary']),
-          chips: [datosChip(DATOS_PER_NEW_SPECIES), secondsChip(SESSION_TIME_PER_SPECIES), name],
-          data: { speciesId: p.speciesId, speciesName: p.name },
+          chips: [datosChip(rw.datos), secondsChip(rw.seconds), name],
+          data: { speciesId: p.speciesId, speciesName: p.name, amount: rw.datos, seconds: rw.seconds },
+          lines: [
+            t('Nadie la había visto aquí. Se guarda en tu Bestiario.', 'Nobody had seen it here. It goes into your Bestiary.'),
+            extra > 0
+              ? t(`Te da ${rw.datos} Datos (${extra} por tu Cuaderno) y ${rw.seconds} segundos más.`, `It gives you ${rw.datos} Data (${extra} from your Notebook) and ${rw.seconds} more seconds.`)
+              : t(`Cada especie nueva te da ${rw.datos} Datos y ${rw.seconds} segundos más.`, `Every new species gives you ${rw.datos} Data and ${rw.seconds} more seconds.`),
+          ],
         };
+      }
       // Classic loop: a new species still pays Samples.
       return {
         focus: at(p.x, p.y, 2.2, near?.id ?? null, ['tab.bestiary']),
@@ -475,29 +487,36 @@ export const MOMENTS: MomentDef[] = [
     priority: 95,
     title: t('Tu tiempo de laboratorio', 'Your lab time'),
     lines: [
-      t('Este reloj es tu tiempo de laboratorio. Queda un minuto.', 'This clock is your lab time. One minute left.'),
+      t('Este reloj es tu tiempo de laboratorio. ¡Ya casi se acaba!', 'This clock is your lab time. It is almost up!'),
       t('Al llegar a 0:00, tu Esencia se cuenta. ¡No pierdes nada!', 'At 0:00 your Essence is counted. You lose nothing!'),
     ],
-    brief: t('¡Último minuto!', 'Last minute!'),
+    brief: t('¡Ya casi!', 'Almost up!'),
     illustration: 'clock',
     icon: 'clock',
     mood: 'happy',
     color: UI.accent,
-    // The lab session's clock crosses one minute left (sessions only; docs/CLARIDAD.md §3.2 step 8).
+    // The clock turns amber (session.ts warnSeconds: a quarter of the run, 4–30 s), whatever the run's
+    // length: the card, its chip and its dial say the same seconds as the clock (QA4 F-08: a fixed
+    // "one minute" opened at the start of a 20 s run, with a dial running from 1:00).
     trigger: {
       kind: 'poll',
       when: (c) => {
         const s = sessionOf(c.view());
-        return !!s && s.phase === 'running' && s.remaining > 0 && s.remaining <= CLOCK_MOMENT_S;
+        return !!s && s.phase === 'running' && s.remaining > 0 && s.remaining <= warnSeconds(s.limit + s.bonus);
       },
+    },
+    // Only while the clock is still amber: a card that waited behind the summary would say stale seconds.
+    valid: (_d, c) => {
+      const s = sessionOf(c.view());
+      return !!s && s.phase === 'running' && s.remaining > 0 && s.remaining <= warnSeconds(s.limit + s.bonus);
     },
     build: (_p, c) => {
       const s = sessionOf(c.view());
-      const left = Math.max(0, Math.ceil(s?.remaining ?? CLOCK_MOMENT_S));
+      const left = Math.max(0, Math.ceil(s?.remaining ?? 0));
       return {
         focus: ui('hud.clock'),
         chips: [chip(t(`Quedan ${left} s`, `${left} s left`), 'info', 'clock')],
-        data: {},
+        data: { seconds: left },
       };
     },
     delayMs: 200,

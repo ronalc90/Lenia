@@ -5,6 +5,7 @@
  * cycleBalance.ts; tree.ts formats the "+30 s → +60 s" values.
  */
 import type { Text } from '../core/types';
+import * as C from './cycleBalance';
 
 const t = (es: string, en: string): Text => ({ es, en });
 
@@ -185,6 +186,8 @@ export const TREE_UI = {
   title: t('Árbol de investigación', 'Research tree'),
   titleShort: t('Árbol', 'Tree'),
   hint: t('Toca una mejora', 'Tap an upgrade'),
+  /** First visit, nothing bought yet: the hand points at a green node (QA4 F-11). */
+  hintFirst: t('¡Toca el nodo verde que señala la mano!', 'Tap the green node the hand points at!'),
   level: t('NIVEL', 'LEVEL'),
   buy: t('Comprar', 'Buy'),
   maxed: t('¡Completo!', 'Complete!'),
@@ -193,7 +196,12 @@ export const TREE_UI = {
   next: t('Con un nivel más', 'With one more level'),
   beforeAfter: t('Antes → después', 'Before → after'),
   tapPrice: t('Toca el precio para ver la cuenta', 'Tap the price to see the sum'),
-  step: (i: number, n: number) => t(`Paso ${i} de ${n}`, `Step ${i} of ${n}`),
+  // "Mejora 1 de 7" (of the route) next to "Nivel 0 de 6" (of this upgrade): two different counts, both
+  // in words (QA4 F-15: "Paso 1 de 7" beside "NIVEL 0/6" read as one number that did not add up).
+  step: (i: number, n: number) => t(`mejora ${i} de ${n}`, `upgrade ${i} of ${n}`),
+  levelOf: (i: number, n: string) => t(`Nivel ${i} de ${n}`, `Level ${i} of ${n}`),
+  /** The wallet next to the price, never as a fraction (QA4 F-15: "Datos 3 / 2"). */
+  haveCost: (have: string, cost: string) => t(`Tienes ${have} · Cuesta ${cost}`, `You have ${have} · Costs ${cost}`),
   bought: (name: string) => t(`Comprado: ${name}`, `Bought: ${name}`),
   needs: t('Necesita', 'Needs'),
   /** A closed node: what to buy first in the Tree. */
@@ -231,7 +239,10 @@ export const TREE_UI = {
   night: (n: number) => t(`Noche ${n}`, `Night ${n}`),
   nightReady: t('¡La noche puede avanzar!', 'The night can move on!'),
   nightGate: (s: number, sp: number, alt: number) =>
-    t(`Necesita ${s} sesiones y ${sp} especies — o ${alt} sesiones.`, `Needs ${s} sessions and ${sp} species — or ${alt} sessions.`),
+    t(
+      `Necesita ${plural(s, 'sesión', 'sesiones')} y ${plural(sp, 'especie', 'especies')} — o ${plural(alt, 'sesión', 'sesiones')}.`,
+      `Needs ${plural(s, 'session', 'sessions')} and ${sp} species — or ${plural(alt, 'session', 'sessions')}.`,
+    ),
   nightProgress: (s: number, sNeed: number, sp: number, spNeed: number) =>
     t(`Sesiones ${s}/${sNeed} · Especies ${sp}/${spNeed}`, `Sessions ${s}/${sNeed} · Species ${sp}/${spNeed}`),
   nightRule: t(
@@ -251,7 +262,11 @@ export const SESSION_UI = {
   startGo: t('¡Empezar!', 'Start!'),
   startNew: t('Nuevo desde la última vez', 'New since last time'),
   startGoal: t('Tu encargo', 'Your request'),
-  startKeep: (n: number) => (n === 1 ? t('Sale de la nevera: 1 criatura', 'Out of the fridge: 1 creature') : t(`Salen de la nevera: ${n} criaturas`, `Out of the fridge: ${n} creatures`)),
+  // The Nevera said once what it is (QA4 F-16: "nevera" was never explained).
+  startKeep: (n: number) =>
+    n === 1
+      ? t('Ya viva desde el principio: 1 criatura (VELA la guarda en la nevera entre sesiones)', 'Alive from the start: 1 creature (VELA keeps it in the fridge between sessions)')
+      : t(`Ya vivas desde el principio: ${n} criaturas (VELA las guarda en la nevera entre sesiones)`, `Alive from the start: ${n} creatures (VELA keeps them in the fridge between sessions)`),
   lastMinute: t('¡Último minuto!', 'Last minute!'),
   timesUp: t('¡Tiempo!', 'Time!'),
   waiting: t('Siembra para empezar', 'Sow to start'),
@@ -293,6 +308,8 @@ export const SESSION_UI = {
   worldFound: (a: number, b: number) => t(`Encontradas ${a}/${b}`, `Found ${a}/${b}`),
   worldAllFound: t('¡Todas encontradas!', 'All found!'),
   worldNew: t('¡Nuevo!', 'New!'),
+  /** The open world that pays most (QA4 F-14). */
+  worldBest: t('★ Da más Esencia', '★ Pays the most'),
   worldPicked: t('Jugarás aquí', 'You will play here'),
   previewDatos: (n: string) => t(`+${n} Datos al terminar`, `+${n} Data at the end`),
   previewNext: (name: string, missing: string) => t(`${name}: te faltan ${missing} Datos`, `${name}: ${missing} more Data`),
@@ -326,8 +343,15 @@ export const SESSION_UI = {
   previewShort: (n: string) => t(`+${n} Datos`, `+${n} Data`),
   previewEnd: t('al terminar', 'at the end'),
   endNowConfirm: (datos: string) => t(`¿Terminar ya? Te llevas ${datos} Datos.`, `End now? You take ${datos} Data.`),
-  boostDesc: t('Todo da Esencia ×1,25 hasta el final de la sesión.', 'Everything gives Essence ×1.25 until the session ends.'),
-  boostPrice: t('Cuesta 20 s de tu Esencia; el siguiente de hoy, el doble.', 'Costs 20 s of your Essence; the next one today costs double.'),
+  // QA4 F-17: the price said "20 s" while the rule was 8 s, and nothing said what Abono is.
+  boostDesc: t(
+    `Abono: comida para tus criaturas. Todo da Esencia ×${String(C.BOOST_MULT).replace('.', ',')} hasta el final de la sesión.`,
+    `Fertiliser: food for your creatures. Everything gives Essence ×${C.BOOST_MULT} until the session ends.`,
+  ),
+  boostPrice: t(
+    `Cuesta lo que tu placa gana en ${C.BOOST_SECONDS} s; el siguiente de hoy, el doble. Lo gastado cuenta igual para tus Datos.`,
+    `Costs what your dish earns in ${C.BOOST_SECONDS} s; the next one today costs double. Spent Essence still counts for your Data.`,
+  ),
   tapAgain: t('¡Toca aquí otra vez!', 'Tap here again!'),
   keptNew: t('¡Nueva! · guardada en el Bestiario', 'New! · kept in the Bestiary'),
   /** Under a new species' portrait in the summary (with the "¡Nueva!" badge above it). */

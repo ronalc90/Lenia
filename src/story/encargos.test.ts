@@ -302,3 +302,16 @@ describe('encargos: persistence and boot', () => {
     expect(t.story.current()).toBeNull();
   });
 });
+
+describe('encargos: never ask for what cannot be done yet (QA4 F-04)', () => {
+  it('"Look at your creature in the Bestiary" waits until a species is in the Bestiary', () => {
+    const t = harness({ cycle: 'sessions', species: [] });
+    const saved = t.enc.serialize();
+    t.enc.load({ ...saved, chain: CHAIN.findIndex((e) => e.id === 'look'), chainOfferedAt: null, chainBase: null });
+    t.wait(600);
+    expect(t.offers.map((o) => o.id)).not.toContain('look');
+    t.set({ species: [species('Orbium')] });
+    t.wait(600);
+    expect(t.offers.map((o) => o.id)).toContain('look');
+  });
+});

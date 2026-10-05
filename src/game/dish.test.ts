@@ -106,6 +106,6 @@ describe('"Muy cerca" only near matter you can see (owner, live v0.014)', () => 
     expect(g.actions.seedAt(dish.cx, dish.cy)).toBeNull();
     const e = log.get('seedBlocked')!.at(-1) as { reason: string; near?: { x: number; y: number } };
     expect(e.reason).toBe('tooClose');
-    expect(e.near).toEqual({ x: dish.cx + 6, y: dish.cy, r: expect.any(Number) });
+    expect(e.near).toEqual({ x: dish.cx + 6, y: dish.cy, r: expect.any(Number), id: expect.any(Number) });
   });
 });

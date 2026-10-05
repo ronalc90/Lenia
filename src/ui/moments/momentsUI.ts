@@ -90,6 +90,8 @@ export interface MomentsUI {
   mountHelp(container: HTMLElement): HelpSheet;
   /** The Behaviour Guide sheet, optionally scrolled to one behaviour (Bestiary header, status pill, species card). */
   openBehaviorGuide(focus?: Behavior | null): void;
+  /** Close the sheets opened from the dish (the behaviour guide): a session card is coming (QA4 F-05). */
+  closeSheets(): void;
   /** Re-render texts after a language change. */
   relabel(): void;
   readonly debug: {
@@ -778,7 +780,10 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
       const r = targetRect(m);
       if (r) {
         x = r.left - lr.left + r.width / 2;
-        y = r.bottom - lr.top + 34;
+        // Below a target in the upper half; above one in the lower half (QA4 F-05: under the seed pill the
+        // label landed on the dock's Tree button).
+        const below = r.bottom - lr.top + 34;
+        y = r.top + r.height / 2 - lr.top > lr.height * 0.5 ? r.top - lr.top - 34 : below;
       } else {
         const d = dishRect();
         if (d) {
@@ -1084,6 +1089,9 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
     },
     openBehaviorGuide(focus) {
       openGuide(focus ?? null);
+    },
+    closeSheets() {
+      guideSheet?.close();
     },
     mountHelp(container) {
       return createHelp(container, moments, { lang: L, reduceMotion: rm, onOpenGuide: () => openGuide() });

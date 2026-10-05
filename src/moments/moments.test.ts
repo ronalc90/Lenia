@@ -42,7 +42,11 @@ function happen(h: Harness, id: MomentId): void {
       h.view.extinction = { ...h.view.extinction, available: true, genomeGain: 7 };
       return;
     case 'clock':
-      (h.view as { session?: unknown }).session = { n: 1, phase: 'running', remaining: 58 };
+      (h.view as { session?: unknown }).session = { n: 1, phase: 'running', limit: 20, bonus: 0, elapsed: 16, remaining: 4 };
+      return;
+    case 'dissolve':
+      h.view.stats = { ...h.view.stats, seeds: 1 };
+      h.bus.emit('creatureDied', SAMPLE_PAYLOADS.creatureDied as never);
       return;
     case 'golden':
       h.view.golden = { x: 50, y: 50, life: 1 };
@@ -245,12 +249,12 @@ describe('moments: triggers', () => {
     expect(h.m.current()).toBeNull();
   });
 
-  it('the clock card opens once when a session has one minute left', () => {
+  it('the clock card opens once when a long session turns amber (30 s of a 2:30 run)', () => {
     const h = harness();
-    (h.view as { session?: unknown }).session = { n: 1, phase: 'running', remaining: 90 };
+    (h.view as { session?: unknown }).session = { n: 1, phase: 'running', limit: 150, bonus: 0, remaining: 59 };
     h.advance(LONG);
     expect(h.m.current()).toBeNull();
-    (h.view as { session?: unknown }).session = { n: 1, phase: 'running', remaining: 59 };
+    (h.view as { session?: unknown }).session = { n: 1, phase: 'running', limit: 150, bonus: 0, remaining: 29 };
     h.advance(LONG);
     expect(h.m.current()?.id).toBe('clock');
     expect(h.m.current()?.focus.target).toEqual(['hud.clock']);
@@ -494,5 +498,61 @@ describe('moments: help sheet replay', () => {
     emit(h, 'creatureDied', { id: 1, x: 1, y: 1 });
     h.advance(LONG);
     expect(h.m.replay('seed')).toBe(false);
+  });
+});
+
+describe('moments: only what the player did, said with the real clock (QA4 F-07, F-08)', () => {
+  it('a creature that fades before the player sowed anything opens no "Se apagó" card', () => {
+    const h = harness({}, { stats: { ...makeView().stats, seeds: 0 } });
+    emit(h, 'creatureDied', { id: 1, x: 10, y: 10 });
+    h.advance(LONG);
+    expect(h.m.current()?.id).not.toBe('dissolve');
+    expect(h.m.seen('dissolve')).toBe(false);
+  });
+
+  it('the clock card never says "one minute" in a short run and comes at the amber point with the real seconds', () => {
+    const h = harness();
+    const ses = (elapsed: number) => ((h.view as { session?: unknown }).session = { n: 2, phase: 'running', limit: 20, bonus: 0, elapsed, remaining: 20 - elapsed });
+    ses(1);
+    h.advance(LONG);
+    expect(h.m.current()?.id).not.toBe('clock');
+    ses(16);
+    h.advance(LONG);
+    const cur = h.m.current();
+    expect(cur?.id).toBe('clock');
+    const def = MOMENT_BY_ID.get('clock')!;
+    const lines = (cur?.lines ?? def.lines).map((l) => l.es + ' ' + l.en).join(' ');
+    expect(lines).not.toMatch(/minuto|minute/i);
+    expect(cur?.data.seconds).toBe(4);
+    expect(cur?.chips.map((c) => c.text.es).join(' ')).toContain('Quedan 4 s');
+  });
+});
+
+describe('moments: the new-species card says what the summary will pay (QA4 F-18)', () => {
+  it('with the Cuaderno de campo the card says +12 Datos, like the summary', () => {
+    const h = harness({}, { cycle: 'sessions' } as Partial<GameView>);
+    (h.view as { research?: unknown }).research = { levels: { notebook: 1 }, speciesReward: { datos: 12, seconds: 3 } };
+    (h.view as { session?: unknown }).session = { n: 2, phase: 'running', limit: 30, bonus: 0, elapsed: 5, remaining: 25 };
+    emit(h, 'speciesNew', { speciesId: 'sp1', name: 'Orbium', rarity: 'common', x: 50, y: 50 });
+    h.advance(LONG);
+    const cur = h.m.current();
+    expect(cur?.id).toBe('species');
+    expect(cur!.chips.map((c) => c.text.es).join(' ')).toContain('+12');
+    expect((cur!.lines ?? []).map((l) => l.es).join(' ')).toContain('12 Datos');
+    expect(cur!.data.amount).toBe(12);
+  });
+});
+
+describe('moments: a clock card that waited past its moment is dropped (QA4 F-08, session-play)', () => {
+  it('queued at the amber point of run 1, blocked until the next run: it does not open with stale seconds', () => {
+    const h = harness();
+    h.blocked.on = true;
+    (h.view as { session?: unknown }).session = { n: 1, phase: 'running', limit: 15, bonus: 0, elapsed: 11, remaining: 4 };
+    h.advance(LONG);
+    (h.view as { session?: unknown }).session = { n: 2, phase: 'ready', limit: 20, bonus: 0, elapsed: 0, remaining: 20 };
+    h.blocked.on = false;
+    h.advance(LONG);
+    expect(h.m.current()?.id).not.toBe('clock');
+    expect(h.m.seen('clock')).toBe(false);
   });
 });
