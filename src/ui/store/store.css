@@ -1470,3 +1470,14 @@
   background: rgba(11, 14, 18, 0.7);
   border: 1px solid var(--line);
 }
+
+/* RF-06: 48 px touch targets. */
+.bst-tab,
+.bst-listen.compact,
+.bst-link,
+.bst-links a {
+  min-height: 48px;
+}
+.bst-listen.compact {
+  height: 48px;
+}

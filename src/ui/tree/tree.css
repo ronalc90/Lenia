@@ -1372,3 +1372,11 @@
     animation: none;
   }
 }
+
+/* RF-06: "¿Por qué cuesta esto?" is a 48 px touch target. */
+.rt-pricebox {
+  min-height: 48px;
+}
+.rt-need {
+  min-height: 48px;
+}

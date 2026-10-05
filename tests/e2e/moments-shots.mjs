@@ -7,10 +7,11 @@
  * 390×844 (phone) and 1366×768 (laptop), dark and light theme, and captures
  * every moment card (frozen at its most telling frame), brief labels, the
  * creature status pills, the help sheet and the seed price sheet into
- * $MOMENTS_SHOTS_DIR (default: the session scratchpad) as moments-*.png.
+ * $MOMENTS_SHOTS_DIR (default: <OS temp dir>/bioluma-shots) as moments-*.png.
  * Fails on console errors, page errors or horizontal overflow.
  */
 import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
@@ -19,7 +20,7 @@ import { chromium } from 'playwright-core';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT =
-  process.env.MOMENTS_SHOTS_DIR ?? '/tmp/claude-0/-home-user-Lenia/a5114f5a-39a4-539d-9a6a-14e769759a92/scratchpad';
+  process.env.MOMENTS_SHOTS_DIR ?? `${tmpdir()}/bioluma-shots`;
 mkdirSync(OUT, { recursive: true });
 
 function findChrome() {

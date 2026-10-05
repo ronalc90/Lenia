@@ -14,6 +14,7 @@
     "e2e": "VITE_E2E=1 vite build && node tests/e2e/smoke.mjs",
     "e2e:play": "node tests/e2e/session-play.mjs",
     "e2e:layers": "node tests/e2e/layers.mjs",
+    "e2e:release": "node tests/e2e/release-checks.mjs",
     "e2e:sim": "node tests/e2e/sim-check.mjs --quick",
     "e2e:audio": "node tests/e2e/audio-render.mjs",
     "build:single": "SINGLE=1 vite build",

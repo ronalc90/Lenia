@@ -6,10 +6,11 @@
  *  - the character gallery (every doctor in every mood, gestures, dialogue portraits) in both themes;
  *  - every intro panel at phone (390×844) and desktop (1366×768), dark and light, es and en;
  *  - Reduce motion, and a click-through that checks Next / Skip / the look picker work.
- * PNGs go to $INTRO_SHOTS_DIR (default: the session scratchpad) as intro-*.png.
+ * PNGs go to $INTRO_SHOTS_DIR (default: <OS temp dir>/bioluma-shots) as intro-*.png.
  * Fails on console errors, page errors, horizontal overflow, or a text line over 12 words.
  */
 import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
@@ -17,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const OUT = process.env.INTRO_SHOTS_DIR ?? '/tmp/claude-0/-home-user-Lenia/a5114f5a-39a4-539d-9a6a-14e769759a92/scratchpad/intro';
+const OUT = process.env.INTRO_SHOTS_DIR ?? `${tmpdir()}/bioluma-shots/intro`;
 const ONLY = process.env.ONLY ?? '';
 mkdirSync(OUT, { recursive: true });
 

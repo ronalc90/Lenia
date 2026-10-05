@@ -5,10 +5,11 @@
  * Starts Vite on a free port, opens the dev page in headless Chromium (390×844 mobile, 360×640
  * minimum, 1280×800 desktop), walks every tab, a detail sheet, a mock purchase + equip, the
  * supporter states and the wardrobe, and saves PNGs as store-*.png to $STORE_SHOTS_DIR (default:
- * the session scratchpad). Fails on console errors, page errors or horizontal overflow.
+ * <OS temp dir>/bioluma-shots). Fails on console errors, page errors or horizontal overflow.
  * Uses playwright-core with the Chromium under /opt/pw-browsers (never `playwright install`).
  */
 import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
@@ -16,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const OUT = process.env.STORE_SHOTS_DIR ?? '/tmp/claude-0/-home-user-Lenia/a5114f5a-39a4-539d-9a6a-14e769759a92/scratchpad';
+const OUT = process.env.STORE_SHOTS_DIR ?? `${tmpdir()}/bioluma-shots`;
 mkdirSync(OUT, { recursive: true });
 
 function findChrome() {

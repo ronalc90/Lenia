@@ -2204,6 +2204,13 @@
   line-height: 1.35;
   margin-top: 1px;
 }
+.set-row .set-id {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--text);
+  user-select: all;
+  word-break: break-all;
+}
 .set-row .range {
   flex: 0 1 150px;
   height: 36px;
@@ -5208,4 +5215,61 @@
 }
 .dock-tip.out {
   opacity: 0;
+}
+
+/* RF-06 (docs/qa/REVISION-FINAL.md): every touch target is at least 48 × 48 px (CLAUDE.md coding style).
+   Bigger boxes where there is room; an invisible ::before hit area where the look must stay small. */
+.seg button {
+  min-height: 48px;
+}
+.range,
+.set-row .range {
+  height: 48px;
+}
+.switch,
+.ccard-close,
+.mp-x {
+  z-index: 1; /* their enlarged hit area lies over the next row */
+}
+.switch::before {
+  inset: -11px -9px; /* measured from inside its 1 px border: 28 + 2 + 22 = 50 px tall */
+}
+.mode-pill {
+  height: 48px;
+  border-radius: 24px;
+}
+.mode-pill.interactive,
+.mode-pill.erase,
+.mode-pill.print,
+.mode-pill.pipette {
+  min-height: 48px;
+}
+.ccard-rows dd.ccard-beh-link {
+  position: relative;
+}
+.ccard-rows dd.ccard-beh-link::before {
+  content: '';
+  position: absolute;
+  inset: -15px -6px;
+}
+.intro button,
+.btn-row .btn,
+.sec-h .bh-guide,
+.badge.badge-link,
+.enc .enc-bubble .enc-whybtn,
+.coach-skip,
+.coach-next,
+button.chip {
+  min-height: 48px;
+}
+.sec-h .bh-guide {
+  margin: -10px 0;
+}
+.icon-btn,
+.splash-sound {
+  min-width: 48px;
+  height: 48px;
+}
+.rename-form input {
+  height: 48px;
 }

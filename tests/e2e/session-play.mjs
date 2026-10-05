@@ -771,11 +771,16 @@ async function runCase(c) {
       await settle(`tree ${k}`);
       if (bought === 0) await shot(`s${k}-node-${id}`);
       const before = (await view()).datos;
+      const levelOf = (nid) => page.evaluate((nid) => window.bioluma.game.research.levels[nid] ?? 0, nid);
+      const lv0 = await levelOf(id);
+      // A Placa level this device cannot show is free (RF-04): it must still be bought, at no cost.
+      const free = await page.evaluate(() => !!document.querySelector('.rt-sheet.show')?.textContent?.match(/ya tiene la placa más grande|already has the biggest dish/));
       if (await visible('.rt-buy:not(:disabled)')) {
         await tapSel('.rt-buy');
         await page.waitForTimeout(900);
         const after = (await view()).datos;
-        if (after >= before) problems.push(`[${c.name}] tree ${k}: buying ${id} did not spend Datos (${before} → ${after})`);
+        if ((await levelOf(id)) <= lv0) problems.push(`[${c.name}] tree ${k}: buying ${id} did not add a level`);
+        else if (after >= before && !free) problems.push(`[${c.name}] tree ${k}: buying ${id} did not spend Datos (${before} → ${after})`);
         else {
           bought++;
           say(`Tree ${k}: bought «${id}» (${before} → ${after} Datos).`);

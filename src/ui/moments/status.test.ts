@@ -88,3 +88,21 @@ describe('creature status pills: placement', () => {
     expect(placePill(180, 200, 20, 100, 22, [], view).blocked).toBeUndefined();
   });
 });
+
+describe('one rate before the first seed (RF-10)', () => {
+  it('while the clock waits a living creature shows no rate (the HUD says +0/s: nothing is earned yet)', () => {
+    const waiting = statusInfo(cv(1, 'stable', 900, { eps: 2 }), 'es', undefined, false);
+    expect(waiting.label).toBe('Viva');
+    expect(waiting.detail).toBeNull();
+    expect(statusInfo(cv(1, 'stable', 900, { eps: 2 }), 'es', undefined, true).detail).toBe('+2,0/s');
+  });
+});
+
+describe('the LIFE card drawing says the creature\'s own rate (RF-10)', () => {
+  it('no rate while the clock waits, the real rate while it runs, the generic +1/s only in a replay', async () => {
+    const { liveRateBadge } = await import('./illustrations');
+    expect(liveRateBadge(0, 'es')).toBeNull();
+    expect(liveRateBadge(2, 'es')).toBe('+2,0/s');
+    expect(liveRateBadge(undefined, 'en')).toBe('+1/s');
+  });
+});

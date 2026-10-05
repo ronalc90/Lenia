@@ -14,7 +14,7 @@
  * Pure parts (statusInfo, pickStatusIds, placePills) have no DOM and are tested.
  */
 import { BEHAVIOR_COLOR, UI } from '../../core/palette';
-import type { Behavior, CreatureState, CreatureView, Lang } from '../../core/types';
+import type { Behavior, CreatureState, CreatureView, GameView, Lang } from '../../core/types';
 import { STABLE_AGE_STEPS, STATUS_MAX } from '../../moments/config';
 import { fmtRate } from '../format';
 import { MS, tr } from './strings';
@@ -39,8 +39,16 @@ export interface StatusInfo {
   behavior: Behavior | null;
 }
 
-/** What the pill says for one creature. */
-export function statusInfo(c: CreatureView, lang: Lang, stableAge = STABLE_AGE_STEPS): StatusInfo {
+/**
+ * True while the dish earns (the session clock runs, or no session at all). Before the first seed the
+ * HUD says +0/s, so no label or card may show a rate either (RF-10: one number everywhere).
+ */
+export function earningNow(v: Pick<GameView, 'session'>): boolean {
+  return !v.session || v.session.phase === 'running';
+}
+
+/** What the pill says for one creature (`earning` false: no rate while the clock waits, RF-10). */
+export function statusInfo(c: CreatureView, lang: Lang, stableAge = STABLE_AGE_STEPS, earning = true): StatusInfo {
   switch (c.state) {
     case 'born': {
       const p = Math.max(0, Math.min(0.99, c.age / Math.max(1, stableAge)));
@@ -51,7 +59,7 @@ export function statusInfo(c: CreatureView, lang: Lang, stableAge = STABLE_AGE_S
       return {
         kind: 'stable',
         label: tr(MS.stStable, lang),
-        detail: c.eps > 0 ? `+${fmtRate(c.eps, lang)}/s` : null,
+        detail: earning && c.eps > 0 ? `+${fmtRate(c.eps, lang)}/s` : null,
         color: UI.good,
         progress: null,
         behavior: c.behavior,
@@ -452,13 +460,13 @@ export class StatusLayer {
     return null;
   }
 
-  private infoOf(ctx: CanvasRenderingContext2D, c: CreatureView, lang: Lang): PillCache {
+  private infoOf(ctx: CanvasRenderingContext2D, c: CreatureView, lang: Lang, earning: boolean): PillCache {
     const pct = c.state === 'born' ? Math.floor(Math.max(0, Math.min(0.99, c.age / Math.max(1, STABLE_AGE_STEPS))) * 100) : -1;
-    const eps = c.state === 'stable' ? c.eps : 0;
+    const eps = c.state === 'stable' && earning ? c.eps : 0;
     const behavior = c.state === 'stable' ? c.behavior : null;
     let e = this.cache.get(c.id);
     if (e && e.state === c.state && e.pct === pct && e.eps === eps && e.behavior === behavior && e.lang === lang) return e;
-    const info = statusInfo(c, lang);
+    const info = statusInfo(c, lang, STABLE_AGE_STEPS, earning);
     const m = measure(ctx, info);
     if (!e) {
       e = { state: c.state, pct, eps, behavior, lang, info, wl: m.wl, wd: m.wd, w: m.w };
@@ -472,7 +480,7 @@ export class StatusLayer {
     creatures: readonly CreatureView[],
     /** Screen position + halo radius of a creature (overlay smoothing), or null if off-screen. */
     toScreen: (c: CreatureView) => { x: number; y: number; r: number } | null,
-    o: { lang: Lang; time: number; dt: number; reduceMotion: boolean; onAll: boolean; selectedId: number | null; view: { w: number; h: number } },
+    o: { lang: Lang; time: number; dt: number; reduceMotion: boolean; onAll: boolean; selectedId: number | null; view: { w: number; h: number }; earning?: boolean },
   ): void {
     const key = this.key;
     if (key.list !== creatures || key.onAll !== o.onAll || key.sel !== o.selectedId) {
@@ -504,7 +512,7 @@ export class StatusLayer {
       this.alpha.set(c.id, a);
       const p = toScreen(c);
       if (!p || p.x < -p.r || p.y < -p.r || p.x > o.view.w + p.r || p.y > o.view.h + p.r) continue;
-      const pc = this.infoOf(ctx, c, o.lang);
+      const pc = this.infoOf(ctx, c, o.lang, o.earning ?? true);
       if (this.nBoxes === this.boxes.length) this.boxes.push({ x: 0, y: 0, w: 0, h: 0, below: false, blocked: false });
       const box = this.boxes[this.nBoxes];
       placePillInto(box, p.x, p.y, p.r, pc.w, PILL_H, this.boxes, this.nBoxes, o.view);

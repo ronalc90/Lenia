@@ -1,9 +1,10 @@
 // QA #3 shared helpers (balance & performance). Serves nothing itself: pass the URL of a running
 // `vite preview` of a VITE_E2E=1 build (exposes window.bioluma).
 import { existsSync, readdirSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { chromium } from 'playwright-core';
 
-export const SHOTS = '/tmp/claude-0/-home-user-Lenia/a5114f5a-39a4-539d-9a6a-14e769759a92/scratchpad';
+export const SHOTS = `${tmpdir()}/bioluma-shots`;
 mkdirSync(SHOTS, { recursive: true });
 
 export function findChromium() {

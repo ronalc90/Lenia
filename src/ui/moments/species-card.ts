@@ -65,6 +65,8 @@ export interface SpeciesCardInput {
   global: number;
   /** Essence per second of its best living creature; null = none alive now. */
   eps: number | null;
+  /** The session waits for its first seed (RF-10): the total reads «al sembrar», not a rate. */
+  waiting?: boolean;
   boosters: Booster[];
   /** Canonical catalog code of its look (SpeciesView.lookCode): the comparison names what you SEE. */
   lookCode?: string;
@@ -151,7 +153,9 @@ export function speciesInputFromView(v: GameView, speciesId: string): SpeciesCar
   const bonus = (v as { cycle?: string }).cycle === 'sessions' ? AFFINITY_TREE_BONUS : AFFINITY_BONUS;
   const bm = sp.production?.behaviorMult ?? behaviorMultFor(behavior, v.upgrades, bonus);
   const global = (v.multipliers?.global ?? 1) * (v.multipliers?.buffs ?? 1);
-  const eps = best && best.eps > 0 ? best.eps : null;
+  // While the clock waits for the first seed nothing is earned (HUD +0/s): no rate here either (RF-10).
+  const waiting = !!v.session && v.session.phase !== 'running';
+  const eps = !waiting && best && best.eps > 0 ? best.eps : null;
   const form = eps !== null ? eps / Math.max(1e-9, bm * sp.mult * global) : null;
   return {
     id: sp.id,
@@ -169,6 +173,7 @@ export function speciesInputFromView(v: GameView, speciesId: string): SpeciesCar
     form,
     global,
     eps,
+    waiting,
     boosters: boostersFor(behavior, v.upgrades, bonus),
     ...(sp.lookCode ? { lookCode: sp.lookCode } : {}),
     ...(sp.chips ? { chips: sp.chips } : {}),
@@ -530,7 +535,7 @@ export function createSpeciesCard(container: HTMLElement, input: SpeciesCardInpu
           )
           .join('<i aria-hidden="true">·</i>')}
         <i aria-hidden="true">=</i><span class="mo-spc-t total"><b>${b.total}</b><small>${
-          b.perSec ? (L === 'es' ? 'Esencia' : 'Essence') : L === 'es' ? 'si estuviera viva' : 'if alive'
+          b.perSec ? (L === 'es' ? 'Esencia' : 'Essence') : s.waiting ? (L === 'es' ? 'al sembrar' : 'once you sow') : L === 'es' ? 'si estuviera viva' : 'if alive'
         }</small></span>
       </div>
       ${

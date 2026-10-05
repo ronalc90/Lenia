@@ -16,6 +16,7 @@ import type { IllustrationKind, MomentData } from '../../moments/types';
 import { catalogPattern } from '../../sim/catalog';
 import { clip, countBlobs, pumpAll, rulesClip, type LeniaClip } from './clips';
 import { drawBehaviorGlyph } from './status';
+import { fmtRate } from '../format';
 
 export const ILLUS_W = 260;
 export const ILLUS_H = 140;
@@ -475,6 +476,16 @@ function seam(ctx: CanvasRenderingContext2D, u: number, loop: number): void {
 
 // ───────────────────────────── outcome diagrams (seed / dissolve / explode / stable / overgrown) ─────────────────────────────
 
+/**
+ * The "¡VIDA!" badge: the creature's own rate, the number its label shows (MomentData.amount); none while
+ * the session clock waits for the first seed (amount 0: the HUD says +0/s, RF-10); the generic "+1/s" only
+ * for a replay that has no creature (amount absent).
+ */
+export function liveRateBadge(amount: number | undefined, lang: Lang): string | null {
+  if (amount === undefined) return '+1/s';
+  return amount > 0 ? `+${fmtRate(amount, lang)}/s` : null;
+}
+
 /** Gauge value for a clip frame: "how much matter vs. just right". */
 function matterLevel(kind: 'fade' | 'flood' | 'live' | 'overgrow', c: LeniaClip, idx: number): number {
   const f = c.frame(idx);
@@ -520,7 +531,8 @@ function outcome(kind: 'fade' | 'flood' | 'live' | 'overgrow'): IllusDef {
       if (kind === 'live') {
         if (end > 0) ring(ctx, cx, cy, 30 + 4 * Math.sin(u * 5), UI.good, end, 2.2);
         mark(ctx, true, px + S - 16, py + 16, 10, UI.good, pop(seg(u, t1, t1 + 0.4)));
-        badge(ctx, '+1/s', cx, py + S - 14, UI.good, pop(seg(u, t1 + 0.25, t1 + 0.65)));
+        const rate = liveRateBadge(env.data.amount, env.lang);
+        if (rate) badge(ctx, rate, cx, py + S - 14, UI.good, pop(seg(u, t1 + 0.25, t1 + 0.65)));
       } else if (kind === 'fade') {
         ring(ctx, cx, cy, 26, GREY, 0.6 * seg(u, t0 + 1.2, t1), 1.5, [3, 4]);
         mark(ctx, false, px + S - 16, py + 16, 10, GREY, pop(seg(u, t1, t1 + 0.4)));

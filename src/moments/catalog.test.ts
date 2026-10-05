@@ -112,3 +112,18 @@ describe('moments catalog: structure', () => {
     expect(MOMENT_BY_ID.has('seedCheaper' as never)).toBe(false);
   });
 });
+
+describe('the LIFE card and the creature label say the same rate (RF-10)', () => {
+  const life = MOMENT_BY_ID.get('stable')!;
+  const ctxFor = (phase: string, eps: number) =>
+    ({ view: () => ({ session: { phase }, creatures: [{ id: 7, eps, state: 'stable' }] }) }) as unknown as Parameters<NonNullable<typeof life.build>>[1];
+  it('before the first seed: no rate chip (the label shows none and the HUD +0/s)', () => {
+    const b = life.build!({ id: 7, x: 10, y: 10 }, ctxFor('ready', 2));
+    expect(b.chips ?? []).toEqual([]);
+  });
+  it('while the clock runs: the chip is the creature\'s own rate, never a made-up 1', () => {
+    const b = life.build!({ id: 7, x: 10, y: 10 }, ctxFor('running', 2));
+    expect(JSON.stringify(b.chips)).toContain('+2,0 Esencia/s');
+    expect(life.build!({ id: 7, x: 10, y: 10 }, ctxFor('running', 0)).chips ?? []).toEqual([]);
+  });
+});

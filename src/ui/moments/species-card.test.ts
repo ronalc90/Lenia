@@ -177,3 +177,19 @@ describe('species card: telling species apart', () => {
     expect(compareSpecies(a, { ...a, id: 'z' }, 'es').winner).toBe('tie');
   });
 });
+
+describe('species card before the first seed (RF-10)', () => {
+  it('shows no rate while the session waits, and says when it will earn', () => {
+    const v = makeView({
+      species: [sp('a', { hue: 210 })],
+      creatures: [{ ...creature(1), speciesId: 'a', behavior: 'swimmer', eps: 2.6 }],
+      session: { phase: 'ready' } as never,
+    });
+    const s = speciesInputFromView(v, 'a')!;
+    expect(s.eps).toBeNull();
+    expect(s.waiting).toBe(true);
+    const running = speciesInputFromView({ ...v, session: { phase: 'running' } as never }, 'a')!;
+    expect(running.eps).toBe(2.6);
+    expect(running.waiting).toBe(false);
+  });
+});

@@ -12,6 +12,7 @@
 //    turns, lysis, rim growth/shrink, a swimmer bouncing off the glass in the real GPU dish
 //  - screenshot of several species after 300 steps, and of round dishes (--dish-shot <png>)
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
@@ -27,10 +28,10 @@ const looks = args.includes('--looks')
   : [];
 const dishShot = args.includes('--dish-shot')
   ? resolve(args[args.indexOf('--dish-shot') + 1])
-  : '/tmp/claude-0/-home-user-Lenia/a5114f5a-39a4-539d-9a6a-14e769759a92/scratchpad/sim-dish.png';
+  : `${tmpdir()}/bioluma-shots/sim-dish.png`;
 const shot = args.includes('--shot')
   ? resolve(args[args.indexOf('--shot') + 1])
-  : '/tmp/claude-0/-home-user-Lenia/a5114f5a-39a4-539d-9a6a-14e769759a92/scratchpad/sim-render.png';
+  : `${tmpdir()}/bioluma-shots/sim-render.png`;
 
 function findChromium() {
   const base = '/opt/pw-browsers';

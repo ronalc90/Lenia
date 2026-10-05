@@ -6,7 +6,7 @@
  *   T=1.3 node tests/e2e/art-shots.mjs            (freeze the animation clock at another time)
  * Starts Vite on a free port, opens art-dev.html in headless Chromium at 390×844 (phone, DPR 2) and
  * 1366×768 (laptop), dark and light, and saves one full-page PNG per section as
- * art-<section>-<phone|laptop>-<theme>.png into $ART_SHOTS_DIR (default: the session scratchpad).
+ * art-<section>-<phone|laptop>-<theme>.png into $ART_SHOTS_DIR (default: <OS temp dir>/bioluma-shots).
  * Google Fonts are fetched with curl (it honours the sandbox proxy and its CA bundle) and cached, so
  * the shots show Fraunces / Inter like players see them; without network the page falls back.
  * Fails on console errors, page errors or horizontal overflow.
@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const OUT = process.env.ART_SHOTS_DIR ?? '/tmp/claude-0/-home-user-Lenia/a5114f5a-39a4-539d-9a6a-14e769759a92/scratchpad/art/shots';
+const OUT = process.env.ART_SHOTS_DIR ?? `${os.tmpdir()}/bioluma-shots/art/shots`;
 const FONT_CACHE = path.join(os.tmpdir(), 'bioluma-font-cache');
 mkdirSync(OUT, { recursive: true });
 mkdirSync(FONT_CACHE, { recursive: true });

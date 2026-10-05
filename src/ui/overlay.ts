@@ -9,7 +9,7 @@ import type { Camera } from '../core/camera';
 import { BEHAVIOR_COLOR, UI as C } from '../core/palette';
 import type { Behavior, CreatureState, CreatureView, GameView, Lang } from '../core/types';
 import { behaviorName, stateName } from './i18n';
-import { StatusLayer } from './moments/status';
+import { earningNow, StatusLayer } from './moments/status';
 import { CREATURE_ALIVE_MS, DISSOLVE_MS, SEED_BLOOM_MS } from '../game/cycleBalance';
 import { defaultItem, type DishTheme, type HaloStyle, type SparkSkin, type TrailStyle } from '../store/catalog';
 import {
@@ -282,7 +282,7 @@ export class Overlay {
   private readonly pillScratch = { x: 0, y: 0, r: 0 };
   private readonly pillView = { w: 1, h: 1 };
   /** The status layer's options, reused every frame (no per-frame allocation). */
-  private readonly pillOpts: { lang: Lang; time: number; dt: number; reduceMotion: boolean; onAll: boolean; selectedId: number | null; view: { w: number; h: number } } = {
+  private readonly pillOpts: { lang: Lang; time: number; dt: number; reduceMotion: boolean; onAll: boolean; selectedId: number | null; view: { w: number; h: number }; earning: boolean } = {
     lang: 'es',
     time: 0,
     dt: 0,
@@ -290,6 +290,7 @@ export class Overlay {
     onAll: true,
     selectedId: null,
     view: this.pillView,
+    earning: true,
   };
   /** Screen position of a creature for its pill (same point as its name label), or null. */
   private readonly pillPos = (c: CreatureView): { x: number; y: number; r: number } | null => {
@@ -334,19 +335,32 @@ export class Overlay {
     };
   }
 
+  /** The frame handed to the layers, reused every frame (RF-11: no allocation per frame and layer). */
+  private readonly layerFrame: OverlayLayerFrame = {
+    ctx: null as unknown as CanvasRenderingContext2D,
+    time: 0,
+    dt: 0,
+    rect: { x: 0, y: 0, w: 0, h: 0 },
+    scale: 1,
+    reduceMotion: false,
+    paused: false,
+    gridToScreen: (x, y) => this.camera.gridToScreen(x, y),
+  };
+
   private runLayers(slot: OverlayLayerSlot, time: number, dt: number, rect: { x: number; y: number; w: number; h: number }, scale: number): void {
     if (!this.layers.length) return;
-    const frame: OverlayLayerFrame = {
-      ctx: this.ctx,
-      time,
-      dt,
-      rect,
-      scale,
-      reduceMotion: this.reduceMotion,
-      paused: this.paused,
-      gridToScreen: (x, y) => this.camera.gridToScreen(x, y),
-    };
-    for (const l of [...this.layers]) {
+    const frame = this.layerFrame;
+    frame.ctx = this.ctx;
+    frame.time = time;
+    frame.dt = dt;
+    frame.rect = rect;
+    frame.scale = scale;
+    frame.reduceMotion = this.reduceMotion;
+    frame.paused = this.paused;
+    // A failing layer is removed by replacing the array, so this one stays intact while it is walked.
+    const list = this.layers;
+    for (let i = 0; i < list.length; i++) {
+      const l = list[i];
       if (l.slot !== slot) continue;
       this.ctx.save();
       try {
@@ -369,6 +383,8 @@ export class Overlay {
 
   setView(view: GameView): void {
     this.reduceMotion = view.settings.reduceMotion;
+    // No rate on the pills while the clock waits for the first seed (RF-10).
+    this.pillOpts.earning = earningNow(view);
     this.cviews = view.creatures;
     this.lang = view.settings.lang;
     this.markers = !!(view.tools as { markers?: boolean }).markers;

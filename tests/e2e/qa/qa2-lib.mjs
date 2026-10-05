@@ -1,10 +1,11 @@
 // QA #2 harness: serves a prebuilt e2e dist, opens it on a 390x844 touch device, records
 // screenshots + visible strings + touch-target sizes with timestamps.
 import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { existsSync, readdirSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 
-export const OUT = '/tmp/claude-0/-home-user-Lenia/a5114f5a-39a4-539d-9a6a-14e769759a92/scratchpad';
+export const OUT = `${tmpdir()}`;
 
 export function findChromium() {
   const base = '/opt/pw-browsers';

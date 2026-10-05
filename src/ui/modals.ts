@@ -13,9 +13,9 @@ import { behaviorName, getLang, rarityName, t, tx } from './i18n';
 import { icon, logo } from './icons';
 import { portraitURL } from './portrait';
 import { EXPORT_PREFIX } from '../game/balance';
+import { BUNDLE_PREFIX, decodeSaveText } from '../app/saveBundle';
 import { WORLD_TEXT } from '../game/treeText';
 import { isWorldId } from '../game/worlds';
-import { base64ToUtf8, deserializeState } from '../game/state';
 import { BUILD_DATE, VERSION_LABEL } from '../version';
 
 export interface ModalHandle {
@@ -290,7 +290,7 @@ export function openSettings(host: ModalHost, ctx: Ctx): ModalHandle {
       r.classList.add('wrap');
       return r;
     };
-    const sw = (key: 'muted' | 'vibration' | 'reduceMotion' | 'oneTouch' | 'analytics', label: string) => {
+    const sw = (key: 'muted' | 'vibration' | 'reduceMotion' | 'oneTouch', label: string) => {
       const b = h('button', { type: 'button', class: 'switch', role: 'switch', 'aria-label': label });
       b.setAttribute('aria-checked', String(!!s0[key]));
       b.addEventListener('click', () => {
@@ -391,7 +391,7 @@ export function openSettings(host: ModalHost, ctx: Ctx): ModalHandle {
                 'hanger',
                 t('wardrobe'),
                 (() => {
-                  const b = h('button', { type: 'button', class: 'btn', style: 'min-height:40px', 'aria-label': t('wardrobe'), 'data-testid': 'open-wardrobe' }, ic('hanger', 24));
+                  const b = h('button', { type: 'button', class: 'btn', 'aria-label': t('wardrobe'), 'data-testid': 'open-wardrobe' }, ic('hanger', 24));
                   b.addEventListener('click', () => {
                     ctx.sound('open');
                     m.close();
@@ -410,7 +410,7 @@ export function openSettings(host: ModalHost, ctx: Ctx): ModalHandle {
                 'bag',
                 t('storeOpen'),
                 (() => {
-                  const b = h('button', { type: 'button', class: 'btn', style: 'min-height:40px', 'aria-label': t('storeOpen'), 'data-testid': 'open-store' }, ic('bag', 24));
+                  const b = h('button', { type: 'button', class: 'btn', 'aria-label': t('storeOpen'), 'data-testid': 'open-store' }, ic('bag', 24));
                   b.addEventListener('click', () => {
                     ctx.sound('open');
                     m.close();
@@ -453,7 +453,7 @@ export function openSettings(host: ModalHost, ctx: Ctx): ModalHandle {
           'info',
           t('tutRestart'),
           (() => {
-            const b = h('button', { type: 'button', class: 'btn', style: 'min-height:40px', 'aria-label': t('tutRestart') }, ic('rebirth', 24));
+            const b = h('button', { type: 'button', class: 'btn', 'aria-label': t('tutRestart') }, ic('rebirth', 24));
             b.addEventListener('click', () => {
               ctx.sound('tap');
               m.close();
@@ -477,8 +477,13 @@ export function openSettings(host: ModalHost, ctx: Ctx): ModalHandle {
               { v: 'high', label: t('qHigh') },
             ] as { v: Settings['quality']; label: string }[],
             () => ctx.view.settings.quality,
-            (v) => set('quality', v),
+            (v) => {
+              // The dish grid is allocated once per quality (ADR-010): say when it takes effect (RF-05).
+              if (v !== ctx.view.settings.quality) ctx.toast(t('qualityLater'), 'info', 'info');
+              set('quality', v);
+            },
           ),
+          t('qualityHint'),
         ),
         ...(ctx.deps.onScreenshot
           ? [
@@ -486,7 +491,7 @@ export function openSettings(host: ModalHost, ctx: Ctx): ModalHandle {
                 'camera',
                 t('screenshot'),
                 (() => {
-                  const b = h('button', { type: 'button', class: 'btn', style: 'min-height:40px' }, ic('download', 24));
+                  const b = h('button', { type: 'button', class: 'btn' }, ic('download', 24));
                   b.setAttribute('aria-label', t('screenshot'));
                   b.addEventListener('click', () => ctx.deps.onScreenshot?.());
                   return b;
@@ -495,7 +500,16 @@ export function openSettings(host: ModalHost, ctx: Ctx): ModalHandle {
             ]
           : []),
       ),
-      group(t('privacy'), row('stats', t('analytics'), sw('analytics', t('analytics')), t('analyticsHint'))),
+      // No telemetry exists, so no switch for it (RF-07); the id the privacy page asks for is shown here.
+      group(
+        t('privacy'),
+        wrapRow(
+          'stats',
+          t('playerId'),
+          h('code', { class: 'set-id', 'data-testid': 'settings-player-id' }, ctx.deps.playerId?.() ?? '—'),
+          t('playerIdHint'),
+        ),
+      ),
     );
     // Extra sections from the integrator (the story archive "Historia").
     if (ctx.deps.settingsSections) {
@@ -544,7 +558,7 @@ export function openSettings(host: ModalHost, ctx: Ctx): ModalHandle {
         return;
       }
       const other = /^[A-Z]+\d+\./.exec(s);
-      if (other && !s.startsWith(EXPORT_PREFIX)) {
+      if (other && !s.startsWith(EXPORT_PREFIX) && !s.startsWith(BUNDLE_PREFIX)) {
         ctx.toast(t('importVersion'), 'bad', 'warning');
         return;
       }
@@ -846,12 +860,7 @@ export function openOffline(host: ModalHost, seconds: number, essence: number, r
   return m;
 }
 
-/** Same checks as game.importString, without touching the game. */
+/** Same checks as the import itself (either export version), without touching the game. */
 function importable(s: string): boolean {
-  if (!s.startsWith(EXPORT_PREFIX)) return false;
-  try {
-    return deserializeState(base64ToUtf8(s.slice(EXPORT_PREFIX.length))) !== null;
-  } catch {
-    return false;
-  }
+  return decodeSaveText(s) !== null;
 }

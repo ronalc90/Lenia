@@ -33,9 +33,6 @@ const CLASSIC_KEYS = new Set([
   'deleteRegime',
   'extinctionLocked',
   'genomeGained',
-  'tutCalibrateTitle',
-  'tutGenomeTitle',
-  'tutGenome',
 ]);
 /** The classic Extinction cards (CLARIDAD B-13). */
 const CLASSIC_MOMENTS = new Set(['extinctionReady', 'extinction']);

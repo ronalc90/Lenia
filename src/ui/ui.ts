@@ -33,7 +33,8 @@ import type { LeaderboardClient } from './leaderboard-types';
 import { createSplash, type Splash } from './splash';
 import { Toasts } from './toasts';
 import { SESSION_UI } from '../game/treeText';
-import { MOMENT_MIN_RUN_SECONDS, SESSION_TOAST_MAX_MS } from '../game/cycleBalance';
+import { MOMENT_MIN_RUN_SECONDS, SESSION_TOAST_MAX_MS, SIM_STEPS_PER_SEC } from '../game/cycleBalance';
+import { earningNow } from './moments/status';
 
 /**
  * The Esencia counter in whole drops (QA4: "3.7", "1.7" next to "16" read as two kinds of number). Seeds
@@ -94,6 +95,8 @@ export interface UIDeps {
   onRestartTutorial?(): void;
   /** Optional: extra Settings sections (e.g. the story archive), mounted at the end of Settings. */
   settingsSections?(container: HTMLElement): void;
+  /** Optional: the random player id (ranking, store), shown in Settings → Privacy for data requests (RF-07). */
+  playerId?(): string | null;
   /** Show the title screen on start (default true). Its tap also unlocks audio. */
   splash?: boolean;
   /** Optional: the title screen was dismissed (game can start music, timers...). */
@@ -226,8 +229,8 @@ const TAP_AGAIN_HINT_MS = 8000;
 export function shortRunRunning(se: { phase: string; limit: number; bonus: number } | null | undefined): boolean {
   return !!se && se.phase === 'running' && se.limit + se.bonus < MOMENT_MIN_RUN_SECONDS;
 }
-/** Simulation steps per second at ×1 (main.ts STEPS_PER_SEC): creature age is shown in seconds. */
-const AGE_STEPS_PER_SEC = 30;
+/** Simulation steps per second at ×1 (cycleBalance SIM_STEPS_PER_SEC, RF-11): creature age is shown in seconds. */
+const AGE_STEPS_PER_SEC = SIM_STEPS_PER_SEC;
 
 /**
  * Bring an element into view by scrolling ONLY its nearest vertically scrollable ancestor (a panel, a
@@ -1668,7 +1671,7 @@ class BiolumaUI implements UI {
     }
     const eps = h('dd', { class: 'eps mono' });
     const age = h('dd', { class: 'mono' });
-    const follow = h('button', { type: 'button', class: 'btn block', style: 'min-height:40px' });
+    const follow = h('button', { type: 'button', class: 'btn block' });
     const arrow = h('span', { class: 'ccard-arrow' });
     const el = h(
       'div',
@@ -1762,7 +1765,8 @@ class BiolumaUI implements UI {
     c.state.className = `ccard-state s-${cr.state}`;
     const col = cr.behavior ? BEHAVIOR_COLOR[cr.behavior] : '#8B98A5';
     setHTML(c.beh, `<span class="icw" style="color:${col}">${icon(cr.behavior ?? 'unknown', 16)}</span>${behaviorName(cr.behavior)}`);
-    setText(c.eps, t('yieldsValue', { v: fmtRate(cr.eps, lang) }));
+    // The same rate as its pill and the HUD: 0 while the clock waits for the first seed (RF-10).
+    setText(c.eps, t('yieldsValue', { v: fmtRate(earningNow(v) ? cr.eps : 0, lang) }));
     // Age is counted in simulation steps; on screen it is seconds at ×1 (CLARIDAD J-28).
     setText(c.age, fmtDuration(cr.age / AGE_STEPS_PER_SEC, lang));
   }

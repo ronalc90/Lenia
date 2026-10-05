@@ -260,9 +260,13 @@ export const MOMENTS: MomentDef[] = [
     color: UI.good,
     trigger: onEvent('creatureStable'),
     build: from('creatureStable', (p, c) => {
-      const cv = c.view().creatures.find((x) => x.id === p.id);
-      const eps = cv && cv.eps > 0 ? cv.eps : 1;
-      return { focus: at(p.x, p.y, 2.4, p.id), chips: [essenceChip(eps, '+', true)], data: { amount: eps } };
+      const v = c.view();
+      const cv = v.creatures.find((x) => x.id === p.id);
+      // The creature's own rate, the number its label shows; none while the clock waits for the first
+      // seed (the HUD says +0/s then), never a made-up 1 (RF-10).
+      const earning = !v.session || v.session.phase === 'running';
+      const eps = earning && cv && cv.eps > 0 ? cv.eps : 0;
+      return { focus: at(p.x, p.y, 2.4, p.id), chips: eps > 0 ? [essenceChip(eps, '+', true)] : [], data: { amount: eps } };
     }),
     delayMs: 400,
     // t_essence chains right after t_stable; the income card (a few seconds later) tells it.

@@ -4,10 +4,11 @@
  *   node tests/e2e/secrets-shots.mjs
  * Starts Vite on a free port, opens the playground in headless Chromium (390×844 mobile and
  * 1366×768 desktop), triggers reveals, overlay effects and the basement page, and saves
- * PNGs as secrets-*.png in $SECRETS_SHOTS_DIR (default: the session scratchpad).
+ * PNGs as secrets-*.png in $SECRETS_SHOTS_DIR (default: <OS temp dir>/bioluma-shots).
  * Also measures the frame rate while the heaviest effects run, and fails on console errors.
  */
 import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
@@ -15,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const OUT = process.env.SECRETS_SHOTS_DIR ?? '/tmp/claude-0/-home-user-Lenia/a5114f5a-39a4-539d-9a6a-14e769759a92/scratchpad';
+const OUT = process.env.SECRETS_SHOTS_DIR ?? `${tmpdir()}/bioluma-shots`;
 mkdirSync(OUT, { recursive: true });
 
 function findChrome() {

@@ -18,6 +18,7 @@
  *               mid-way on a bar line) with the same NaN / peak / clipping / click checks, WAVs per preset
  */
 import { existsSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
@@ -26,7 +27,7 @@ import { chromium } from 'playwright-core';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const args = process.argv.slice(2);
 const outIdx = args.indexOf('--out');
-const defaultOut = '/tmp/claude-0/-home-user-Lenia/a5114f5a-39a4-539d-9a6a-14e769759a92/scratchpad/bioluma-music-preview.wav';
+const defaultOut = `${tmpdir()}/bioluma-shots/bioluma-music-preview.wav`;
 const outPath = outIdx >= 0 ? args[outIdx + 1] : process.env.BIOLUMA_WAV ?? defaultOut;
 
 function findChromium() {

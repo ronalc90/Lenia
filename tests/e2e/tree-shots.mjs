@@ -6,10 +6,11 @@
  * Starts Vite on a free port, opens the dev page in headless Chromium at 390×844 (phone) and
  * 1366×768 (laptop), dark and light, es/en, and captures the tree (several progress stages, node
  * sheets, a purchase), the session HUD states, the start card and the end-of-session summary into
- * $TREE_SHOTS_DIR (default: the session scratchpad) as tree-*.png and session-*.png.
+ * $TREE_SHOTS_DIR (default: <OS temp dir>/bioluma-shots) as tree-*.png and session-*.png.
  * Fails on console errors, page errors, horizontal overflow or tap targets under 48 px.
  */
 import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
@@ -17,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const OUT = process.env.TREE_SHOTS_DIR ?? '/tmp/claude-0/-home-user-Lenia/a5114f5a-39a4-539d-9a6a-14e769759a92/scratchpad';
+const OUT = process.env.TREE_SHOTS_DIR ?? `${tmpdir()}/bioluma-shots`;
 mkdirSync(OUT, { recursive: true });
 
 function findChrome() {

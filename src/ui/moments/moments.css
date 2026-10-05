@@ -1674,3 +1674,21 @@ html[data-theme='light'] .mo-bh-glyph {
   background: color-mix(in srgb, var(--mo-bg, #141a21) 92%, transparent);
   backdrop-filter: blur(4px);
 }
+
+/* RF-06: 48 px touch targets. */
+.mo-never,
+.mo-card.rich .mo-never,
+.mo-card.rich .mo-chips .mo-bh-open {
+  min-height: 48px;
+}
+.mo-help-play,
+.mo-seg-o button,
+.mo-spc-go,
+.mo-bh-go,
+.mo-bh-open {
+  min-height: 48px;
+}
+.mo-sp-x {
+  width: 48px;
+  height: 48px;
+}

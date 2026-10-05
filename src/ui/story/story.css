@@ -1100,3 +1100,21 @@
   opacity: 1;
   transform: none;
 }
+
+/* RF-06: 48 px touch targets (VELA's task ✕ and "Saltar tutorial"). */
+.sty-task-x {
+  width: 48px;
+  height: 48px;
+}
+.sty-skip {
+  height: 48px;
+}
+.sty-later,
+.sty-end-skip,
+.sty-archive .sa-scene,
+.enc-badge {
+  min-height: 48px;
+}
+.sty-end-skip {
+  height: 48px;
+}
