@@ -453,7 +453,9 @@ ADR that supersedes the old one.
   - The detector, camera, overlay and game drop toroidal maths; `wrapDist` becomes `dishDist`; seeds and free spots
     keep a margin from the glass (seed radius + 0.5 R; auto-seeder 2 R).
   - The detector must not read deflection turns as spinning (a bouncing swimmer turns 60–180° once per impact).
-  - Saves keep the grid bytes; old 4:5 saves are centred and cropped into the new square grid.
+  - Saves keep the grid bytes. *(Corrected v0.017, RF-05: old 4:5 saves were never centred and cropped. A saved dish
+    is restored only on the grid it was saved on; any other dish — a 4:5 save, a Quality change, an import — is
+    dropped and the session on it gets its starter / Nevera again, `Game.dishLost()`.)*
   - The GDD (§4 "Bordes", Placa row of §8, §9 "sobre el toro") gets "(Corrección v1.2)" notes; CLAUDE.md's
     invariant "The dish is toroidal" becomes "The dish is a round walled disc that grows (ADR-025)".
   - *(Amended v0.015)* **The dish never steps blind** (`src/sim/detectGate.ts`): at each 10-step snapshot
@@ -461,6 +463,41 @@ ADR that supersedes the old one.
     swimmers cross ~60 steps unsteered and die on the glass (the empty session-1 dish of v0.014,
     `tests/unit/starter-dish.test.ts`).
 
+
+
+## ADR-026: Lab sessions with a clock, a research tree of 7 straight routes, and Worlds
+
+- **Status:** Accepted (2026-10-05; live since v0.012, proposed in [`docs/CICLO.md`](docs/CICLO.md) §16 and moved
+  here for the final review, RF-03). Supersedes the GDD's continuous loop (§5 Muestras and Genoma, §8 Laboratorio,
+  §10 Extinción, §12 offline) and Calibrar (§4). Owner requests; pacing in [`docs/RITMO.md`](docs/RITMO.md).
+- **Context:** the owner asked for a tree with branches and a clearer prestige ("a student with lab time"), then for
+  straight routes where you always gain more and no chemistry knobs, and after the second play-test for a short,
+  exciting, very incremental game that never punishes growth. The continuous Era loop could not give that: Extinción
+  wiped what the player built, Calibrar asked for μ/σ by hand, and nobody reached the Genome.
+- **Decision:**
+  - The game is played in **lab sessions**: a short run on a fresh dish whose clock starts with the first seed and
+    grows with the Reloj route (0:15 → 2:30, `cycleBalance.ts`). Creatures earn Esencia, spent in the run on seeds
+    (one price rule, the dish's room is the limit) and Abono.
+  - When the clock runs out the Esencia becomes **Datos** with a visible division (Esencia ÷ `DATOS_ESSENCE_DIV`)
+    plus discovery bonuses (new species, variants, ways of moving, Encargos, Sparks, records), never fewer than
+    `DATOS_MIN` for a run that used its clock. Datos are never lost.
+  - Datos buy levels in a **research tree** of 7 straight routes around a centre (Reloj, Gotero, Placa, Vida,
+    Descubrimiento, Mundos, Destello): every step needs only the one before, every level improves one number shown as
+    "antes → después", price = `start(ring) × factor^level`.
+  - The rules of life are 7 **Worlds** (presets checked on the CPU, `src/game/worlds.ts`), opened in order and picked
+    on the start card; no sliders.
+  - The **night** (the story's era) moves forward for free at the tree's centre once enough sessions and species are
+    reached (`NIGHT_GATES`, with a fallback in sessions); the story's last question comes around night 7 (~2 h).
+  - Retired: Calibrar and saved regimes, Muestras, Genoma, Extinción, the Turno de laboratorio and offline income.
+    Classic saves are migrated generously (`src/game/legacy.ts`).
+  - The ranking judges these saves by the session economy (nights, sessions, Datos; RF-01, `server/validate.ts`).
+- **Consequences:**
+  - The GDD keeps its text with "(Corrección v1.3)" notes on §4 (Calibrar), §5, §8, §10, §12 pointing to CICLO.md,
+    RITMO.md and this ADR; §2 adopts the glossary of [`docs/CLARIDAD.md`](docs/CLARIDAD.md).
+  - The session bot (`scripts/session-bot.ts`, engine `scripts/sessionBotCore.ts`) plays the integrated game and
+    its HARD rule (the median player never earns less than in the session before) gates every balance change.
+  - Encargos and the story change their era / Extinción / Calibrar conditions to nights, worlds and the tree.
+  - The contract changes this needed are recorded in ADR-028.
 
 ## ADR-027: Time-lapse in the session runs and incubation under the start card
 
@@ -494,3 +531,28 @@ ADR that supersedes the old one.
   extrapolated to the current step with the heading the last turns gave them (`src/sim/extrapolate.ts`): with the
   async readback the stale heading put a turn's pivot ~6 cells off the centroid and tore the starter apart before the
   first seed (`tests/unit/starter-lag.test.ts`).
+
+
+## ADR-028: Contract removals of the sessions cycle (d9da2ef) and the retired classic loop
+
+- **Status:** Accepted (2026-10-05, integrator; recorded for the final review, RF-03 and RF-09).
+- **Context:** CLAUDE.md rule 1 lets agents only *add optional fields* to `src/core/types.ts`; removing or renaming
+  one is a breaking change that must stop and ask. Commit `d9da2ef` («Juego: ciclo de sesiones en vivo, fuera
+  Calibrar y bot clásico») retired Calibrar with ADR-026 and removed contract members without a record:
+  `CalibrationView.muRange`, `sigmaRange`, `RRange`, `dtRange`, `regimes`, `maxRegimes`, `ringsOptions`, `hints`, and
+  `GameActions.setCalibration`, `saveRegime`, `loadRegime`, `deleteRegime`, `setRings`.
+- **Decision:**
+  - The removal is a **deliberate breaking change approved by the integrator**: nothing may call a slider, save a
+    regime or pick a ring preset any more (the World sets the rules), and keeping dead members would invite code that
+    the game can no longer honour. `CalibrationView` is now the read-only rules of the dish (μ, σ, R, dt, rings).
+    Every consumer (UI, story, Encargos, secrets, mock, dev pages) was updated in the same commit and the build is
+    green; no later contract field was removed. `Settings.analytics` stays in the contract although the Settings
+    switch was removed (RF-07: there is no telemetry); it is simply never read.
+  - The classic Era loop in `src/game/game.ts` is **retired**: `createGame` defaults to the sessions cycle (RF-09), the
+    app only plays sessions, and classic saves are migrated. The classic code and its unit tests remain, explicitly
+    marked `cycle: 'classic'` with a header that says so, until a separate change deletes them together; player-facing
+    regressions (seed spacing QA4 F-07/F-13, the round dish, the ranking) run in the sessions cycle.
+- **Consequences:** future contract removals need an ADR like this one before they land; the reviewer checks
+  `git diff -- src/core/types.ts` for removed members. Deleting the classic loop must delete its tests, its texts
+  (`content.ts` UPGRADE_TEXT, the Extinción/Genoma Momentos and illustrations) and the classic validator path of the
+  ranking only after no client older than the sessions cycle can submit.

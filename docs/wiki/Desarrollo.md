@@ -46,8 +46,9 @@ Hace falta **Node 22** y un navegador con **WebGL2**. En desarrollo, `window.bio
 | `npm run e2e:sim` | Comprobaciones de la simulación en GPU |
 | `npm run e2e:audio` | Render de audio sin conexión, con control de picos |
 | `npm run calibrate` | Recalibra las firmas del detector con el catálogo (~4 min) |
-| `npm run bot` | Bot de balance: juega el juego acelerado y mide la curva |
-| `node tests/e2e/ui-shots.mjs` | Capturas de la interfaz con datos de ejemplo (`ui-dev.html`) |
+| `npm run bot` | Bot de sesiones: juega el juego integrado y mide el ritmo (regla DURA de balance) |
+| `npm run e2e:layers` | Botones que nunca quedan tapados (móvil y escritorio) |
+| `node tests/e2e/release-checks.mjs` | Revisión final: toques de 48 px, una sola cifra antes de sembrar, exportar/importar todo |
 | `node tests/e2e/wiki-shots.mjs` | Regenera las capturas de esta wiki desde el juego real |
 
 Para navegadores sin pantalla usa `playwright-core` con el Chromium que haya en `/opt/pw-browsers`. **Nunca** ejecutes `playwright install`.
@@ -68,7 +69,7 @@ Para navegadores sin pantalla usa `playwright-core` con el Chromium que haya en 
 | `src/main.ts` | Une todo: sim → detector → juego → UI y audio; bucle y autoguardado | Lo toca el integrador |
 | `api/`, `server/` | Ranking (funciones Edge de Vercel y lógica pura) | Ver `docs/RANKING.md` |
 | `platforms/` | Envoltorios: escritorio (Electron), móvil (Capacitor), Steam | Ver `docs/PLATAFORMAS.md` |
-| `scripts/` | Calibración, bot de balance, iconos | No se publican |
+| `scripts/` | Calibración del detector, bot de sesiones (`sessionBotCore.ts`), iconos | No se publican; salidas en la carpeta temporal del sistema |
 | `tests/unit/`, `tests/e2e/` | Pruebas entre módulos y de navegador | Las de un módulo viven junto a su código |
 | `docs/` | `GDD.md` (diseño), `ROADMAP.md`, `REVIEW.md`, `wiki/` (esta wiki) | El GDD está en español |
 
@@ -81,7 +82,7 @@ Resumen de [`CLAUDE.md`](https://github.com/ronalc90/Lenia/blob/main/CLAUDE.md):
 1. **Contratos solo por el integrador** (`src/core`). Añadir campos opcionales está bien.
 2. **Todos los números del balance viven en `src/game/balance.ts`**, cada uno con un comentario de dónde sale. Nada de números mágicos en `game/` ni `ui/`.
 3. **Todo texto para el jugador es `Text { es, en }`**, en los dos idiomas. Identificadores, comentarios y nombres de pruebas, en inglés.
-4. **Invariantes de la simulación**: fórmulas de Chan, placa toroidal, aspecto 4:5, RGBA16F (nunca 8 bits), semillas con ruido asimétrico. No se "mejoran" sin ADR.
+4. **Invariantes de la simulación**: fórmulas de Chan, placa de Petri redonda con cristal que crece (sin toro, grilla cuadrada fija; ADR-025), RGBA16F (nunca 8 bits), semillas con ruido asimétrico, la placa nunca avanza sin su lectura cada 10 pasos. No se "mejoran" sin ADR.
 5. **Sin dependencias nuevas** sin ADR. Sin framework de interfaz.
 6. **El GDD manda.** Si el código y el GDD no coinciden, se arregla uno de los dos con un ADR.
 7. **Nada de secretos ni llaves en el repo.** Ninguna API key de IA en ningún sitio.
@@ -116,7 +117,7 @@ Las especies vienen del catálogo de Bert Chan (MIT). Pasos:
 4. **Efecto**: úsalo donde corresponda en `src/game/game.ts` o `economy.ts` (por ejemplo `level('miMejora')`).
 5. **Icono** de la tarjeta en `UP_ICONS` de `src/ui/upgrades.ts` (si no, usa uno genérico).
 6. **Pruebas** en `src/game/upgrades.test.ts` (y de economía si cambia la producción): costo, tope, desbloqueo y efecto.
-7. Corre el **bot de balance** antes y después: `npm run bot`. Ningún número cambia sin ese informe.
+7. Corre el **bot de sesiones** antes y después: `npm run bot` (regla DURA: la mediana nunca gana menos que en la sesión anterior). Ningún número cambia sin ese informe.
 
 ## Cómo añadir un idioma o un texto
 

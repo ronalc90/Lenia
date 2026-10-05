@@ -19,6 +19,14 @@
 > | 9 | Tests del detector a 128×128 cuando intervienen especies de R = 18 | §9, §20, §22 |
 > | — | Kernel y crecimiento exactos de Chan (kn = 1, gn = 1, polinomiales) en lugar de gaussianos | §4, §22 |
 > | — | Corrección de la reducción de lecturas por simetría de 8 pliegues | §4, §17 |
+>
+> **Correcciones v1.2 y v1.3 (marcadas en el lugar):**
+>
+> | ADR | Corrección | Dónde |
+> |---|---|---|
+> | [ADR-025](../DECISIONS.md#adr-025-round-walled-petri-dish-that-grows-glass-deflection-instead-of-wrap) | **(v1.2)** La placa es una **placa de Petri redonda con cristal** que crece con la ruta Placa (Ø128 → Ø224, limitada por la calidad); el cristal desvía a las nadadoras. Se acaban el toro y el aspecto 4:5: grilla cuadrada fija (baja 168², media/alta 232²) con la placa dentro. Detalle en [`DISH.md`](DISH.md). | §4, §8, §9, §13, §17 |
+> | [ADR-026](../DECISIONS.md#adr-026-lab-sessions-with-a-clock-a-research-tree-of-7-straight-routes-and-worlds) | **(v1.3)** Se juega en **sesiones de laboratorio** con reloj (0:15 → 2:30); la Esencia de cada sesión se vuelve **Datos** (÷ 25 + descubrimientos) que compran un **Árbol** de 7 rutas rectas; las reglas de la vida son 7 **Mundos**; la **noche** avanza gratis. Se retiran Calibrar, Muestras, Genoma, Extinción y el progreso offline. Detalle en [`CICLO.md`](CICLO.md) y [`RITMO.md`](RITMO.md). | §2, §4, §5, §6, §8, §10, §11, §12, §23 |
+> | [ADR-027](../DECISIONS.md#adr-027-time-lapse-in-the-session-runs-and-incubation-under-the-start-card) | **(v1.3)** Cámara rápida en las sesiones (×1,5 pasos por segundo) e incubación de la criatura inicial bajo la tarjeta de inicio; el reloj de la sesión cuenta tiempo de placa. | §4, §6, §17 |
 
 ## Índice
 
@@ -77,13 +85,15 @@ Hipótesis a validar con jugadores reales.
 | Primera criatura estable | antes del minuto 3 de juego | evento `first_stable_creature` |
 | Retención día 1 | 35 % | PostHog, cohortes |
 | Retención día 7 | 15 % | PostHog, cohortes |
-| Primera Extinción | entre 45 y 90 min de juego activo | evento `prestige` |
+| Primera Extinción **(Corrección v1.3, ADR-026: retirada; hoy, la noche 2 hacia la sesión 4)** | entre 45 y 90 min de juego activo | evento `prestige` |
 | Sesión media | 4 a 8 min | PostHog |
 | Rendimiento | ≥ 30 fps en gama media Android, 60 objetivo | Playwright + Firebase Test Lab |
 
 ---
 
 ## 2. Glosario
+
+> **(Corrección v1.3, ADR-026)** El glosario vigente es el de [`CLARIDAD.md`](CLARIDAD.md): **Sesión**, **Datos**, **Árbol**, **Mundo**, **Noche** (antes «Era»), **Nevera**, **Abono**, **Encargo**. **Muestras**, **Genoma**, **Calibración**, **Régimen** y **Extinción** se retiraron; la **Placa** es redonda y crece (ADR-025). La tabla de abajo es la de la v1.1.
 
 Los términos de abajo se usan igual en el juego, en el código y en este documento; el código los nombra en inglés entre paréntesis.
 
@@ -132,7 +142,7 @@ Eres una científica o científico con una sola placa de Petri y una regla que n
 | Primera división | "Una se volvió dos. Ya no sé si las descubro o si me descubren." |
 | Desbloquear Calibrador | "Si muevo μ un poco, el mundo cambia de reglas. Tengo que anotar todo." |
 | Décima especie | "Diez. Empiezan a parecerse a una fauna, no a accidentes." |
-| Primera Extinción | "Esterilizo la placa. Me duele. Pero sé qué funcionó, y eso se queda conmigo." |
+| Primera Extinción **(Corrección v1.3: hoy, la primera noche nueva; ver [`STORY.md`](STORY.md))** | "Esterilizo la placa. Me duele. Pero sé qué funcionó, y eso se queda conmigo." |
 | Era 2 | "Nueva placa, mismos ojos. Esta vez siembro con intención." |
 | Primer canal nuevo | "Dos sustancias. Se tocan. Una come a la otra. No era lo que buscaba y es mejor." |
 | Especie 50 | "Dejé de contar accidentes. Ahora cuento vidas." |
@@ -164,9 +174,11 @@ A(t+dt) = clip[0,1]( A(t) + dt · G( K * A(t) ) )
 
   De este modo los parámetros del catálogo (μ, σ, b, R, T) valen **sin modificar**; ya no hace falta la "tolerancia" 0.14/0.014 frente a 0.15/0.015 del texto original. La referencia CPU (`src/sim/cpu.ts`) y el shader implementan la misma fórmula.
 - `dt = 1/T`. El catálogo usa T = 10 en 518 de 548 especies; el juego fija `dt = 0.1` y hace 1 o 2 subpasos por frame según rendimiento.
-- **Bordes (Corrección v1.1, ADR-004):** toroidales (la placa se envuelve) **en la simulación y también en pantalla**: una criatura que sale por un lado reaparece por el opuesto. El original hacía que el detector tratara el contacto con el borde como "explosión"; **eso se elimina**: no hay penalización por tocar el borde. "Explotó" se mide solo por masa y relleno (§9).
+- **Bordes (Corrección v1.2, ADR-025): ya no hay toro.** La placa es una placa de Petri **redonda con cristal absorbente** dentro de una grilla cuadrada fija; nada se envuelve. El cristal desvía a las nadadoras antes de tocarlo (`src/sim/deflect.ts`) y la placa crece con la ruta Placa. El texto que sigue es el de la v1.1, superado: *Bordes (Corrección v1.1, ADR-004):* toroidales (la placa se envuelve) **en la simulación y también en pantalla**: una criatura que sale por un lado reaparece por el opuesto. El original hacía que el detector tratara el contacto con el borde como "explosión"; **eso se elimina**: no hay penalización por tocar el borde. "Explotó" se mide solo por masa y relleno (§9).
 
 ### Parámetros base y rangos del Calibrador
+
+> **(Corrección v1.3, ADR-026)** El Calibrador se retiró: nadie elige μ, σ, R ni dt con deslizadores. Las reglas de la placa las pone el **Mundo** de cada sesión (7 preajustes comprobados en CPU, `src/game/worlds.ts`), que se abren en la ruta Mundos del Árbol. La tabla queda como referencia de los rangos que esos Mundos respetan.
 
 | Parámetro | Valor inicial | Rango total desbloqueable | Qué cambia |
 |---|---|---|---|
@@ -196,7 +208,7 @@ Parámetros exactos de `animals.json` (todas R = 13, T = 10, b = `"1"` salvo not
 
 ### Grilla y rendimiento
 
-- **Tamaño y aspecto fijo (Corrección v1.1, ADR-010).** La grilla tiene aspecto **fijo 4:5 (ancho × alto)**: **media 192×240**, **baja 128×160**, **alta 224×280** (el original decía "192 celdas en el lado corto, rango 128 a 256, aspecto igual al del área visible"). Los paneles de la interfaz que se colapsan o expanden **solo cambian el zoom** con el que se ve la placa, nunca la grilla (una grilla que cambia de forma con la UI destruiría las criaturas y el guardado).
+- **(Corrección v1.2, ADR-025)** La grilla es **cuadrada y fija** por perfil (baja 168², media y alta 232²) y la placa es el disco de Ø128 a Ø224 dentro de ella (baja: Ø160 como máximo); sigue sin cambiar con la interfaz (solo el zoom). El texto de la v1.1 que sigue queda superado. **Tamaño y aspecto fijo (Corrección v1.1, ADR-010).** La grilla tiene aspecto **fijo 4:5 (ancho × alto)**: **media 192×240**, **baja 128×160**, **alta 224×280** (el original decía "192 celdas en el lado corto, rango 128 a 256, aspecto igual al del área visible"). Los paneles de la interfaz que se colapsan o expanden **solo cambian el zoom** con el que se ve la placa, nunca la grilla (una grilla que cambia de forma con la UI destruiría las criaturas y el guardado).
 - Dos texturas RGBA16F en ping-pong; render con filtrado lineal y colormap en un segundo pase. **Nunca 8 bits:** `G · dt` puede ser menor que 1/255 y la criatura se congela.
 - **Convolución directa con simetría de 8 pliegues (Corrección v1.1, ADR-013).** El original afirmaba que la simetría de 8 pliegues baja las lecturas de textura de ~531 a ~70 por celda (R = 13). Eso es **incorrecto**: la simetría reduce los **pesos distintos** del kernel (≈ πR²/8 ≈ 70 valores únicos, que se precalculan y se consultan en una textura 1D), pero **cada vecino sigue siendo una lectura distinta de la placa**, así que las lecturas de textura por celda y por paso siguen siendo ≈ **πR²** (≈ 531 con R = 13). Consecuencia para el presupuesto: 192×240 celdas × 531 lecturas ≈ 24 M lecturas por paso, y el perfil Bajo (128×160) existe precisamente por eso.
 
@@ -222,6 +234,8 @@ El repo lleva el aviso "MIT License, Copyright (c) 2018 Bert Chan" para el catá
 ---
 
 ## 5. Recursos y fórmulas económicas
+
+> **(Corrección v1.3, ADR-026)** Hoy hay dos monedas: la **Esencia**, que se gana y se gasta *dentro* de una sesión (semillas, Abono), y los **Datos**, que salen al acabar la sesión (Esencia ÷ 25, más especies, variantes, maneras de moverse, Encargos, Destellos y récords; nunca menos de 3) y compran el Árbol. **Muestras y Genoma se retiraron**; las partidas viejas se migran con generosidad. La fórmula de producción de abajo sigue viva (complejidad × comportamiento × rareza × multiplicador global), con los multiplicadores que da el Árbol. Cifras en `src/game/cycleBalance.ts`.
 
 Hay tres recursos con tres ritmos: Esencia se gana por segundo, Muestras por descubrimiento, Genoma por Extinción. Todos los números de esta sección son valores iniciales que el Balanceador ajusta con el bot; la forma de las fórmulas sí es fija. **Todos los números viven en `src/game/balance.ts`.**
 
@@ -262,9 +276,13 @@ con `b` el costo base y `g` entre 1.15 (mejoras de volumen, como Placa) y 1.35 (
 
 ### Muestras
 
+> **(Corrección v1.3, ADR-026)** Retiradas. Los descubrimientos pagan Datos al final de la sesión y las copias (Copiadora) cuestan Esencia.
+
 Se ganan solo por descubrir: +1 por especie nueva registrada, +1 la primera vez que una especie muestra un comportamiento nuevo, +3 si la especie es rara (§9). No se generan pasivamente ni se compran con Esencia. Se gastan en Impresiones (1 Muestra por impresión de especie común, 2 rara) y en mejoras del bestiario (Microscopio, Archivo).
 
 ### Genoma
+
+> **(Corrección v1.3, ADR-026)** Retirado junto con la Extinción: lo que el Genoma compraba son ahora nodos del Árbol pagados con Datos.
 
 Se calcula al confirmar una Extinción, con tres componentes para que premie tanto el volumen como la exploración:
 
@@ -284,6 +302,8 @@ Hasta 999 999 con separador de miles; después sufijos K, M, B, T, Qa, Qi; despu
 
 ---
 ## 6. Loop de juego y primera sesión
+
+> **(Corrección v1.3, ADR-026, ADR-027)** El loop continuo de abajo (sembrar, comprar en el Laboratorio, calibrar, extinguir) se sustituyó por: **tarjeta de inicio** (Mundo, criatura de la Nevera incubada) → **sesión con reloj** (el reloj empieza con la primera gota; sembrar y mirar, Abono, Destello) → **resumen** (Esencia → Datos) → **Árbol** → siguiente sesión, y cada pocas sesiones una **noche** nueva de la historia. La primera sesión dura 15 s. Ver [`CICLO.md`](CICLO.md) §2–3 y [`RITMO.md`](RITMO.md).
 
 El juego tiene tres loops anidados: el de segundos (sembrar y mirar), el de minutos (comprar y calibrar) y el de días (descubrir y extinguir). Los tres desembocan en la misma acción, sembrar, que es la única que no se puede automatizar del todo.
 
@@ -362,6 +382,8 @@ Todo se controla con un pulgar sobre la placa y un panel inferior; no hay gestos
 
 ## 8. Catálogo de mejoras
 
+> **(Corrección v1.3, ADR-026)** El Laboratorio y el Bestiario de mejoras se sustituyeron por el **Árbol de investigación**: 7 rutas rectas (Reloj, Gotero, Placa, Vida, Descubrimiento, Mundos, Destello) que se pagan con Datos; cada nivel enseña «antes → después» y su precio sigue una sola regla. Lista y cifras en [`CICLO.md`](CICLO.md) §6 y `src/game/tree.ts`. Las tablas siguientes quedan como historia del diseño.
+
 Las mejoras se compran con Esencia en la pestaña Laboratorio y con Muestras en el Bestiario; ninguna se compra con dinero real. Toda mejora se desbloquea por un hito de juego, no por tiempo, y la lista completa es visible desde el inicio con las no desbloqueadas en gris y su condición escrita.
 
 ### Laboratorio (Esencia)
@@ -375,7 +397,7 @@ Costos en Esencia; `g` es el factor geométrico de la §5. Las mejoras con nivel
 | **Cultivo** | ∞ | b = 50, g = 1.35 | +10 % a `M_global`. | 10 Esencia/s |
 | **Calibrador** | 4 | 25, 300, 3 000, 30 000 | I: slider μ en 0.13 a 0.17. II: slider σ en 0.005 a 0.05 y 8 regímenes guardables. III: μ hasta 0.10 a 0.50 y slider dt. IV: slider R de 10 a 27. | 1 especie registrada |
 | **Estabilizador** | 10 | b = 80, g = 1.30 | +3 % de probabilidad de que una siembra se estabilice (ajusta densidad y sesgo de la espora hacia el mejor valor conocido del régimen actual). | Calibrador I |
-| **Placa** | 4 | 100, 1 000, 10 000, 100 000 | **(Corrección v1.1)** Más tamaño de placa y más espacio para criaturas, en escalones de aspecto fijo 4:5 (128×160, 160×200, 192×240, 224×280). Limitado por el perfil de rendimiento del dispositivo (§17); el reparto exacto por nivel vive en `src/game/balance.ts`. | 4 criaturas estables a la vez |
+| **Placa** | 4 | 100, 1 000, 10 000, 100 000 | **(Corrección v1.2, ADR-025)** Placa redonda Ø128 → Ø160 → Ø192 → Ø224 con sitio para 3 · 4 · 5 · 7 criaturas; en calidad baja llega a Ø160 y los niveles mayores no se cobran (RF-04). *(v1.1, superado:)* Más tamaño de placa y más espacio para criaturas, en escalones de aspecto fijo 4:5 (128×160, 160×200, 192×240, 224×280). Limitado por el perfil de rendimiento del dispositivo (§17); el reparto exacto por nivel vive en `src/game/balance.ts`. | 4 criaturas estables a la vez |
 | **Incubadora** | 2 | 200, 2 000 | I: botón ×2 pasos por frame. II: ×4. Solo si el dispositivo sostiene 30 fps. | Placa I |
 | **Afinidad nadadora** | 10 | b = 120, g = 1.35 | +8 % a la producción de criaturas con comportamiento nadadora o giratoria. | Primera nadadora |
 | **Afinidad sésil** | 10 | b = 120, g = 1.35 | +8 % a la producción de quietas y pulsantes. | Primera quieta |
@@ -407,7 +429,7 @@ El detector es el juez del juego: decide qué está vivo, qué hace y si es algo
 
 Cada 10 pasos de simulación un pase de reducción en GPU devuelve, para toda la placa, masa total, centroide y suma del gradiente; además etiqueta componentes conexas (celdas con A ≥ 0.1) y guarda por cada una masa, centroide, radio y gradiente. La CPU mantiene una ventana de 100 lecturas (1 000 pasos) por criatura y clasifica.
 
-**(Corrección v1.1, ADR-004)** El pase **ya no devuelve contacto con el borde**: la placa es un toro, no hay borde. Centroides, desplazamientos y distancias entre criaturas se calculan **sobre el toro** (distancia mínima con envolvimiento).
+**(Corrección v1.2, ADR-025)** La placa es redonda y no se envuelve: centroides, desplazamientos y distancias son **rectos**, dentro del disco. El pase sigue sin penalizar el cristal (el desviador aparta a las nadadoras y el detector no lee esos giros como «girar»). *(v1.1, superado: «la placa es un toro… distancias sobre el toro».)*
 
 ### Estados de una criatura
 
@@ -433,7 +455,7 @@ Se recalculan cada ventana; una criatura puede cambiar de comportamiento y el ju
 | **Nadadora** | Desplazamiento del centroide > 4 R en 1 000 pasos con velocidad angular baja. | ×1.6 |
 | **Giratoria** | Velocidad angular del vector de velocidad sostenida (giro completo en < 1 000 pasos) con velocidad lineal media. | ×1.8 |
 | **Divisora** | La fracción de masa dentro de la ventana centrada en el centroide cae bajo 0.9 y aparecen 2 componentes que ambas se estabilizan. | ×2.2 |
-| **Colonia** | 3 o más criaturas estables de la misma firma a menos de 3 R entre sí (distancia sobre el toro). | ×2.5 al grupo; **(Corrección v1.1) no se apila con la divisora: se aplica el máximo de ambos, no el producto** |
+| **Colonia** | 3 o más criaturas estables de la misma firma a menos de 3 R entre sí (**(Corrección v1.2, ADR-025)** distancia recta en la placa redonda; antes «sobre el toro»). | ×2.5 al grupo; **(Corrección v1.1) no se apila con la divisora: se aplica el máximo de ambos, no el producto** |
 
 ### Firma de especie (Corrección v1.1, ADR-007)
 
@@ -457,6 +479,8 @@ Nombre, retrato (captura de 64 × 64 de la criatura), comportamiento, rareza, Es
 
 ### Impresión
 
+> **(Corrección v1.3, ADR-026)** La impresión es la **Copiadora** del Árbol: planta la plantilla pura de una especie del Bestiario que vive en el Mundo de la sesión, por Esencia (el Archivo da una copia gratis cada cierto tiempo); ya no cuesta Muestras ni hay régimen que elegir.
+
 Coloca la forma guardada de la especie (captura de materia, no la del catálogo) con los parámetros actuales. Si el régimen actual está fuera del rango de la especie, la ficha lo advierte en naranja y la impresión se permite igual: ver morir una especie fuera de su régimen es parte de la enseñanza.
 
 ### Tests del detector (Corrección v1.1, ADR-011)
@@ -469,6 +493,8 @@ Coloca la forma guardada de la especie (captura de materia, no la del catálogo)
 ---
 
 ## 10. Prestigio: Extinción y Genoma
+
+> **(Corrección v1.3, ADR-026)** **La Extinción se retiró.** Ya no se borra lo construido: cada sesión empieza en una placa nueva y lo permanente son los Datos y el Árbol. El papel del prestigio lo hace la **noche**: el centro del Árbol abre una noche nueva (gratis) cuando se cumplen sesiones y especies (`NIGHT_GATES`), con escena de historia y anillos nuevos del Árbol. Esta sección queda como historia del diseño.
 
 La Extinción es la decisión más importante del juego y por eso es la única con confirmación: borra la placa y el Laboratorio, conserva todo lo descubierto y entrega Genoma, que solo compra reglas nuevas.
 
@@ -532,6 +558,8 @@ Era 1: 45 a 90 min. Era 2: 30 a 60 min. Era 3 en adelante: 20 a 40 min cada una,
 
 ## 11. Curva de progresión e hitos
 
+> **(Corrección v1.3, ADR-026)** La curva vigente es por sesiones y noches (sesión 1 de 15 s, la historia acaba hacia la noche 7, ~2 h), medida con el bot de sesiones: [`RITMO.md`](RITMO.md) §6 y `scripts/session-bot.ts`. Las Extinciones y eras de esta sección son del ciclo retirado.
+
 La curva objetivo duplica la producción cada 8 a 12 minutos de juego activo en la Era 1 y cada 5 a 8 en las siguientes; el bot de progresión la mide y cualquier desvío mayor al 20 % abre un issue. Los tiempos son de juego activo; el idle alarga el calendario pero no cambia el orden.
 
 | Tiempo activo | Hito esperado | Producción típica (Esencia/s) | Qué nuevo hay para hacer |
@@ -563,6 +591,8 @@ La curva objetivo duplica la producción cada 8 a 12 minutos de juego activo en 
 ---
 ## 12. Progreso offline e idle
 
+> **(Corrección v1.3, ADR-026)** **Sin progreso offline**: las sesiones solo corren mientras se juega, y al volver la partida sigue donde estaba (sin tarjeta de «mientras no estabas»). El texto de abajo describe el ciclo continuo retirado.
+
 La simulación no corre cuando la app está cerrada; el juego extrapola la producción con una tasa conservadora y la placa se congela tal cual estaba, para que al volver siga viva y reconocible.
 
 **Cálculo al volver.** Se usa la media de Esencia/s de los últimos 5 min de la sesión anterior, multiplicada por 0.5 (tasa offline) y por el tiempo transcurrido hasta el tope de Reserva (2 h sin mejoras, 24 h al máximo). El resultado se muestra en una tarjeta: "Mientras no estabas: +12 400 Esencia en 3 h 10 min". Nunca se simula hacia atrás: la placa reaparece congelada en su último estado y se reanuda con 1 s de fundido.
@@ -578,6 +608,8 @@ La simulación no corre cuando la app está cerrada; el juego extrapola la produ
 ---
 
 ## 13. UI/UX, pantallas y accesibilidad
+
+> **(Corrección v1.3, ADR-026)** Ya no hay pestañas de Laboratorio, Calibrar ni Genoma: la pantalla es la placa con su reloj, la barra de semilla y el muelle (Bestiario, Árbol); entre sesiones, la tarjeta de resumen, el Árbol y la tarjeta de inicio. Los objetivos táctiles miden 48 × 48 px como mínimo (RF-06).
 
 Una sola pantalla: la placa ocupa la mitad superior y un panel con cuatro pestañas la inferior; no hay menús anidados ni pantallas de carga. Todo lo que el jugador necesita ver mientras juega cabe en un vistazo.
 
@@ -686,6 +718,8 @@ Todo el sonido se sintetiza en Web Audio en tiempo de ejecución: cero archivos 
 
 ## 16. Guardado, migraciones y cloud save
 
+> **(Corrección v1.3, ADR-026)** El guardado lleva el estado de investigación (Datos, Árbol, noche, Nevera) y la sesión en curso; la placa solo se restaura en la grilla en que se guardó (ADR-025). Exportar/Importar lleva todo el progreso en un sobre `BIOLUMA2.` (juego, historia, Encargos, secretos, Momentos vistos, bitácora; RF-02, `src/app/saveBundle.ts`) y sigue aceptando las exportaciones `BIOLUMA1.`.
+
 La partida se guarda sola cada 30 s y en cada evento importante, en local, con versión de esquema y suma de verificación; el jugador puede exportarla como texto e importarla en otro dispositivo. No hay cuenta ni servidor propio.
 
 ### Qué se guarda
@@ -714,6 +748,8 @@ La partida se guarda sola cada 30 s y en cada evento importante, en local, con v
 ---
 
 ## 17. Rendimiento y escalado por dispositivo
+
+> **(Corrección v1.2, ADR-025)** Las grillas de los perfiles son cuadradas: baja 168², media y alta 232², con la placa redonda dentro (baja hasta Ø160). Las grillas 4:5 de abajo quedan superadas. **(Corrección v1.3, ADR-027)** El suelo de 30 fps se mide con la cámara rápida de las sesiones encendida.
 
 El piso duro es 30 fps con la simulación a tiempo real en un Android de gama media de 2022; 60 fps es el objetivo. El juego mide su propio rendimiento en los primeros 5 s y elige un perfil, y vuelve a medir cada vez que el jugador compra Placa o Incubadora.
 
@@ -751,6 +787,8 @@ Placa I a IV sube el tamaño dentro del perfil; si el perfil no lo permite, la m
 ---
 
 ## 18. Analítica y métricas de diseño
+
+> **(Corrección v1.3)** El juego **no envía estadísticas** (no hay telemetría ni interruptor para ella, RF-07); las métricas de abajo eran un plan y se miden con el bot de sesiones y las pruebas de juego.
 
 Se miden solo los eventos que responden preguntas de diseño concretas, con PostHog en su capa gratuita, sin identificadores personales y con opción de desactivar desde ajustes. Nada de la analítica afecta al juego.
 
@@ -818,6 +856,8 @@ La primera versión es gratis, **sin anuncios y sin compras**: eso es lo que per
 ---
 
 ## 20. Balance: parámetros, bot de progresión y estrategias degeneradas
+
+> **(Corrección v1.3, ADR-026)** El bot vigente es el de sesiones (`scripts/session-bot.ts`, motor `scripts/sessionBotCore.ts`), con la regla DURA de que la mediana nunca gana menos Esencia que en la sesión anterior; las cifras de equilibrio viven en `src/game/cycleBalance.ts`.
 
 Todos los números del juego viven en un solo archivo (`src/game/balance.ts`, antes `src/balance.ts`) con comentario de origen por valor, y un bot juega el juego acelerado cada noche para verificar que la curva de la §11 se cumple. Ningún número se cambia a mano sin una corrida del bot antes y después.
 
@@ -922,6 +962,8 @@ Cada sistema se considera terminado solo cuando cumple todos sus criterios en CI
 ---
 
 ## 23. Capa de diversión (añadida en v1.1)
+
+> **(Corrección v1.3, ADR-026)** En las sesiones el Destello aparece desde la sesión 4 y regala segundos de tu Esencia (sin Floración ni lluvia de esporas); los objetivos y logros se apuntan al Árbol y a los Mundos (`cycleBalance.ts` SESSION_OBJECTIVES / SESSION_ACHIEVEMENTS).
 
 **Por qué existe.** El dueño pidió que Bioluma sea *"un incremental DIVERTIDO"* y que no tenga que ser *"100 % químicamente exacto"*. El diseño original (§1 a §22) resuelve la economía y la progresión; esta capa añade **sorpresa, guía y recompensa inmediata** encima, sin tocar los pilares: nada de ella simula vida (pilar 1), todo es opcional para progresar y nada se compra con dinero (ADR-014).
 

@@ -54,7 +54,7 @@ principal, y nada importante depende solo del color.
 ## 2. Lo que hoy falla (auditoría)
 
 Capturas de la v0.009 (build `VITE_E2E=1`) y de las páginas de desarrollo, 390 × 844 y 1366 × 768, oscuro y claro. Los
-nombres de archivo son los que generan `tests/e2e/ui-shots.mjs`, `tree-shots.mjs`, `moments-shots.mjs`,
+nombres de archivo son los que generan `tests/e2e/ui-shots.mjs` (retirado en la v0.017, RF-09), `tree-shots.mjs`, `moments-shots.mjs`,
 `story-shots.mjs`, `store-shots.mjs` y `sim-check.mjs --dish-shot` (*walls-dish-gpu.png*).
 
 **P0 — rompen la identidad o la claridad**

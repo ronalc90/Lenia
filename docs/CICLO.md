@@ -746,11 +746,17 @@ Nevera en el primer `tick` (la placa ya existe).
   resumen («12 × 2 encargos», `gameGrantOf`); la tarjeta de inicio espera a la de bienvenida de una partida vieja;
   la barra del Encargo se aparta bajo una tarjeta de Momento; las notas y avisos esperan mientras un Momento está por
   abrirse o hay una tarjeta de sesión.
-- **Sigue en el código (solo pruebas y bots)**: el ciclo clásico de `game.ts` (Laboratorio, Genoma, Extinción, Muestras,
-  offline) aún existe para sus pruebas unitarias; ningún jugador lo ve. Borrarlo entero es una tarea aparte (convertir
-  las pruebas de siembra, especies y economía al ciclo de sesiones).
+- **Sigue en el código (solo pruebas)**: el ciclo clásico de `game.ts` (Laboratorio, Genoma, Extinción, Muestras,
+  offline) aún existe; ningún jugador lo ve. *(Corrección v0.017, RF-09)* `createGame` ya arranca en el ciclo de
+  sesiones; las pruebas del ciclo clásico lo piden de forma explícita (`cycle: 'classic'`) y las regresiones que ve el
+  jugador (separación de semillas, placa redonda, ranking) corren en sesiones. Borrarlo entero sigue siendo una tarea
+  aparte (ADR-028).
 
-## 16. ADR propuesto y preguntas abiertas
+## 16. ADR (aceptado) y preguntas abiertas
+
+> **(Corrección v0.017)** El ADR-026 está **aceptado** y vive en [`DECISIONS.md`](../DECISIONS.md#adr-026-lab-sessions-with-a-clock-a-research-tree-of-7-straight-routes-and-worlds)
+> (con las cifras de hoy: sesiones 0:15 → 2:30, Datos = Esencia ÷ 25); la ruptura de contrato que trajo está en el
+> ADR-028. El texto de abajo es la propuesta original, se deja como historia.
 
 **ADR-026 — Sesiones de laboratorio con reloj, Árbol de 7 rutas rectas y Mundos (sustituye el ciclo continuo, la
 Extinción y Calibrar).** *Contexto:* el dueño pidió un árbol con ramas y un prestigio más claro («estudiante con tiempo de
