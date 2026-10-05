@@ -7,7 +7,8 @@
 import type { GameView, JournalEntryView, Text } from '../core/types';
 import { SUPPORTER_JOURNAL } from '../store/catalog';
 
-const KEY = 'bioluma.journal.extra.v1';
+export const EXTRA_JOURNAL_KEY = 'bioluma.journal.extra.v1';
+const KEY = EXTRA_JOURNAL_KEY;
 
 /** Texts of the extra entries this module owns. */
 const TEXTS: Record<string, Text> = { [SUPPORTER_JOURNAL.id]: SUPPORTER_JOURNAL.text };

@@ -233,6 +233,11 @@ export function writeSave(gameStr: string, dish?: Uint8Array, w?: number, h?: nu
   return ok && isPersistent();
 }
 
+/** Forget the saved dish (an import: the old picture does not belong to the imported game). */
+export function clearDish(): void {
+  for (const k of [K_DISH, K_DISH_BAK]) remove(k);
+}
+
 /** Remove every Bioluma key (Settings → delete save). */
 export function clearSave(): void {
   for (const k of [K_GAME, K_GAME_BAK, K_DISH, K_DISH_BAK, K_TIME, K_UNREADABLE]) remove(k);
