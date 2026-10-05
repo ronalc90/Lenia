@@ -138,6 +138,8 @@ export const VALUE_TEXT = {
   normalPrice: t('Precio normal', 'Normal price'),
   /** The dish size is seen in the animation, never as a number (J-93). */
   room: (n: number, d?: number) => (void d, t(`Sitio para ${plural(n, 'criatura', 'criaturas')}`, `Room for ${plural(n, 'creature', 'creatures')}`)),
+  /** RF-04: one more Placa level would not show on this device (low quality caps the dish). */
+  deviceDishMax: t('Tu aparato ya tiene la placa más grande', 'Your device already has the biggest dish'),
   roomOnly: (n: number) => t(`Sitio para ${plural(n, 'criatura', 'criaturas')}`, `Room for ${plural(n, 'creature', 'creatures')}`),
   nursery: (n: number) => t(`${n} creciendo a la vez`, `${n} growing at once`),
   /** Incubadora: seconds a seed needs to be born (time-lapse × Incubadora). */

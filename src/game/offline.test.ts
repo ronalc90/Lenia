@@ -1,3 +1,9 @@
+/**
+ * Classic Era loop (Laboratorio, Calibrar, Genoma, Extinción): no player reaches it any more (createGame's
+ * default is the sessions cycle, ADR-026, which migrates old classic saves); the code is still there and is tested
+ * here explicitly with `cycle: 'classic'` until it is deleted (ADR-028). The sessions cycle has its own tests (sessions.test.ts,
+ * spacing.test.ts, dish.test.ts, tests/unit/ranking-sessions.test.ts…).
+ */
 import { describe, expect, it } from 'vitest';
 import * as B from './balance';
 import { createGame } from './game';
@@ -39,7 +45,7 @@ describe('offline progress', () => {
 
   it('game: uses the last active minutes, emits offlineReturn, ignores negative time', () => {
     const { bus, log } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(1) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(1) });
     // Enough identical creatures of different species to make production steady.
     const cs = Array.from({ length: 6 }, (_, i) => creature({ id: i + 1, x: 20 + i * 30, signature: [1 + i, 0.5, 0.3, 0, 1, 0.1, 1, 0.8] }));
     run(g, 320, report(cs), 0.5);
@@ -61,7 +67,7 @@ describe('offline progress', () => {
 
   it('paused time is not part of the active average', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(2) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(2) });
     const rep = report([creature({ id: 1 })]);
     run(g, 300, rep, 0.5);
     const hist = [...g.state.epsHistory];

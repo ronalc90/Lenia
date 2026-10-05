@@ -1,3 +1,9 @@
+/**
+ * Classic Era loop (Laboratorio, Calibrar, Genoma, Extinción): no player reaches it any more (createGame's
+ * default is the sessions cycle, ADR-026, which migrates old classic saves); the code is still there and is tested
+ * here explicitly with `cycle: 'classic'` until it is deleted (ADR-028). The sessions cycle has its own tests (sessions.test.ts,
+ * spacing.test.ts, dish.test.ts, tests/unit/ranking-sessions.test.ts…).
+ */
 import { describe, expect, it } from 'vitest';
 import type { Creature, DetectorReport } from '../core/types';
 import * as B from './balance';
@@ -19,7 +25,7 @@ function mazeReport(n: number, fill: number): DetectorReport {
 describe('dish overgrowth (play-test: flood unlocked everything in seconds)', () => {
   it('a flooded dish pays nothing, registers no species and keeps the seed price sane', () => {
     const { bus, count } = recordingBus();
-    const game = createGame({ bus, rng: seededRng(11) });
+    const game = createGame({ cycle: 'classic', bus, rng: seededRng(11) });
     const before = game.view();
     // Shorter than the free auto-clean, which would end the flood.
     run(game, B.OVERGROWN_AUTO_CLEAN - 2, mazeReport(80, 0.5));
@@ -36,7 +42,7 @@ describe('dish overgrowth (play-test: flood unlocked everything in seconds)', ()
 
   it('crowded fragments on a calm dish cannot spam the bestiary', () => {
     const { bus } = recordingBus();
-    const game = createGame({ bus, rng: seededRng(12) });
+    const game = createGame({ cycle: 'classic', bus, rng: seededRng(12) });
     run(game, 30, mazeReport(40, 0.1));
     // Packed pieces are never isolated → no new species from a crowd.
     expect(game.view().species.length).toBe(0);
@@ -44,7 +50,7 @@ describe('dish overgrowth (play-test: flood unlocked everything in seconds)', ()
 
   it('new species come in small bursts, then at a steady rate', () => {
     const { bus } = recordingBus();
-    const game = createGame({ bus, rng: seededRng(13) });
+    const game = createGame({ cycle: 'classic', bus, rng: seededRng(13) });
     const n = B.SPECIES_NEW_BURST + 2;
     const far = Array.from({ length: n }, (_, i) =>
       creature({ id: 10 + i, x: 10 + i * 36, y: 20 + i * 44, signature: [0.5 + i, 0.4, 0.5, 0.3, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1, 0.3, 0, 0.01, 0.2] }),
@@ -58,7 +64,7 @@ describe('dish overgrowth (play-test: flood unlocked everything in seconds)', ()
 
   it('a dish that stays flooded cleans itself after 20 s, for free, keeping everything earned', () => {
     const { bus, count, log } = recordingBus();
-    const game = createGame({ bus, rng: seededRng(15) });
+    const game = createGame({ cycle: 'classic', bus, rng: seededRng(15) });
     const flood = mazeReport(60, 0.5);
     run(game, B.OVERGROWN_AUTO_CLEAN - 1, flood);
     expect(game.view().overgrown).toBe(true);
@@ -73,7 +79,7 @@ describe('dish overgrowth (play-test: flood unlocked everything in seconds)', ()
     const toasts = (log.get('toast') ?? []) as { text: { es: string; en: string } }[];
     expect(toasts.some((x) => x.text.es.startsWith('La placa se desbordó y la limpié'))).toBe(true);
     // A dish that recovers on its own before the delay is never wiped.
-    const g2 = createGame({ bus: recordingBus().bus, rng: seededRng(16) });
+    const g2 = createGame({ cycle: 'classic', bus: recordingBus().bus, rng: seededRng(16) });
     run(g2, B.OVERGROWN_AUTO_CLEAN - 5, flood);
     run(g2, 10, mazeReport(5, 0.05));
     run(g2, B.OVERGROWN_AUTO_CLEAN - 5, flood);
@@ -82,7 +88,7 @@ describe('dish overgrowth (play-test: flood unlocked everything in seconds)', ()
 
   it('sterilizeDish clears the flood for free', () => {
     const { bus, count } = recordingBus();
-    const game = createGame({ bus, rng: seededRng(14) });
+    const game = createGame({ cycle: 'classic', bus, rng: seededRng(14) });
     run(game, 2, mazeReport(60, 0.5));
     const essence = game.view().essence;
     game.actions.sterilizeDish!();

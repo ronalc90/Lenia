@@ -1,3 +1,9 @@
+/**
+ * Classic Era loop (Laboratorio, Calibrar, Genoma, Extinción): no player reaches it any more (createGame's
+ * default is the sessions cycle, ADR-026, which migrates old classic saves); the code is still there and is tested
+ * here explicitly with `cycle: 'classic'` until it is deleted (ADR-028). The sessions cycle has its own tests (sessions.test.ts,
+ * spacing.test.ts, dish.test.ts, tests/unit/ranking-sessions.test.ts…).
+ */
 import { describe, expect, it } from 'vitest';
 import * as B from './balance';
 import { essenceTerm, EXTINCTION_ESSENCE_NEEDED, genomeGain } from './defs';
@@ -33,7 +39,7 @@ describe('genome formula', () => {
 describe('extinction', () => {
   function setupRichGame() {
     const rec = recordingBus();
-    const g = createGame({ bus: rec.bus, rng: seededRng(11) });
+    const g = createGame({ cycle: 'classic', bus: rec.bus, rng: seededRng(11) });
     // Discover two species and two behaviours.
     g.tick(0.5, report([creature({ id: 1, x: 20 }), creature({ id: 2, x: 120, signature: GYRO_SIG })]));
     g.tick(0.5, report([creature({ id: 1, x: 20, behavior: 'swimmer' }), creature({ id: 2, x: 120, signature: GYRO_SIG, behavior: 'spinner' })]));
@@ -58,7 +64,7 @@ describe('extinction', () => {
 
   it('is unavailable below the essence requirement', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(1) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(1) });
     (g.state as { eraEssence: number }).eraEssence = 249_000;
     expect(g.view().extinction.available).toBe(false);
     expect(g.actions.extinguish()).toBe(false);
@@ -133,7 +139,7 @@ describe('extinction', () => {
 
   it('genome tree: prerequisites, coming-soon nodes', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(3) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(3) });
     (g.state as { genome: number }).genome = 1000;
     expect(g.actions.buyGenomeNode('tripleRings')).toBe(false);
     expect(g.actions.buyGenomeNode('doubleRings')).toBe(true);

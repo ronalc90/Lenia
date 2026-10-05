@@ -12,6 +12,7 @@ const st = (g: Game) => g.state as unknown as St;
 const roomy = (x: number, y: number, c: { x: number; y: number; radius: number }) =>
   wrapDist(x, y, c.x, c.y, 192, 240) >= R + Math.max(B.SEED_BODY_MIN_R * R, B.SEED_BODY_FROM_RG * c.radius) + B.SEED_GAP * R - 1e-6;
 
+// The sessions cycle (the loop every player plays, default of createGame) unless a test says 'classic'.
 describe('seed spacing (spores stamped next to other matter fuse into a maze)', () => {
   it('a tap next to a creature is moved to the nearest spot with room, within 2 R', () => {
     const { bus, log } = recordingBus();
@@ -35,7 +36,11 @@ describe('seed spacing (spores stamped next to other matter fuse into a maze)', 
   it('a tap on a crowd is refused: nothing charged, no charge used, seedBlocked emitted', () => {
     const { bus, count, log } = recordingBus();
     const g = createGame({ bus, rng: seededRng(2), grid: { w: 192, h: 240 } });
-    const crowd = [0, 1, 2, 3, 4, 5].map((i) => creature({ id: i + 1, x: 96 + Math.cos(i) * 18, y: 120 + Math.sin(i) * 18, radius: 6 }));
+    // A dish with room to spare (Placa route bought), so the tap is refused for lack of space between the
+    // creatures, not because the dish is full.
+    (g.state as unknown as { research: { levels: Record<string, number> } }).research.levels = { lab: 1, dish: 2, slots: 3 };
+    g.setDeviceDish(Infinity); // re-reads the tree
+    const crowd = [0, 1, 2, 3].map((i) => creature({ id: i + 1, x: 96 + Math.cos((i * Math.PI) / 2) * 18, y: 120 + Math.sin((i * Math.PI) / 2) * 18, radius: 6 }));
     g.tick(0.1, report(crowd));
     const before = { essence: g.state.essence, charges: { ...st(g).charges } };
     expect(g.actions.seedAt(96, 120)).toBeNull();
@@ -73,7 +78,8 @@ describe('seed spacing (spores stamped next to other matter fuse into a maze)', 
 
   it('the auto-seeder (and golden spore rain, same free-spot search) and prints respect the same room', () => {
     const { bus, log } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(5), grid: { w: 192, h: 240 } });
+    // Classic Era loop: its Sembrador is an upgrade level (the sessions cycle's is a tree node).
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(5), grid: { w: 192, h: 240 } });
     st(g).charges = { free: 0, guaranteed: 0 };
     st(g).essence = 1e9;
     st(g).upgrades.autoSeeder = 30;
@@ -84,7 +90,7 @@ describe('seed spacing (spores stamped next to other matter fuse into a maze)', 
     for (const s of auto) for (const c of cs) expect(roomy(s.x, s.y, c)).toBe(true);
     // Prints: a tap on top of a creature is moved off it.
     st(g).upgrades.autoSeeder = 0;
-    const g2 = createGame({ bus: recordingBus().bus, rng: seededRng(6), catalogSignatures: [{ code: 'O2u', name: 'Orbium unicaudatus', signature: [1, 1, 1, 1], mu: 0.15, sigma: 0.015, R: 13 }] });
+    const g2 = createGame({ cycle: 'classic', bus: recordingBus().bus, rng: seededRng(6), catalogSignatures: [{ code: 'O2u', name: 'Orbium unicaudatus', signature: [1, 1, 1, 1], mu: 0.15, sigma: 0.015, R: 13 }] });
     g2.tick(0.5, report([creature({ id: 1, x: 100, y: 100, signature: [1, 1, 1, 1] })]));
     (g2.state as unknown as { samples: number }).samples = 10;
     const p = g2.actions.printAt(g2.view().species[0].id, 125, 100)!;
@@ -101,7 +107,7 @@ describe('seed spacing (spores stamped next to other matter fuse into a maze)', 
 describe('the nursery (QA2 H-05: "⏳ Espera…")', () => {
   it('the auto-seeder waits while enough spores are forming; the spore rain banks what does not fit', () => {
     const { bus, log } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(8), grid: { w: 192, h: 240 } });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(8), grid: { w: 192, h: 240 } });
     st(g).charges = { free: 0, guaranteed: 0 };
     st(g).essence = 1e9;
     st(g).upgrades.autoSeeder = 30;

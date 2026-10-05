@@ -23,6 +23,7 @@
  * `npx vite-node scripts/world-check.ts --features --crops=crops.json` (each form at its world's preset).
  */
 import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,8 +42,7 @@ import { CpuLenia } from '../src/sim/cpu';
 import { applySeedCpu } from '../src/sim/seed';
 import { snapshotFromCpu } from '../src/sim/snapshot';
 
-const SCRATCH = '/tmp/claude-0/-home-user-Lenia/a5114f5a-39a4-539d-9a6a-14e769759a92/scratchpad';
-const OUT = process.env.AUDIT_OUT ?? (existsSync(SCRATCH) ? SCRATCH : join(process.cwd(), 'audit-out'));
+const OUT = process.env.AUDIT_OUT ?? join(tmpdir(), 'bioluma-audit');
 const SIZE = 128;
 const EVERY = 10; // steps between detector updates (game: one snapshot every 10 steps)
 const STEPS_PER_SEC = 30; // src/main.ts
@@ -164,7 +164,7 @@ function runPlayer(player: number, seedsWanted: number, steps: number): PlayerRe
   const t0 = Date.now();
   const bus = new Bus<GameEvents>();
   let clock = 1e12;
-  const game = createGame({ bus, rng: seededRng(9000 + player * 7919), now: () => clock, grid: { w: SIZE, h: SIZE } }) as GameExt;
+  const game = createGame({ cycle: 'classic', bus, rng: seededRng(9000 + player * 7919), now: () => clock, grid: { w: SIZE, h: SIZE } }) as GameExt;
   game.setGridSize(SIZE, SIZE);
   const st = game.state as unknown as {
     essence: number;

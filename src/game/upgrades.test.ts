@@ -1,3 +1,9 @@
+/**
+ * Classic Era loop (Laboratorio, Calibrar, Genoma, Extinción): no player reaches it any more (createGame's
+ * default is the sessions cycle, ADR-026, which migrates old classic saves); the code is still there and is tested
+ * here explicitly with `cycle: 'classic'` until it is deleted (ADR-028). The sessions cycle has its own tests (sessions.test.ts,
+ * spacing.test.ts, dish.test.ts, tests/unit/ranking-sessions.test.ts…).
+ */
 import { describe, expect, it } from 'vitest';
 import * as B from './balance';
 import { costForQty, levelCost, maxAffordable, UPGRADE_BY_ID, UPGRADES } from './defs';
@@ -39,7 +45,7 @@ describe('upgrade costs', () => {
 
   it('buyUpgrade ×1 / ×10 / ×max through the game never goes negative', () => {
     const { bus, count } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(1) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(1) });
     const st = g.state as { essence: number; unlocked: string[] };
     st.unlocked.push('culture');
     st.essence = 777.7;
@@ -53,7 +59,7 @@ describe('upgrade costs', () => {
 
   it('locked upgrades cannot be bought; unlocks are sticky and toast', () => {
     const { bus, count } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(2) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(2) });
     (g.state as { essence: number }).essence = 1e6;
     expect(g.actions.buyUpgrade('autoSeeder', 1)).toBe(false);
     g.tick(0.5, report([creature({ id: 1, x: 10 }), creature({ id: 2, x: 100 })]));
@@ -67,7 +73,7 @@ describe('upgrade costs', () => {
 
   it('view: qty and cost follow the buy selector', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(3) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(3) });
     const [c0, c1, c2] = B.DROPPER_COSTS;
     (g.state as { essence: number }).essence = c0 + c1 + c2 / 2;
     const dropper = () => g.view().upgrades.find((u) => u.id === 'dropper')!;

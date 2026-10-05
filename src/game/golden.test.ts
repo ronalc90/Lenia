@@ -1,3 +1,9 @@
+/**
+ * Classic Era loop (Laboratorio, Calibrar, Genoma, Extinción): no player reaches it any more (createGame's
+ * default is the sessions cycle, ADR-026, which migrates old classic saves); the code is still there and is tested
+ * here explicitly with `cycle: 'classic'` until it is deleted (ADR-028). The sessions cycle has its own tests (sessions.test.ts,
+ * spacing.test.ts, dish.test.ts, tests/unit/ranking-sessions.test.ts…).
+ */
 import { describe, expect, it } from 'vitest';
 import * as B from './balance';
 import { createGame } from './game';
@@ -13,14 +19,14 @@ function scripted(values: number[], seed = 1): () => number {
 describe('golden spark (Destello)', () => {
   it('does not spawn before the first stable creature', () => {
     const { bus, count } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(1) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(1) });
     run(g, 600, report([]), 0.5);
     expect(count('goldenSpawn')).toBe(0);
   });
 
   it('spawns after the first stable creature, drifts, and is missed after 12 s', () => {
     const { bus, count } = recordingBus();
-    const g = createGame({ bus, rng: scripted([1]) }); // first delay = max of the range
+    const g = createGame({ cycle: 'classic', bus, rng: scripted([1]) }); // first delay = max of the range
     const rep = report([creature({ id: 1 })]);
     g.tick(0.1, rep);
     run(g, B.GOLDEN_FIRST_DELAY[1] - 1, rep, 0.1);
@@ -45,7 +51,7 @@ describe('golden spark (Destello)', () => {
 
   it('collect: Floración gives ×7 production for 30 s', () => {
     const rec = recordingBus();
-    const g = createGame({ bus: rec.bus, rng: scripted([0, 0.5, 0.5, 0.25, 0.0]) });
+    const g = createGame({ cycle: 'classic', bus: rec.bus, rng: scripted([0, 0.5, 0.5, 0.25, 0.0]) });
     const rep = report([creature({ id: 1 })]);
     g.tick(0.5, rep);
     run(g, B.GOLDEN_FIRST_DELAY[0] + 0.5, rep, 0.5);
@@ -73,7 +79,7 @@ describe('golden spark (Destello)', () => {
     };
     for (const [kind, roll] of Object.entries(rolls)) {
       const rec = recordingBus();
-      const g = createGame({ bus: rec.bus, rng: scripted([0, 0.5, 0.5, 0.25, roll]) });
+      const g = createGame({ cycle: 'classic', bus: rec.bus, rng: scripted([0, 0.5, 0.5, 0.25, roll]) });
       (g.state as { charges: { free: number; guaranteed: number } }).charges = { free: 0, guaranteed: 0 };
       const rep = report([creature({ id: 1 })]);
       g.tick(0.5, rep);
@@ -96,7 +102,7 @@ describe('golden spark (Destello)', () => {
     const W = B.GOLDEN_WEIGHTS;
     const total = W.bloom + W.lump + W.spores + W.mutagen;
     const rec = recordingBus();
-    const g = createGame({ bus: rec.bus, rng: scripted([0, 0.5, 0.5, 0.25, (W.bloom + W.lump + W.spores / 2) / total]) });
+    const g = createGame({ cycle: 'classic', bus: rec.bus, rng: scripted([0, 0.5, 0.5, 0.25, (W.bloom + W.lump + W.spores / 2) / total]) });
     (g.state as { charges: { free: number; guaranteed: number } }).charges = { free: 0, guaranteed: 0 };
     const rep = report([creature({ id: 1 })]);
     g.tick(0.5, rep);
@@ -110,7 +116,7 @@ describe('golden spark (Destello)', () => {
 
   it('a paused game ignores taps on the frozen spark (QA1 #9)', () => {
     const rec = recordingBus();
-    const g = createGame({ bus: rec.bus, rng: seededRng(9) });
+    const g = createGame({ cycle: 'classic', bus: rec.bus, rng: seededRng(9) });
     const rep = report([creature({ id: 1 })]);
     g.tick(0.5, rep);
     for (let t = 0; t < B.GOLDEN_FIRST_DELAY[1] + 1 && !g.view().golden; t += 0.5) g.tick(0.5, rep);
@@ -125,7 +131,7 @@ describe('golden spark (Destello)', () => {
 
   it('collect with no spark is a no-op', () => {
     const { bus, count } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(3) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(3) });
     g.actions.collectGolden();
     expect(count('goldenCollected')).toBe(0);
   });

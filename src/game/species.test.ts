@@ -1,3 +1,9 @@
+/**
+ * Classic Era loop (Laboratorio, Calibrar, Genoma, Extinción): no player reaches it any more (createGame's
+ * default is the sessions cycle, ADR-026, which migrates old classic saves); the code is still there and is tested
+ * here explicitly with `cycle: 'classic'` until it is deleted (ADR-028). The sessions cycle has its own tests (sessions.test.ts,
+ * spacing.test.ts, dish.test.ts, tests/unit/ranking-sessions.test.ts…).
+ */
 import { describe, expect, it } from 'vitest';
 import type { Pattern } from '../core/types';
 import catalogSignatures from '../detect/catalogSignatures.json';
@@ -26,7 +32,7 @@ function capture(code: string, angle: number, size = 64, extra?: [number, number
 describe('only finished forms found a species', () => {
   it('unfinished, morphing, fragmentary or speck-sized creatures pay as unknown and register nothing', () => {
     const { bus, count } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(1) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(1) });
     const young = NOVEL.map((v, i) => (i >= SIG.SPEED ? -1 : v));
     const cases = [
       creature({ id: 1, x: 20, y: 20, signature: young, ...settled }), // behaviour unknown yet
@@ -49,7 +55,7 @@ describe('only finished forms found a species', () => {
 
   it('a look-alike form (a variant) is its species, never a new one; even found first it founds that species', () => {
     const { bus, count } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(2) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(2) });
     // Parorbium dividuus is two Orbiums side by side (PARTS ≈ 1.2): a Nadadora variant (docs/ESPECIES.md).
     g.tick(0.5, report([creature({ id: 1, x: 30, y: 30, signature: sigOf('O4d'), ...settled })]));
     // Orbium unicaudatus, then bicaudatus: the same Bestiary entry.
@@ -66,7 +72,7 @@ describe('only finished forms found a species', () => {
 
   it('matching an already registered species stays immediate', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(3) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(3) });
     g.tick(0.5, report([creature({ id: 1, signature: sigOf('O2u'), ...settled })]));
     const young = sigOf('O2u').map((v, i) => (i >= SIG.SPEED ? -1 : v));
     g.tick(0.5, report([creature({ id: 1, signature: sigOf('O2u'), ...settled }), creature({ id: 2, x: 140, signature: young, stableSteps: 0 })]));
@@ -77,7 +83,7 @@ describe('only finished forms found a species', () => {
 describe('species identity', () => {
   it('Spanish common names with their own colour; the Latin/catalog name is the scientific line', () => {
     const { bus, log } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(4) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(4) });
     g.tick(0.5, report([creature({ id: 1, x: 20, y: 20, signature: sigOf('O2u'), behavior: 'swimmer', ...settled })]));
     g.tick(0.5, report([creature({ id: 2, x: 140, y: 140, signature: sigOf('O4i'), behavior: 'swimmer', ...settled })]));
     g.tick(0.5, report([creature({ id: 3, x: 140, y: 20, signature: sigOf('OG2g'), behavior: 'spinner', ...settled })]));
@@ -121,10 +127,10 @@ describe('species identity', () => {
 
   it('saves from before species identity get a colour and names on load; they survive a roundtrip', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(5) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(5) });
     g.tick(0.5, report([creature({ id: 1, signature: NOVEL, behavior: 'swimmer', ...settled })]));
     const { name, hue } = g.view().species[0];
-    const g2 = createGame({ bus: recordingBus().bus }, g.serialize());
+    const g2 = createGame({ cycle: 'classic', bus: recordingBus().bus }, g.serialize());
     expect(g2.view().species[0].name).toBe(name);
     expect(g2.view().species[0].hue).toBe(hue);
     // An old save has none of the identity fields: the loader computes them deterministically.
@@ -133,8 +139,8 @@ describe('species identity', () => {
     delete st.species[0].hue;
     delete st.species[0].shape;
     delete st.species[0].common;
-    const g3 = createGame({ bus: recordingBus().bus }, g2.serialize());
-    const g4 = createGame({ bus: recordingBus().bus }, g2.serialize());
+    const g3 = createGame({ cycle: 'classic', bus: recordingBus().bus }, g2.serialize());
+    const g4 = createGame({ cycle: 'classic', bus: recordingBus().bus }, g2.serialize());
     expect(g3.view().species[0].name).toMatch(/^[A-ZÁÉÍÓÚ][a-záéíóúñ]+( [a-záéíóúñ]+)+$/u);
     expect(g3.view().species[0].scientificName).toMatch(/^[A-Z][a-z]+ [a-z]+$/);
     expect(g4.view().species[0].name).toBe(g3.view().species[0].name);
@@ -145,7 +151,7 @@ describe('species identity', () => {
 describe('species portraits', () => {
   it('registration asks for a capture of the founder; a good capture ends the requests', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(6), grid: { w: 192, h: 240 } });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(6), grid: { w: 192, h: 240 } });
     const c = creature({ id: 7, x: 60, y: 80, signature: NOVEL, ...settled });
     g.tick(0.5, { ...report([c]), step: 1000 });
     const reqs = g.takePortraitRequests();
@@ -161,7 +167,7 @@ describe('species portraits', () => {
 
   it('a crowded first capture is replaced by a clean one later; worse captures never replace a better one', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(7), grid: { w: 192, h: 240 } });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(7), grid: { w: 192, h: 240 } });
     const c = creature({ id: 3, x: 60, y: 80, signature: NOVEL, ...settled });
     g.tick(0.5, { ...report([c]), step: 1000 });
     const id = g.takePortraitRequests()[0].speciesId;
@@ -181,7 +187,7 @@ describe('species portraits', () => {
 
   it('the bestiary shows the catalog pattern for revealed species and the aligned capture for discoveries', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(8), grid: { w: 192, h: 240 } });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(8), grid: { w: 192, h: 240 } });
     g.tick(0.5, report([creature({ id: 1, x: 30, y: 30, signature: sigOf('O2u'), ...settled })]));
     g.tick(0.5, report([creature({ id: 2, x: 150, y: 200, signature: NOVEL, ...settled })]));
     const [orb, novel] = g.view().species;
@@ -240,7 +246,7 @@ describe('diverse spores', () => {
 
   it('a fresh dish starts with the surest template; after the first species the templates vary; Mutágeno keeps the surest', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(9) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(9) });
     (g.state as { essence: number }).essence = 1e9;
     (g.state as { charges: { free: number; guaranteed: number } }).charges = { free: 0, guaranteed: 0 };
     const fresh = new Set<number>();

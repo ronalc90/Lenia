@@ -1,3 +1,9 @@
+/**
+ * Classic Era loop (Laboratorio, Calibrar, Genoma, Extinción): no player reaches it any more (createGame's
+ * default is the sessions cycle, ADR-026, which migrates old classic saves); the code is still there and is tested
+ * here explicitly with `cycle: 'classic'` until it is deleted (ADR-028). The sessions cycle has its own tests (sessions.test.ts,
+ * spacing.test.ts, dish.test.ts, tests/unit/ranking-sessions.test.ts…).
+ */
 import { describe, expect, it } from 'vitest';
 import * as B from './balance';
 import { computeProduction, type ProductionCtx } from './economy';
@@ -63,7 +69,7 @@ describe('production formula', () => {
 describe('game economy', () => {
   it('uniform dish / no creatures → no essence', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(1) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(1) });
     const e0 = g.view().essence;
     run(g, 30, report([], [], 0));
     expect(g.view().essence).toBe(e0);
@@ -75,7 +81,7 @@ describe('game economy', () => {
 
   it('one stable Orbium-like creature (complexity 1) → ~1 essence/s', () => {
     const { bus, count } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(2) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(2) });
     const rep = report([creature({ id: 1 })]);
     g.tick(0.1, rep);
     const e0 = g.view().essence;
@@ -92,7 +98,7 @@ describe('game economy', () => {
 
   it('pause stops production', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(3) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(3) });
     const rep = report([creature({ id: 1 })]);
     run(g, 2, rep);
     g.isPaused = true;
@@ -104,6 +110,7 @@ describe('game economy', () => {
   it('registers distinct species, repeated species decay, catalog reveal sets rarity', () => {
     const { bus, count } = recordingBus();
     const g = createGame({
+      cycle: 'classic',
       bus,
       rng: seededRng(4),
       catalogSignatures: [{ code: 'O2u', name: 'Orbium unicaudatus', signature: ORBIUM_SIG, mu: 0.15, sigma: 0.015, R: 13 }],
@@ -132,7 +139,7 @@ describe('game economy', () => {
 
   it('behaviour-first-seen bonuses and milestones', () => {
     const { bus, count } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(5) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(5) });
     g.tick(0.5, report([creature({ id: 1 })]));
     const before = g.view();
     g.tick(0.5, report([creature({ id: 1, behavior: 'swimmer' })]));

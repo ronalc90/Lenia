@@ -1,7 +1,9 @@
 import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
+import { stampServiceWorker } from './src/app/swVersion';
 
 // `SINGLE=1 vite build` inlines everything into one HTML file (used for the
 // shareable test build); the default build is a normal multi-file PWA build.
@@ -23,13 +25,18 @@ function gitSha(): string {
 
 const build = { version, sha: gitSha(), date: new Date().toISOString() };
 
-/** Emits /version.json next to the game so a deployment can be checked from any device. */
+/** Emits /version.json next to the game so a deployment can be checked from any device, and stamps sw.js. */
 function versionFile(): Plugin {
   return {
     name: 'bioluma-version-file',
     apply: 'build',
     generateBundle() {
       this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify(build, null, 2) + '\n' });
+    },
+    // public/sw.js is copied as is; give its cache this release's name (RF-11).
+    writeBundle(options) {
+      const sw = join(options.dir ?? 'dist', 'sw.js');
+      if (existsSync(sw)) writeFileSync(sw, stampServiceWorker(readFileSync(sw, 'utf8'), `${build.version}-${build.sha}`));
     },
   };
 }

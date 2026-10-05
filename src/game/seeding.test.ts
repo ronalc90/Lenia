@@ -1,3 +1,9 @@
+/**
+ * Classic Era loop (Laboratorio, Calibrar, Genoma, Extinción): no player reaches it any more (createGame's
+ * default is the sessions cycle, ADR-026, which migrates old classic saves); the code is still there and is tested
+ * here explicitly with `cycle: 'classic'` until it is deleted (ADR-028). The sessions cycle has its own tests (sessions.test.ts,
+ * spacing.test.ts, dish.test.ts, tests/unit/ranking-sessions.test.ts…).
+ */
 import { describe, expect, it } from 'vitest';
 import { catalogByCode, catalogPattern } from '../sim/catalog';
 import * as B from './balance';
@@ -28,7 +34,7 @@ describe('quarter turns', () => {
 describe('seeding', () => {
   it('a brand-new game starts with a guaranteed first seed and a few free ones (QA2 H-04)', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(30) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(30) });
     expect(g.view().charges).toEqual({ free: B.START_FREE_SEEDS, guaranteed: B.START_GUARANTEED_SEEDS });
     const first = g.actions.seedAt(40, 40)!;
     expect(first.bias).toBe(1);
@@ -42,7 +48,7 @@ describe('seeding', () => {
 
   it('seed cost = c0·(r/R)²·(1 + 0.25·n_alive)·saturation^(n_alive − free), start with 20 essence', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(1) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(1) });
     expect(g.view().essence).toBe(B.START_ESSENCE);
     expect(g.view().seedCost).toBeCloseTo(2, 10);
     const cost = (n: number, free = B.DISH_FREE_SLOTS[0]) =>
@@ -63,7 +69,7 @@ describe('seeding', () => {
 
   it('newborns count: a short burst is cheap, spamming escalates, and the nursery caps a burst', () => {
     const { bus, count } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(11) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(11) });
     (g.state as { essence: number; objective: number }).essence = 1e6;
     (g.state as { objective: number }).objective = B.OBJECTIVES.length;
     const costs: number[] = [];
@@ -89,7 +95,7 @@ describe('seeding', () => {
 
   it('pays the cost, returns a spore spec, refuses when broke', () => {
     const { bus, count } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(2) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(2) });
     plainSpores(g);
     (g.state as { objective: number }).objective = B.OBJECTIVES.length; // no objective rewards
     let n = 0;
@@ -105,7 +111,7 @@ describe('seeding', () => {
 
   it('spec: radius≈R, density 0.6–0.8, asymmetric noise, bias template of a catalog species near the calibration', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(3) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(3) });
     plainSpores(g);
     const spec = g.actions.seedAt(30, 40)!;
     expect(spec.x).toBe(30);
@@ -123,7 +129,7 @@ describe('seeding', () => {
 
   it('big seed (Gotero II): radius ×1.5, cost ×2.25', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(4) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(4) });
     plainSpores(g);
     const st = g.state as { essence: number; upgrades: Record<string, number>; objective: number };
     st.upgrades.dropper = 2;
@@ -149,7 +155,7 @@ describe('seeding', () => {
 
   it('Mutágeno: next 3 seeds are pure template (bias 1, no noise)', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(5) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(5) });
     (g.state as { charges: { guaranteed: number }; essence: number }).charges.guaranteed = B.MUTAGEN_SEEDS;
     (g.state as { essence: number }).essence = 1000;
     for (let i = 0; i < 3; i++) {
@@ -164,7 +170,7 @@ describe('seeding', () => {
 
   it('emergency pipette: free seed after 10 s when broke and nothing lives', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(6) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(6) });
     plainSpores(g);
     g.actions.seedAt(5, 5);
     (g.state as { essence: number }).essence = 0; // broke
@@ -180,7 +186,7 @@ describe('seeding', () => {
 
   it('invisible help raises the bias after 3 min without a stable creature', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(7) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(7) });
     plainSpores(g);
     (g.state as { essence: number }).essence = 1000;
     const b0 = g.actions.seedAt(1, 1)!.bias!;
@@ -193,7 +199,7 @@ describe('seeding', () => {
 
   it('auto-seeder picks a spot farther than 3R from every creature (wrap-aware) and pays', () => {
     const { bus, log } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(8), grid: { w: 192, h: 240 } });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(8), grid: { w: 192, h: 240 } });
     const st = g.state as { essence: number; upgrades: Record<string, number>; unlocked: string[] };
     st.upgrades.autoSeeder = 1;
     st.essence = 1000;
@@ -214,7 +220,7 @@ describe('seeding', () => {
 
   it('print costs Muestras and returns the captured portrait at bias 1', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(9), catalogSignatures: [] });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(9), catalogSignatures: [] });
     g.tick(0.5, report([creature({ id: 1 })]));
     const sp = g.view().species[0];
     expect(g.actions.printAt(sp.id, 10, 10)).toBeNull(); // no portrait, not a catalog species
@@ -238,6 +244,7 @@ describe('seeding', () => {
   it('a revealed catalog species without portrait prints its catalog template', () => {
     const { bus } = recordingBus();
     const g = createGame({
+      cycle: 'classic',
       bus,
       rng: seededRng(10),
       catalogSignatures: [{ code: 'O2u', name: 'Orbium unicaudatus', signature: [1, 1, 1, 1], mu: 0.15, sigma: 0.015, R: 13 }],

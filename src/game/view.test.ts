@@ -1,3 +1,9 @@
+/**
+ * Classic Era loop (Laboratorio, Calibrar, Genoma, Extinción): no player reaches it any more (createGame's
+ * default is the sessions cycle, ADR-026, which migrates old classic saves); the code is still there and is tested
+ * here explicitly with `cycle: 'classic'` until it is deleted (ADR-028). The sessions cycle has its own tests (sessions.test.ts,
+ * spacing.test.ts, dish.test.ts, tests/unit/ranking-sessions.test.ts…).
+ */
 import { describe, expect, it } from 'vitest';
 import { createGame } from './game';
 import { creature, GYRO_SIG, ORBIUM_SIG, recordingBus, report, seededRng } from './testUtil';
@@ -5,7 +11,7 @@ import { creature, GYRO_SIG, ORBIUM_SIG, recordingBus, report, seededRng } from 
 describe('creature views', () => {
   it('carry the detector velocity (cells per step) and never a non-finite one', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(4) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(4) });
     g.tick(
       0.1,
       report([
@@ -24,7 +30,7 @@ describe('creature views', () => {
 describe('purchases', () => {
   it('an absurd (infinite) bank never turns essence into NaN when buying ×max', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(9) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(9) });
     const st = g.state as unknown as { essence: number; unlocked: string[] };
     st.unlocked.push('autoSeeder');
     st.essence = Number.POSITIVE_INFINITY;
@@ -36,7 +42,7 @@ describe('purchases', () => {
 describe('explaining production (owner: "explain why they are different"; QA3 #13)', () => {
   it('each paying creature and species carries its yield factors; the multiplier parts multiply to global', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(31) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(31) });
     const rep = report([
       creature({ id: 1, x: 20, signature: ORBIUM_SIG, behavior: 'swimmer', complexity: 1 }),
       creature({ id: 2, x: 120, signature: ORBIUM_SIG, behavior: 'swimmer', complexity: 1 }),
@@ -68,7 +74,7 @@ describe('explaining production (owner: "explain why they are different"; QA3 #1
 
   it('upgrade cards say how long until affordable; seeds still growing are flagged (QA2 H-05)', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(32) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(32) });
     const st = g.state as unknown as { essence: number; charges: { free: number; guaranteed: number } };
     st.charges = { free: 0, guaranteed: 0 };
     const rep = report([creature({ id: 1 })]);

@@ -10,17 +10,18 @@ import { createSimulation } from './sim/webgl';
 import { QUALITY_DISH } from './sim/perf';
 import { Deflector } from './sim/deflect';
 import { BodyExtrapolator } from './sim/extrapolate';
-import { mustWaitForDetection } from './sim/detectGate';
+import { mustWaitForDetection, stepDish } from './sim/detectGate';
 import { DishAnimator, dishDiameterFor, dishForGrid, type DishShape } from './core/dish';
 import { ART_RENDER_STYLE } from './ui/art/matter';
 import { DEFAULT_ITEM } from './store/catalog';
 import { createDetector, DISH_OVERGROWN_FILL } from './detect/detector';
 import { createGame } from './game/game';
-import { clearSave, loadSave, offlineSeconds, writeSave } from './game/save';
+import { clearDish as clearSavedDish, clearSave, loadSave, offlineSeconds, writeSave } from './game/save';
 // Art tokens (--bl-*) before every module stylesheet (docs/ARTE.md §12).
 import './ui/art/art.css';
 import { createUI, shortRunRunning } from './ui/ui';
-import { createIntro, introSeen, mountIntroEntry, type Intro } from './ui/intro';
+import { createIntro, INTRO_STORAGE_KEY, introSeen, mountIntroEntry, type Intro } from './ui/intro';
+import { LOOK_STORAGE_KEY } from './ui/art/characters/people';
 import { createAudio } from './audio/audio';
 import { detectPlatform, endingAchievementId, initPlatform, secretAchievementId, type Platform } from './platform/platform';
 import { TEXT as GAME_TEXT } from './game/content';
@@ -29,9 +30,10 @@ import { hexToRgb } from './ui/art/color';
 import { PALETTE } from './ui/art/tokens';
 import { createIntegrity } from './net/integrity';
 import { createLeaderboardClient } from './net/leaderboard';
-import { createPlayerIdentity } from './net/identity';
+import { createPlayerIdentity, K_ID as K_PLAYER_ID } from './net/identity';
 import { setupCosmetics } from './app/cosmetics';
-import { createExtraJournal } from './app/journal';
+import { createExtraJournal, EXTRA_JOURNAL_KEY } from './app/journal';
+import { createSaveTransfer } from './app/saveBundle';
 import { LYSIS_TOAST_MS, lysisTargets } from './app/lysis';
 import { RunawayWatch } from './sim/runaway';
 import { SUPPORTER_JOURNAL } from './store/catalog';
@@ -49,12 +51,12 @@ import {
   type MomentsUI,
   type SpeciesCardInput,
 } from './ui/moments';
-import { COLORMAPS, colormapLUT, createSecretJournal, createSecrets, secretDef } from './secrets';
+import { COLORMAPS, colormapLUT, createSecretJournal, createSecrets, SECRET_JOURNAL_KEY, secretDef } from './secrets';
 import { bigSeedChip, createSeedMeter, seedPriceSheetExplain, type SeedMeter } from './ui/seed-price';
 import { attachSecretInputs, createSecretsUI, createStrokeRecorder, mountBasementEntry, type BasementEntry } from './ui/secrets';
 import { createSessionFlow, createWelcomeCard, datosExplain, type SessionFlow, type SessionFlowSound } from './ui/session';
 import { computeDatos } from './game/session';
-import { PREINCUBATE_STEPS } from './game/cycleBalance';
+import { PREINCUBATE_STEPS, SIM_STEPS_PER_SEC } from './game/cycleBalance';
 import { dishSeconds } from './game/dishClock';
 import { nodeText } from './game/tree';
 
@@ -72,11 +74,10 @@ const LEADERBOARD_URL: string | undefined =
 const STORE_API_URL: string = import.meta.env.VITE_STORE_API_URL ?? '';
 
 /**
- * Base simulation rate (steps per second) at speed ×1. Orbium swims ~0.24
- * cells/step, so 30 steps/s keeps motion graceful and readable while halving
- * the GPU load on phones; the Incubadora doubles/quadruples it.
+ * Base simulation rate (steps per second) at speed ×1: the one number the session clock (dishSeconds)
+ * also divides by, so it lives in cycleBalance.ts (SIM_STEPS_PER_SEC, RF-11) and is never copied.
  */
-const STEPS_PER_SEC = 30;
+const STEPS_PER_SEC = SIM_STEPS_PER_SEC;
 /** Detector cadence in simulation steps. */
 const DETECT_EVERY = 10;
 /** Most incubation steps a frame under the start card (RITMO §7: ≤ 40, so a phone keeps its frame rate). */
@@ -86,6 +87,8 @@ const AUTOSAVE_MS = 30_000;
 const DISH_SAVE_MS = 5 * 60_000;
 /** Kernel changes (R, rings: a new World) recompile the step shader; let a burst of changes settle. */
 const KERNEL_DEBOUNCE_MS = 350;
+/** After an import the page reloads once the "imported" toast has been seen. */
+const IMPORT_RELOAD_MS = 900;
 const IDLE_AFTER_MS = 60_000;
 /** Frame interval while idle (30 fps). */
 const IDLE_FRAME_MS = 1000 / 30;
@@ -142,6 +145,8 @@ function boot(): void {
   // Anti-cheat signals must look at the save before the game rewrites it.
   const integrity = createIntegrity();
   integrity.checkSave();
+  /** Set by an import: the page reloads soon and the old dish must not be saved over the new game. */
+  let importReloading = false;
   const saved = loadSave();
   if (saved.savedAt) integrity.noteSavedAt(saved.savedAt);
   integrity.start();
@@ -161,6 +166,8 @@ function boot(): void {
   const dishQ = QUALITY_DISH[quality];
   const gridW = dishQ.grid;
   const gridH = dishQ.grid;
+  // Placa levels past this device's largest dish give no room (and cost nothing): RF-04.
+  game.setDeviceDish(dishQ.maxDiameter);
   /** The dish the tree has bought (TreeEffects.dishLevel → Ø96…224, capped by quality). */
   const boughtDish = (): DishShape => dishForGrid(gridW, gridH, dishDiameterFor(game.effects?.dishLevel ?? 0, dishQ.maxDiameter));
   /** Rim, camera fit and growth glow, animated when a bigger dish is bought (each session starts at that size). */
@@ -308,6 +315,20 @@ function boot(): void {
   // ── Secrets (docs/SECRETS.md, spoilers): easter eggs, +1 % Essence each (max +10 %). ──
   const secrets = createSecrets({ bus, getView: () => game.view(), center: { x: gridW / 2, y: gridH / 2 } });
   const secretJournal = createSecretJournal();
+  /** Settings → Export / Import: the whole progress in one versioned text (src/app/saveBundle.ts, RF-02). */
+  const saveTransfer = () =>
+    createSaveTransfer({
+      game,
+      parts: { story, encargos, secrets, moments },
+      storage: (() => {
+        try {
+          return localStorage;
+        } catch {
+          return null;
+        }
+      })(),
+      rawKeys: [SECRET_JOURNAL_KEY, EXTRA_JOURNAL_KEY, LOOK_STORAGE_KEY, INTRO_STORAGE_KEY],
+    });
   extraJournal.addSource(() => secretJournal.views());
   // Older finds (before this wiring) get their Bitácora entry too.
   for (const sv of secrets.list()) if (sv.found) secretJournal.add(`secret.${sv.id}`, secretDef(sv.id).journal);
@@ -405,6 +426,13 @@ function boot(): void {
     // Also a Momento about to open (the dish is easing to a stop) and the session cards: a toast or a
     // tip would land on them (one message per event, CLARIDAD §3).
     isNarrating: () => introOpen() || storyBusy() || (momentsUIRef?.busy ?? false) || moments.isBusy() || encargoShowing() || secretShowing() || flowBusy(),
+    playerId: () => {
+      try {
+        return localStorage.getItem(K_PLAYER_ID);
+      } catch {
+        return null;
+      }
+    },
     settingsSections: (el) => {
       storyArchive?.dispose();
       storyArchive = storyUI.mountArchive(el);
@@ -470,13 +498,21 @@ function boot(): void {
       setPause('user', !pauseSources.has('user'));
       secrets.setPaused(pauseSources.has('user'));
     },
-    exportSave: () => game.exportString(),
+    exportSave: () => saveTransfer().exportText(),
     importSave(s) {
       integrity.noteImport(s);
-      const ok = game.importString(s);
+      const { ok, legacy } = saveTransfer().importText(s);
       if (ok) {
+        // An old game-only export (RF-02): this device's story does not know that game; a played game
+        // does not need the tutorial again.
+        if (legacy && game.state.stats.seeds > 0) story.skipTutorial();
         applySecretBonus();
-        save();
+        // Reload so every screen starts from the imported progress. The old dish does not belong to
+        // the imported session: drop it (the session gets its starter, RF-05) and never save it again.
+        save('none');
+        clearSavedDish();
+        importReloading = true;
+        setTimeout(() => location.reload(), IMPORT_RELOAD_MS);
       }
       return ok;
     },
@@ -754,9 +790,11 @@ function boot(): void {
   }
   applyDish();
 
-  if (saved.dish && saved.dishW === gridW && saved.dishH === gridH) {
-    sim.importState(saved.dish, gridW, gridH);
-  }
+  // The saved dish only fits the grid it was saved on. Without it (none saved, an import, or a Quality
+  // change that resized the grid: RF-05) the session on the dish is given its starter / Nevera again.
+  const dishRestored = !!saved.dish && saved.dishW === gridW && saved.dishH === gridH;
+  if (dishRestored) sim.importState(saved.dish!, gridW, gridH);
+  else game.dishLost();
   /** Grant offline progress for time spent away (closed app or long-hidden tab). */
   function grantOffline(away: number): void {
     if (away <= 60) return;
@@ -935,6 +973,7 @@ function boot(): void {
    */
   function save(dish: 'sync' | 'none' | Uint8Array = 'sync'): void {
     if (!sim) return;
+    if (importReloading) dish = 'none';
     let ok = false;
     try {
       const bytes = dish === 'sync' ? sim.exportState() : dish === 'none' ? undefined : dish;
@@ -974,7 +1013,7 @@ function boot(): void {
    * Steps still to incubate under the start card (ADR-027, RITMO §4.3): the Nevera's plants are alive
    * when the run starts. Up to PREINCUBATE_PER_FRAME steps a frame, never ahead of the detector.
    */
-  let preincubate = !saved.dish && game.session?.phase === 'ready' ? PREINCUBATE_STEPS : 0;
+  let preincubate = !dishRestored && game.session?.phase === 'ready' ? PREINCUBATE_STEPS : 0;
   let last = performance.now();
   let acc = 0;
   /** Detector reports produced since the last game tick (async readbacks). */
@@ -1050,6 +1089,9 @@ function boot(): void {
   const tintSrc: { id: number; x: number; y: number; vx: number; vy: number; r: number }[] = [];
   let tintStep = 0;
   const tintOut: { x: number; y: number; r: number; hue: number }[] = [];
+  /** The tint entries, allocated once (RF-11: nothing is allocated per frame). */
+  const TINT_MAX = 32;
+  const tintPool = Array.from({ length: TINT_MAX }, () => ({ x: 0, y: 0, r: 0, hue: 0 }));
   /** Species hue of every registered creature (from the game's view, refreshed 10×/s). */
   const hueById = new Map<number, number>();
   function detect(snap: ReturnType<NonNullable<typeof sim>['snapshot']>): void {
@@ -1099,10 +1141,16 @@ function boot(): void {
     const s = sim!;
     const ahead = s.stepCount - tintStep;
     tintOut.length = 0;
-    for (const t of tintSrc) {
+    for (let i = 0; i < tintSrc.length && tintOut.length < TINT_MAX; i++) {
+      const t = tintSrc[i];
       const hue = hueById.get(t.id);
-      if (hue === undefined || tintOut.length >= 32) continue;
-      tintOut.push({ x: t.x + t.vx * ahead, y: t.y + t.vy * ahead, r: t.r, hue });
+      if (hue === undefined) continue;
+      const o = tintPool[tintOut.length];
+      o.x = t.x + t.vx * ahead;
+      o.y = t.y + t.vy * ahead;
+      o.r = t.r;
+      o.hue = hue;
+      tintOut.push(o);
     }
     s.setCreatureTints(tintOut);
   }
@@ -1210,15 +1258,10 @@ function boot(): void {
       acc += dt * STEPS_PER_SEC * game.speed * ts * debugTime.scale;
       // Never fall into a spiral of death: cap work per frame.
       const whole = Math.floor(acc);
-      let n = Math.min(whole, 4 * game.speed * debugTime.scale);
+      const n = Math.min(whole, 4 * game.speed * debugTime.scale);
       acc -= whole; // any backlog beyond the cap is dropped, the sim just runs slower
-      while (n > 0 && !detectionDue()) {
-        const k = Math.min(n, DETECT_EVERY - (s.stepCount % DETECT_EVERY));
-        s.advance(k);
-        n -= k;
-        stepped += k;
-        if (s.stepCount % DETECT_EVERY === 0) requestDetection();
-      }
+      // Only the steps the dish really ran count (a lost GL context runs none: RF-08).
+      stepped = stepDish(s, n, DETECT_EVERY, detectionDue, requestDetection);
     }
     // Feed every report so no died/exploded/divided event is lost; time advances once.
     const n = reports.length;

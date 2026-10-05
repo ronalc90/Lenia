@@ -287,7 +287,7 @@ describe('sessions cycle: saves', () => {
 
   it('a classic save opened in the sessions cycle is migrated generously', () => {
     const bus = recordingBus().bus;
-    const classic = createGame({ bus, rng: seededRng(5) });
+    const classic = createGame({ cycle: 'classic', bus, rng: seededRng(5) });
     classic.actions.seedAt(50, 50);
     run(classic, 5, report(stable(2)), 0.5);
     const s = classic.state as GameState;
@@ -302,13 +302,69 @@ describe('sessions cycle: saves', () => {
 
   it('a v1 save still loads in the classic cycle', async () => {
     const { checksum } = await import('./state');
-    const g = createGame({ bus: recordingBus().bus, rng: seededRng(1) });
+    const g = createGame({ cycle: 'classic', bus: recordingBus().bus, rng: seededRng(1) });
     g.actions.seedAt(50, 50);
     const data = JSON.parse(g.serialize()).data;
     const s = JSON.stringify(data);
-    const h = createGame({ bus: recordingBus().bus }, `{"v":1,"sum":"${checksum(s)}","data":${s}}`);
+    const h = createGame({ cycle: 'classic', bus: recordingBus().bus }, `{"v":1,"sum":"${checksum(s)}","data":${s}}`);
     expect(h.state.stats.seeds).toBe(1);
     expect(h.cycle).toBe('classic');
     expect(h.research).toBeNull();
+  });
+});
+
+describe('sessions cycle: a dish that cannot be restored (RF-05)', () => {
+  it('a waiting session loaded without its dish gets its starter back on the next tick', () => {
+    const a = sessionsGame();
+    a.g.tick(0.1, null);
+    const saved = a.g.serialize();
+    // Loaded with its dish (main.ts restored it): nothing is planted again.
+    const kept = sessionsGame(1, saved);
+    kept.g.tick(0.1, null);
+    expect(kept.count('dishSeed')).toBe(0);
+    // Loaded without it (no dish saved, or a Quality change resized the grid): the starter comes back.
+    const lost = sessionsGame(1, saved);
+    lost.g.dishLost();
+    lost.g.tick(0.1, null);
+    expect(lost.count('dishClear')).toBe(1);
+    expect(lost.count('dishSeed')).toBe(1);
+    const specs = (lost.log.get('dishSeed')![0] as { specs: unknown[] }).specs;
+    expect(specs.length).toBeGreaterThanOrEqual(C.STARTER_CREATURES);
+    expect(lost.g.session?.phase).toBe('ready');
+  });
+
+  it('a running session loaded without its dish keeps its clock and is not left empty', () => {
+    const a = sessionsGame();
+    a.g.tick(0.1, null);
+    a.g.actions.seedAt(80, 80);
+    run(a.g, 3, report(stable(1)), 0.5);
+    expect(a.g.session?.phase).toBe('running');
+    const elapsed = a.g.session!.elapsed;
+    const lost = sessionsGame(1, a.g.serialize());
+    lost.g.dishLost();
+    lost.g.tick(0.1, null);
+    expect(lost.count('dishSeed')).toBe(1);
+    expect(lost.g.session?.phase).toBe('running');
+    expect(lost.g.session!.elapsed).toBeGreaterThanOrEqual(elapsed);
+  });
+
+  it('dishLost does nothing between sessions (the end card freezes an empty dish anyway)', () => {
+    const { g } = sessionsGame();
+    expect(() => g.dishLost()).not.toThrow();
+  });
+});
+
+describe('sessions cycle: the device caps the dish (RF-04)', () => {
+  it('on a low-quality device the room is the room of the dish it shows', () => {
+    const { g } = sessionsGame();
+    st(g).research!.levels = { lab: 1, dish: 2 };
+    try {
+      g.setDeviceDish(160); // low quality: Ø160 at most
+      expect(g.view().research!.capacity).toBe(C.DISH_CAPACITY[1]);
+      g.setDeviceDish(224);
+      expect(g.view().research!.capacity).toBe(C.DISH_CAPACITY[2]);
+    } finally {
+      g.setDeviceDish(Infinity);
+    }
   });
 });

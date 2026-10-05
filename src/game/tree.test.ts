@@ -28,6 +28,7 @@ import {
   seedConfig,
   seedSuccess,
   sessionsToAfford,
+  setDishLevelLimit,
   treeEffects,
   treeStates,
   type TreeCtx,
@@ -377,5 +378,39 @@ describe('layout: rings are bands, routes are rays', () => {
     for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) min = Math.min(min, Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y));
     expect(min).toBeGreaterThanOrEqual(0.9);
     for (const g of TREE_GATES) for (const b of TREE_BANDS.values()) expect(g.r < b.from || g.r > b.to).toBe(true);
+  });
+});
+
+describe('a device that cannot show a bigger dish (RF-04, low quality)', () => {
+  // Low quality caps the dish at Ø160 (sim/perf QUALITY_DISH): dish level 1 of DISH_DIAMETERS.
+  const limited = <T>(fn: () => T): T => {
+    setDishLevelLimit(1);
+    try {
+      return fn();
+    } finally {
+      setDishLevelLimit(Infinity);
+    }
+  };
+
+  it('room follows the dish the device really shows, not the level bought', () => {
+    limited(() => {
+      expect(treeEffects({ dish: 2 }).capacity).toBe(C.DISH_CAPACITY[1]);
+      expect(treeEffects({ dish: 2, dishXL: 1 }).capacity).toBe(C.DISH_CAPACITY[1]);
+      expect(treeEffects({ dish: 1, slots: 1 }).capacity).toBe(C.DISH_CAPACITY[1] + C.SLOTS_PER_LEVEL);
+    });
+    expect(treeEffects({ dish: 2 }).capacity).toBe(C.DISH_CAPACITY[2]);
+  });
+
+  it('a dish level the device cannot show costs nothing and says so (the route stays open)', () => {
+    limited(() => {
+      expect(nodeCost('dish', 0)).toBeGreaterThan(0);
+      expect(nodeCost('dish', 1)).toBe(0);
+      expect(nodeCost('dishXL', 0)).toBe(0);
+      const ba = beforeAfter({ dish: 1 }, 'dish');
+      expect(ba.better).toBe(false);
+      expect(ba.after?.es).toMatch(/aparato/);
+      expect(ba.after?.en).toMatch(/device/);
+    });
+    expect(nodeCost('dish', 1)).toBeGreaterThan(0);
   });
 });

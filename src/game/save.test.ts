@@ -1,3 +1,9 @@
+/**
+ * Classic Era loop (Laboratorio, Calibrar, Genoma, Extinción): no player reaches it any more (createGame's
+ * default is the sessions cycle, ADR-026, which migrates old classic saves); the code is still there and is tested
+ * here explicitly with `cycle: 'classic'` until it is deleted (ADR-028). The sessions cycle has its own tests (sessions.test.ts,
+ * spacing.test.ts, dish.test.ts, tests/unit/ranking-sessions.test.ts…).
+ */
 import { afterEach, describe, expect, it } from 'vitest';
 import { createGame } from './game';
 import { clearSave, decodeDish, encodeDish, isPersistent, loadSave, setStorage, writeSave, type StorageLike } from './save';
@@ -6,7 +12,7 @@ import { creature, GYRO_SIG, recordingBus, report, seededRng } from './testUtil'
 
 function played() {
   const { bus } = recordingBus();
-  const g = createGame({ bus, rng: seededRng(5) });
+  const g = createGame({ cycle: 'classic', bus, rng: seededRng(5) });
   g.tick(0.5, report([creature({ id: 1, x: 10 }), creature({ id: 2, x: 120, signature: GYRO_SIG, behavior: 'spinner' })]));
   g.actions.seedAt(5, 5);
   g.setSpeciesPortrait(g.view().species[0].id, { w: 4, h: 3, data: new Float32Array([0, 0.5, 1, 0.25, 0, 0, 0, 1, 0.75, 0.1, 0.2, 0.3]) });
@@ -20,11 +26,11 @@ describe('serialize / import', () => {
     const g = played();
     const str = g.serialize();
     const { bus } = recordingBus();
-    const g2 = createGame({ bus }, str);
+    const g2 = createGame({ cycle: 'classic', bus }, str);
     expect(JSON.stringify(g2.state)).toBe(JSON.stringify(g.state));
     const exp = g.exportString();
     expect(exp.startsWith('BIOLUMA1.')).toBe(true);
-    const g3 = createGame({ bus: recordingBus().bus });
+    const g3 = createGame({ cycle: 'classic', bus: recordingBus().bus });
     expect(g3.importString(exp)).toBe(true);
     expect(JSON.stringify(g3.state)).toBe(JSON.stringify(g.state));
     expect(g3.view().species[1].name).toBe('Remolino ñandú');
@@ -105,7 +111,7 @@ describe('serialize / import', () => {
 
   it('a corrupt save string passed to createGame starts a fresh game', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus }, '{"v":1,"sum":"00000000","data":{}}');
+    const g = createGame({ cycle: 'classic', bus }, '{"v":1,"sum":"00000000","data":{}}');
     expect(g.view().essence).toBe(20);
     expect(g.view().era).toBe(1);
   });

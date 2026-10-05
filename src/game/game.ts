@@ -10,8 +10,10 @@
  *    sim.capture(r.x, r.y, r.size), r.creatureId) — the game keeps the best capture of each species
  *  - game.setGridSize(sim.gridW, sim.gridH) after creating the dish
  *
- * Two loops (GameDeps.cycle, default 'classic'):
- *  - classic   the continuous Era loop: Laboratorio, Calibrar, Genoma, Extinción.
+ * Two loops (GameDeps.cycle, default 'sessions' since RF-09):
+ *  - classic   the continuous Era loop: Laboratorio, Calibrar, Genoma, Extinción. No player reaches it
+ *              (main.ts plays sessions, which migrates classic saves); kept, with tests that ask for it
+ *              explicitly, until it is deleted (ADR-028).
  *  - sessions  lab sessions + research tree + worlds (docs/CICLO.md): a timed session on a fresh dish
  *              earns Esencia (spent on seeds, Abono); when its clock runs out the Esencia earned
  *              becomes Datos (session.ts), spent on the tree (tree.ts) between sessions. The classic
@@ -97,7 +99,7 @@ import {
   type UpgradeDef,
 } from './defs';
 import { computeProduction, wrapDist, type YieldDetail } from './economy';
-import { clampToDish, insideDish, moveInDish, randomPointInDish, rimDistance, type DishShape } from '../core/dish';
+import { clampToDish, DISH_DIAMETERS, insideDish, moveInDish, randomPointInDish, rimDistance, type DishShape } from '../core/dish';
 import { clipGraphemes } from './format';
 import * as C from './cycleBalance';
 import { migrateLegacy, type MigrationReport } from './legacy';
@@ -163,6 +165,7 @@ import {
   nodeText,
   exactTurns,
   seedConfig,
+  setDishLevelLimit,
   TREE_NODES,
   treeEffects,
   treeStates,
@@ -209,9 +212,9 @@ export interface GameDeps {
   /** Dish size in cells until setGridSize is called. */
   grid?: { w: number; h: number };
   /**
-   * Which loop runs: 'classic' (default: Laboratorio, Calibrar, Genoma, Extinción) or 'sessions'
-   * (lab sessions + research tree + worlds, docs/CICLO.md). A classic save opened in 'sessions' is
-   * migrated with migrateLegacy (Game.migration says what it got).
+   * Which loop runs: 'sessions' (default: lab sessions + research tree + worlds, docs/CICLO.md, ADR-026)
+   * or 'classic' (the retired Era loop: Laboratorio, Calibrar, Genoma, Extinción; ADR-028). A classic save
+   * opened in 'sessions' is migrated with migrateLegacy (Game.migration says what it got).
    */
   cycle?: 'classic' | 'sessions';
 }
@@ -229,6 +232,18 @@ export interface PortraitRequest {
 
 export interface Game {
   readonly actions: GameActions;
+  /**
+   * (sessions) The integrator could not restore the saved dish (none was saved, or a Quality change
+   * gave the dish another grid, RF-05): a session that waits plants its starter and Nevera again, and a
+   * running one keeps its clock and gets the same plants, so the dish is never left empty. Call it
+   * after setDish, before the first tick. No-op between sessions and in the classic loop.
+   */
+  dishLost(): void;
+  /**
+   * (sessions) The largest dish this device shows (QUALITY_DISH maxDiameter, RF-04): Placa levels past
+   * it give no room and cost nothing (tree.ts setDishLevelLimit). Call once at boot.
+   */
+  setDeviceDish(maxDiameter: number): void;
   view(): GameView;
   /** realDt seconds since last tick; report = latest detector report (or null if none new). */
   tick(realDt: number, report: DetectorReport | null): void;
@@ -319,7 +334,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
   let s: GameState = (save && loadAny(save)) || defaultState(now());
   let paused = false;
-  const cycle: 'classic' | 'sessions' = deps.cycle === 'sessions' ? 'sessions' : 'classic';
+  const cycle: 'classic' | 'sessions' = deps.cycle === 'classic' ? 'classic' : 'sessions';
   /** The sessions cycle runs (lab sessions + research tree + worlds). */
   const sessions = cycle === 'sessions';
 
@@ -3022,6 +3037,29 @@ export function createGame(deps: GameDeps, save?: string): Game {
       if (se?.phase === 'over') return 0;
       // Time-lapse (ADR-027): every run plays at simPace, the Incubadora on top while seeds form.
       return Math.min(C.SIM_PACE_MAX, fx.simPace * (forming() > 0 ? fx.matureSpeed : 1));
+    },
+    setDeviceDish(maxDiameter) {
+      let limit = Infinity;
+      if (Number.isFinite(maxDiameter)) {
+        limit = 0;
+        DISH_DIAMETERS.forEach((d, i) => {
+          if (d <= maxDiameter) limit = i;
+        });
+      }
+      setDishLevelLimit(limit);
+      refreshFx();
+    },
+    dishLost() {
+      const se = ses();
+      const r = s.research;
+      if (!se || !r || se.phase === 'over') return;
+      if (se.phase === 'ready') {
+        sessionStartInfo ??= beginSession(r, fx).start;
+        // The tick chooses the spots again when the dish exists (as for a session set up at load).
+        bootReplant = fridgePlants(sessionStartInfo);
+      } else {
+        bootReplant = fridgePlants(beginSession(r, fx).start);
+      }
     },
     setBonus(id, name, mult) {
       if (!(mult > 0) || mult === 1) bonuses.delete(id);

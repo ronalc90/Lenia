@@ -8,10 +8,12 @@
  *  - never touches cross-origin requests (Google Fonts, analytics), non-GET requests or Range requests,
  *  - old caches are deleted on activate.
  *
- * Bump CACHE_VERSION when shipping a release that must not reuse old cached files. The page registers
- * this worker only on http(s) origins (never from file://, e.g. the single-file build).
+ * The build stamps CACHE_VERSION with the release (vite.config.ts, src/app/swVersion.ts): every release
+ * is a new worker with its own cache, and activate deletes the caches of older releases, so the cache
+ * never holds more than one release. The page registers this worker only on http(s) origins (never
+ * from file://, e.g. the single-file build).
  */
-const CACHE_VERSION = 'bioluma-v2';
+const CACHE_VERSION = 'bioluma-__BIOLUMA_BUILD__';
 const CACHE_PREFIX = 'bioluma-';
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 

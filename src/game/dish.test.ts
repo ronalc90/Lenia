@@ -10,9 +10,10 @@ const R = 13;
 type St = { essence: number; charges: { free: number; guaranteed: number } };
 const st = (g: Game) => g.state as unknown as St;
 
-function dishGame(seed: number, diameter = 96) {
+/** A game on a round dish: the sessions cycle (what players play) unless a test asks for 'classic'. */
+function dishGame(seed: number, diameter = 96, cycle: 'sessions' | 'classic' = 'sessions') {
   const { bus, count, log } = recordingBus();
-  const g = createGame({ bus, rng: seededRng(seed), grid: { w: N, h: N } });
+  const g = createGame({ bus, rng: seededRng(seed), grid: { w: N, h: N }, cycle });
   const dish = dishForGrid(N, N, diameter);
   g.setDish(dish);
   return { g, dish, count, log };
@@ -47,7 +48,8 @@ describe('round dish (ADR-025)', () => {
   });
 
   it('the golden spark spawns inside the glass and bounces off it for its whole life', () => {
-    const { g, dish, count } = dishGame(3);
+    // Classic timing (B.GOLDEN_*); the sessions Spark (from session SPARK_FROM_SESSION) is in sessions.test.ts.
+    const { g, dish, count } = dishGame(3, 96, 'classic');
     const rep = report([creature({ id: 1, x: dish.cx, y: dish.cy })]);
     g.tick(0.1, rep);
     let seen = 0;
@@ -100,6 +102,9 @@ describe('"Muy cerca" only near matter you can see (owner, live v0.014)', () => 
   it('a refusal points at the matter that is in the way', () => {
     const { g, dish, log } = dishGame(9, 128);
     st(g).charges = { free: 5, guaranteed: 0 };
+    // The whole Placa route, so ten creatures fit: the tap is refused for lack of space, not room.
+    (g.state as unknown as { research: { levels: Record<string, number> } }).research.levels = { lab: 1, dish: 2, dishXL: 1, slots: 3, crowdCost: 2 };
+    g.setDeviceDish(Infinity); // re-reads the tree
     // A crowd around the tap so no spot within SEED_RELOCATE·R is free.
     const ring = Array.from({ length: 9 }, (_, i) => creature({ id: 10 + i, x: dish.cx + 20 * Math.cos(i * 0.7), y: dish.cy + 20 * Math.sin(i * 0.7), radius: 9 }));
     g.tick(0.1, report([creature({ id: 1, x: dish.cx + 6, y: dish.cy, radius: 9 }), ...ring], [], 10));

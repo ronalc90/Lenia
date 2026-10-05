@@ -1,3 +1,9 @@
+/**
+ * Classic Era loop (Laboratorio, Calibrar, Genoma, Extinción): no player reaches it any more (createGame's
+ * default is the sessions cycle, ADR-026, which migrates old classic saves); the code is still there and is tested
+ * here explicitly with `cycle: 'classic'` until it is deleted (ADR-028). The sessions cycle has its own tests (sessions.test.ts,
+ * spacing.test.ts, dish.test.ts, tests/unit/ranking-sessions.test.ts…).
+ */
 import { describe, expect, it } from 'vitest';
 import { createGame } from './game';
 import { creature, recordingBus, report, seededRng } from './testUtil';
@@ -5,7 +11,7 @@ import { creature, recordingBus, report, seededRng } from './testUtil';
 describe('seed price breakdown', () => {
   it('explains the seed cost as base × crowd × saturation', () => {
     const { bus } = recordingBus();
-    const game = createGame({ bus, rng: seededRng(7) });
+    const game = createGame({ cycle: 'classic', bus, rng: seededRng(7) });
     const empty = game.view();
     expect(empty.seedPrice).toBeDefined();
     const p0 = empty.seedPrice!;

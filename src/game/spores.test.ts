@@ -1,3 +1,9 @@
+/**
+ * Classic Era loop (Laboratorio, Calibrar, Genoma, Extinción): no player reaches it any more (createGame's
+ * default is the sessions cycle, ADR-026, which migrates old classic saves); the code is still there and is tested
+ * here explicitly with `cycle: 'classic'` until it is deleted (ADR-028). The sessions cycle has its own tests (sessions.test.ts,
+ * spacing.test.ts, dish.test.ts, tests/unit/ranking-sessions.test.ts…).
+ */
 import { describe, expect, it } from 'vitest';
 import { createDetector } from '../detect/detector';
 import { CpuLenia } from '../sim/cpu';
@@ -10,7 +16,7 @@ import * as B from './balance';
 describe('spores at the start calibration (CPU simulation, real seed specs)', () => {
   it('the first seeds a new player can afford still give a living creature quickly', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(2026) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(2026) });
     (g.state as { charges: { free: number; guaranteed: number } }).charges = { free: 0, guaranteed: 0 }; // plain spores only
     (g.state as { essence: number }).essence = 1e6;
     let stable = 0;
@@ -43,7 +49,7 @@ describe('a tight cluster of taps never floods the dish (seed spacing; e2e mobil
     const N = 128;
     for (const seed of [1, 2, 3]) {
       const { bus, count } = recordingBus();
-      const g = createGame({ bus, rng: seededRng(4242 + seed), grid: { w: N, h: N } });
+      const g = createGame({ cycle: 'classic', bus, rng: seededRng(4242 + seed), grid: { w: N, h: N } });
       g.setGridSize(N, N);
       (g.state as { essence: number }).essence = 1e6;
       const sim = new CpuLenia(N, N, g.simParams);

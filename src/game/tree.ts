@@ -432,12 +432,40 @@ export function isSuperseded(levels: Readonly<Record<string, number>>, id: strin
 }
 
 /** Everything the tree changes for these levels (unknown ids are ignored). */
+// ───────────────────────────── the device's dish ───────────────────
+
+/**
+ * Largest dish level (index of DISH_DIAMETERS) this device can show (RF-04): low quality caps the dish
+ * at Ø160 (sim/perf QUALITY_DISH), so dish level 2+ looks like level 1 there. The integrator sets it
+ * once at boot (Game.setDeviceDish); Infinity = no limit (tests, bots, the server's ceilings).
+ */
+let dishLevelLimit = Infinity;
+export function setDishLevelLimit(level: number): void {
+  dishLevelLimit = Number.isFinite(level) ? Math.max(0, Math.floor(level)) : Infinity;
+}
+export function dishLevelLimitNow(): number {
+  return dishLevelLimit;
+}
+/** The dish level one more level of a Placa node would give (null for other nodes). */
+function dishLevelAfter(id: string, level: number): number | null {
+  if (id === 'dish') return level + 1;
+  if (id === 'dishXL') return C.DISH_XL_LEVEL;
+  return null;
+}
+/** One more level of this Placa node gives a dish the device cannot show: it is free, and says so. */
+export function beyondDevice(id: string, level: number): boolean {
+  const next = dishLevelAfter(id, level);
+  return next !== null && next > dishLevelLimit;
+}
+
 export function treeEffects(levels: Readonly<Record<string, number>>): TreeEffects {
   const fx = baseEffects();
   for (const def of TREE_NODES) {
     const l = nodeLevel(levels, def.id);
     if (l > 0 && def.apply) def.apply(fx, l);
   }
+  // Room follows the dish the device really shows (RF-04).
+  fx.dishLevel = Math.min(fx.dishLevel, dishLevelLimit);
   fx.capacity = C.DISH_CAPACITY[Math.min(C.DISH_CAPACITY.length - 1, fx.dishLevel)] + fx.extraSlots;
   return fx;
 }
@@ -453,6 +481,7 @@ export function beforeAfter(levels: Readonly<Record<string, number>>, id: string
   const fx0 = treeEffects(levels);
   const before = def.show(fx0, l);
   if (l >= def.maxLevel || isSuperseded(levels, id)) return { before, after: null, better: false };
+  if (beyondDevice(id, l)) return { before, after: V.deviceDishMax, better: false };
   const fx1 = treeEffects({ ...levels, [id]: l + 1 });
   const a = def.measure(fx0, l);
   const b = def.measure(fx1, l + 1);
@@ -483,6 +512,7 @@ export function nodeCost(id: string, level: number): number {
   const def = TREE_BY_ID[id];
   if (!def) return Infinity;
   if (level >= def.maxLevel) return Infinity;
+  if (beyondDevice(id, level)) return 0;
   const r = priceRule(id);
   // The centre: level = night; the first move (night 1 → 2) costs `start`.
   const n = id === 'lab' ? Math.max(0, level - 1) : Math.max(0, level);

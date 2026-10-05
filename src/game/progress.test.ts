@@ -1,3 +1,9 @@
+/**
+ * Classic Era loop (Laboratorio, Calibrar, Genoma, Extinción): no player reaches it any more (createGame's
+ * default is the sessions cycle, ADR-026, which migrates old classic saves); the code is still there and is tested
+ * here explicitly with `cycle: 'classic'` until it is deleted (ADR-028). The sessions cycle has its own tests (sessions.test.ts,
+ * spacing.test.ts, dish.test.ts, tests/unit/ranking-sessions.test.ts…).
+ */
 import { describe, expect, it } from 'vitest';
 import * as B from './balance';
 import { createGame } from './game';
@@ -6,7 +12,7 @@ import { creature, GYRO_SIG, ORBIUM_SIG, recordingBus, report, run, seededRng } 
 describe('progression layer', () => {
   it('journal entries unlock with milestones and can be marked read', () => {
     const { bus, log } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(1) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(1) });
     g.actions.seedAt(10, 10);
     g.tick(0.5, report([], [{ type: 'died', id: 99, x: 1, y: 1 }]));
     g.tick(0.5, report([], [{ type: 'exploded', id: 98, x: 1, y: 1 }]));
@@ -23,7 +29,7 @@ describe('progression layer', () => {
 
   it('objective chain advances and pays its reward', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(2) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(2) });
     expect(g.view().objective!.es).toContain('Toca aquí');
     const e0 = g.view().essence;
     const spec = g.actions.seedAt(10, 10)!;
@@ -41,7 +47,7 @@ describe('progression layer', () => {
 
   it('opening the Bestiary counts as looking at the creature; objectives met early are not asked again', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(21) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(21) });
     const st = g.state as { essence: number };
     g.actions.seedAt(10, 10);
     // Bought before its objective comes up (QA2 H-24).
@@ -55,7 +61,7 @@ describe('progression layer', () => {
     // look done, and "buy the Dropper" was already done → straight to "two creatures".
     expect(B.OBJECTIVES[g.state.objective].id).toBe('two');
     // A peak met while an earlier objective waited counts too.
-    const g2 = createGame({ bus: recordingBus().bus, rng: seededRng(22) });
+    const g2 = createGame({ cycle: 'classic', bus: recordingBus().bus, rng: seededRng(22) });
     g2.actions.seedAt(10, 10);
     g2.tick(0.5, report([creature({ id: 1, x: 20 }), creature({ id: 2, x: 120, signature: GYRO_SIG })]));
     g2.tick(0.5, report([creature({ id: 1, x: 20 })])); // one of them is gone again
@@ -67,7 +73,7 @@ describe('progression layer', () => {
 
   it('tabs appear progressively', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(3) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(3) });
     expect(g.view().tabs).toEqual({ lab: false, bestiary: false, calibrate: false, genome: false });
     g.actions.seedAt(10, 10);
     expect(g.view().tabs.lab).toBe(true);
@@ -83,7 +89,7 @@ describe('progression layer', () => {
 
   it('achievements fire once and add a permanent bonus', () => {
     const { bus, count } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(4) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(4) });
     const m0 = g.view().multipliers!.global;
     g.actions.seedAt(10, 10);
     expect(count('achievement')).toBe(1);
@@ -97,7 +103,7 @@ describe('progression layer', () => {
   it('brush (Gotero III) lays dabs along a stroke and charges per dab', () => {
     const { bus } = recordingBus();
     let ms = 0;
-    const g = createGame({ bus, rng: seededRng(5), now: () => ms });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(5), now: () => ms });
     expect(g.actions.brushAt(10, 10)).toEqual([]);
     const st = g.state as { upgrades: Record<string, number>; essence: number };
     st.upgrades.dropper = 3;
@@ -116,7 +122,7 @@ describe('progression layer', () => {
 
   it('seed shapes unlock with the Gotero and change bias/noise', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(6) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(6) });
     const st = g.state as { upgrades: Record<string, number>; essence: number; objective: number };
     st.essence = 1e5;
     st.objective = B.OBJECTIVES.length;
@@ -136,7 +142,7 @@ describe('progression layer', () => {
   it('Mutaciones: a mutated print that stabilises nearby registers a "var." species', () => {
     const { bus } = recordingBus();
     // rng: first calls are consumed by spawn timers etc.; force mutation with a low stream.
-    const g = createGame({ bus, rng: () => 0.01, catalogSignatures: [] });
+    const g = createGame({ cycle: 'classic', bus, rng: () => 0.01, catalogSignatures: [] });
     g.tick(0.5, report([creature({ id: 1, x: 30, y: 30 })]));
     const parent = g.view().species[0];
     g.setSpeciesPortrait(parent.id, { w: 20, h: 20, data: new Float32Array(400).fill(0.6) });
@@ -156,7 +162,7 @@ describe('progression layer', () => {
 
   it('Simbiosis: two different species within 2R boost each other in the game', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(8) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(8) });
     const near = report([creature({ id: 1, x: 50, y: 50 }), creature({ id: 2, x: 60, y: 50, signature: GYRO_SIG })]);
     g.tick(0.5, near);
     g.tick(0.5, near); // achievements unlocked by the first tick are priced in from the second
@@ -177,7 +183,7 @@ describe('progression layer', () => {
 
   it('settings are validated; speed only from unlocked Incubadora levels', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(9), catalogSignatures: [] });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(9), catalogSignatures: [] });
     expect(g.view().settings.lang).toBe('es');
     g.actions.setSetting('lang', 'en');
     g.actions.setSetting('lang', 'fr' as 'en');
@@ -206,7 +212,7 @@ describe('progression layer', () => {
 
   it('species signature: unknown dynamic features (-1) never pollute the running average', () => {
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(12) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(12) });
     const k = ORBIUM_SIG.length - 3;
     const young = ORBIUM_SIG.map((v, i) => (i >= k ? -1 : v));
     // A young creature (behaviour not known yet) cannot found a species: it waits, paying as unknown.
@@ -227,7 +233,7 @@ describe('progression layer', () => {
 
   it('reset keeps settings, clears progress and asks to clear the dish', () => {
     const { bus, count } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(10) });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(10) });
     g.actions.setSetting('lang', 'en');
     run(g, 5, report([creature({ id: 1 })]));
     g.reset();
