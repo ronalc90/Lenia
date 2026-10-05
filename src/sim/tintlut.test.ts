@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { matterLUT } from '../core/palette';
 import { FAMILY_HUES } from '../ui/art/matter';
 import { COLOR_FAMILIES } from '../species/identity';
-import { MAX_TINT_ROWS, TINT_LUT_ROWS, TintRows, tintRow, tintWeight } from './tintlut';
+import { MAX_TINT_ROWS, TINT_LUT_ROWS, TintRows, accentHueToOklch, tintRow, tintWeight } from './tintlut';
 
 /** HSL hue (degrees) of an sRGB colour: the wheel the species cards use. */
 function hslHue(r: number, g: number, b: number): number {
@@ -67,6 +67,20 @@ describe('species tint colormaps', () => {
         const h = hslHue(rows.data[i], rows.data[i + 1], rows.data[i + 2]);
         expect(hueGap(h, f.hue), `${f.id} at ${v}: hue ${h.toFixed(0)}`).toBeLessThan(30);
       }
+    }
+  });
+});
+
+describe('a species colour reads in its bright core (QA4: the Anillo verde looked white with a green rim)', () => {
+  it('the green species core (v 0.8–1) is clearly green, not white; still bright', () => {
+    const base = matterLUT();
+    const row = new Uint8Array(256 * 4);
+    tintRow(base, accentHueToOklch(140), row);
+    for (const v of [0.8, 0.9, 1]) {
+      const i = Math.round(v * 255) * 4;
+      const [r, g, b] = [row[i], row[i + 1], row[i + 2]];
+      expect(g - Math.max(r, b), `v ${v}: ${r},${g},${b}`).toBeGreaterThanOrEqual(70);
+      expect(g, `v ${v} stays bright`).toBeGreaterThanOrEqual(200);
     }
   });
 });

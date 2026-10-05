@@ -65,6 +65,40 @@ describe('glass deflection', () => {
     expect(Math.cos(h0 + total)).toBeLessThan(0);
   });
 
+  it('the glass comes first: a swimmer about to hit the rim turns even mid-swerve or in its cooldown (QA4)', () => {
+    // A swerve off another body just finished (cooldown), then the swimmer heads straight for the rim.
+    const d = new Deflector();
+    const h = (b: Body, ang: number) => ((b.vx = 0.6 * Math.cos(ang)), (b.vy = 0.6 * Math.sin(ang)));
+    // A shallow approach to the rim: one small turn, then the cooldown starts.
+    const a: Body = { id: 1, x: dish.cx + 33, y: dish.cy, vx: 0, vy: 0, radius: 5.8 };
+    h(a, Math.PI / 2 - 0.2);
+    d.update([a], dish, 990, 10); // heading known
+    const first = d.update([a], dish, 1000, 10).filter((t) => t.id === 1);
+    expect(first.length).toBe(1);
+    // Ten steps later (inside the cooldown) its heading (the turned one) points straight at the glass
+    // further along: the bottom of the dish, a few cells away.
+    const turned = Math.PI / 2 - 0.2 + first[0].angle;
+    a.x = dish.cx;
+    a.y = dish.cy + dish.radius - a.radius * d.opts.extentK - d.opts.margin - 2;
+    h(a, turned);
+    const next = d.update([a], dish, 1010, 10).filter((t) => t.id === 1);
+    expect(next.length).toBe(1);
+    expect(Math.abs(next[0].angle)).toBeGreaterThan(0.5);
+    // Mid-swerve: a long avoidance turn is pending, then the rim is right ahead: the turn becomes the rim's.
+    const e = new Deflector();
+    const b: Body = { id: 2, x: dish.cx, y: dish.cy, vx: 0.6, vy: 0, radius: 5.8 };
+    const c: Body = { id: 3, x: dish.cx + 30, y: dish.cy, vx: -0.6, vy: 0, radius: 5.8 };
+    e.update([b, c], dish, 2000, 10);
+    e.update([b, c], dish, 2010, 10); // heading known: the head-on encounter starts a long swerve
+    b.x = dish.cx + dish.radius - b.radius * e.opts.extentK - e.opts.margin - 3;
+    b.y = dish.cy + 2;
+    const t2 = e.update([b], dish, 2020, 10).filter((t) => t.id === 2);
+    expect(t2.length).toBe(1);
+    // Turning away from the glass: the new heading points back into the dish.
+    const nh = Math.atan2(b.vy, b.vx) + t2[0].angle;
+    expect(Math.cos(nh) * 0.6).toBeLessThan(0.6 * Math.cos(Math.atan2(b.vy, b.vx)));
+  });
+
   it('leaves slow, sessile or far-away bodies alone', () => {
     const bodies: Body[] = [
       { id: 1, x: 64 + 40, y: 64, vx: 0.01, vy: 0, radius: 5 },

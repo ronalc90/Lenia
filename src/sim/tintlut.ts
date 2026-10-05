@@ -74,20 +74,28 @@ function oklch(L: number, C: number, hDeg: number): [number, number, number] {
  * Share of the hue each matter value takes: none in the faint haze, all of the body, and still a
  * clear hint in the hot core. Stronger than the art direction's first rows (matter.ts tintedStops:
  * 0.85 body, 0.15 core) by the owner's call: "cada especie un color claramente distinto" at phone
- * size, where most of a creature is its bright core. v0.015: the core keeps 80 % of the hue at chroma
- * 0.15 (was 55 % at 0.11): solid bodies like the Anillo read white with a coloured rim (docs/ESPECIES.md).
+ * size, where most of a creature is its bright core. v0.015: the core kept 80 % of the hue at chroma
+ * 0.15 and solid bodies like the Anillo still read white with a coloured rim (QA4); now the whole
+ * creature takes its hue (chroma 0.19, lightness capped at TINT_L_MAX: docs/ESPECIES.md).
  */
 export function tintWeight(v: number): number {
   if (v <= 0.04) return 0;
   if (v < 0.12) return (v - 0.04) / 0.08;
-  if (v <= 0.7) return 1;
-  if (v < 0.94) return 1 - ((v - 0.7) / 0.24) * 0.2;
-  return 0.8;
+  return 1;
 }
 
 /** Chroma the tinted body reaches (OKLCH), and the floor near white so the core still shows its hue. */
 const BODY_CHROMA = 0.19;
-const CORE_CHROMA = 0.15;
+const CORE_CHROMA = 0.19;
+/**
+ * Lightness cap of a tinted colour (OKLCH). Near white no hue fits in sRGB: a solid creature whose
+ * body is mostly hot core (the Anillo verde) read "white with a thin green halo" (QA4, owner: "que un
+ * niño diga verde"). Capping its lightness keeps the hue in the core; the glow stays bright (bloom).
+ */
+const TINT_L_MAX = 0.8;
+/** The cap rises to this at the hottest matter, so the core still glows brighter than the body. */
+const TINT_L_MAX_CORE = 0.88;
+const lightCap = (v: number): number => (v <= 0.7 ? TINT_L_MAX : TINT_L_MAX + ((TINT_L_MAX_CORE - TINT_L_MAX) * (v - 0.7)) / 0.3);
 
 /**
  * Knots where the hue is applied exactly: the values of the matter colormap's stops
@@ -147,7 +155,7 @@ export function tintRow(base: Uint8Array, hueDeg: number, out: Uint8Array, offse
       continue;
     }
     const [L, A, B] = rgbToOklab(r, g, b);
-    const t = oklch(L, Math.max(Math.hypot(A, B), L > 0.85 ? CORE_CHROMA : BODY_CHROMA), hueDeg);
+    const t = oklch(Math.min(L, lightCap(v)), Math.max(Math.hypot(A, B), L > 0.85 ? CORE_CHROMA : BODY_CHROMA), hueDeg);
     tinted.set([Math.round(r + (t[0] - r) * w), Math.round(g + (t[1] - g) * w), Math.round(b + (t[2] - b) * w)], k * 3);
   }
   let k = 0;

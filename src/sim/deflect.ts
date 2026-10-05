@@ -109,6 +109,8 @@ export const DEFLECT: DeflectOptions & { feather: number } = {
 interface Pending {
   left: number;
   until: number;
+  /** A turn off the glass (it is never replaced by another rim turn). */
+  rim?: boolean;
 }
 
 interface Track {
@@ -189,9 +191,41 @@ export class Deflector {
     }
     const updatesFor = (ang: number) => Math.max(1, Math.ceil(Math.abs(ang) / o.maxTurn - 1e-9));
 
+    /** The glass ahead of a body: the specular turn it needs now, or null (no impact in reach). */
+    const rimThreat = (b: Body): { vx: number; vy: number; t: number } | null => {
+      const sp = Math.hypot(b.vx, b.vy);
+      const dx = b.x - dish.cx;
+      const dy = b.y - dish.cy;
+      const rc = Math.hypot(dx, dy);
+      if (!(sp >= o.minSpeed) || rc <= 1e-6) return null;
+      const nx = dx / rc;
+      const ny = dy / rc;
+      const vn = b.vx * nx + b.vy * ny;
+      if (!(vn > o.minApproach * sp)) return null;
+      const gap = dish.radius - rc - b.radius * o.extentK - o.margin;
+      const t = gap / vn; // steps until the outline reaches the clearance line
+      const r = reflect(b.vx, b.vy, nx, ny);
+      const need = updatesFor(angleDelta(Math.atan2(b.vy, b.vx), Math.atan2(r.vy, r.vx))) * interval + interval;
+      return t <= need ? { ...r, t } : null;
+    };
+
     for (let i = 0; i < bodies.length; i++) {
       const b = bodies[i];
       const p = this.pending.get(b.id);
+      // The glass comes first (QA4: a swimmer in the middle of a swerve off another body, or in the
+      // cooldown after one, was carried into the absorbing rim and died). A steerable body whose heading
+      // is known and that is about to reach the glass turns off it now, whatever it was doing.
+      const urgent =
+        p && ((p.left !== 0 && !p.rim) || (p.left === 0 && step < p.until)) && b.steerable !== false && (curl.get(b.id) ?? Infinity) <= o.maxCurl ? rimThreat(b) : null;
+      if (urgent) {
+        const ang = angleDelta(Math.atan2(b.vy, b.vx), Math.atan2(urgent.vy, urgent.vx));
+        if (Math.abs(ang) >= 1e-3) {
+          const np: Pending = { left: ang, until: 0, rim: true };
+          this.pending.set(b.id, np);
+          turns.push(this.emit(b, np));
+          continue;
+        }
+      }
       if (p && p.left !== 0) {
         turns.push(this.emit(b, p));
         continue;
@@ -202,24 +236,11 @@ export class Deflector {
       const sp = Math.hypot(b.vx, b.vy);
       if (!(sp >= o.minSpeed)) continue;
       const ext = b.radius * o.extentK;
-      let best: { vx: number; vy: number; t: number } | null = null;
+      let best: { vx: number; vy: number; t: number; rim?: boolean } | null = null;
 
       // Rim: outward normal at the body.
-      const dx = b.x - dish.cx;
-      const dy = b.y - dish.cy;
-      const rc = Math.hypot(dx, dy);
-      if (rc > 1e-6) {
-        const nx = dx / rc;
-        const ny = dy / rc;
-        const vn = b.vx * nx + b.vy * ny;
-        if (vn > o.minApproach * sp) {
-          const gap = dish.radius - rc - ext - o.margin;
-          const t = gap / vn; // steps until the outline reaches the clearance line
-          const r = reflect(b.vx, b.vy, nx, ny);
-          const need = updatesFor(angleDelta(Math.atan2(b.vy, b.vx), Math.atan2(r.vy, r.vx))) * interval + interval;
-          if (t <= need) best = { ...r, t };
-        }
-      }
+      const rim = rimThreat(b);
+      if (rim) best = { ...rim, rim: true };
       // Other bodies: elastic encounter (each reflects off the line between centres).
       if (o.bodies) {
         for (let j = 0; j < bodies.length; j++) {
@@ -239,13 +260,13 @@ export class Deflector {
           const t = Math.max(0, gap) / closing;
           const r = awayFrom(reflect(b.vx, b.vy, nx, ny), nx, ny, o.minAway);
           const need = updatesFor(angleDelta(Math.atan2(b.vy, b.vx), Math.atan2(r.vy, r.vx))) * interval + interval;
-          if (t <= need && (!best || t < best.t)) best = { ...r, t };
+          if (t <= need && (!best || t < best.t)) best = { ...r, t, rim: false };
         }
       }
       if (!best) continue;
       const ang = angleDelta(Math.atan2(b.vy, b.vx), Math.atan2(best.vy, best.vx));
       if (Math.abs(ang) < 1e-3) continue;
-      const np: Pending = { left: ang, until: 0 };
+      const np: Pending = { left: ang, until: 0, rim: !!best.rim };
       this.pending.set(b.id, np);
       turns.push(this.emit(b, np));
     }
