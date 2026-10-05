@@ -45,8 +45,28 @@ trampa cueste esfuerzo y que las puntuaciones imposibles o muy sospechosas no ll
    envío aceptado) y cubos por IP en memoria (orientativos: cada instancia tiene los suyos). Además:
    cuerpo de 4 KB como máximo, `Content-Type: application/json` obligatorio y solo el mismo origen.
    Nunca se envían cabeceras CORS, y un `Origin` ajeno recibe 403.
-4. **Plausibilidad en el servidor** (`server/validate.ts`). Las cotas salen de `src/game/balance.ts`.
-   El tiempo real lo mide el **reloj del servidor** entre dos envíos aceptados.
+4. **Plausibilidad en el servidor** (`server/validate.ts`). Las cotas salen de `src/game/balance.ts`,
+   `src/game/cycleBalance.ts` y `src/game/tree.ts`. El tiempo real lo mide el **reloj del servidor** entre dos
+   envíos aceptados.
+
+   **(Corrección v0.017, RF-01)** Cada envío dice su ciclo. Los clientes de hoy juegan el **ciclo de sesiones**
+   (ADR-026) y mandan `cycle: 'sessions'`, `sessions` (terminadas) y `datos` (ganados en total); `era` es la noche y
+   `genome` siempre 0. Esos envíos se juzgan con la economía de sesiones:
+   - **Rechazo:** una noche mayor que `NIGHT_MAX` o que las sesiones no alcanzan (`NIGHT_GATES`); Genoma > 0; más
+     sesiones de las que caben en el tiempo de juego (una cada 2 s, +3); más Datos de los que paga la Esencia
+     (÷ 25 con todos los bonus al máximo, por sesión); un pico de producción por encima del techo físico (el mejor
+     Árbol que esos Datos pueden comprar, 40 criaturas, 13 Abonos, todos los multiplicadores); esencia por encima
+     de ese techo × tiempo de juego (+ Destellos y Encargos); sesiones, Datos o noches que bajan; un ciclo de
+     sesiones que vuelve al clásico, o sin sus campos.
+   - **Marca:** pico de producción por encima del techo «sospechoso» (sitio de la placa + 6 criaturas, 7 Abonos);
+     esencia que no cuadra con el propio pico (editar solo la esencia).
+   - Prueba: `tests/unit/ranking-sessions.test.ts` pasa las partidas reales del bot de sesiones (3 políticas,
+     40 sesiones, 6 partidas) por el validador, como primer envío y contra el último aceptado: **ninguna** se
+     rechaza ni se marca (un barrido de 36 partidas × 50 sesiones = 1 692 envíos tampoco; el pico más alto usa el
+     4 % del techo sospechoso). Las trampas de la prueba (Esencia ×10⁶, pico ×1000, noche 6 en 3 sesiones…) sí.
+     Importar tu propia partida en otro aparato ya no marca `tampered`.
+
+   Los envíos **sin** `cycle` (clientes viejos del ciclo clásico de eras) siguen con las reglas de abajo.
    - **Rechazo** (reglas que el juego no puede romper):
      - el tiempo de juego crece más rápido que el tiempo real (speed hack);
      - un contador baja (esencia, especies, comportamientos, eras, semillas, tiempo de juego, pico de producción);

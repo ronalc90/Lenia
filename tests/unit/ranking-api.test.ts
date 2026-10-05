@@ -123,6 +123,24 @@ describe('ranking API (memory store)', () => {
     expect(typeof b.body.serverTime).toBe('number');
   });
 
+  it('a sessions-cycle player at Night 3 is accepted and stays accepted (RF-01: rejected from Night 2 on before)', async () => {
+    const p = await newPlayer();
+    // Night 3 after 9 sessions (NIGHT_GATES), no Genome: the classic rules alone would reject it.
+    const night3 = { lifetimeEssence: 9000, eraEssence: 9000, era: 3, epsPeak: 20, cycle: 'sessions' as const, sessions: 9, datos: 420, speciesCount: 2, behaviorsCount: 1, playTimeSec: 900, seeds: 60 };
+    const r = await submit(await signed(p, night3));
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(r.body).toMatchObject({ ok: true, status: 'accepted', flagged: false });
+    // Two sessions and a minute later: still accepted against the stored (sessions) baseline.
+    clock += 3 * 60_000;
+    const later = await submit(await signed(p, { ...night3, lifetimeEssence: 12_000, eraEssence: 12_000, sessions: 11, datos: 560, playTimeSec: 1060, seeds: 72, clientTime: clock }));
+    expect(later.status, JSON.stringify(later.body)).toBe(200);
+    expect(later.body).toMatchObject({ status: 'accepted', flagged: false });
+    // The same save claiming the classic loop (no cycle) is judged by the classic rules.
+    const q = await newPlayer();
+    const classic = await submit(await signed(q, { ...night3, cycle: undefined, sessions: undefined, datos: undefined }));
+    expect(classic.status).toBe(422);
+  });
+
   it('ranks players per board and serves the top 50 plus my own row', async () => {
     const players = await Promise.all(Array.from({ length: 55 }, () => newPlayer()));
     for (let i = 0; i < players.length; i++) {

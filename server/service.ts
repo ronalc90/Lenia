@@ -215,6 +215,7 @@ export function createLeaderboardService(opts: ServiceOptions): LeaderboardServi
         seeds: sub.seeds,
         createdAt: sub.createdAt,
         epsPeak: sub.epsPeak,
+        ...(sub.cycle === 'sessions' ? { cycle: sub.cycle, sessions: sub.sessions, datos: sub.datos } : {}),
       };
       const result = validateSubmission(rec?.last ?? null, stats, t, sub.integrity);
       if (result.verdict === 'reject') {

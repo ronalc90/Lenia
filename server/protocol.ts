@@ -63,6 +63,13 @@ export interface SubmissionPayload {
   epsPeak: number;
   /** First-run time of the save (ms). */
   createdAt: number;
+  /**
+   * Optional (added for RF-01, ADR-026): 'sessions' for a sessions-cycle save, which then also sends
+   * `sessions` (finished) and `datos` (ever earned). Absent = an old client of the classic Era loop.
+   */
+  cycle?: 'sessions';
+  sessions?: number;
+  datos?: number;
   /** Client estimate of the SERVER clock in ms (Date.now() + offset learned from serverTime). */
   clientTime: number;
   /** 32 hex chars, random per submission. */
@@ -308,6 +315,9 @@ const ALL_KEYS = new Set<string>([
   'integrity',
   'sig',
   'cosmetics',
+  'cycle',
+  'sessions',
+  'datos',
   ...NUM_FIELDS,
 ]);
 
@@ -329,6 +339,14 @@ export function parseSubmission(x: unknown): ParseResult {
     const v = o[k];
     if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) return bad(k);
     if (INT_FIELDS.has(k) && !Number.isSafeInteger(v)) return bad(k);
+  }
+  if (o.cycle !== undefined || o.sessions !== undefined || o.datos !== undefined) {
+    if (o.cycle !== 'sessions') return bad('cycle');
+    for (const k of ['sessions', 'datos'] as const) {
+      const v = o[k];
+      if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) return bad(k);
+    }
+    if (!Number.isSafeInteger(o.sessions)) return bad('sessions');
   }
   const i = o.integrity;
   if (typeof i !== 'object' || i === null || Array.isArray(i)) return bad('integrity');

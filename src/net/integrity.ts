@@ -20,6 +20,7 @@ import { base64ToUtf8, checksum, deserializeState, type GameState } from '../gam
 import type { IntegrityReport } from '../../server/protocol.js';
 import { plausibleSnapshot, type RunStats } from '../../server/validate.js';
 import { readJson, safeStorage } from './storage';
+import { decodeSaveText } from '../app/saveBundle';
 
 const K_FLAGS = 'bioluma.lb.integrity';
 const K_CLOCK = 'bioluma.lb.clock';
@@ -75,8 +76,15 @@ interface Flags {
   reasons: string[];
 }
 
+/**
+ * The numbers a ranking submission reports. A sessions-cycle save (it carries `research`) also reports
+ * its cycle, sessions and Datos, so the server judges it by the session economy (RF-01), not the Era
+ * loop's prestige arithmetic.
+ */
 export function runStatsOf(s: Readonly<GameState>): RunStats {
+  const r = s.research;
   return {
+    ...(r ? { cycle: 'sessions' as const, sessions: r.sessions, datos: r.datosEarned } : {}),
     lifetimeEssence: s.stats.totalEssence,
     eraEssence: s.eraEssence,
     genome: s.genome + s.genomeSpent,
@@ -187,7 +195,8 @@ export function createIntegrity(opts: IntegrityOptions = {}): Integrity {
     },
     noteImport(text) {
       try {
-        const t = String(text ?? '').trim();
+        // A whole-progress bundle (RF-02) is judged by its game part.
+        const t = decodeSaveText(text)?.game ?? String(text ?? '').trim();
         if (!t.startsWith(B.EXPORT_PREFIX)) return;
         let json: string;
         try {

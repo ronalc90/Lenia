@@ -1,3 +1,9 @@
+/**
+ * Classic Era loop (Laboratorio, Calibrar, Genoma, Extinción): no player reaches it any more (createGame's
+ * default is the sessions cycle, ADR-026, which migrates old classic saves); the code is still there and is tested
+ * here explicitly with `cycle: 'classic'` until it is deleted (ADR-028). The sessions cycle has its own tests (sessions.test.ts,
+ * spacing.test.ts, dish.test.ts, tests/unit/ranking-sessions.test.ts…).
+ */
 import { describe, expect, it } from 'vitest';
 import * as B from '../../src/game/balance';
 import { createGame } from '../../src/game/game';
@@ -233,7 +239,7 @@ describe('no false positives on a real (very strong) game run', () => {
   it('a greedy two-hour session with maxed creatures, upgrades and every golden spark is always accepted', () => {
     let clock = NOW - 3 * H * 1000;
     const { bus } = recordingBus();
-    const g = createGame({ bus, rng: seededRng(7), now: () => clock });
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(7), now: () => clock });
     // Twelve top-complexity creatures across three species, best behaviours.
     const sigs = [ORBIUM_SIG, SCUTIUM_SIG, GYRO_SIG];
     const behaviors = ['colony', 'divider', 'spinner'] as const;

@@ -158,10 +158,19 @@ describe('parseSubmission', () => {
     ['integrity not boolean', (o: Record<string, unknown>) => (o.integrity = { speedHack: 'no', clockRollback: false, tampered: false })],
     ['integrity extra key', (o: Record<string, unknown>) => (o.integrity = { speedHack: false, clockRollback: false, tampered: false, x: true })],
     ['huge name', (o: Record<string, unknown>) => (o.name = 'x'.repeat(100))],
+    ['an unknown cycle', (o: Record<string, unknown>) => Object.assign(o, { cycle: 'era', sessions: 3, datos: 10 })],
+    ['sessions without the cycle', (o: Record<string, unknown>) => Object.assign(o, { sessions: 3, datos: 10 })],
+    ['negative Datos', (o: Record<string, unknown>) => Object.assign(o, { cycle: 'sessions', sessions: 3, datos: -1 })],
+    ['fractional sessions', (o: Record<string, unknown>) => Object.assign(o, { cycle: 'sessions', sessions: 2.5, datos: 10 })],
   ])('rejects %s', async (_label, mutate) => {
     const o = await valid();
     mutate(o);
     expect(parseSubmission(o).ok).toBe(false);
+  });
+
+  it('accepts the sessions-cycle fields (RF-01)', async () => {
+    const o = { ...(await valid()), cycle: 'sessions', sessions: 12, datos: 340 };
+    expect(parseSubmission(o).ok).toBe(true);
   });
 
   it('rejects non-objects', () => {
