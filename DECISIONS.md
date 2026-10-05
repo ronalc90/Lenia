@@ -456,6 +456,11 @@ ADR that supersedes the old one.
   - Saves keep the grid bytes. *(Corrected v0.017, RF-05: old 4:5 saves were never centred and cropped. A saved dish
     is restored only on the grid it was saved on; any other dish — a 4:5 save, a Quality change, an import — is
     dropped and the session on it gets its starter / Nevera again, `Game.dishLost()`.)*
+  - *(Amended v0.018, RF-04/RF-12)* On a device whose quality caps the dish (Low: Ø160), room follows the dish it
+    shows. A Placa level past that cap keeps its **real price** and is **not on sale** there (BuyBlock `device`,
+    «Tu aparato ya tiene la placa más grande»); a node whose prerequisite is such a level counts it as met, so the
+    route goes on to Ecosistema. Selling those levels for 0 (v0.017) let a Low device buy Placa gigante for free
+    and show it unpaid on Medium. Levels already bought stay bought.
   - The GDD (§4 "Bordes", Placa row of §8, §9 "sobre el toro") gets "(Corrección v1.2)" notes; CLAUDE.md's
     invariant "The dish is toroidal" becomes "The dish is a round walled disc that grows (ADR-025)".
   - *(Amended v0.015)* **The dish never steps blind** (`src/sim/detectGate.ts`): at each 10-step snapshot

@@ -239,7 +239,7 @@ contra un build de la v0.016 sacado con `git archive`: falló en RF-02, RF-05, R
 | RF-08 | P2 | El bucle avanza la placa con `stepDish` (`src/sim/detectGate.ts`), que devuelve los pasos que la placa **de verdad** dio: con el contexto WebGL perdido son 0 y el reloj de la sesión (tiempo de placa) no se mueve. | `src/sim/detectGate.test.ts` (4). |
 | RF-09 | P2 | `createGame` arranca en el ciclo de sesiones; las pruebas del ciclo clásico lo piden explícitamente con una cabecera que lo dice (ADR-028), y las regresiones que ve el jugador pasaron a sesiones (`spacing.test.ts` QA4 F-07/F-13, `dish.test.ts`, ranking). Borrados `ui-shots.mjs` e `integration2-shots.mjs` (rotos, del flujo viejo) y 29 textos muertos de `i18n.ts`. Ningún script lleva ya la ruta del scratchpad de un agente: salida en `os.tmpdir()` o en su variable de entorno. README y wiki (Desarrollo/Development) describen el juego actual; las imágenes rotas del README se cambiaron por capturas que existen. El código clásico de `game.ts` sigue (su borrado completo, con sus pruebas y textos, queda definido en ADR-028). | Suite completa con el nuevo valor por defecto: 104 archivos, 1 108 pruebas. |
 | RF-10 | P2 | Una sola cifra antes de la primera semilla (`earningNow`): la etiqueta de la criatura dice «Viva» sin «/s», la tarjeta «¡VIDA!» no inventa «+1,0» ni dibuja «+1/s» (su chip y su dibujo usan la cifra de la etiqueta, y ninguna mientras el reloj espera; `liveRateBadge`), la ficha de la criatura dice +0 y la ficha de especie dice «al sembrar». | `status.test.ts` (incluye el dibujo, que el pase de `session-play` encontró con «+1/s»), `species-card.test.ts`, `catalog.test.ts`; `release-checks.mjs`. |
-| RF-11 | P2 | `STEPS_PER_SEC` de `main.ts` y la edad de `ui.ts` usan `SIM_STEPS_PER_SEC` de `cycleBalance.ts`. `pushTints` reutiliza 32 objetos y `Overlay.runLayers` un solo `frame` sin copiar la lista. `sw.js` lleva el nombre de caché sellado con la versión en el build (`src/app/swVersion.ts`, `vite.config.ts`): cada versión instala su trabajador y al activarse borra las cachés viejas, así que guarda una sola versión. | `src/app/swVersion.test.ts` (3); `dist/sw.js` sale con `bioluma-0.016-<sha>`. |
+| RF-11 | P2 | `STEPS_PER_SEC` de `main.ts` y la edad de `ui.ts` usan `SIM_STEPS_PER_SEC` de `cycleBalance.ts`. `pushTints` reutiliza 32 objetos y `Overlay.runLayers` un solo `frame` sin copiar la lista. `sw.js` lleva el nombre de caché sellado con la versión en el build (`src/app/swVersion.ts`, `vite.config.ts`): cada versión instala su trabajador y al activarse borra las cachés viejas, así que guarda una sola versión. | `src/app/swVersion.test.ts` (3); `dist/sw.js` sale con `bioluma-<versión>-<sha>` (en la v0.017, `bioluma-0.017-b9b3781`). |
 
 **Puertas (todas en este contenedor):** `npm run typecheck` ✅ · `npm test` ✅ 104 archivos, 1 108 pruebas · `npm run build`
 ✅ (JS 404 + 26 + 4 KB gzip, CSS 37 KB) · `SINGLE=1 npx vite build` ✅ (471 KB gzip) · `npm run e2e` ✅ `SMOKE: OK` ·
@@ -248,4 +248,98 @@ repetido, OK) · `npm run e2e:release` ✅ `RELEASE-CHECKS: OK` · `layout-shift
 escritorio) · `session-play.mjs` ✅ `SESSION PLAY: OK` en los 4 casos (móvil y escritorio, es/en, oscuro/claro; 169 capturas revisadas: la tarjeta «¡VIDA!» sin cifra antes de sembrar, la ficha de Placa con «Tu aparato ya tiene la placa más grande» a 0 Datos). Una primera pasada encontró el «+1/s» dibujado (corregido) y esperaba que todo nivel de Placa costara Datos (ahora acepta el nivel gratis de RF-04) · bot de sesiones: salida
 **idéntica** antes y después, regla DURA OK (0 bajones). Sigue sin poder medirse aquí el suelo de 30 fps (SwiftShader:
 6,2 fps móvil, 1,3 escritorio, como en la revisión).
+
+
+## 7. Verificación v0.017 (revisor independiente)
+
+Base: `b9b3781` («Versión 0.017»), la misma que sirve `https://bioluma-xi.vercel.app/version.json` (`0.017`, `b9b3781`).
+Revisado el diff `08518e3..b9b3781` (86 archivos). El revisor no tocó código ni git; solo añade esta sección.
+
+### 7.1 Lo que se volvió a ejecutar
+
+| Comprobación | Resultado |
+|---|---|
+| `npm run typecheck` · `npm test` · `npm run build` · `SINGLE=1 npx vite build` | ✅ · ✅ 104 archivos, 1 108 pruebas · ✅ JS 404 + 26 + 4 KB gzip, CSS 37 KB · ✅ 471 KB gzip |
+| `npm run e2e` (smoke) · `layers.mjs` · `release-checks.mjs` | ✅ `SMOKE: OK` · ✅ `LAYERS: OK` (móvil y escritorio) · ✅ `RELEASE-CHECKS: OK` |
+| Contratos (`git diff 08518e3..b9b3781 -- src/core/`) | ✅ sin cambios |
+| Bot de sesiones → `runStatsOf` → `validateSubmission`, **propio del revisor**: 3 políticas × 7 semillas nuevas (2000 + 37k) × 60 sesiones, cada fin de sesión como primer envío y contra el último aceptado (≥ 60 s) | ✅ **994 envíos, 0 rechazos, 0 marcas**; las tres políticas llegan a la Noche 7 |
+| Partida clásica migrada (Noche 3, Genoma 4 + 7 gastado, coherente: el validador clásico la acepta) cargada en el ciclo de sesiones → validador | ❌ `reject` · `genome_max` (ver RF-01b) |
+| Ida y vuelta de exportar/importar por **Ajustes** en dos aparatos (build e2e): 4 secretos, +123 Datos, historia, Encargos, Momentos | ✅ secretos y su bonus (×1,04), Datos, niveles, historia y Momentos idénticos tras recargar; prefijo `BIOLUMA2.`; sin errores |
+| Objetivos táctiles a 48 px (`elementFromPoint`) en la placa del build de **producción**, 390 × 844 | ✅ ningún control visible por debajo de 48 px (en la v0.016: píldora 42 px, ✕ 36 px); `release-checks` audita además Ajustes, Árbol, fichas, resumen, inicio y Bestiario: 0 fallos |
+| Una sola cifra antes de sembrar (build de producción) | ✅ HUD «+0/s», la criatura dice «Nadadora celeste» sin «/s», la tarjeta «¡VIDA!» sin cifra inventada |
+| Criatura inicial en partida nueva (móvil y escritorio, e2e) | ✅ presente desde el paso 50, «stable» hacia el paso 480 |
+| `dist/sw.js` | ✅ caché `bioluma-0.017-b9b3781` |
+| Suelo de 30 fps | ⚠️ sigue sin poder medirse aquí (SwiftShader 6 fps / 1,3 fps) |
+
+### 7.2 Veredicto por hallazgo
+
+| Id | Veredicto | Nota del revisor |
+|---|---|---|
+| RF-01 | **cerrado para partidas del ciclo de sesiones; no cerrado para partidas migradas** | Las 994 partidas honradas del bot pasan. Queda RF-01b (abajo). |
+| RF-02 | **cerrado** | Verificado por la interfaz real en dos contextos de navegador, secretos incluidos (no los cubría `release-checks`). |
+| RF-03 | **cerrado** | ADR-026 y ADR-028 en `DECISIONS.md`, 27 marcas en la GDD. Restos menores sin marca: `docs/GDD.md:441` («la placa es toroidal» en la fila «Explotó») y `:939` (pregunta resuelta «toroidal también en pantalla»); la tabla de perfiles `:760-764` queda bajo la nota v1.2 de `:752`. P2. |
+| RF-04 | **cerrado, pero introduce RF-12** | El sitio sigue a la placa del aparato; el «gratis» abre un atajo (abajo). |
+| RF-05 | **cerrado** | `release-checks`: 168 → 232 con la criatura inicial viva; Ajustes avisa. |
+| RF-06 | **cerrado** | Ver 7.1. |
+| RF-07 | **cerrado** | Sin interruptor; identificador en Ajustes; la página de privacidad lo dice. |
+| RF-08 | **cerrado** | `stepDish` cuenta solo los pasos que avanzó `stepCount`; con contexto perdido devuelve 0. Pruebas en `detectGate.test.ts`. |
+| RF-09 | **cerrado** (según ADR-028) | Sesiones por defecto; scripts rotos borrados; ninguna ruta de scratchpad en `tests/`, `scripts/`, `src/`; README y wiki al día. El ciclo clásico sigue en `game.ts` por decisión registrada. |
+| RF-10 | **cerrado** | Ver 7.1. |
+| RF-11 | **cerrado** | Constante única, sin asignaciones por fotograma en tintes y capas, caché del SW por versión. (La tabla de §6 dice `bioluma-0.016-<sha>`; el build real dice `0.017`.) |
+
+### 7.3 Hallazgos nuevos
+
+#### RF-01b · P1 · Ranking — una partida clásica migrada con Genoma se rechaza para siempre
+
+- **Dónde:** `server/validate.ts` `checkSessionsAbsolute` (`if (s.genome > 0) hard.push('genome_max')`) con
+  `src/net/integrity.ts` `runStatsOf` (`genome: s.genome + s.genomeSpent`); `migrateLegacy` convierte el Genoma en Datos
+  pero no pone a 0 `s.genome` ni `s.genomeSpent`.
+- **Escenario medido:** partida clásica coherente (Noche/era 3, 800 000 de Esencia, Genoma 4 + 7 gastado; el validador
+  clásico dice `accept`) → abierta en la v0.017 (migración) → `runStatsOf` envía `cycle: 'sessions'`, `genome: 11` →
+  `reject` `genome_max`. Todo jugador anterior a las sesiones que hizo una Extinción lee «El sistema anti-trampas rechazó
+  la puntuación» en cada envío, y al importar su partida queda marcado `tampered`. `ranking-sessions.test.ts` solo juega
+  partidas nacidas en sesiones.
+- **Arreglo:** en `runStatsOf`, `genome: r ? 0 : s.genome + s.genomeSpent` (o que la migración ponga ambos a 0, ya
+  pagados en Datos), y una prueba que migre una partida clásica con Genoma y la valide.
+
+#### RF-12 · P1 · Economía — la Placa XL (12 000 Datos) sale gratis cambiando la Calidad
+
+- **Dónde:** `src/game/tree.ts` `nodeCost` (`if (beyondDevice(id, level)) return 0`) con el nivel comprado guardado tal
+  cual en `research.levels`; `treeEffects` solo recorta el efecto en el aparato que tiene el límite.
+- **Escenario medido** (script del revisor con el juego real): `setDeviceDish(160)` (Ajustes → Calidad Baja, que cualquiera
+  puede elegir) → «Placa más grande» nivel 2 cuesta 0 (6 en Media) y «Placa gigante» (`dishXL`, anillo 4) cuesta 0 en vez
+  de 12 000: se compra con 5 Datos en la cartera. La misma partida con `setDeviceDish(224)` (volver a Calidad Media, o pasar
+  la partida a otro móvil) tiene `dishLevel` 3 y sitio para 12 criaturas sin haberlas pagado.
+- **Arreglo:** no regalar el nivel: mantener el precio y bloquear la compra con «Tu aparato ya tiene la placa más grande»
+  (o guardar el nivel como «pendiente de pago» y no aplicarlo en un aparato mayor). Prueba: comprar en límite bajo, cargar
+  sin límite, el nivel no debe aparecer sin haberse pagado.
+
+### 7.4 Veredicto final
+
+**Casi lista; todavía no.** El P0 está cerrado: ningún jugador honrado del ciclo de sesiones es rechazado (994 envíos
+propios, 0 rechazos), y los otros diez hallazgos de la revisión están cerrados y comprobados por el revisor. No hay
+regresiones en contratos, puertas ni e2e. Quedan **dos P1 nuevos, pequeños y aislados** que hay que cerrar antes de
+publicar:
+
+| Id | Sev. | Qué cerrar |
+|---|---|---|
+| RF-01b | P1 | `genome` = 0 en los envíos de partidas de sesiones (o a 0 en la migración) + prueba con una partida clásica migrada |
+| RF-12 | P1 | Los niveles de Placa que el aparato no enseña no pueden ser gratis + prueba de cambio de Calidad |
+
+Con esos dos cerrados (y el suelo de 30 fps medido en un móvil real), el revisor la daría por **lista**. Los restos de la
+GDD de RF-03 son P2.
+
+### 7.5 Resolución de la verificación
+
+Arreglos del agente de cierre sobre `b9b3781`. Cada uno con su prueba, que se vio fallar contra el código de la v0.017.
+
+| Id | Sev. | Resolución | Prueba |
+|---|---|---|---|
+| RF-01b | P1 | Las dos puntas. (1) La migración (`ensureResearch` en `game.ts`) pone a 0 `genome` y `genomeSpent`: ese Genoma ya se pagó en Datos. (2) `runStatsOf` envía `genome: 0` en el ciclo de sesiones, también para una partida que una migración anterior dejó con Genoma. Además, el validador acepta una noche por encima de las puertas de sesiones solo si la Esencia alcanza lo que exigían las Extinciones de esas eras (250 000 cada una): es el caso de una partida clásica migrada con su Era, y una noche inventada con poca Esencia sigue rechazada (`night_gate`). | `tests/unit/ranking-sessions.test.ts` (4 nuevas) con el caso del revisor (era 3, 800 000 de Esencia, Genoma 4 + 7 gastado): migrada, Genoma 0, envío `accept`; importarla no marca `tampered`; una Noche 6 sin esa Esencia sigue `night_gate`. `scratchpad/rev/mig.ts` del revisor: `migrated { verdict: 'accept' }`. |
+| RF-12 | P1 | **Decisión:** un nivel de Placa que el aparato no enseña **conserva su precio real** y **no se vende** en ese aparato (bloqueo `device`; el botón dice «Tu aparato ya tiene la placa más grande»). Para no cortar la ruta, un nodo cuyo requisito es un nodo de Placa que el aparato no puede enseñar en absoluto lo da por cumplido: Ecosistema sigue disponible en calidad Baja sin vender la Placa gigante. En un aparato mayor ese nivel vuelve a estar a la venta a su precio. Los niveles ya comprados se quedan. Registrado como enmienda de ADR-025 en `DECISIONS.md` y en la fila Placa de la GDD. | `tree.test.ts`: precio real, `block: 'device'`, compra imposible y Ecosistema `available`. `sessions.test.ts`: la secuencia del revisor (Baja, todo comprado salvo la Placa gigante, 5 Datos → compra rechazada; la misma partida en Media → sin Placa gigante, `dishLevel` 1, y el nivel siguiente se compra pagando). Scripts `scratchpad/rev2/dishxl.ts` y `dishfree.ts`: «buy on low with 5 Datos: false», Placa gigante 12 000 en Baja y en Media. |
+| RF-03 (resto) | P2 | `docs/GDD.md`: la fila «Explotó» (§9), la pregunta resuelta de §22 y la línea 2 de la tabla v1.1 llevan su «(Corrección v1.2, ADR-025)»: ya no queda «toroidal» sin marca. | Revisión de documentos. |
+
+**Puertas:** `npm run typecheck` ✅ · `npm test` ✅ 104 archivos, 1 113 pruebas · `npm run build` ✅ · `SINGLE=1 npx vite build` ✅
+(471 KB gzip) · `npm run e2e` ✅ `SMOKE: OK` · `npm run e2e:release` ✅ `RELEASE-CHECKS: OK` · `npm run e2e:layers` ✅
+`LAYERS: OK` · bot de sesiones: salida **idéntica** a la de antes de la revisión, regla DURA OK (0 bajones).
 

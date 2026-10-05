@@ -9,7 +9,7 @@
 > | # | Corrección | Dónde |
 > |---|---|---|
 > | 1 | Semillas con ruido asimétrico suavizado y "esporas" (plantilla de especie + ruido) | §2, §4, §6, §8, §11 |
-> | 2 | Placa toroidal también en pantalla; sin penalización por borde; "Explotó" solo por masa/relleno | §4, §9, §22 |
+> | 2 | Placa toroidal también en pantalla *(superado por ADR-025 en la v1.2: placa redonda con cristal)*; sin penalización por borde; "Explotó" solo por masa/relleno | §4, §9, §22 |
 > | 3 | Extinción disponible solo por el término de esencia; bonus de Genoma por especie/comportamiento solo la primera vez de por vida | §5, §10 |
 > | 4 | La firma de especie no incluye μ ni σ | §9 |
 > | 5 | Rendimientos decrecientes 0.85^k por especie repetida; colonia no se apila con divisora | §5, §9, §20 |
@@ -397,7 +397,7 @@ Costos en Esencia; `g` es el factor geométrico de la §5. Las mejoras con nivel
 | **Cultivo** | ∞ | b = 50, g = 1.35 | +10 % a `M_global`. | 10 Esencia/s |
 | **Calibrador** | 4 | 25, 300, 3 000, 30 000 | I: slider μ en 0.13 a 0.17. II: slider σ en 0.005 a 0.05 y 8 regímenes guardables. III: μ hasta 0.10 a 0.50 y slider dt. IV: slider R de 10 a 27. | 1 especie registrada |
 | **Estabilizador** | 10 | b = 80, g = 1.30 | +3 % de probabilidad de que una siembra se estabilice (ajusta densidad y sesgo de la espora hacia el mejor valor conocido del régimen actual). | Calibrador I |
-| **Placa** | 4 | 100, 1 000, 10 000, 100 000 | **(Corrección v1.2, ADR-025)** Placa redonda Ø128 → Ø160 → Ø192 → Ø224 con sitio para 3 · 4 · 5 · 7 criaturas; en calidad baja llega a Ø160 y los niveles mayores no se cobran (RF-04). *(v1.1, superado:)* Más tamaño de placa y más espacio para criaturas, en escalones de aspecto fijo 4:5 (128×160, 160×200, 192×240, 224×280). Limitado por el perfil de rendimiento del dispositivo (§17); el reparto exacto por nivel vive en `src/game/balance.ts`. | 4 criaturas estables a la vez |
+| **Placa** | 4 | 100, 1 000, 10 000, 100 000 | **(Corrección v1.2, ADR-025)** Placa redonda Ø128 → Ø160 → Ø192 → Ø224 con sitio para 3 · 4 · 5 · 7 criaturas; en calidad baja llega a Ø160: los niveles mayores conservan su precio pero no se venden en ese aparato («Tu aparato ya tiene la placa más grande») y la ruta sigue hacia Ecosistema (RF-04, RF-12). *(v1.1, superado:)* Más tamaño de placa y más espacio para criaturas, en escalones de aspecto fijo 4:5 (128×160, 160×200, 192×240, 224×280). Limitado por el perfil de rendimiento del dispositivo (§17); el reparto exacto por nivel vive en `src/game/balance.ts`. | 4 criaturas estables a la vez |
 | **Incubadora** | 2 | 200, 2 000 | I: botón ×2 pasos por frame. II: ×4. Solo si el dispositivo sostiene 30 fps. | Placa I |
 | **Afinidad nadadora** | 10 | b = 120, g = 1.35 | +8 % a la producción de criaturas con comportamiento nadadora o giratoria. | Primera nadadora |
 | **Afinidad sésil** | 10 | b = 120, g = 1.35 | +8 % a la producción de quietas y pulsantes. | Primera quieta |
@@ -438,7 +438,7 @@ El orden importa: se evalúa de arriba hacia abajo y el primer estado que aplica
 | Estado | Criterio (umbrales iniciales) | Efecto en el juego |
 |---|---|---|
 | **Muerta** | Todas sus celdas < 0.1 durante 20 pasos. | Se elimina; sonido de disolución. |
-| **Explotó** | **(Corrección v1.1)** Su masa supera el 10 % de la placa, **o** la masa de la última cuarta parte de la ventana dividida por la segunda cuarta parte sale de (0.5, 3.0). *(El original añadía "toca el borde con A > 0.1"; se elimina: la placa es toroidal y no hay penalización por borde.)* | Produce 0; se marca en rojo; si cubre más del 40 % de la placa se ofrece "Esterilizar zona". |
+| **Explotó** | **(Corrección v1.1)** Su masa supera el 10 % de la placa, **o** la masa de la última cuarta parte de la ventana dividida por la segunda cuarta parte sale de (0.5, 3.0). *(El original añadía "toca el borde con A > 0.1"; se elimina: la placa es toroidal y no hay penalización por borde.)* **(Corrección v1.2, ADR-025)** La placa ya no es toroidal: es redonda con cristal; sigue sin haber penalización por tocarlo (el desviador aparta a las nadadoras). | Produce 0; se marca en rojo; si cubre más del 40 % de la placa se ofrece "Esterilizar zona". |
 | **Naciendo** | **(Corrección v1.1)** Edad < ~400 pasos (antes 200). | Produce 0; borde animado. |
 | **Estable** | **(Corrección v1.1)** A partir de ~400 pasos de edad: ratio de masa dentro de (0.5, 3.0) en 2 mini-ventanas seguidas (~200 pasos cada una) y una sola componente conexa que concentra ≥ 80 % de su masa. *(El original exigía 2 ventanas completas de 1 000 pasos, es decir 2 000 pasos de espera, demasiado largo para un incremental.)* | Produce Esencia **como "quieta" ×1.0** desde que es estable; puede registrarse. |
 
@@ -936,7 +936,7 @@ El riesgo mayor es que el detector sea impreciso: si registra basura como especi
 
 - **Nombre definitivo del juego.** Nombre de trabajo: **Bioluma** (antes "Petri"). Verificar disponibilidad de dominio antes de comprar.
 - ¿Las Muestras sobreviven a la Extinción tal como está escrito, o se reinician para que el Bestiario también tenga ritmo de Era? *(Se mantiene como está escrito.)*
-- ~~¿La placa es toroidal visualmente o se muestra con borde y el detector castiga el contacto?~~ **Resuelta (Corrección v1.1, ADR-004): toroidal también en pantalla, sin penalización por borde.** El original asumía lo segundo.
+- ~~¿La placa es toroidal visualmente o se muestra con borde y el detector castiga el contacto?~~ **Resuelta (Corrección v1.1, ADR-004): toroidal también en pantalla, sin penalización por borde.** El original asumía lo segundo. **(Corrección v1.2, ADR-025)** Vuelta a resolver: placa de Petri redonda con cristal que crece, sin toro y sin penalización por el cristal.
 - ~~¿Idioma inicial solo español, o español e inglés desde el día 1?~~ **Resuelta:** todo texto para el jugador se escribe en español **y** en inglés (`Text { es, en }`).
 - ¿Se permite nombrar especies con texto libre (riesgo de nombres ofensivos en capturas compartidas) o solo con un generador de nombres latinos?
 
