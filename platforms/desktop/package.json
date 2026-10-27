@@ -22,8 +22,8 @@
     "dist:steam": "node scripts/copy-web.mjs && electron-builder --config electron-builder.steam.cjs --publish never"
   },
   "devDependencies": {
-    "electron": "^44.5.1",
-    "electron-builder": "^26.15.3"
+    "electron": "^44.9.3",
+    "electron-builder": "^26.18.0"
   },
   "optionalDependencies": {
     "steamworks.js": "^0.4.0"
