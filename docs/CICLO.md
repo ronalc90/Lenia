@@ -50,7 +50,7 @@ mundos, noches, Nevera, Abono, guardado v2) con su interfaz (§15.2). El ciclo c
 13. [Partidas antiguas](#13-partidas-antiguas)
 14. [Archivos y API](#14-archivos-y-api)
 15. [Cambios para la Fase 2](#15-cambios-para-la-fase-2)
-16. [ADR propuesto y preguntas abiertas](#16-adr-propuesto-y-preguntas-abiertas)
+16. [ADR (aceptado) y preguntas abiertas](#16-adr-aceptado-y-preguntas-abiertas)
 
 ---
 
