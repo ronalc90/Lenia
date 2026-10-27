@@ -63,14 +63,14 @@ jobs:
           BIOLUMA_VERSION: ${{ steps.version.outputs.version }}
         run: platforms/portals/zip-web.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: web-dist
           path: dist
           if-no-files-found: error
           retention-days: 7
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bioluma-web-${{ steps.version.outputs.version }}
           path: platforms/portals/out/*.zip
@@ -149,14 +149,14 @@ jobs:
           STEAM_APP_ID: ${{ vars.STEAM_APP_ID }}
         run: npm run dist:steam -- ${{ matrix.target }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bioluma-desktop-${{ runner.os }}-${{ needs.web.outputs.version }}
           path: ${{ matrix.artifacts }}
           if-no-files-found: error
           retention-days: 30
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: vars.STEAM_APP_ID != ''
         with:
           name: steam-depot-${{ runner.os }}-${{ needs.web.outputs.version }}
@@ -222,14 +222,14 @@ jobs:
           BIOLUMA_KEYSTORE_PATH="$RUNNER_TEMP/upload.keystore" ./gradlew bundleRelease --no-daemon
           rm -f "$RUNNER_TEMP/upload.keystore"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bioluma-android-debug-${{ needs.web.outputs.version }}
           path: platforms/mobile/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: env.HAS_KEYSTORE == 'true'
         with:
           name: bioluma-android-aab-${{ needs.web.outputs.version }}
