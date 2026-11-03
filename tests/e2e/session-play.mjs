@@ -13,6 +13,9 @@
 //   pictures (m-*, en-*, d-*: docs/wiki/README.md) into <dir>, as tests/e2e/wiki-shots.mjs does.
 // Fails on console/page errors, horizontal overflow, a HUD / dish / dock that moves, a session that
 // never ends, a summary or tree that never shows, or a purchase that does not land.
+// ADR-030 (docs/CLARIDAD2.md §2.2–§2.4): the player collects the light by tapping its drops; session 1
+// starts on an empty dish, the first tap plants the first creature where it landed and the clock waits for
+// VELA; the clock does not move while the Bestiary is open.
 import { spawn, spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -537,15 +540,34 @@ async function runCase(c) {
       if (busy.some((p) => Math.abs(p.x - x) < 70 && y > p.y - 90 && y < p.y + 60)) continue;
       await tap(x, y);
       await page.waitForTimeout(250);
-      return true;
+      return { x, y };
     }
     return false;
+  };
+  /** Like a player: tap the ripest drop of light on the dish (ADR-030), if there is one. */
+  const collectOnce = async () => {
+    const r = await page.evaluate(() => {
+      const t = window.bioluma.ui.targetRect('drop');
+      return t ? { x: t.x + t.width / 2, y: t.y + t.height / 2 } : null;
+    });
+    if (!r) return false;
+    await tap(r.x, r.y);
+    await page.waitForTimeout(150);
+    return true;
   };
 
   // ── Title ──
   await page.goto(`http://localhost:${port}/`);
   await page.waitForFunction(() => !!window.bioluma, null, { timeout: 30000 });
   await page.evaluate((s) => Object.assign(window.bioluma.debugTime, { scale: s, lockstep: true }), SCALE);
+  // Light the player collected with a finger, per session (ADR-030: the drop waits for a tap).
+  await page.evaluate(() => {
+    window.__hand = {};
+    window.bioluma.bus.on('lightCollected', (e) => {
+      const n = window.bioluma.game.view().session?.n ?? 0;
+      if (e.by === 'hand') window.__hand[n] = (window.__hand[n] ?? 0) + 1;
+    });
+  });
   await page.waitForTimeout(900);
   await shot('title');
   if (await visible('[data-testid="splash"]')) {
@@ -632,9 +654,47 @@ async function runCase(c) {
       }
     }
 
-    // ── Seed: the first tap starts the clock ──
+    // ── Seed: the first tap starts the clock (session 1: it plants the first creature; the clock waits for VELA) ──
+    if (k === 1) {
+      await settle(`seed ${k}`);
+      // QA#4 (docs/CLARIDAD2.md §2.4): the very first session starts on an empty dish.
+      const before = await page.evaluate(() => window.bioluma.game.view().creatures.filter((x) => x.state !== 'dead').length);
+      if (before !== 0) problems.push(`[${c.name}] session 1 started with ${before} creature(s) on the dish (QA#4: the player sows the first one)`);
+      const at = await seedOnce();
+      if (at) {
+        const grid = await page.evaluate(({ x, y }) => {
+          const b = window.bioluma;
+          const d = document.querySelector('.bl-dish').getBoundingClientRect();
+          return b.camera.screenToGrid(x - d.x, y - d.y);
+        }, at);
+        // The planted creature appears where the finger landed (incubating, its body within a radius or two).
+        const near = await page
+          .waitForFunction(
+            (g) => {
+              const b = window.bioluma;
+              const v = b.game.view();
+              const R = v.calibration.R;
+              return v.creatures.some((cr) => Math.hypot(cr.x - g.x, cr.y - g.y) < 3 * R);
+            },
+            grid,
+            { timeout: 60000, polling: 250 },
+          )
+          .then(() => true, () => false);
+        if (!near) problems.push(`[${c.name}] QA#4: the first creature is not where the player tapped (${JSON.stringify(grid)})`);
+        const ph = (await view()).session?.phase;
+        // QA#7: the first tap does not start the clock; VELA's line does.
+        if (ph !== 'ready') problems.push(`[${c.name}] QA#7: the first tap started the clock (${ph}); it waits for VELA`);
+        else say('Session 1: the dish was empty; the first tap planted the first creature there; the clock waits for VELA.');
+      }
+      // Read VELA's lines (born, alive, «Tu reloj empieza ahora») until the clock runs.
+      for (let i = 0; i < 40 && (await view()).session?.phase === 'ready'; i++) {
+        await settle(`seed ${k}`);
+        await page.waitForTimeout(400);
+      }
+    }
     for (let i = 0; i < 4; i++) {
       await settle(`seed ${k}`);
+      await collectOnce();
       await seedOnce();
     }
     await settle(`seed ${k}`);
@@ -644,6 +704,47 @@ async function runCase(c) {
     const started = !!v.session && (v.session.phase === 'running' || (v.session.phase === 'over' && v.session.remaining < v.session.total));
     if (!started) problems.push(`[${c.name}] session ${k}: the clock did not start after seeding (${JSON.stringify(v.session)})`);
     say(`Session ${k}: seeded, the clock runs (${v.session?.remaining ?? '?'} s left, ${v.creatures} creatures).`);
+    // QA#3 (docs/CLARIDAD2.md §2.12): with the Copiadora bought, the seed pill shows «Copiar»; it lists this
+    // world's species and a pick enters the copy mode.
+    if ((await page.evaluate(() => window.bioluma.game.research?.levels.print ?? 0)) > 0 && (await view()).session?.phase === 'running') {
+      await settle(`copy ${k}`);
+      if (!(await visible('[data-testid="copy"]'))) problems.push(`[${c.name}] QA#3: the Copiadora is bought but the seed pill shows no «Copiar»`);
+      else {
+        await shot(`s${k}-copy-button`);
+        await tapSel('[data-testid="copy"]');
+        await page.waitForTimeout(500);
+        if (await visible('.copy-strip .cs-sp')) {
+          await shot(`s${k}-copy-strip`);
+          await tapSel('.copy-strip .cs-sp');
+          await page.waitForTimeout(500);
+          if (!(await visible('.mode-pill.print'))) problems.push(`[${c.name}] QA#3: picking a species in «Copiar» did not enter the copy mode`);
+          else {
+            await shot(`s${k}-copy-mode`);
+            say(`Session ${k}: «Copiar» by the seed: picked a species, the pill says where to put the copy.`);
+            await seedOnce();
+            await page.waitForTimeout(400);
+          }
+        } else if (await page.evaluate(() => document.querySelector('[data-testid="copy"]')?.getAttribute('aria-disabled') === 'true')) {
+          await shot(`s${k}-copy-none`);
+          say(`Session ${k}: «Copiar» is there, greyed out: none of this world yet.`);
+        } else problems.push(`[${c.name}] QA#3: «Copiar» opened no species strip`);
+      }
+    }
+    // QA#19/#40 (docs/CLARIDAD2.md §2.3): the clock does not move while the Bestiary is open.
+    if (k === 2 && (await view()).session?.phase === 'running' && (await settle(`bestiary clock ${k}`), (await view()).session?.phase === 'running')) {
+      await tapSel('.bl-dock [data-tab="bestiary"]');
+      await page.waitForTimeout(800);
+      if (await page.evaluate(() => !!window.bioluma.ui.drawerOpen)) {
+        const e0 = await page.evaluate(() => window.bioluma.game.view().session?.elapsed ?? 0);
+        await page.waitForTimeout(2500);
+        const e1 = await page.evaluate(() => window.bioluma.game.view().session?.elapsed ?? 0);
+        await shot(`s${k}-bestiary-clock`);
+        if (Math.abs(e1 - e0) > 0.05) problems.push(`[${c.name}] QA#19: the clock ran ${(e1 - e0).toFixed(2)} s while the Bestiary was open`);
+        else say(`Session ${k}: the clock waits while the Bestiary is open.`);
+        await tapSel('.bl-drawer .drawer-x');
+        await page.waitForTimeout(600);
+      } else if ((await view()).session?.phase === 'running') problems.push(`[${c.name}] session ${k}: the Bestiary did not open from the dock while the clock ran`);
+    } else if (k === 2) say(`Session ${k}: the clock ran out while seeding; the Bestiary clock check had no running clock.`);
     await page.waitForTimeout(1500);
     await settle(`run ${k}`);
     await shot(`s${k}-running`);
@@ -666,7 +767,8 @@ async function runCase(c) {
         break;
       }
       const answered = await settle(`run ${k}`);
-      // A player keeps sowing while there is room and Essence.
+      // A player collects the ripe light (ADR-030) and keeps sowing while there is room and light.
+      if (!answered) await collectOnce();
       if (!answered && v.creatures < 4) await seedOnce();
       // Abono when it glows.
       if (boosted < 1 && (await visible('.dock-boost.can'))) {
@@ -745,7 +847,10 @@ async function runCase(c) {
     await shot(`s${k}-times-up`);
     v = await view();
     const turns = await page.evaluate(() => window.bioluma.dishStats?.turns ?? 0);
-    say(`Session ${k}: "¡Tiempo!" (${v.essence} Essence, ${v.species} species; ${turns} glass turns so far).`);
+    const hand = await page.evaluate((n) => window.__hand?.[n] ?? 0, k);
+    say(`Session ${k}: "¡Tiempo!" (${v.essence} Luz, ${v.species} species; ${hand} drops collected by hand; ${turns} glass turns so far).`);
+    // The player's taps collect the light (ADR-030): session 1 always has a drop to tap.
+    if (k === 1 && hand < 1) problems.push(`[${c.name}] session 1: no drop of light was collected by a tap`);
 
     // ── Summary ──
     for (let i = 0; i < 30 && !(await visible('.ss-layer [data-act="tree"]')); i++) {
@@ -773,7 +878,9 @@ async function runCase(c) {
     await shot(`s${k}-tree`);
     await overlapCheck(`tree ${k}`);
     // Session 2's tree buys «Placa más grande» first: the round dish must grow with it (ADR-025).
-    const want = k === 1 ? ['worldCold', 'clock', 'dropper'] : ['dish', 'clock', 'dropper', 'culture', 'startEssence', 'worldGyro', 'fridge'];
+    // Session 1's tree buys a Pipeta too (the helper the player then watches work, docs/CLARIDAD2.md §1.3);
+    // session 2's, the Copiadora (QA#3: its «Copiar» must show by the seed in session 3).
+    const want = k === 1 ? ['worldCold', 'pipette', 'clock', 'dropper'] : ['dish', 'notebook', 'print', 'clock', 'dropper', 'culture', 'startEssence', 'worldGyro', 'fridge'];
     const dishBefore = await page.evaluate(() => Math.round(2 * (window.bioluma.dishAnim?.target.radius ?? 0)));
     let bought = 0;
     for (let tries = 0; tries < 6 && bought < 3; tries++) {

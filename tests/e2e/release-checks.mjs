@@ -150,7 +150,8 @@ try {
   await page.waitForTimeout(600);
   const cardTexts = await page.evaluate(() => [...document.querySelectorAll('.mo-card, .ccard')].filter((e) => e.getBoundingClientRect().width > 0).map((e) => e.textContent.replace(/\s+/g, ' ')));
   for (const t of cardTexts) {
-    const m = /\+(\d+[.,]?\d*) (Esencia|Essence)\/s/.exec(t);
+    // The rate as cards say it: «+2 luz/s» (ADR-030), or the old «+2 Esencia/s».
+    const m = /\+(\d+[.,]?\d*) ?(luz|glow|Luz|Glow|Esencia|Essence)?\/s/.exec(t);
     // A card may name a rate only if it is no more than what the HUD says the dish will earn.
     if (waiting.phase === 'ready' && m && Number(m[1].replace(',', '.')) > hudRate + 1e-6 && !/al empezar|at start/.test(t)) problems.push(`RF-10: a card says «${m[0]}» while the HUD says ${rate}`);
   }

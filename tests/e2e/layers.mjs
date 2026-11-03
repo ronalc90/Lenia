@@ -8,6 +8,10 @@
 // Polish-pass owner bugs (docs/ARTE-PULIDO.md B-10): «¿Por qué?» unfolds in the same sheet without
 // repeating it; the night's sheet stays clear and full-colour under VELA, its counters never overflow;
 // the spotlight never points at a button the open Bestiary covers; a tapped toast closes.
+// Clarity pass 2 (ADR-030, docs/CLARIDAD2.md): session 1 starts on an empty dish and its clock waits for VELA
+// (a player who never taps her bubble still gets it); the clock stands still while VELA talks; QA#17 a tap
+// that closes VELA's line over the dock never buys Nutrientes; QA#29 buying Nutrientes keeps the dock's
+// three cells in place.
 //
 // Usage: node tests/e2e/layers.mjs [--dist <dir>] [--out <dir>] [--only mobile|desktop]
 import { spawn, spawnSync } from 'node:child_process';
@@ -147,12 +151,29 @@ async function runCase(c) {
     if ((await state()).phase === 'running') break;
     say(`tap at ${fx},${fy} refused: ${await page.evaluate(() => window.__blocked.join(',') + ' moment=' + (window.bioluma.moments.current()?.id ?? '-'))}`);
   }
+  // ADR-030 §2.4: the first tap plants the first creature and the clock waits for VELA's «Tu reloj empieza
+  // ahora». A player who never taps her bubble still gets the clock (her lines close on their own, or the
+  // tutorial's failsafe starts it).
+  for (let i = 0; i < 150 && (await state()).phase === 'ready'; i++) {
+    await closeMoments();
+    await page.waitForTimeout(400);
+  }
   let s = await state();
-  if (s.phase !== 'running') problems.push(`[${c.name}] the first tap did not start the clock (${JSON.stringify(s)})`);
+  if (s.phase !== 'running') problems.push(`[${c.name}] the clock never started after the first tap (${JSON.stringify(s)})`);
   // F-03: the tap the tutorial asked for ends its task (no "¡Toca la placa!" loop).
   if (s.scene === 't_intro') problems.push(`[${c.name}] VELA still asks to tap the dish after the first tap (F-03)`);
-  // The worst case: a chain of lines on screen when the clock runs out.
+  // A chain of lines over the running clock: the clock waits while VELA talks (ADR-030 §2.3, QA#7), so a
+  // session can never run out behind her bubble.
   await page.evaluate(() => window.bioluma.story.play('t_essence'));
+  await page.waitForTimeout(900);
+  const elapsed = () => page.evaluate(() => window.bioluma.game.view().session?.elapsed ?? 0);
+  const e0 = await elapsed();
+  await page.waitForTimeout(2500);
+  const e1 = await elapsed();
+  const talking = await page.evaluate(() => window.bioluma.story.current()?.phase === 'lines');
+  if (talking && Math.abs(e1 - e0) > 0.05) problems.push(`[${c.name}] the clock ran ${(e1 - e0).toFixed(2)} s while VELA talked (ADR-030 §2.3)`);
+  else if (talking) say('the clock stands still while VELA talks');
+  await page.evaluate(() => window.bioluma.story.current() && window.bioluma.story.skip());
   for (let i = 0; i < 200 && (await state()).phase !== 'over'; i++) {
     await closeMoments();
     await page.waitForTimeout(400);
@@ -377,6 +398,15 @@ async function runCase(c) {
   for (let i = 0; i < 10 && !(await visible('.ss-layer:not(.ss-welcome) [data-act="go"]')); i++) await page.waitForTimeout(400);
   await shot('start-card');
   await mustHit('.ss-layer:not(.ss-welcome) [data-act="go"]', 'start card 2');
+  // QA#14 (docs/CLARIDAD2.md §2.12): «¡Empezar!» waits until the Nevera's creature is lit on the dish (a
+  // software-rendered test browser incubates slowly); a player taps it once it is enabled.
+  const goReady = await page
+    .waitForFunction(() => {
+      const b = document.querySelector('.ss-layer:not(.ss-welcome) [data-act="go"]');
+      return !!b && !b.disabled;
+    }, null, { timeout: 180000, polling: 250 })
+    .then(() => true, () => false);
+  if (!goReady) problems.push(`[${c.name}] start card 2: «¡Empezar!» never enabled (the dish never lit)`);
   await tapSel('.ss-layer:not(.ss-welcome) [data-act="go"]');
   await page.waitForTimeout(800);
   // F-06: the Tree from the dock before the first seed; buying keeps it open.
@@ -574,6 +604,117 @@ async function runCase(c) {
   if (opens.length) problems.push(`[${c.name}] the Tree reopened by itself: ${opens.join(' || ')}; clicks: ${(await page.evaluate(() => window.__clicks ?? [])).join(' | ')}`);
   await shot('session-2');
   await mustHit('.mode-pill', 'session 2 ready');
+
+  // ── Nutrientes in a running session 2 (docs/CLARIDAD2.md §2.7, §2.14) ──
+  await closeMoments();
+  for (let i = 0; i < 4 && (await state()).phase === 'ready'; i++) {
+    const p1 = await dishPoint([0.25, 0.75, 0.3, 0.7][i], [0.7, 0.3, 0.3, 0.7][i]);
+    await tap(p1.x, p1.y);
+    await page.waitForTimeout(800);
+    await closeMoments();
+  }
+  if ((await state()).phase !== 'running') problems.push(`[${c.name}] session 2: the clock did not start`);
+  // Plenty of light, and wait until Nutrientes is on sale (BOOST_FROM_SECONDS of clock, something alive).
+  const onSale = async () => {
+    for (let i = 0; i < 120; i++) {
+      await page.evaluate(() => {
+        const b = window.bioluma;
+        if (b.game.state.essence < 5000) b.game.state.essence = 5000;
+        if (b.story.current()) b.story.skip();
+        // A loaded software-GL machine must not run out of clock before the checks (test scaffolding, like the light).
+        const se = b.game.session;
+        if (se && se.phase === 'running' && se.limit + se.bonus - se.elapsed < 20) se.bonus += 20;
+      });
+      await closeMoments();
+      if ((await state()).phase !== 'running') return false;
+      if (await visible('.dock-boost.can')) return true;
+      await page.waitForTimeout(400);
+    }
+    return false;
+  };
+  const boosts = () => page.evaluate(() => window.bioluma.game.view().boost?.count ?? 0);
+  const cells = () =>
+    page.evaluate(() =>
+      [...(document.querySelector('.bl-dock .dock-in')?.children ?? [])].map((e) => {
+        const r = e.getBoundingClientRect();
+        return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)].join(',');
+      }),
+    );
+  if (await onSale()) {
+    // QA#17: VELA's one-line bubble over the dock; a finger taps it to close it and the rest of the double
+    // tap lands where the bubble was: on Nutrientes. Nothing is bought.
+    await page.evaluate(() => window.bioluma.story.play('t_seedcost'));
+    await page.waitForTimeout(900);
+    await page.evaluate(() => window.bioluma.storyUI.debug.completeTyping());
+    await page.waitForTimeout(200);
+    const b0 = await box('.dock-boost');
+    const under = await cover('.dock-boost');
+    if (b0 && under) {
+      const n0 = await boosts();
+      const cx = b0.x + b0.width / 2;
+      const cy = b0.y + b0.height / 2;
+      // The finger taps VELA's box where it covers the button (it closes her last line), and the rest of a
+      // quick double tap lands on the same spot the moment the box no longer covers the button. A real second
+      // tap on a loaded software-GL machine arrives far too late to test that moment, so the page dispatches it
+      // itself, armed before the first tap: from that tap, every frame looks at the spot and presses as soon as
+      // the button is what a finger there would hit.
+      await page.evaluate(({ x, y }) => {
+        window.__presses = [];
+        window.__second = null;
+        const note = (k) => (e) => window.__presses.push({ k, t: performance.now(), on: String(e.target?.className?.baseVal ?? e.target?.className ?? '').split(' ')[0] });
+        window.addEventListener('pointerdown', note('down'), true);
+        window.addEventListener('click', note('click'), true);
+        const arm = (e) => {
+          if (!e.isTrusted) return;
+          window.removeEventListener('pointerdown', arm, true);
+          const t0 = performance.now();
+          const poll = () => {
+            const hit = document.elementFromPoint(x, y);
+            const btn = document.querySelector('.dock-boost');
+            if (hit && btn && btn.contains(hit)) {
+              const o = { bubbles: true, cancelable: true, clientX: x, clientY: y, pointerType: 'touch', isPrimary: true, pointerId: 9 };
+              hit.dispatchEvent(new PointerEvent('pointerdown', o));
+              hit.dispatchEvent(new PointerEvent('pointerup', o));
+              hit.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: x, clientY: y, detail: 1 }));
+              window.__second = { ms: Math.round(performance.now() - t0) };
+            } else if (performance.now() - t0 > 5000) window.__second = { ms: -1 };
+            else requestAnimationFrame(poll);
+          };
+          requestAnimationFrame(poll);
+        };
+        window.addEventListener('pointerdown', arm, true);
+      }, { x: cx, y: cy });
+      await tap(cx, cy);
+      const second = await page
+        .waitForFunction(() => window.__second, null, { timeout: 15000, polling: 100 })
+        .then((h) => h.jsonValue(), () => ({ ms: -1 }));
+      await page.waitForTimeout(400);
+      await shot('qa17-after-double-tap');
+      const log = (await page.evaluate(() => window.__presses)).map((p) => `${p.k}@${Math.round(p.t)} ${p.on}`).join(', ');
+      // The second tap lands in the very frame the box stops covering the button: it is the rest of the
+      // double tap whatever the frame rate (the guard counts 350 ms from the moment the cover goes).
+      if (second.ms < 0) problems.push(`[${c.name}] QA#17: VELA's box never uncovered the Nutrientes button after closing her line (${log})`);
+      else if ((await boosts()) !== n0) problems.push(`[${c.name}] QA#17: a tap that closed VELA's line over the dock bought Nutrientes (the rest of the double tap, ${second.ms} ms after the first, as the box cleared; under the finger: ${under}; ${log})`);
+      else say(`QA#17: closing VELA's line over the dock (${under.split(' ')[0]}) bought nothing (second tap as the box cleared, ${second.ms} ms after the first)`);
+    } else say(`QA#17: VELA's bubble does not cover the Nutrientes button here (${under || 'free'})`);
+    await page.evaluate(() => window.bioluma.story.current() && window.bioluma.story.skip());
+    await page.waitForTimeout(700);
+    // QA#29: a plain tap buys it, and the dock's three cells do not move.
+    if (await onSale()) {
+      // A player taps once the button is plainly there (nothing on top of it for a moment).
+      for (let i = 0; i < 20 && (await cover('.dock-boost')); i++) await page.waitForTimeout(200);
+      await page.waitForTimeout(600);
+      const before = await cells();
+      const n0 = await boosts();
+      await tapSel('.dock-boost');
+      await page.waitForTimeout(900);
+      const after = await cells();
+      await shot('qa29-boost-bought');
+      if ((await boosts()) <= n0) problems.push(`[${c.name}] a plain tap on Nutrientes did not buy it`);
+      if (before.length !== 3 || before.join('|') !== after.join('|')) problems.push(`[${c.name}] QA#29: buying Nutrientes moved the dock: ${before.join(' ')} → ${after.join(' ')}`);
+      else say('QA#29: buying Nutrientes keeps the dock\'s three cells in place');
+    } else problems.push(`[${c.name}] Nutrientes not on sale again after VELA's line`);
+  } else problems.push(`[${c.name}] session 2: Nutrientes never went on sale`);
   await ctx.close();
 }
 
