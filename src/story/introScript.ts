@@ -1,12 +1,12 @@
 /**
- * The opening intro (docs/STORY.md §11): ten illustrated panels, ~35 s, before VELA's first scene.
- * Story first (the station, Albor's farewell tape, you arriving, VELA lighting her candle, the
- * glowing dish), then "what you do" in four kid-sized steps (sow, shape → Esencia, the lab clock →
- * Datos, the Árbol and the Mundos), then one hook (Albor's secret) and "¡Empezar!".
+ * The opening intro (docs/STORY.md §11): ten illustrated panels, ~33 s, before VELA's first scene.
+ * Story first (the station, Albor's farewell tape, you arriving, VELA the MC-7 monitor with her pilot
+ * lamp, the glowing dish), then "what you do" as four one-line rules (sow, collect the light, the lab
+ * clock → Datos, the Árbol and the Mundos), and last the game in one sentence (docs/CLARIDAD2.md §1.1).
  *
  * Owner's rule: a 5-year-old must follow it. Every line ≤ 12 words (tested), es + en, one idea per
- * line, at most two lines per panel. The intro never repeats t_intro: after it, t_intro only says
- * "your first seed" and asks for the tap (script.ts T_INTRO_AFTER_INTRO).
+ * line, at most two lines per panel. The intro never repeats the station: after it, t_intro only says
+ * who VELA is and asks for the tap (script.ts T_INTRO_AFTER_INTRO).
  */
 import type { Text } from '../core/types';
 
@@ -53,7 +53,7 @@ export const INTRO_PANELS: readonly IntroPanel[] = [
     seconds: 4,
     lines: [
       { who: 'narrator', text: t('La doctora Albor cuidaba el laboratorio. Se fue antes de la noche.', 'Dr. Albor ran the lab. She left before the night came.') },
-      { who: 'albor', mood: 'happy', text: t('Te dejo mi luz. Cuídalas mucho, ¿vale?', 'I leave you my light. Take good care of them, okay?') },
+      { who: 'albor', mood: 'happy', text: t('Te dejo mi luz y mis criaturas. Cuídalas mucho.', 'I leave you my light and my creatures. Look after them.') },
     ],
   },
   {
@@ -62,7 +62,7 @@ export const INTRO_PANELS: readonly IntroPanel[] = [
     picker: true,
     lines: [
       { who: 'narrator', text: t('Y llegas tú, para cuidar el turno de noche.', 'And here you come, to keep the night shift.') },
-      { who: 'narrator', text: t('¿Cómo eres? Elige tu bata.', 'What do you look like? Pick your look.') },
+      { who: 'narrator', text: t('¿Qué bata te pones? Elige una.', 'Which lab coat do you wear? Pick one.') },
     ],
   },
   {
@@ -70,7 +70,7 @@ export const INTRO_PANELS: readonly IntroPanel[] = [
     seconds: 3.5,
     lines: [
       { who: 'vela', mood: 'awed', text: t('¡Hola! Soy VELA, la ayudante del laboratorio.', 'Hi! I\'m VELA, the lab assistant.') },
-      { who: 'vela', mood: 'happy', text: t('Mi vela da calor. ¡Y la placa da luz!', 'My candle keeps us warm. And the dish gives light!') },
+      { who: 'vela', mood: 'happy', text: t('Mi lámpara nunca se apaga. ¡Y la placa da luz!', 'My lamp never goes out. And the dish gives light!') },
     ],
   },
   {
@@ -81,48 +81,38 @@ export const INTRO_PANELS: readonly IntroPanel[] = [
       { who: 'vela', mood: 'happy', text: t('Las llamamos criaturas. Las cuidaremos juntos.', 'We call them creatures. We\'ll look after them together.') },
     ],
   },
+  // How to play: one rule per panel (docs/CLARIDAD2.md §5.3 task 11; Esencia is Luz on screen, ADR-030).
   {
     id: 'sow',
     kicker: how(1),
-    seconds: 3,
-    lines: [
-      { who: 'narrator', text: t('Toca la placa para sembrar una semilla de vida.', 'Tap the dish to sow a seed of life.') },
-      { who: 'narrator', text: t('Algunas se apagan. ¡No pasa nada! Prueba otra vez.', 'Some fade away. That\'s okay! Try again.') },
-    ],
+    seconds: 2.5,
+    lines: [{ who: 'narrator', text: t('Toca la placa para poner una semilla de luz.', 'Tap the dish to drop a seed of light.') }],
   },
   {
     id: 'essence',
     kicker: how(2),
-    seconds: 3.5,
-    lines: [
-      { who: 'narrator', text: t('Si se queda con forma, ¡es una criatura!', 'If it keeps its shape, it\'s a creature!') },
-      { who: 'narrator', text: t('Las criaturas te dan Esencia. Las manchas sin forma, no.', 'Creatures give you Essence. Shapeless blobs don\'t.') },
-    ],
+    seconds: 2.5,
+    lines: [{ who: 'narrator', text: t('Una criatura con forma hace luz. ¡Tócala y recógela!', 'A creature with a shape makes glow. Tap to collect it!') }],
   },
   {
     id: 'clock',
     kicker: how(3),
-    seconds: 3.5,
-    lines: [
-      { who: 'narrator', text: t('Tu tiempo de laboratorio es corto. ¡Mira el reloj!', 'Your lab time is short. Watch the clock!') },
-      { who: 'narrator', text: t('Al terminar, tu Esencia se convierte en Datos.', 'When it ends, your Essence turns into Data.') },
-    ],
+    seconds: 2.5,
+    lines: [{ who: 'narrator', text: t('Mira el reloj: al acabar, tu luz se hace Datos.', 'Watch the clock: when it ends, your glow becomes Data.') }],
   },
   {
     id: 'tree',
     kicker: how(4),
-    seconds: 3.5,
-    lines: [
-      { who: 'narrator', text: t('Con Datos, haz crecer el Árbol: mejoras para todo.', 'Spend Data to grow the Tree: upgrades for everything.') },
-      { who: 'narrator', text: t('Y abre Mundos nuevos, con otras criaturas.', 'And open new Worlds, with other creatures.') },
-    ],
+    seconds: 2.5,
+    lines: [{ who: 'narrator', text: t('Con Datos, el Árbol te da mejoras y Mundos nuevos.', 'With Data, the Tree gives you upgrades and new Worlds.') }],
   },
   {
+    // The game in one sentence (§1.1), in two lines of the 12-word rule.
     id: 'go',
-    seconds: 3,
+    seconds: 4,
     lines: [
-      { who: 'vela', mood: 'proud', text: t('Albor dejó un secreto en la placa. ¿Lo buscamos?', 'Albor left a secret in the dish. Shall we find it?') },
-      { who: 'you', mood: 'happy', text: t('¡Vamos a sembrar!', 'Let\'s go sow!') },
+      { who: 'vela', mood: 'happy', text: t('Siembra criaturas de luz y recoge la luz que hacen.', 'Sow creatures of light and collect the glow they make.') },
+      { who: 'vela', mood: 'proud', text: t('Úsala para descubrir las 7 especies de la doctora Albor.', 'Use it to discover all 7 of Dr. Albor\'s species.') },
     ],
   },
 ];
@@ -136,7 +126,7 @@ export const INTRO_UI = {
   back: t('Atrás', 'Back'),
   start: t('¡Empezar!', 'Let\'s start!'),
   skipAll: t('Saltar intro', 'Skip intro'),
-  pickLook: t('Elige tu bata', 'Pick your look'),
+  pickLook: t('Elige tu bata', 'Pick your lab coat'),
   label: t('Introducción', 'Introduction'),
   replay: t('Ver la introducción', 'Watch the intro'),
   replayHint: t('La historia y cómo se juega, en 40 segundos.', 'The story and how to play, in 40 seconds.'),

@@ -365,12 +365,12 @@ export const SECRET_DEFS: readonly SecretDef[] = [
     category: 'touch',
     name: t('Contar despacio', 'Counting slowly'),
     flavor: t('Un número, mirado lo bastante, deja de serlo.', 'A number, stared at long enough, stops being one.'),
-    journal: t('Mantuve el dedo sobre la Esencia hasta que dejó de parecer un número. Luego volvió a serlo.', 'I held my finger on the Essence until it stopped looking like a number. Then it was one again.'),
+    journal: t('Mantuve el dedo sobre la luz hasta que dejó de parecer un número. Luego volvió a serlo.', 'I held my finger on the glow until it stopped looking like a number. Then it was one again.'),
     companion: t('Ese número es exacto. Lo comprobé tres veces.', 'That number is exact. I checked three times.'),
     hints: [
       t('Algunos números quieren que los mires más tiempo.', 'Some numbers want to be looked at longer.'),
-      t('Mantén pulsado el contador de Esencia.', 'Press and hold the Essence counter.'),
-      t('Mantén pulsado el contador de Esencia 5 segundos.', 'Hold the Essence counter for 5 seconds.'),
+      t('Mantén pulsado el contador de luz.', 'Press and hold the glow counter.'),
+      t('Mantén pulsado el contador de luz 5 segundos.', 'Hold the glow counter for 5 seconds.'),
     ],
     glyph: 'hold',
   },
@@ -462,7 +462,7 @@ export const SECRET_DEFS: readonly SecretDef[] = [
     hints: [
       t('Mira bien el contador; a veces dice algo.', 'Look closely at the counter; sometimes it says something.'),
       t('Algunos números se leen igual al derecho y al revés.', 'Some numbers read the same forwards and backwards.'),
-      t('Ten una Esencia capicúa de 6 cifras o más (o exactamente 1 234 567).', 'Have a palindromic Essence of 6 digits or more (or exactly 1,234,567).'),
+      t('Ten una luz capicúa de 6 cifras o más (o exactamente 1 234 567).', 'Have a palindromic glow of 6 digits or more (or exactly 1,234,567).'),
     ],
     glyph: 'mirror',
   },
@@ -488,7 +488,7 @@ export const SECRET_DEFS: readonly SecretDef[] = [
     name: t('Luna llena', 'Full moon'),
     flavor: t('Esta noche la placa refleja algo más.', 'Tonight the dish reflects something else.'),
     journal: t('Hay luna llena. No afecta a la regla, lo sé. Aun así, esta noche las miro distinto.', 'Full moon. It does not affect the rule, I know. Still, tonight I look at them differently.'),
-    companion: t('Luna llena. Mi llama se pone nerviosa.', 'Full moon. My flame gets jittery.'),
+    companion: t('Luna llena. Mi lámpara parpadea sola.', 'Full moon. My lamp keeps flickering.'),
     hints: [
       t('El cielo también tiene fases.', 'The sky has phases too.'),
       t('Juega cuando la luna esté llena.', 'Play when the moon is full.'),
@@ -502,7 +502,7 @@ export const SECRET_DEFS: readonly SecretDef[] = [
     name: t('Cumpleaños', 'Birthday'),
     flavor: t('Una vela por cada noche.', 'One candle for every night.'),
     journal: t('Hoy la placa cumple años. Le canto bajito, para no despertar a nadie.', 'Today the dish has a birthday. I sing quietly, so as not to wake anyone.'),
-    companion: t('¡Feliz cumpleaños, placa! No tengo velas. Bueno, una.', 'Happy birthday, dish! I have no candles. Well, one.'),
+    companion: t('¡Feliz cumpleaños, placa! No hay velas. Bueno, me tienes a mí.', 'Happy birthday, dish! No candles. Well, you have me.'),
     hints: [
       t('Todo laboratorio tiene una fecha que celebrar.', 'Every lab has a date to celebrate.'),
       t('Hay dos fechas en el año: la de esta placa y la de su regla.', 'There are two dates a year: this dish’s and its rule’s.'),

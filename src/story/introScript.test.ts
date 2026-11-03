@@ -28,9 +28,17 @@ describe('opening intro script', () => {
     expect(INTRO_PANELS.filter((p) => p.picker)).toHaveLength(1);
   });
 
-  it('names the game concepts a player needs: Esencia, reloj, Datos, Árbol, Mundos', () => {
+  it('names the game concepts a player needs: luz, reloj, Datos, Árbol, Mundos', () => {
     const all = INTRO_PANELS.flatMap((p) => p.lines.map((l) => l.text.es)).join(' ');
-    for (const w of ['placa', 'Esencia', 'reloj', 'Datos', 'Árbol', 'Mundos', 'Albor', 'VELA']) expect(all).toContain(w);
+    for (const w of ['placa', 'luz', 'reloj', 'Datos', 'Árbol', 'Mundos', 'Albor', 'VELA']) expect(all).toContain(w);
+    expect(all).not.toMatch(/Esencia|vela da calor/);
+  });
+
+  it('ends on the game in one sentence (CLARIDAD2 §1.1) and Albor leaves her light and her creatures', () => {
+    const go = INTRO_PANELS[INTRO_PANELS.length - 1];
+    expect(go.lines.map((l) => l.text.es).join(' ')).toBe('Siembra criaturas de luz y recoge la luz que hacen. Úsala para descubrir las 7 especies de la doctora Albor.');
+    expect(INTRO_PANELS.find((p) => p.id === 'tape')!.lines.some((l) => l.text.es.startsWith('Te dejo mi luz y mis criaturas.'))).toBe(true);
+    for (const id of ['sow', 'essence', 'clock', 'tree']) expect(INTRO_PANELS.find((p) => p.id === id)!.lines, id).toHaveLength(1);
   });
 
   it('has both languages on every button label', () => {

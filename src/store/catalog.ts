@@ -473,7 +473,7 @@ export const SUPPORTER_PALETTES: PaletteItem[] = [
   palette(
     'palette.mecenas.2026-12',
     t('Solsticio', 'Solstice'),
-    t('Paleta Mecenas de diciembre 2026: noche larga, vela cálida.', 'Supporter palette, December 2026: long night, warm candle.'),
+    t('Paleta Mecenas de diciembre 2026: noche larga, lámpara cálida.', 'Supporter palette, December 2026: long night, warm lamp.'),
     'exclusive',
     null,
     { type: 'rotation', month: '2026-12' },

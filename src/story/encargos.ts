@@ -355,7 +355,7 @@ export function createEncargos(deps: EncargosDeps): Encargos {
           return '';
         // CLARIDAD J-136: every number says what it is ("2,4 de 3 Esencia/s", "1:20 de 2:00").
         case 'eps':
-          return `${fmt(current, l, current < 100 ? 1 : 0)} ${l === 'es' ? 'de' : 'of'} ${fmt(target, l)} ${l === 'es' ? 'Esencia/s' : 'Essence/s'}`;
+          return `${fmt(current, l, current < 100 ? 1 : 0)} ${l === 'es' ? 'de' : 'of'} ${fmt(target, l)} ${l === 'es' ? 'luz/s' : 'glow/s'}`;
         case 'seconds':
           return `${clock(current)} ${l === 'es' ? 'de' : 'of'} ${clock(target)}`;
         case 'count':
