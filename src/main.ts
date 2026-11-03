@@ -184,6 +184,13 @@ function boot(): void {
   if (saved.savedAt) integrity.noteSavedAt(saved.savedAt);
   integrity.start();
   const game = createGame({ bus, cycle: 'sessions' }, saved.game ?? undefined);
+  /**
+   * The player's language and Reduce motion, read from the state: game.view() rebuilds every list it
+   * shows (species, tree, achievements, journal…) and portraits, cards and HUD pieces ask for these two
+   * every frame (several full views a frame on a phone).
+   */
+  const langNow = () => game.state.settings.lang;
+  const rmNow = () => game.state.settings.reduceMotion;
   /** Watches every component for the runaway growth that becomes a maze (early lysis). Declared before any
    * bus handler that resets it ('dishClear' can fire while booting). */
   const runaway = new RunawayWatch();
@@ -262,8 +269,8 @@ function boot(): void {
     openExternal: (url) => platformRef?.openExternal(url),
     // One identity per page: the ranking's when it exists, else the same storage keys standalone.
     identity: leaderboard?.identity ?? createPlayerIdentity(),
-    lang: () => game.view().settings.lang,
-    reduceMotion: () => game.view().settings.reduceMotion,
+    lang: langNow,
+    reduceMotion: rmNow,
     playerName: () => leaderboard?.getName() ?? null,
     previewMusic: () =>
       audio.musicAudible && audio.previewAmbience ? (preset) => audio.previewAmbience?.(preset) : undefined,
@@ -292,8 +299,8 @@ function boot(): void {
   function openIntro(): void {
     if (introOpen()) return;
     intro = createIntro(root, {
-      lang: () => game.view().settings.lang,
-      reduceMotion: () => game.view().settings.reduceMotion,
+      lang: langNow,
+      reduceMotion: rmNow,
       onDone: () => {
         intro = null;
         story.setFlag('introSeen');
@@ -403,8 +410,8 @@ function boot(): void {
     const input = speciesInputFromView(game.view(), id);
     if (!input) return null;
     const card = createSpeciesCard(box, input, {
-      lang: () => game.view().settings.lang,
-      reduceMotion: () => game.view().settings.reduceMotion,
+      lang: langNow,
+      reduceMotion: rmNow,
       onShowUpgrade: (up) => ui.reveal(`upgrade.${up}`),
       onBehavior: (b) => momentsUIRef?.openBehaviorGuide(b),
     });
@@ -490,13 +497,13 @@ function boot(): void {
       storyArchive?.dispose();
       storyArchive = storyUI.mountArchive(el);
       introEntry?.dispose();
-      introEntry = mountIntroEntry(el, { lang: () => game.view().settings.lang, onOpen: openIntro });
+      introEntry = mountIntroEntry(el, { lang: langNow, onOpen: openIntro });
       // "¿Qué pasó?": re-watch any Momento, explain mode (full / brief / off) and creature labels.
       momentsHelp?.dispose();
       momentsHelp = momentsUIRef?.mountHelp(el) ?? null;
       basementEntry?.dispose();
       basementEntry = secretsUIRef
-        ? mountBasementEntry(el, secrets, { lang: () => game.view().settings.lang, createBasement: () => secretsUIRef!.createBasement() })
+        ? mountBasementEntry(el, secrets, { lang: langNow, createBasement: () => secretsUIRef!.createBasement() })
         : null;
     },
     // A new player sees the intro once, right after the title screen (before VELA's t_intro).
@@ -598,8 +605,8 @@ function boot(): void {
     ending: 'open',
   };
   const storyUI = createStoryUI(root, story, {
-    lang: () => game.view().settings.lang,
-    reduceMotion: () => game.view().settings.reduceMotion,
+    lang: langNow,
+    reduceMotion: rmNow,
     getTargetRect: (id) => ui.targetRect(id),
     gridToClient: (x, y) => ui.gridToClient(x, y),
     revealTarget: (id) => ui.reveal(id),
@@ -628,8 +635,8 @@ function boot(): void {
   const momentsUI = createMomentsUI(root, moments, {
     camera,
     getDishRect: () => glCanvas.getBoundingClientRect(),
-    lang: () => game.view().settings.lang,
-    reduceMotion: () => game.view().settings.reduceMotion,
+    lang: langNow,
+    reduceMotion: rmNow,
     onPause: (on) => setPause('moment', on),
     getTargetRect: (id) => ui.targetRect(id),
     creaturePos: (id) => ui.creaturePos(id),
@@ -657,10 +664,10 @@ function boot(): void {
 
   // Seed price: slot dots + "why it changed" chip next to the price, and the sheet behind ONE tap on the
   // pill. Both read the parts of view.seedPrice that exist (a ×1 or missing factor is not shown).
-  const seedMeter = createSeedMeter(() => game.view().settings.lang);
+  const seedMeter = createSeedMeter(langNow);
   ui.seedMeterSlot.appendChild(seedMeter.el);
   seedMeterRef = seedMeter;
-  const priceCore = createPriceSheet(root, { reduceMotion: () => game.view().settings.reduceMotion });
+  const priceCore = createPriceSheet(root, { reduceMotion: rmNow });
   const explainSeed = (v: GameView) =>
     seedPriceSheetExplain(v, v.settings.lang, {
       onSeeDish: () => {
@@ -688,8 +695,8 @@ function boot(): void {
 
   // Encargos: the badge lives in the objective bar; offers and celebrations hang from it.
   const encUI = createEncargoUI(root, encargos, {
-    lang: () => game.view().settings.lang,
-    reduceMotion: () => game.view().settings.reduceMotion,
+    lang: langNow,
+    reduceMotion: rmNow,
     // Offers tuck away while VELA talks (lines, choice, ending, or her task hint near the top of the dish),
     // a Momento is coming/open, a sheet / modal / the Bestiary covers the screen, a session card or a secret card is up.
     busy: () => storyBusy() || moments.isBusy() || momentsUI.busy || sheetOpen() || ui.blocked() || ui.drawerOpen || flowBusy() || secretShowing(),
@@ -730,8 +737,8 @@ function boot(): void {
     dish: ui.dishEl,
     game,
     bus,
-    lang: () => game.view().settings.lang,
-    reduceMotion: () => game.view().settings.reduceMotion,
+    lang: langNow,
+    reduceMotion: rmNow,
     // Only a request still to do (QA4 F-16: the card showed "Compra el Gotero" already bought).
     encargo: () => {
       const c = encargos.current();
@@ -754,7 +761,7 @@ function boot(): void {
   });
   flowRef = flow;
   // An old save turned into Datos: VELA says so once (game.migration is set only on that load).
-  const welcome = createWelcomeCard(root, { lang: () => game.view().settings.lang, reduceMotion: () => game.view().settings.reduceMotion });
+  const welcome = createWelcomeCard(root, { lang: langNow, reduceMotion: rmNow });
   flowBusy = () => flow.busy || welcome.isOpen;
   welcomeOpen = () => welcome.isOpen;
   if (migrated)
@@ -767,8 +774,8 @@ function boot(): void {
   const secretInputs = attachSecretInputs(secrets, { essence: ui.essenceEl, dish: ui.dishEl });
   const secretsUI = createSecretsUI(ui.dishEl, secrets, {
     camera,
-    lang: () => game.view().settings.lang,
-    reduceMotion: () => game.view().settings.reduceMotion,
+    lang: langNow,
+    reduceMotion: rmNow,
     // A reveal card waits while a Momento card is open, VELA is talking (not during a task hint), or a
     // sheet / modal covers the dish (it would time out unseen behind it).
     // A secret found at boot (a full moon, the dish's birthday) waits for VELA's first words.
@@ -942,7 +949,7 @@ function boot(): void {
     const now = performance.now();
     if (now - blockedHintAt < SEED_BLOCKED_HINT_MS) return;
     blockedHintAt = now;
-    seedMeter.flash({ text: GAME_TEXT.seedGrowing[game.view().settings.lang], dir: 0 });
+    seedMeter.flash({ text: GAME_TEXT.seedGrowing[langNow()], dir: 0 });
   });
   function clearDish(): void {
     sim!.clear();
@@ -1433,7 +1440,7 @@ function boot(): void {
     // player sees it), the rim and the camera ease out with a glow (1.5 s), before the next session's
     // first tap.
     const want = boughtDish();
-    if (want.radius !== dishAnim.target.radius && !flowBusy()) dishAnim.setTarget(want, !game.view().settings.reduceMotion);
+    if (want.radius !== dishAnim.target.radius && !flowBusy()) dishAnim.setTarget(want, !rmNow());
     if (dishAnim.update(dt)) applyDish();
     dishFxArg.grow = dishAnim.glow;
     s.setDishFx(dishFxArg);
