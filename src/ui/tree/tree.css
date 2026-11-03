@@ -111,17 +111,22 @@
 .rt-datos.bump b {
   animation: rt-bump var(--bl-t-story) var(--bl-ease-standard);
 }
-/* PriceTicker (Momentos) right of the Datos: "−12 · Más tiempo" for ~2 s after a purchase. */
-.rt-datos {
-  position: relative;
-}
+/* PriceTicker (Momentos): "−12 · Más tiempo" for ~2 s after a purchase. It hangs under the whole header
+   (the bar is its containing block), so the chip is never cut: floating above the Datos box, it went past
+   the screen's top edge (integrator review v0.023). */
 .rt-tick {
   position: absolute;
-  left: calc(100% + 8px);
-  top: 50%;
-  transform: translateY(-50%);
+  left: 12px;
+  top: calc(100% + 8px);
   white-space: nowrap;
   pointer-events: none;
+}
+.rt-tick .mo-why {
+  left: calc(100% + 6px);
+  top: 50%;
+  bottom: auto;
+  translate: 0 -50%;
+  max-width: calc(100vw - 64px);
 }
 .rt-title {
   order: 3;
