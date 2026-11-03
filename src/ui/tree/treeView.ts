@@ -5,7 +5,11 @@
  *    icon tiles joined by lines (bright when owned); a "?" one step beyond what you can see; rings
  *    the night has not opened yet sit behind a dashed moon circle (rings are bands around the centre).
  *  - Pan with one finger / mouse drag, pinch or wheel to zoom, +/− and "centre" buttons (48 px).
- *  - Tap a node: a sheet with NAME, "Paso 2 de 7", LEVEL x/y, "antes → después" with numbers
+ *  - The camera never moves by itself (docs/CLARIDAD2.md §2.10, ./camera.ts): opening frames every buyable
+ *    node; a tap on a visible node leaves the camera where it is (one under the sheet moves the least it can,
+ *    same zoom, and comes back when the sheet closes); a tap within 350 ms of a camera move is ignored.
+ *  - «Puedes comprar (n)» at the bottom: the buyable nodes in a row (tap = its sheet), or the cheapest one.
+ *  - Tap a node: a sheet with NAME, «Ruta Placa · paso 2 de 7» and its levels as dots, "antes → después" with numbers
  *    ("Sesión 3:30 → 4:00"), a one-line description, the price as an equation with its one rule in
  *    plain words (tap it: the shared "¿Por qué cuesta esto?" sheet, src/ui/moments/price.ts), a bar
  *    chart of the next levels, the "Datos have/need" bar ("te faltan 12 — unas 2 sesiones") and a
@@ -43,15 +47,16 @@ import {
   type TreeCtx,
   type TreeNodeDef,
 } from '../../game/tree';
-import { BRANCH_TEXT, DATOS_NAME, SESSION_UI, TREE_UI, VALUE_TEXT, type BranchId } from '../../game/treeText';
+import { BRANCH_TEXT, DATOS_NAME, SESSION_UI, TREE_UI, type BranchId } from '../../game/treeText';
 import type { WorldId } from '../../game/worlds';
-import { datosMissingText, fmt, fmtShort, gateCount } from '../format';
+import { datosMissingText, fmt, fmtFactor, fmtShort, gateCount } from '../format';
 import { PriceTicker, type PriceExplain } from '../moments/price';
 import '../moments/moments.css';
 import { mountPortrait } from '../portrait';
 import { ROUTE_ICON } from '../art/icons';
 import { DURATION, EASING, pop, staggerIn } from '../art/motion';
 import { nodeWhy, WHY_UI } from './why';
+import { D, FAR_Z, Z_MAX, Z_MIN, openingCam, revealCam, tapAllowed, type Area, type Cam } from './camera';
 import { treeIcon } from './icons';
 import { DISH_DIAMETERS } from '../../core/dish';
 import '../art/art.css';
@@ -106,28 +111,14 @@ export interface TreeView {
   dispose(): void;
 }
 
-/** Pixels per layout unit at zoom 1 (one step along a route; leaves room for the name under a tile). */
-const D = 128;
 /** World half-size (layout units) for the SVG layer and the pan limits. */
 const S = TREE_RADIUS + 1.8;
-const Z_MIN = 0.16;
-const Z_MAX = 1.9;
-/** Below this zoom node names and branch labels fade out. */
-const FAR_Z = 0.55;
-/** A node's extent in world px around its centre: the 64-px tile, then its name and price below. */
-const NODE_ABOVE = 40;
-const NODE_BELOW = 84;
 /** Where the night labels sit on their circles: between Mundos and Destello. */
 const GATE_LABEL_ANGLE = ((-90 + 5.5 * (360 / 7)) * Math.PI) / 180;
 /** Night boundaries: dashed circles between the last ring of a night and the first of the next. */
 const GATES = TREE_GATES;
 
 const tx = (t: Text, l: Lang): string => t[l];
-/** Factors exactly as the rule makes them, up to 2 decimals ("×2,25", "×1.5", "×8"). */
-const dec2 = (x: number, l: Lang): string => {
-  const v = Math.round(x * 100) / 100;
-  return v >= 1000 ? fmt(Math.round(v), l) : String(v).replace('.', l === 'es' ? ',' : '.');
-};
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const branchOf = (def: TreeNodeDef): BranchId | 'core' => def.branch;
 
@@ -169,6 +160,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       <button type="button" class="rt-tool" data-z="fit">${treeIcon('centre', 24)}</button>
     </div>
     <div class="rt-hint"></div>
+    <nav class="rt-strip"><span class="rt-strip-h"></span><div class="rt-strip-row"></div></nav>
     <section class="rt-sheet" aria-live="polite"></section>
     <div class="rt-fx"></div>`;
   root.appendChild(el);
@@ -184,6 +176,9 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
   const goBtn = el.querySelector('.rt-go') as HTMLButtonElement;
   const goLbl = goBtn.querySelector('span') as HTMLElement;
   const hint = el.querySelector('.rt-hint') as HTMLElement;
+  const strip = el.querySelector('.rt-strip') as HTMLElement;
+  const stripH = strip.querySelector('.rt-strip-h') as HTMLElement;
+  const stripRow = strip.querySelector('.rt-strip-row') as HTMLElement;
   const sheet = el.querySelector('.rt-sheet') as HTMLElement;
   const fx = el.querySelector('.rt-fx') as HTMLElement;
   // Shared price components (Momentos): one tap on a price explains it; a chip says what it cost.
@@ -292,8 +287,16 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
   let shownDatos = 0;
   let datosTween = 0;
   let sheetKey = '';
-  const cam = { x: 0, y: 0, z: 1 };
+  const cam: Cam = { x: 0, y: 0, z: 1 };
   let camAnim = 0;
+  /** When the camera last moved (a tap within TAP_QUIET_MS of it is ignored). */
+  let lastCamMove = -Infinity;
+  let lastCamKey = '';
+  /** Where the camera was when the sheet opened: it goes back there when the sheet closes (if the player did not pan). */
+  let homeCam: Cam | null = null;
+  /** The World bought this visit: «Nueva sesión» pulses with «¡Juega en el Mundo 2!». */
+  let playWorld: string | null = null;
+  let stripKey = '';
   /** The node of the very first purchase, while its sheet stays open ("¡Es tuya para siempre!"). */
   let firstBought: string | null = null;
   /** The node whose «¿Por qué cuesta esto?» is unfolded (one at a time; folded again on another node). */
@@ -301,6 +304,8 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
   /** The node the sheet last entered for (its blocks stagger in once per node). */
   let staggerFor: string | null = null;
   let peekTimer = 0;
+  /** When the sheet last turned to a node (its buy button waits TAP_QUIET_MS like a node tap). */
+  let sheetAt = -Infinity;
 
   const ctxOf = (d: TreeViewData): TreeCtx => ({ levels: d.levels, datos: d.datos, sessions: d.sessions, species: d.species });
   const vpSize = () => ({ w: vp.clientWidth || window.innerWidth, h: vp.clientHeight || window.innerHeight });
@@ -308,11 +313,18 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
 
   // ───────────── camera ─────────────
   function applyCam(): void {
+    const key = `${cam.x.toFixed(1)}|${cam.y.toFixed(1)}|${cam.z.toFixed(4)}`;
+    if (key !== lastCamKey) {
+      lastCamKey = key;
+      lastCamMove = performance.now();
+    }
     world.style.transform = `translate(${cam.x}px, ${cam.y}px) scale(${cam.z})`;
     el.classList.toggle('far', cam.z < FAR_Z);
     // Route names and night labels keep a readable size on screen when zoomed far out.
     world.style.setProperty('--rt-iz', String(Math.min(3, Math.max(1, 0.45 / cam.z))));
     world.style.setProperty('--rt-izg', String(Math.min(4, Math.max(1, 0.8 / cam.z))));
+    // …and the buyable nodes' prices too: the opening frame of a big tree can be far out (./camera openingCam).
+    world.style.setProperty('--rt-ic', String(Math.min(2.6, Math.max(1, 0.62 / cam.z))));
   }
   function clampCam(): void {
     const { w, h } = vpSize();
@@ -344,7 +356,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       cam.z = from.z + (target.z - from.z) * e;
       clampCam();
       applyCam();
-      if (k < 1) camAnim = requestAnimationFrame(step);
+      camAnim = k < 1 ? requestAnimationFrame(step) : 0;
     };
     camAnim = requestAnimationFrame(step);
   }
@@ -359,11 +371,11 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     applyCam();
   }
   /**
-   * The visible area minus the top bar and (on phones) the open sheet. The bar is measured: on a
-   * 390-px phone it wraps to two rows (Datos + button, then the title) and a fixed inset let it
-   * cover the top node.
+   * The visible area (viewport px) minus the top bar and VELA's dock, the strip at the bottom and (on phones)
+   * the open sheet. The bar is measured: on a 390-px phone it wraps to two rows (Datos + button, then the
+   * title) and a fixed inset let it cover the top node.
    */
-  function freeArea(): { cx: number; cy: number; w: number; h: number; top: number } {
+  function freeArea(withSheet = true): Area {
     const { w, h } = vpSize();
     const bar = topBar.getBoundingClientRect();
     const vpTop = vp.getBoundingClientRect().top;
@@ -371,78 +383,45 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     // VELA docked at the top of the Tree (QA4 F-01) is part of the bar: no node under her bubble.
     const dock = document.querySelector('.sty.sty-docked .sty-box:not([hidden])')?.getBoundingClientRect();
     if (dock && dock.height > 0) top = Math.max(top, dock.bottom - vpTop + 10);
-    // Room for the hint pill at the bottom (bigger on the first visit, QA4 F-11): no node under it.
-    let bottom = hint.offsetHeight > 0 ? hint.offsetHeight + 28 : 18;
+    // Room for the strip and the first visit's hint at the bottom: no node under them.
+    const low = Math.max(strip.offsetHeight, hint.offsetHeight + (strip.offsetHeight ? strip.offsetHeight + 8 : 0));
+    let bottom = low > 0 ? low + 24 : 18;
     let right = 0;
-    if (selected && open) {
+    if (withSheet && selected && open) {
       if (desktop()) right = 410;
-      else bottom = Math.min(h * 0.62, sheet.offsetHeight || h * 0.5);
+      else bottom = Math.max(bottom, Math.min(h * 0.66, (sheet.offsetHeight || h * 0.5) + 8));
     }
-    const aw = w - right;
-    const ah = h - top - bottom;
-    return { cx: aw / 2, cy: top + ah / 2, w: aw, h: ah, top };
+    return { left: 0, top, right: w - right, bottom: Math.max(top + 60, h - bottom) };
   }
-  /**
-   * Camera y that leaves no node half under the top bar. When the tree is taller than the screen
-   * (the zoom floor on a phone) a centred fit cut the top node in two under «Árbol · Noche 2»
-   * (audit, tree-mid.png): nodes that straddle the bar's edge are pushed fully below it.
-   */
-  function clearOfBar(camY: number, z: number, barBottom: number): number {
-    let y = camY;
-    for (let pass = 0; pass < 4; pass++) {
-      let shift = 0;
-      for (const [id, st] of states) {
-        if (st.status === 'hidden') continue;
-        const p = TREE_LAYOUT.get(id)!;
-        const top = y + (p.y * D - NODE_ABOVE) * z;
-        const bottom = y + (p.y * D + NODE_BELOW) * z;
-        if (top < barBottom && bottom > barBottom) shift = Math.max(shift, barBottom + 4 - top);
-      }
-      if (shift <= 0) break;
-      y += shift;
-    }
-    return y;
-  }
+  /** Frame what can be bought (./camera openingCam): on open, on «centrar», when VELA docks. */
   function fitView(animate = true): void {
-    let minX = -0.6;
-    let maxX = 0.6;
-    let minY = -0.6;
-    let maxY = 0.6;
-    for (const [id, st] of states) {
-      if (st.status === 'hidden' || st.status === 'mystery') continue;
-      const p = TREE_LAYOUT.get(id)!;
-      minX = Math.min(minX, p.x);
-      maxX = Math.max(maxX, p.x);
-      minY = Math.min(minY, p.y);
-      maxY = Math.max(maxY, p.y);
-    }
-    const a = freeArea();
-    const pad = 0.75;
-    // Never so far that names and prices become unreadable: the player pans for the rest.
-    const z = Math.max(FAR_Z + 0.04, Math.min(1.1, Math.min(a.w / ((maxX - minX + 2 * pad) * D), a.h / ((maxY - minY + 2 * pad) * D))));
-    const wx = ((minX + maxX) / 2) * D;
-    const wy = ((minY + maxY) / 2) * D;
-    const zz = Math.min(Z_MAX, Math.max(Z_MIN, z));
-    const sy = a.cy + clearOfBar(a.cy - wy * zz, zz, a.top) - (a.cy - wy * zz);
-    if (animate) animateTo(wx, wy, z, a.cx, sy);
+    const c = openingCam(states, freeArea(false));
+    if (animate) animateTo(0, 0, c.z, c.x, c.y);
     else {
-      cam.z = zz;
-      cam.x = a.cx - wx * cam.z;
-      cam.y = sy - wy * cam.z;
+      Object.assign(cam, c);
       clampCam();
       applyCam();
     }
   }
+  /** Bring a node into the free area with the least move and no zoom change (null move = it already shows). */
+  function revealNode(id: string): void {
+    const p = TREE_LAYOUT.get(id);
+    if (!p) return;
+    const next = revealCam(cam, { x: p.x * D, y: p.y * D }, freeArea());
+    if (next) animateTo(0, 0, next.z, next.x, next.y);
+  }
+  /** Pan/zoom to a node (API `focus`, deliberate navigation only: never on a tap). */
   function focusNode(id: string, zoom?: number): void {
     const p = TREE_LAYOUT.get(id);
     if (!p) return;
     const a = freeArea();
-    animateTo(p.x * D, p.y * D, zoom ?? Math.max(cam.z, 0.95), a.cx, a.cy);
+    animateTo(p.x * D, p.y * D, zoom ?? Math.max(cam.z, 0.95), (a.left + a.right) / 2, (a.top + a.bottom) / 2);
   }
 
   // ───────────── input: pan, pinch, wheel, taps ─────────────
   const pointers = new Map<number, { x: number; y: number }>();
-  let drag: { sx: number; sy: number; cx: number; cy: number; moved: boolean; node: string | null } | null = null;
+  /** `at`: when the camera last moved before this touch began (a tap counts only on a still camera). */
+  let drag: { sx: number; sy: number; cx: number; cy: number; moved: boolean; node: string | null; at: number } | null = null;
   let pinch: { d: number; z: number; mx: number; my: number; wx: number; wy: number } | null = null;
   let suppressClickUntil = 0;
 
@@ -459,10 +438,12 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     } catch {
       /* synthetic events */
     }
+    const animating = camAnim !== 0;
     cancelAnimationFrame(camAnim);
+    camAnim = 0;
     if (pointers.size === 1) {
       const nodeEl = (e.target as HTMLElement).closest('.rt-node') as HTMLElement | null;
-      drag = { sx: p.x, sy: p.y, cx: cam.x, cy: cam.y, moved: false, node: nodeEl?.dataset.id ?? null };
+      drag = { sx: p.x, sy: p.y, cx: cam.x, cy: cam.y, moved: false, node: nodeEl?.dataset.id ?? null, at: animating ? performance.now() : lastCamMove };
     } else if (pointers.size === 2) {
       const [a, b] = [...pointers.values()];
       const mx = (a.x + b.x) / 2;
@@ -480,6 +461,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       const d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
       const mx = (a.x + b.x) / 2;
       const my = (a.y + b.y) / 2;
+      homeCam = null;
       cam.z = Math.min(Z_MAX, Math.max(Z_MIN, (pinch.z * d) / pinch.d));
       cam.x = mx - pinch.wx * cam.z;
       cam.y = my - pinch.wy * cam.z;
@@ -495,6 +477,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       vp.classList.add('dragging');
     }
     if (drag.moved) {
+      homeCam = null;
       cam.x = drag.cx + dx;
       cam.y = drag.cy + dy;
       clampCam();
@@ -511,6 +494,8 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     drag = null;
     if (!d || d.moved || e.type === 'pointercancel') return;
     suppressClickUntil = performance.now() + 450;
+    // QA-CLARIDAD #12: a tap that lands while (or just after) the camera moves is not aimed at what is under it.
+    if (!tapAllowed(performance.now(), d.at)) return;
     if (d.node) tapNode(d.node);
     else if (selected) api.select(null);
     // First visit, nothing bought yet (QA4 F-11): a tap anywhere on the tree opens the green node the
@@ -523,6 +508,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     'wheel',
     (e) => {
       e.preventDefault();
+      homeCam = null;
       const p = local(e);
       zoomAt(Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0016)), p.x, p.y);
     },
@@ -530,7 +516,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
   );
   // Keyboard activation of a node button (Tab + Enter/Space).
   world.addEventListener('click', (e) => {
-    if (performance.now() < suppressClickUntil) return;
+    if (performance.now() < suppressClickUntil || !tapAllowed(performance.now(), lastCamMove)) return;
     const n = (e.target as HTMLElement).closest('.rt-node') as HTMLElement | null;
     if (n?.dataset.id) tapNode(n.dataset.id);
   });
@@ -555,6 +541,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     if (!b) return;
     const { w, h } = vpSize();
     sound('tap');
+    homeCam = null;
     if (b.dataset.z === 'in') zoomAt(1.3, w / 2, h / 2);
     else if (b.dataset.z === 'out') zoomAt(1 / 1.3, w / 2, h / 2);
     else fitView();
@@ -569,7 +556,6 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     if (!st || st.status === 'hidden') return;
     el.classList.add('touched');
     sound('open');
-    if (cam.z < 0.62) focusNode(id, 0.95);
     api.select(id);
   }
 
@@ -610,7 +596,8 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       n.moon.hidden = !(mystery && st.nightNeeded);
       if (st.nightNeeded) n.moon.innerHTML = `${treeIcon('moon', 13)}${st.nightNeeded}`;
       n.lock.hidden = st.status !== 'locked';
-      const showCost = !mystery && n.def.id !== 'lab' && !st.maxed && Number.isFinite(st.cost);
+      const showCost = !mystery && n.def.id !== 'lab' && !st.maxed && !isDeviceMax(st) && Number.isFinite(st.cost);
+      n.el.classList.toggle('devmax', isDeviceMax(st));
       n.cost.hidden = !showCost;
       if (showCost) n.cost.innerHTML = `${treeIcon('datos', 12)}${fmtShort(st.cost, l)}`;
     }
@@ -665,9 +652,12 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     titleP.innerHTML = parts.join(' · ');
     nightChip.hidden = !(night.ready && night.next);
     nightChip.innerHTML = `${treeIcon('moon', 16)}<span>${esc(tx(TREE_UI.nightReady, l))}</span>`;
-    goLbl.textContent = tx(opts.goText?.() ?? TREE_UI.newSession, l);
+    const custom = opts.goText?.() ?? null;
+    // After buying a World the way to it pulses: «¡Juega en el Mundo 2!» (docs/CLARIDAD2.md §2.10).
+    const world = !custom && playWorld ? nodeText(playWorld).name : null;
+    goLbl.textContent = world ? tx(TREE_UI.playWorld(world), l) : tx(custom ?? TREE_UI.newSession, l);
+    goBtn.classList.toggle('pulse', !!world);
     goBtn.hidden = !opts.onNewSession;
-    hint.textContent = tx(TREE_UI.hint, l);
     for (const { b, l: lab } of branchEls) lab.textContent = tx(BRANCH_TEXT[b].name, l);
     for (const [k, t] of [
       ['in', TREE_UI.zoomIn],
@@ -680,6 +670,43 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     }
     el.setAttribute('aria-label', tx(TREE_UI.title, l));
   }
+
+  /**
+   * «Puedes comprar (n)» (docs/CLARIDAD2.md §2.10, QA-CLARIDAD #38): every node the player can buy now, cheapest
+   * first, one tap away (its sheet); none → «Lo más barato: Reloj grande · 30 Datos · unas 2 sesiones».
+   */
+  function renderStrip(): void {
+    const l = lang();
+    const buy = [...states.values()].filter((st) => st.affordable && st.status !== 'hidden' && st.id !== 'lab').sort((a, b) => a.cost - b.cost);
+    const key = `${l}|${buy.map((b) => `${b.id}:${b.cost}`).join(',')}|${selected ?? ''}|${data.datos}`;
+    if (key === stripKey) return;
+    stripKey = key;
+    stripRow.innerHTML = buy
+      .map((st) => {
+        const def = TREE_BY_ID[st.id];
+        const name = tx(nodeText(st.id).name, l);
+        return `<button type="button" class="rt-sbtn b-${branchOf(def)}${selected === st.id ? ' sel' : ''}" data-pick="${st.id}" aria-label="${esc(`${name} · ${fmt(st.cost, l)} ${tx(DATOS_NAME, l)}`)}"><span class="ic">${treeIcon(def.icon, 22)}</span><span class="nm">${esc(name)}</span><b>${treeIcon('datos', 14)}${fmtShort(st.cost, l)}</b></button>`;
+      })
+      .join('');
+    stripRow.hidden = !buy.length;
+    if (buy.length) stripH.textContent = tx(TREE_UI.canBuyStrip(buy.length), l);
+    else {
+      // The cheapest node that only waits for Datos, and how many sessions away.
+      let best: NodeState | null = null;
+      for (const st of states.values()) if (st.block === 'datos' && st.id !== 'lab' && (!best || st.cost < best.cost)) best = st;
+      stripH.textContent = best ? tx(TREE_UI.cheapestNow(nodeText(best.id).name, fmt(best.cost, l), sessionsToAfford(best.missingDatos, data.recentDatos) ?? 0), l) : '';
+    }
+    strip.classList.toggle('none', !buy.length);
+    strip.hidden = !stripH.textContent;
+    strip.setAttribute('aria-label', stripH.textContent ?? '');
+  }
+  stripRow.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('[data-pick]') as HTMLElement | null;
+    if (!b?.dataset.pick) return;
+    sound('open');
+    el.classList.add('touched');
+    api.select(b.dataset.pick);
+  });
 
   function tweenDatos(to: number): void {
     cancelAnimationFrame(datosTween);
@@ -708,40 +735,37 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     return `<button type="button" class="rt-need b-${branchOf(def)}" data-go="${id}">${treeIcon(def.icon, 22)}${esc(tx(nodeText(id).name, l))}</button>`;
   }
 
-  /** "Sesiones 4/4 ✓": the count stops at what the gate needs, the bar at 100 % (owner bug B-10.3). */
-  function gateBar(label: string, have: number, need: number): string {
+  /** A gate condition with «tienes / hace falta» (TREE_UI.gateSessions / gateSpecies) and its bar. */
+  function gateLine(text: string, have: number, need: number): string {
     const g = gateCount(have, need);
-    return `<div class="rt-gatebar${g.done ? ' done' : ''}"><div class="row"><span>${esc(label)}</span><b>${g.text}</b></div><div class="track"><div class="fill" style="transform:scaleX(${g.frac.toFixed(3)})"></div></div></div>`;
+    return `<div class="rt-gatebar${g.done ? ' done' : ''}"><div class="row"><span>${esc(text)}</span></div><div class="track"><div class="fill" style="transform:scaleX(${g.frac.toFixed(3)})"></div></div></div>`;
   }
 
+  /**
+   * The centre (QA-CLARIDAD #37): the PRIZE first («Noche 2 · capítulo 2 de la historia. +10 % de Datos y
+   * mejoras nuevas. Nada se borra.»), then one line per condition with what you have and what it needs, then
+   * the button.
+   */
   function nightSheet(st: NodeState, l: Lang): string {
     const ni = nightInfo(ctxOf(data));
-    const def = TREE_BY_ID.lab;
-    let body = `<div class="rt-eff"><span class="now">${esc(tx(TREE_UI.night(ni.night), l))}</span>${
-      ni.next ? `<span class="arrow">→</span><span class="nxt">${esc(tx(TREE_UI.night(ni.next), l))}</span>` : ''
-    }</div><p class="rt-desc">${esc(tx(nodeText('lab').desc, l))}</p>`;
-    if (ni.next && ni.gate) {
+    if (!ni.next || !ni.gate) return `<p class="rt-note">${esc(tx(TREE_UI.maxed, l))}</p>`;
+    let body = `<p class="rt-prize">${treeIcon('moon', 22)}<span>${esc(tx(TREE_UI.nightPrize(ni.next), l))}</span></p>`;
+    body += `<div class="rt-box rt-gate-box">${gateLine(tx(TREE_UI.gateSessions(data.sessions, ni.gate.sessions), l), data.sessions, ni.gate.sessions)}${gateLine(
+      tx(TREE_UI.gateSpecies(data.species, ni.gate.species), l),
+      data.species,
+      ni.gate.species,
+    )}</div>`;
+    // The night's button (owner bug B-10.2): «Empezar la Noche N» is the primary action (accent, moon);
+    // «Aún no» is a secondary, informative button with the reason, never a ghost that looks broken.
+    if (ni.ready) {
+      body += `<button type="button" class="rt-buy rt-night-go" data-buy="lab"${st.affordable ? '' : ' disabled'}>${treeIcon('moon', 24)}<span>${esc(
+        l === 'es' ? `Empezar la Noche ${ni.next}` : `Start Night ${ni.next}`,
+      )}</span>${ni.cost > 0 ? `<b>· ${fmt(ni.cost, l)}</b>` : ''}</button>`;
+    } else {
       const alt = ni.gate.sessions + C.NIGHT_GATE_FALLBACK;
-      body += `<div class="rt-box rt-gate-box"><h4>${esc(tx(TREE_UI.night(ni.next), l))}</h4><p class="rt-rule" style="margin:0 0 8px">${esc(
-        tx(TREE_UI.nightGate(ni.gate.sessions, ni.gate.species, alt), l),
-      )}</p>${gateBar(
-        l === 'es' ? 'Sesiones' : 'Sessions',
-        data.sessions,
-        ni.gate.sessions,
-      )}${gateBar(l === 'es' ? 'Especies' : 'Species', data.species, ni.gate.species)}<p class="rt-rule">${esc(tx(TREE_UI.nightRule, l))}</p></div>`;
-      // The night's button (owner bug B-10.2): «Empezar la Noche N» is the primary action (accent, moon);
-      // «Aún no» is a secondary, informative button with the reason, never a ghost that looks broken.
-      if (ni.ready) {
-        body += `<button type="button" class="rt-buy rt-night-go" data-buy="lab"${st.affordable ? '' : ' disabled'}>${treeIcon('moon', 24)}<span>${esc(
-          l === 'es' ? `Empezar la Noche ${ni.next}` : `Start Night ${ni.next}`,
-        )}</span>${ni.cost > 0 ? `<b>· ${fmt(ni.cost, l)}</b>` : ''}</button>`;
-      } else {
-        const alt = ni.gate.sessions + C.NIGHT_GATE_FALLBACK;
-        const left = data.species >= ni.gate.species ? Math.max(0, ni.gate.sessions - data.sessions) : Math.max(0, alt - data.sessions);
-        body += `<button type="button" class="rt-notyet" data-notyet="1">${treeIcon('moon', 22)}<span>${esc(tx(TREE_UI.nightNotYet(Math.max(1, left)), l))}</span></button>`;
-      }
-    } else body += `<p class="rt-note">${esc(tx(TREE_UI.maxed, l))}</p>`;
-    void def;
+      const left = data.species >= ni.gate.species ? Math.max(0, ni.gate.sessions - data.sessions) : Math.max(0, alt - data.sessions);
+      body += `<button type="button" class="rt-notyet" data-notyet="1">${treeIcon('moon', 22)}<span>${esc(tx(TREE_UI.nightNotYet(Math.max(1, left)), l))}</span></button>`;
+    }
     return body;
   }
 
@@ -765,10 +789,10 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       ${row(br === 'core' ? 'lab' : ROUTE_ICON[br], WHY_UI.forWhat, w.forWhat)}
       ${row('star', WHY_UI.matters, w.matters)}
       ${row('plus', WHY_UI.unlocks, w.unlocks)}
+      <p class="rt-rule rt-rule-first">${esc(w.rule)}</p>
       <div class="rt-eq" role="group" aria-label="${esc(tx(WHY_UI.price, l))}"><span class="term"><b>${esc(eq.start)}</b><small>${esc(eq.startLabel)}</small></span><span class="op" aria-hidden="true">×</span><span class="term"><b>${esc(
         eq.growth,
       )}</b><small>${esc(eq.growthLabel)}</small></span><span class="op" aria-hidden="true">=</span><span class="term total"><b>${esc(eq.total)}</b><small>${esc(eq.totalLabel)}</small></span></div>
-      <p class="rt-rule">${esc(w.rule)}</p>
       ${barsBox(def, st, l)}
     </div>`;
   }
@@ -863,6 +887,22 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     return `<div class="rt-box"><h4>${esc(tx(SESSION_UI.worldSpecies(sp.length), l))}</h4><div class="rt-species">${cells}</div></div>`;
   }
 
+  /**
+   * A Placa level this phone cannot show (QA-CLARIDAD #11, RF-12): BuyBlock 'device' today; PA's `deviceMax`
+   * state when it lands. No price, no bar, no «Comprar»: «✓ Máximo en este móvil».
+   */
+  function isDeviceMax(st: NodeState): boolean {
+    return st.block === 'device' || (st as NodeState & { deviceMax?: boolean }).deviceMax === true;
+  }
+
+  /** The levels as dots ●●○ (∞ routes: «nivel 3»), with the words for a screen reader. */
+  function levelDots(level: number, max: number, l: Lang): string {
+    const words = tx(TREE_UI.levelOf(level, max >= 99 ? '∞' : String(max)), l);
+    if (max >= 99 || max > 10) return `<span class="rt-chip lv">${esc(words)}</span>`;
+    const dots = Array.from({ length: max }, (_, i) => `<i class="${i < level ? 'on' : ''}"></i>`).join('');
+    return `<span class="rt-chip lv rt-dots" role="img" aria-label="${esc(words)}">${dots}</span>`;
+  }
+
   function renderSheet(force = false): void {
     if (!selected) {
       sheet.classList.remove('show', 'peek');
@@ -885,14 +925,15 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     const br = branchOf(def);
     const name = mystery ? '?' : selected === 'lab' ? tx(TREE_UI.night(st.level), l) : tx(nodeText(def.id).name, l);
     const chips: string[] = [];
+    const devMax = isDeviceMax(st);
     if (!mystery && br !== 'core') {
+      // ONE counter (QA-CLARIDAD: «Mejora 1 de 7» next to «Nivel 0 de 6»): «Ruta Placa · paso 1 de 7», and the
+      // levels as dots ●●○ beside it.
       const n = routeNodes(br).length;
-      chips.push(`<span class="rt-chip br">${treeIcon(ROUTE_ICON[br], 14)}${esc(tx(BRANCH_TEXT[br].name, l))} · ${esc(tx(TREE_UI.step(def.step, n), l))}</span>`);
-      chips.push(
-        st.maxed
-          ? `<span class="rt-chip done">${treeIcon('check', 14)}${esc(tx(TREE_UI.maxed, l))}</span>`
-          : `<span class="rt-chip lv">${esc(tx(TREE_UI.levelOf(st.level, def.maxLevel >= 99 ? '∞' : String(def.maxLevel)), l))}</span>`,
-      );
+      chips.push(`<span class="rt-chip br">${treeIcon(ROUTE_ICON[br], 14)}${esc(tx(TREE_UI.routeStep(BRANCH_TEXT[br].name, def.step, n), l))}</span>`);
+      if (devMax) chips.push(`<span class="rt-chip done">${esc(tx(TREE_UI.deviceMax, l))}</span>`);
+      else if (st.maxed) chips.push(`<span class="rt-chip done">${treeIcon('check', 14)}${esc(tx(TREE_UI.maxed, l))}</span>`);
+      else if (def.maxLevel > 1) chips.push(levelDots(st.level, def.maxLevel, l));
     }
     let body = '';
     if (selected === 'lab') body = nightSheet(st, l);
@@ -900,7 +941,10 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       body = `<p class="rt-note">${esc(tx(st.nightNeeded ? TREE_UI.nightLocked(st.nightNeeded) : TREE_UI.mystery, l))}</p>`;
       if (st.nightNeeded) {
         const ni = nightInfo(ctxOf(data));
-        if (ni.gate) body += gateBar(l === 'es' ? 'Sesiones' : 'Sessions', data.sessions, ni.gate.sessions) + gateBar(l === 'es' ? 'Especies' : 'Species', data.species, ni.gate.species);
+        if (ni.gate)
+          body +=
+            gateLine(tx(TREE_UI.gateSessions(data.sessions, ni.gate.sessions), l), data.sessions, ni.gate.sessions) +
+            gateLine(tx(TREE_UI.gateSpecies(data.species, ni.gate.species), l), data.species, ni.gate.species);
       }
     } else {
       // What it does first (before → after, in words), then the button; the price's arithmetic and
@@ -915,23 +959,26 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       body += `<p class="rt-desc">${esc(tx(nodeText(def.id).desc, l))}</p>`;
       body += worldBox(def, l);
       body += dishBox(def, l);
-      if (!st.maxed) {
+      if (devMax) {
+        // QA-CLARIDAD #11: no Datos bar and no «Comprar» for a dish this phone cannot show; one line instead.
+        body += `<p class="rt-note rt-devmax">${esc(tx(TREE_UI.deviceMaxLine, l))}</p>`;
+      } else if (!st.maxed) {
         if (st.status === 'locked') {
           body += `<div class="rt-needs">${esc(tx(TREE_UI.needs, l))}: ${st.missingRequires.map((id) => needChip(id, l)).join('')}</div>`;
         } else {
           body += haveBox(st, l);
+          // The button names its node: the only way to buy is a tap on «Comprar Más tiempo · 2».
           body += `<button type="button" class="rt-buy" data-buy="${def.id}"${st.affordable ? '' : ' disabled'}>${
             st.affordable
-              ? `${esc(tx(TREE_UI.buy, l))} · ${treeIcon('datos', 22)}<b>${fmt(st.cost, l)}</b>`
-              : st.block === 'device'
-                ? esc(tx(VALUE_TEXT.deviceDishMax, l)) // RF-12: real price, not on sale on this device
-                : esc(datosMissingText(st.missingDatos, l))
+              ? `<span>${esc(tx(TREE_UI.buy, l))} ${esc(tx(nodeText(def.id).name, l))}</span><span class="rt-buy-c">${treeIcon('datos', 22)}<b>${fmt(st.cost, l)}</b></span>`
+              : esc(datosMissingText(st.missingDatos, l))
           }</button>`;
         }
         body += whyBox(def, st, l);
       }
     }
     const fresh = staggerFor !== selected;
+    if (fresh) sheetAt = performance.now();
     staggerFor = selected;
     sheet.innerHTML = `<div class="rt-grab"></div>
       <div class="rt-sh-head">
@@ -964,7 +1011,6 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     if (go?.dataset.go) {
       sound('tap');
       api.select(go.dataset.go);
-      focusNode(go.dataset.go);
       return;
     }
     const why = t.closest('[data-why]') as HTMLElement | null;
@@ -993,7 +1039,9 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       return;
     }
     const buy = t.closest('[data-buy]') as HTMLButtonElement | null;
-    if (buy?.dataset.buy && !buy.disabled) doBuy(buy.dataset.buy, buy);
+    // Buying only with the sheet's button, which names its node, and never right after the camera moved or
+    // the sheet turned to another node (QA-CLARIDAD #12: purchases by accident).
+    if (buy?.dataset.buy && !buy.disabled && tapAllowed(performance.now(), Math.max(lastCamMove, sheetAt))) doBuy(buy.dataset.buy, buy);
   });
 
   // ───────────── buying ─────────────
@@ -1056,6 +1104,8 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     sound(id === 'lab' ? 'night' : 'buy');
     const prev = data;
     if (wasFirst) firstBought = id;
+    // A new World: «Nueva sesión» pulses with «¡Juega en el Mundo 2!» (the start card brings it picked).
+    if (TREE_BY_ID[id]?.world) playWorld = id;
     data = { ...data, levels: res.levels, datos: res.datos };
     recompute();
     const n = nodes.get(id);
@@ -1168,7 +1218,10 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       handEl.remove();
       handEl = null;
     }
-    hint.textContent = tx(id ? TREE_UI.hintFirst : TREE_UI.hint, lang());
+    // The first visit's line (QA-CLARIDAD #10: the nodes are not green, they glow in their route's colour);
+    // after it the strip says what can be bought.
+    hint.textContent = id ? tx(TREE_UI.tapGlowing, lang()) : '';
+    hint.hidden = !id;
   }
 
   function recompute(): void {
@@ -1178,6 +1231,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     renderGates();
     renderTop();
     renderGuide();
+    renderStrip();
     tweenDatos(data.datos);
     renderSheet();
   }
@@ -1225,19 +1279,34 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       open = false;
       el.hidden = true;
       selected = null;
+      homeCam = null;
+      playWorld = null;
       firstBought = null;
       renderSheet();
     },
     select(id) {
       const prev = selected;
       selected = id && TREE_BY_ID[id] && states.get(id)?.status !== 'hidden' ? id : null;
+      // The camera of the tree as the player left it: the sheet's reveals are undone when it closes.
+      if (!prev && selected) homeCam = { ...cam };
       if (selected !== firstBought) firstBought = null;
       if (selected !== whyOpenFor) whyOpenFor = null;
       if (prev && nodes.get(prev)) nodes.get(prev)!.key = '';
       if (selected && nodes.get(selected)) nodes.get(selected)!.key = '';
       renderNodes();
       renderSheet(true);
-      if (selected) requestAnimationFrame(() => focusNode(selected!, Math.max(cam.z, 0.85)));
+      renderStrip();
+      // QA-CLARIDAD #12: a visible node never moves the camera; one under the sheet moves the least it can.
+      if (selected) {
+        const id = selected;
+        requestAnimationFrame(() => {
+          if (selected === id) revealNode(id);
+        });
+      } else if (prev && homeCam) {
+        const back = homeCam;
+        homeCam = null;
+        animateTo(0, 0, back.z, back.x, back.y);
+      } else homeCam = null;
     },
     focus(id, zoom) {
       focusNode(id, zoom);
@@ -1303,7 +1372,7 @@ export function nodePriceExplain(
       { icon: 'tag', value: fmtShort(r.start, lang), label: tx(TREE_UI.ringStart(String(def.ring)), lang), active: true },
       {
         icon: 'up',
-        value: `×${dec2(Math.pow(r.growth, level), lang)}`,
+        value: fmtFactor(Math.pow(r.growth, level), lang),
         label: level > 0 ? tx(TREE_UI.levelsBought(level, g), lang) : tx(TREE_UI.levelN(1), lang),
         active: level > 0,
       },

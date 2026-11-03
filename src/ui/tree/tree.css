@@ -52,6 +52,7 @@
 .rt .b-discovery { --bc: var(--bl-route-discovery); }
 .rt .b-worlds { --bc: var(--bl-route-worlds); }
 .rt .b-spark { --bc: var(--bl-route-spark); }
+.rt .b-collect { --bc: var(--bl-route-collect); }
 .rt .b-core { --bc: var(--bl-route-core); }
 
 .rt button {
@@ -487,10 +488,11 @@
   font-variant-numeric: tabular-nums;
   border: 1px solid var(--rt-line);
 }
+/* A price is a cost (docs/CLARIDAD2.md §2.11): amber, never the green of a prize. */
 .rt-node.can .rt-cost {
-  background: var(--bl-good);
-  color: var(--bl-accent-ink);
-  border-color: var(--bl-good);
+  background: var(--bl-surface2);
+  color: var(--bl-cost);
+  border-color: var(--bl-cost);
 }
 .rt.far .rt-label {
   opacity: 0;
@@ -1362,7 +1364,7 @@
 .rt.rt-first .rt-hint {
   font-size: var(--bl-fs-body);
   color: var(--bl-text);
-  border-color: var(--bl-good, #7ee081);
+  border-color: var(--bl-accent);
   padding: 12px 20px;
 }
 .rt.rm .rt-hand .bl-ic {
@@ -1626,4 +1628,202 @@
 .rt-datos,
 .rt-title {
   background: var(--bl-surface);
+}
+
+/* ───── Clarity pass 2 (docs/CLARIDAD2.md §2.10) ───── */
+
+/* «Puedes comprar (n)»: the buyable nodes in a row at the bottom, left of the zoom tools; a tap opens the sheet. */
+.rt-strip {
+  position: absolute;
+  z-index: 3;
+  left: 12px;
+  right: 76px;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  border-radius: var(--bl-r-lg);
+  background: color-mix(in srgb, var(--bl-surface) 94%, transparent);
+  border: 1px solid var(--bl-plate-rule, var(--rt-line));
+  box-shadow: var(--bl-elev-1);
+  transition: opacity var(--bl-t-base) var(--bl-ease-standard);
+}
+.rt-strip[hidden] {
+  display: none;
+}
+.rt-strip-h {
+  font: 700 var(--bl-fs-caption)/1.2 var(--bl-font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bl-text2);
+}
+.rt-strip.none .rt-strip-h {
+  font: 600 var(--bl-fs-small)/1.3 var(--bl-font-ui);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--bl-text);
+}
+.rt-strip-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.rt-strip-row[hidden] {
+  display: none;
+}
+.rt-strip-row::-webkit-scrollbar {
+  display: none;
+}
+.rt-sbtn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  max-width: 220px;
+  padding: 0 12px 0 8px;
+  border-radius: var(--bl-r-md);
+  border: 1.5px solid color-mix(in srgb, var(--bc) 60%, transparent);
+  background: var(--bl-surface2);
+  color: var(--bl-text);
+  font: 700 var(--bl-fs-small)/1.15 var(--bl-font-ui);
+  cursor: pointer;
+}
+.rt-sbtn .ic {
+  display: grid;
+  place-items: center;
+  color: var(--bc);
+}
+.rt-sbtn .nm {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rt-sbtn b {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--bl-cost);
+  font-variant-numeric: tabular-nums;
+}
+.rt-sbtn.sel {
+  border-color: var(--bc);
+  outline: 2px solid color-mix(in srgb, var(--bc) 35%, transparent);
+}
+.rt-sbtn:focus-visible {
+  outline: 3px solid var(--bl-gold);
+  outline-offset: 2px;
+}
+.rt.sheet-open .rt-strip {
+  opacity: 0;
+  pointer-events: none;
+}
+/* The first visit's line sits above the strip. */
+.rt-hint[hidden] {
+  display: none;
+}
+.rt.rt-first .rt-hint {
+  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 104px);
+}
+@media (min-width: 900px) {
+  .rt-strip {
+    left: 84px;
+    right: 16px;
+    max-width: 920px;
+    margin: 0 auto;
+  }
+  .rt.sheet-open .rt-strip {
+    right: 412px;
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* The levels as dots ●●○ next to «Ruta Placa · paso 1 de 7». */
+.rt-chip.rt-dots {
+  gap: 4px;
+  padding: 6px 10px;
+}
+.rt-dots i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid var(--bc, var(--bl-text2));
+}
+.rt-dots i.on {
+  background: var(--bc, var(--bl-text2));
+}
+
+/* «Comprar Más tiempo · 2»: the button names its node; the price reads as a cost on the accent. */
+.rt-buy .rt-buy-c {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* The night's prize, before its conditions (QA-CLARIDAD #37). */
+.rt-prize {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 4px 0 6px;
+  padding: 12px 14px;
+  border-radius: var(--bl-r-md);
+  border: 1px solid color-mix(in srgb, var(--bl-gold) 45%, transparent);
+  background: color-mix(in srgb, var(--bl-gold) 8%, var(--bl-surface));
+  color: var(--bl-text);
+  font: 650 var(--bl-fs-body)/1.4 var(--bl-font-ui);
+}
+.rt-prize .bl-ic {
+  flex: none;
+  color: var(--bl-gold);
+}
+.rt-gate-box .rt-gatebar + .rt-gatebar {
+  margin-top: 10px;
+}
+
+/* A Placa level past this phone's dish: no price, a ✓ badge (QA-CLARIDAD #11). */
+.rt-node.devmax .rt-badge {
+  border-color: var(--bc);
+}
+.rt-devmax {
+  margin-top: 12px;
+}
+
+/* After buying a World the way to it pulses (transform only; still with reduce motion). */
+.rt-go.pulse {
+  animation: rt-go-pulse 1.4s var(--bl-ease-standard) infinite; /* css-lint-ok: «¡Juega en el Mundo 2!» until the player leaves */
+}
+@keyframes rt-go-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+.rt.rm .rt-go.pulse {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rt .rt-go.pulse {
+    animation: none;
+  }
+}
+
+/* Far out (the opening frame of a big tree fits every buyable node), the buyable ones keep their amber price
+   readable on screen: the name hides, the price badge counter-scales (--rt-ic, treeView applyCam). */
+.rt.far .rt-node.can .rt-label {
+  opacity: 1;
+}
+.rt.far .rt-node.can .rt-name {
+  display: none;
+}
+.rt.far .rt-node.can .rt-cost {
+  transform: scale(var(--rt-ic, 1));
+  transform-origin: 50% 0;
 }

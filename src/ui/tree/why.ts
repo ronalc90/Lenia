@@ -7,7 +7,7 @@
 import type { Lang, Text } from '../../core/types';
 import { TREE_BY_ID, TREE_NODES, beforeAfter, costRows, nodeText, priceRule, sessionsToAfford, treeStates, type TreeCtx } from '../../game/tree';
 import { BRANCH_TEXT, DATOS_NAME, SESSION_UI, TREE_UI, type BranchId } from '../../game/treeText';
-import { datosMissingText, fmt, fmtShort } from '../format';
+import { datosMissingText, fmt, fmtFactor, fmtShort } from '../format';
 
 const t = (es: string, en: string): Text => ({ es, en });
 
@@ -76,10 +76,8 @@ export function sheetSentences(id: string, lang: Lang, ctx: WhyCtx): string[] {
   return out.filter(Boolean);
 }
 
-const dec2 = (x: number, l: Lang): string => {
-  const v = Math.round(x * 100) / 100;
-  return v >= 1000 ? fmt(Math.round(v), l) : String(v).replace('.', l === 'es' ? ',' : '.');
-};
+/** The exact factor, for the folded maths only ("×2,25"; docs/CLARIDAD2.md §2.13). */
+const dec2 = (x: number, l: Lang): string => fmtFactor(x, l).slice(1);
 
 /** The unfolded explanation of a node (null for the centre and unknown ids). */
 export function nodeWhy(id: string, level: number, lang: Lang, ctx: WhyCtx): NodeWhy | null {
