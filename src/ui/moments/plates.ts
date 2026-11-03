@@ -94,6 +94,14 @@ export function plateOf(kind: string): PlateDef | null {
   return (PLATES as Record<string, PlateDef | undefined>)[kind] ?? null;
 }
 
+/**
+ * The plate kind of a Momento: its own when it has one (25 «Recoger», 26 «Guiar» draw on another
+ * illustration), else its illustration's. The card and the report's «Láminas de hoy» both number by it.
+ */
+export function momentPlateKind(m: { id: string; illustration: string }): string {
+  return m.id === 'collect' || m.id === 'steer' ? m.id : m.illustration;
+}
+
 /** Lengths a scale bar may have, mm (a round number the eye reads at once). */
 const BAR_MM = [10, 5, 2, 1] as const;
 /** The longest bar, in box units (a sixth of the 260-wide diagram). */

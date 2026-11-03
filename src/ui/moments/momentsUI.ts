@@ -32,7 +32,7 @@ import { behaviorRowsHtml, createBehaviorGuideSheet, type BehaviorGuideSheet, ty
 import { createHelp, type HelpSheet } from './help';
 import { moIcon } from './icons';
 import { Illustration, ILLUS_H, ILLUS_W, type CompareSide } from './illustrations';
-import { KEY_TEXT, figPrefix, plateLabel, plateOf, scaleBar, scaleText, type PlateDef, type PlateKey } from './plates';
+import { KEY_TEXT, figPrefix, momentPlateKind, plateLabel, plateOf, scaleBar, scaleText, type PlateDef, type PlateKey } from './plates';
 import { compareSpecies, createSpeciesCompare, speciesBreakdown, type SpeciesCardInput, type SpeciesCompare } from './species-card';
 import { MS, tr } from './strings';
 
@@ -732,7 +732,7 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
       typed: 0,
       full: '',
       lastBlip: 0,
-      plate: plateOf(m.illustration),
+      plate: plateOf(momentPlateKind(m)),
       stillsAt: -Infinity,
       stillsDone: false,
       activePanel: -1,

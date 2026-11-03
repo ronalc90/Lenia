@@ -25,12 +25,10 @@ import { createSessionStart, type SessionStartView } from './start';
 import { shouldStartClock } from './clockGate';
 import { celebrateNight } from './night';
 import { createSessionSummary, type SessionSummaryView, type SummarySound } from './summary';
+import { momentPlateKind } from '../moments/plates';
 
 /** The Tree's button when it was opened from the dock before the first seed. */
 const TREE_BACK: Text = { es: 'A la placa', en: 'To the dish' };
-
-/** The clock pill's pause chip (PD's SessionHud.setPaused, docs/CLARIDAD2.md §8.1), when it exists. */
-type PausableHud = SessionHud & { setPaused?(on: boolean): void };
 
 /** Every sound the session screens ask for (the host maps them to src/audio). */
 export type SessionFlowSound = SessionHudSound | SummarySound | TreeSound;
@@ -62,6 +60,8 @@ export interface SessionFlowOptions {
    * moments.drainForSummary (it empties the Momentos' queue: nothing carries into the next run).
    */
   plates?(): MomentPlate[];
+  /** A tap on one of today's plates in the report: main.ts opens that Momento again (moments.replay). */
+  onPlate?(id: MomentPlate['id']): void;
   /** (§2.12, QA#14) The dish is lit (the Nevera's creatures are visible): «¡Empezar!» waits for it. */
   cultureReady?(): boolean;
   /**
@@ -102,10 +102,13 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
   let holdSince = -1;
   /** Last state pushed to the clock pill's pause chip. */
   let pausedShown = false;
+  /** Merges of this run (VELA's tip in the report: «Hoy se juntaron 2…», docs/CLARIDAD2.md §2.5). */
+  let merged = 0;
 
-  function speciesInfo(id: string): { name: string; portrait: Pattern | null; hue?: number } | null {
+  function speciesInfo(id: string): { name: string; portrait: Pattern | null; hue?: number; latin?: string | null } | null {
     const sp = game.view().species.find((x) => x.id === id);
-    return sp ? { name: sp.name, portrait: sp.portrait, hue: sp.hue } : null;
+    // `latin`: the report's specimen photo carries the scientific name (docs/CLARIDAD2.md §2.13).
+    return sp ? { name: sp.name, portrait: sp.portrait, hue: sp.hue, latin: sp.scientificName ?? null } : null;
   }
 
   /** A world's species: catalog portraits, the ones not in the Bestiary yet as silhouettes. */
@@ -121,7 +124,7 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
       });
   }
 
-  const hud: PausableHud = createSessionHud(o.hudHost, {
+  const hud: SessionHud = createSessionHud(o.hudHost, {
     lang: o.lang,
     reduceMotion: o.reduceMotion,
     onSound: (k) => sound(k),
@@ -175,6 +178,7 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
       game.actions.startSession?.();
     },
     onSound: (k) => sound(k),
+    onPlate: o.onPlate ? (ref) => o.onPlate!(ref.id as MomentPlate['id']) : undefined,
   });
 
   function treeData() {
@@ -211,14 +215,15 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
     const ctx = treeCtxOf(r, game.state.species.length);
     const goal = nextGoal(ctx);
     const v = game.view();
-    // `plates`: PD's SummaryExtras.plates (§8.1); a summary that does not know it yet ignores it.
     const extras = {
       affordable: Math.max(0, (v.research?.affordable ?? 0) - (v.research?.nightReady ? 1 : 0)),
       nextGoal:
         goal && goal.missingDatos > 0
           ? { name: nodeText(goal.id).name, missing: goal.missingDatos, sessions: sessionsToAfford(goal.missingDatos, r.history.map((h) => h.datos)) }
           : null,
-      plates: o.plates?.() ?? [],
+      // The Momentos' plates as the report's PlateRef: the plate number comes from the illustration (PD).
+      plates: (o.plates?.() ?? []).map((p) => ({ id: p.id, kind: momentPlateKind(p), title: p.title })),
+      merged,
     };
     summary.show(sum, extras);
   }
@@ -226,6 +231,7 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
   const offs = [
     bus.on('sessionStart', ({ n }) => {
       const again = n === lastStartN;
+      if (!again) merged = 0;
       lastStartN = n;
       tree.update(treeData());
       // The same run set up anew while it waits (a node bought, a world picked): the player stays where
@@ -236,6 +242,9 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
       if (tree.isOpen) tree.close();
       if (summary.isOpen) summary.hide();
       showStart();
+    }),
+    bus.on('creatureExploded', ({ cause }) => {
+      if (cause === 'touch' && game.session?.phase === 'running') merged++;
     }),
     bus.on('sessionExtended', ({ seconds, reason }) => hud.extended(seconds, reason, reason === 'species' && game.state.species.length <= 1)),
     bus.on('sessionClock', ({ type }) => {

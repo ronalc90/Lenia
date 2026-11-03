@@ -11,7 +11,8 @@ import type { GameEvents } from '../core/bus';
 import { BEHAVIOR_COLOR, UI } from '../core/palette';
 import type { Behavior, GameView, Lang, Text } from '../core/types';
 import { GOLDEN_LIFE, OFFLINE_RATE, SAMPLES_NEW_BEHAVIOR, SAMPLES_NEW_SPECIES } from '../game/balance';
-import { DATOS_PER_NEW_BEHAVIOR, DATOS_PER_NEW_SPECIES, SESSION_TIME_PER_SPECIES } from '../game/cycleBalance';
+import { DATOS_PER_NEW_BEHAVIOR, DATOS_PER_NEW_SPECIES, SESSION_SEED_PRICE, SESSION_TIME_PER_SPECIES } from '../game/cycleBalance';
+import { SESSION_UI } from '../game/treeText';
 import { warnSeconds } from '../game/session';
 import { TEXT as GAME_TEXT } from '../game/content';
 import { fmt, fmtDuration, fmtRate } from '../ui/format';
@@ -122,6 +123,9 @@ export function priceRose(v: GameView): boolean {
 
 /** Back-compat name. */
 export const priceIsHigh = priceRose;
+
+/** The seed price plate's second line: the one way the price changes is a Tree node (ADR-030 §2.11). */
+const SEED_CHEAPER = t('Con «Semillas baratas» del Árbol, cuesta menos.', 'With “Cheap seeds” in the Tree, it costs less.');
 
 /** The first purchase in the classic loop (Lab upgrades: at once; an Extinction resets them). */
 const CLASSIC_UPGRADE_LINES: readonly [Text, Text] = [
@@ -417,7 +421,7 @@ export const MOMENTS: MomentDef[] = [
   behaviorMoment('colony', 75),
   {
     id: 'division',
-    plate: 14,
+    plate: 21,
     priority: 76,
     title: t('¡Una se hizo dos!', 'One became two!'),
     lines: [
@@ -439,7 +443,7 @@ export const MOMENTS: MomentDef[] = [
   },
   {
     id: 'golden',
-    plate: 15,
+    plate: 14,
     priority: 110,
     title: t('¡Un Destello!', 'A Spark!'),
     lines: [
@@ -464,7 +468,7 @@ export const MOMENTS: MomentDef[] = [
   },
   {
     id: 'upgrade',
-    plate: 16,
+    plate: 15,
     priority: 60,
     title: t('¡Mejora comprada!', 'Upgrade bought!'),
     lines: [
@@ -497,7 +501,7 @@ export const MOMENTS: MomentDef[] = [
   },
   {
     id: 'autoseed',
-    plate: 17,
+    plate: 16,
     priority: 58,
     title: t('Siembra automática', 'Auto-sowing'),
     lines: [
@@ -557,12 +561,13 @@ export const MOMENTS: MomentDef[] = [
     id: 'seedPrice',
     plate: 19,
     priority: 62,
-    title: t('¿Por qué sube?', 'Why does it rise?'),
+    // One price (ADR-030 §2.11, QA-CLARIDAD #21): SEED_PRICE_STEP is 1, the sheet says the fixed price.
+    title: t('Precio de la semilla', 'The seed price'),
     lines: [
-      t('Cada semilla que compras hoy cuesta un poquito más.', 'Each seed you buy today costs a tiny bit more.'),
-      t('En la próxima sesión vuelve a costar lo de siempre.', 'Next session it costs the usual price again.'),
+      SESSION_UI.seedAlways(String(SESSION_SEED_PRICE)),
+      SEED_CHEAPER,
     ],
-    brief: t('La semilla sube un poquito', 'Seeds cost a bit more'),
+    brief: t('Una semilla, un precio', 'One seed, one price'),
     illustration: 'seedPrice',
     icon: 'tag',
     mood: 'neutral',
@@ -574,7 +579,8 @@ export const MOMENTS: MomentDef[] = [
       const bought = v.seedPrice?.bought ?? 0;
       const chips: Chip[] = [chip(both((l) => `${l === 'es' ? 'Semilla' : 'Seed'}: ${fmt(v.seedCost, l)} ${l === 'es' ? 'luz' : 'glow'}`), 'warn', 'essence')];
       if (bought > 0) chips.push(chip(both((l) => `${l === 'es' ? 'Compradas hoy' : 'Bought today'}: ${fmt(bought, l)}`), 'info', 'up'));
-      return { focus: ui('seed', 'dish'), chips, data: { price } };
+      const lines = [SESSION_UI.seedAlways(String(Math.max(0, Math.round(v.seedCost)))), SEED_CHEAPER];
+      return { focus: ui('seed', 'dish'), chips, data: { price }, lines };
     },
     delayMs: 800,
   },
@@ -607,7 +613,7 @@ export const MOMENTS: MomentDef[] = [
   },
   {
     id: 'extinctionReady',
-    plate: 21,
+    plate: 22,
     priority: 80,
     title: t('Extinción disponible', 'Extinction ready'),
     lines: [
@@ -627,7 +633,7 @@ export const MOMENTS: MomentDef[] = [
   },
   {
     id: 'extinction',
-    plate: 22,
+    plate: 23,
     priority: 92,
     title: t('¡Era nueva!', 'A new Era!'),
     lines: [
@@ -648,7 +654,7 @@ export const MOMENTS: MomentDef[] = [
   },
   {
     id: 'offline',
-    plate: 23,
+    plate: 24,
     priority: 120,
     title: t('Mientras no estabas', 'While you were away'),
     lines: [t('Tus criaturas siguieron trabajando mientras no estabas.', 'Your creatures kept working while you were gone.'), offlineShare],
@@ -668,7 +674,7 @@ export const MOMENTS: MomentDef[] = [
   // ── ADR-030 (docs/CLARIDAD2.md §2.2, §2.5): collected light, the warning before a touch, steering ──
   {
     id: 'contact',
-    plate: 24,
+    plate: 3,
     priority: 98,
     title: t('¡Cuidado!', 'Careful!'),
     lines: [
