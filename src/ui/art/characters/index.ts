@@ -11,6 +11,7 @@ export {
   MOOD_GESTURE,
   drawDoctorAt,
   drawDoctorBust,
+  drawForearm,
   drawGlovedHand,
   drawLantern,
   handAngle,
