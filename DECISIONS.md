@@ -631,3 +631,61 @@ ADR that supersedes the old one.
   - Tests that pinned the cartoon (faces change, blink) are rewritten towards the new behaviour, not deleted.
   - ADR-024, `docs/ARTE.md` §1, §6, §11, §13, `docs/STORY.md` (cast) and GDD §14 carry «(Corrección v0.021, ADR-029)»
     or «(Corrección v1.4, ADR-029)» notes where they describe the flask, the chibi doctors or "everything drawn in code".
+
+## ADR-030: Collected light, a clock that waits for the player, and explained accidents (clarity pass 2)
+
+- **Status:** Accepted (2026-11-03). The owner approved the plan's open decisions (§7): Esencia → **Luz / Glow** on
+  screen, Abono → **Nutrientes**, manual collection where a full drop waits and nothing is lost (capped at 4 s of
+  production, swept at "¡Tiempo!"), an 8th tree route **↓ Recoger** with 6 pipette nodes, and a clock that pauses
+  while VELA talks or a sheet is open. Source: owner ("divertido, interactivo y que cualquiera entienda qué está
+  haciendo y para qué"; "la Esencia debería recogerse… al inicio a mano"), black-box QA of v0.019
+  (QA-CLARIDAD: 41 findings, 4 blocking), plan [`docs/CLARIDAD2.md`](docs/CLARIDAD2.md).
+  Amends ADR-022, ADR-025, ADR-026, ADR-027 and RITMO §2 rule 7.
+- **Context:** a naive player of v0.019 does not know what to achieve, does not understand why creatures die, and spends
+  half of every run watching: the tutorial's lines run on the clock (session 1 is gone before the player acts), the
+  explanations wait for the summary (`MOMENT_MIN_RUN_SECONDS`) and then all land at the start of the next run, the clock
+  runs behind the Bestiary, fusions empty the dish without a word, and a full dish leaves nothing to do. The owner
+  green-lit collecting the currency by hand, with upgrades that add collectors.
+- **Decision:**
+  - **Currency names:** the in-run currency is shown as **Luz / Glow** (code ids stay `essence`); **Datos** stays.
+    Every 25 Luz collected visibly ticks one Dato on the Datos chip.
+  - **Collection:** a stable creature fills its own drop with its production (GDD §5 formula unchanged); the drop holds
+    at most `LIGHT_CAP_SECONDS` of it and then waits. A tap or a swipe collects; tap on a creature = collect, long press
+    = its card. Light made is never lost: a dead creature's drop stays on the dish; everything left is swept at "¡Tiempo!"
+    and on load. Datos count light made. Uniform soup, forming seeds, blobs and mazes have no drop.
+  - **Pipettes:** an 8th straight route, **↓ Recoger** (6 nodes: Pipeta, Pipetas rápidas, Gotas grandes, Más pipetas,
+    Pipetas con imán, Pipeta maestra), same price rule and "before → after" rule as ADR-026. Pipettes are drawn as lab
+    instruments, never as living things (pillar 1); the game decides their trips deterministically.
+  - **Clock:** in a running session the dish and the clock pause while VELA has a line on screen (only the session-1
+    tutorial and the first Spark may speak during a run) and while any sheet is open (Bestiary, journal, settings, help,
+    price, creature card). Amends ADR-022 ("the game does not pause for the story") for the sessions cycle.
+  - **Session 1:** the first-ever session starts on an empty dish; the player's first tap plants the sure template,
+    which incubates unlit (ADR-027 v0.019 path) while the session is still `ready`; the clock starts when VELA's line
+    after it closes (`startClock`). Run length stays 15 s of play.
+  - **Interruptions:** from session 2, at most one pausing card per run (`RUN_CARD_MAX`), only for an accident seen for
+    the first time, never in the first `RUN_QUIET_START_S`; other Momentos become brief labels and summary plates;
+    nothing is carried to the next run. Replaces `MOMENT_MIN_RUN_SECONDS`.
+  - **Accidents:** collisions are predicted from creature views (`src/game/contact.ts`) and warned; fusions,
+    overgrowth and failed seeds are explained with their cause.
+  - **Finger steering:** the player may steer a swimmer by dragging from it. `src/sim/steer.ts` emits rigid rotations
+    of the same kind as the glass deflector (≤ 30° per detector update, never into the glass, the deflector's rim turns
+    first), applied by the existing rotate pass and told to the detector. No new simulation rule. Translating
+    non-swimmers (whole-cell shifts, exact by translation invariance) is **not** adopted; it needs a CPU survival
+    measurement and a new pass first.
+  - **Prices:** one seed price per session (`SEED_PRICE_STEP` = 1); the Nutrientes (Abono) price is set when it goes on
+    sale and only doubles per purchase; not on sale in session 1 nor in the last 3 s. Colours: amber ↑ = cost,
+    green ×/+ = gain, grey = inactive, red = danger.
+  - **Tree reveal:** the Destello route shows "?" until session 3 ends; Destello frecuente also shortens the first
+    Spark of a run.
+- **Consequences:**
+  - CLAUDE.md hard gates gain: "No light drop fills on a creature that is not stable" and "Light made is never lost:
+    collected, or swept at the end". The update rule, the detector and "only stable pays" are unchanged.
+  - The session bot models drops and collection and gains the `idle` policy; every balance PR of this plan carries
+    before/after reports (B0–B4).
+  - GDD v1.4 notes at §1, §2, §3, §5, §6, §7, §8, §9, §13, §20 and a new §23.5; CICLO §2–§4, RITMO §2 and §4.4, and
+    CLARIDAD §2–§3 are updated; the tree has 59 buyable nodes on 8 routes.
+  - Contracts: optional additions only (types.ts, bus.ts), listed in the plan's annex (`SessionView.tutorialHold` is
+    `SessionClockView.tutorialHold`), plus `BoostView.noTime` and `BoostView.nextCost` for the Nutrientes button; no
+    removal. Tokens (step 0): the route colour `collect` (instrument silver, `#c3c8cc` dark / `#55606b` light) and the
+    meaning colours `MEANING` → `--bl-cost`, `--bl-gain`, `--bl-off`; `--bl-danger` is the palette's existing role.
+  - Save format v2 gains optional session fields (drops, pipettes); a save mid-run sweeps its drops on load.
