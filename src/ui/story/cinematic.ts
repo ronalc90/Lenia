@@ -8,8 +8,8 @@
  *  law      chaos → perfect orbits → a six-fold mandala that crystallises, a prism of dawn
  *  memory   creatures rise like lanterns and become a named constellation, warm dawn
  *  tide     they multiply, mutate and spill over the rim; the microscope light goes off; aurora
- *  albor    three taps answered by all; the Spark rises to become the sun; two figures at
- *           dawn; pull back: the station's lights form an Orbium inside someone's eyepiece
+ *  albor    three taps answered by all; the Spark rises to become the sun; Albor at dawn with VELA
+ *           in her hand; pull back: the station's lights form an Orbium inside someone's eyepiece
  */
 import type { Lang } from '../../core/types';
 import { ENDINGS } from '../../story/endings';
@@ -23,6 +23,8 @@ const TAU = Math.PI * 2;
 const TITLE_END = 4.0;
 const CARD = 5.6;
 const CREDITS_SPEED = 34; // px/s
+/** Reduce motion: seconds per page of a roll taller than its window (a cut, no scroll). */
+const CREDITS_PAGE = 4;
 
 const clamp = (x: number, a = 0, b = 1) => Math.max(a, Math.min(b, x));
 const smooth = (a: number, b: number, x: number) => {
@@ -188,10 +190,20 @@ export class Cinematic {
     this.skipBtn.textContent = `${tr(S.skip, L)} ›`;
     this.goBtn.textContent = tr(S.continueExp, L);
     this.creditsInner.innerHTML = '';
-    S.credits.forEach((c, i) => {
-      const el = document.createElement(i === 0 ? 'b' : 'p');
-      el.textContent = tr(c, L);
+    const line = (tag: 'b' | 'p', text: string) => {
+      const el = document.createElement(tag);
+      el.textContent = text;
       this.creditsInner.appendChild(el);
+    };
+    // The roll: the game and its sources, then one line per archive photo (ADR-029), then the farewell.
+    const tail = 2;
+    S.credits.forEach((c, i) => {
+      if (i === S.credits.length - tail) {
+        line('b', tr(S.photoCredits.title, L));
+        for (const p of S.photoCredits.lines) line('p', tr(p, L));
+        line('p', tr(S.photoCredits.note, L));
+      }
+      line(i === 0 ? 'b' : 'p', tr(c, L));
     });
     this.shownCard = -2;
   }
@@ -275,12 +287,15 @@ export class Cinematic {
     if (t >= this.closingAt + 3.5) this.goBtn.classList.add('show');
     this.skipBtn.style.opacity = t >= this.closingAt ? '0' : '1';
     this.skipBtn.style.pointerEvents = t >= this.closingAt ? 'none' : 'auto';
-    // Credits: scroll up through the window once, then rest centred in it.
+    // Credits: scroll up through the window once, then rest centred in it; a roll taller than the window
+    // scrolls on until its last line rests above the fade. Reduce motion turns the pages instead.
     const winH = this.creditsEl.clientHeight || this.H * 0.6;
     const inH = this.creditsInner.offsetHeight || 300;
     const rest = Math.max(0, (winH - inH) / 2);
+    const end = Math.min(rest, winH * 0.78 - inH);
     const rm = this.opts.rm();
-    const y = rm ? rest : Math.max(rest, winH - Math.max(0, t - this.creditsAt) * CREDITS_SPEED);
+    const since = Math.max(0, t - this.creditsAt);
+    const y = rm ? Math.max(end, rest - Math.floor(since / CREDITS_PAGE) * winH * 0.6) : Math.max(end, winH - since * CREDITS_SPEED);
     this.creditsInner.style.transform = `translate(-50%, ${y.toFixed(1)}px)`;
     this.creditsEl.style.opacity = t > this.creditsAt ? (rm ? '1' : smooth(this.creditsAt, this.creditsAt + 1, t).toFixed(3)) : '0';
   }
@@ -940,7 +955,7 @@ export class Cinematic {
     }
   }
 
-  /** The secret ending's dawn: a warm sky, the sun on the sea, two figures on the shore. */
+  /** The secret ending's dawn: a warm sky, the sun on the sea, Albor on the shore carrying VELA. */
   private firstLight(ctx: CanvasRenderingContext2D, W: number, H: number, t: number, p: number, a: number, hy: number, sunX: number): void {
     const rm = this.opts.rm();
     ctx.save();
@@ -991,7 +1006,7 @@ export class Cinematic {
     ctx.moveTo(0, hy);
     ctx.lineTo(W, hy);
     ctx.stroke();
-    // The shore with the station's little lights, and the two figures.
+    // The shore with the station's little lights, and Albor with VELA.
     ctx.fillStyle = '#07080D';
     ctx.beginPath();
     ctx.moveTo(0, hy + 14);
@@ -1008,16 +1023,13 @@ export class Cinematic {
       const ax = W * 0.2;
       ctx.save();
       ctx.globalAlpha *= figs;
-      // Albor: hair bob, coat; a warm rim on the sun side.
+      // Albor against the dawn (docs/ARTE-REALISTA.md §5.4): one dark silhouette (bob, parka, the arm that
+      // carries VELA) with the warm rim light of the sun on its right edge. Never a face.
+      const hand = { x: ax + hh * 0.25, y: base - hh * 0.38 };
       ctx.fillStyle = '#0A0709';
-      ctx.strokeStyle = 'rgba(255,200,140,0.75)';
-      ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.arc(ax, base - hh * 0.86, hh * 0.1, 0, TAU);
       ctx.fill();
-      ctx.beginPath();
-      ctx.arc(ax, base - hh * 0.86, hh * 0.1, -0.9, 0.6);
-      ctx.stroke();
       ctx.beginPath();
       ctx.moveTo(ax - hh * 0.17, base);
       ctx.lineTo(ax - hh * 0.13, base - hh * 0.5);
@@ -1026,13 +1038,34 @@ export class Cinematic {
       ctx.lineTo(ax + hh * 0.17, base);
       ctx.closePath();
       ctx.fill();
+      // The arm, down and a little forward, holding the handle.
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = '#0A0709';
+      ctx.lineWidth = hh * 0.07;
+      ctx.beginPath();
+      ctx.moveTo(ax + hh * 0.1, base - hh * 0.66);
+      ctx.quadraticCurveTo(ax + hh * 0.2, base - hh * 0.52, hand.x, hand.y);
+      ctx.stroke();
+      // Rim light from the sun (right): head, shoulder and arm.
+      ctx.strokeStyle = 'rgba(255,200,140,0.75)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(ax, base - hh * 0.86, hh * 0.1, -0.9, 0.6);
+      ctx.stroke();
       ctx.beginPath();
       ctx.moveTo(ax + hh * 0.13, base - hh * 0.5);
       ctx.quadraticCurveTo(ax + hh * 0.12, base - hh * 0.72, ax, base - hh * 0.74);
       ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(ax + hh * 0.135, base - hh * 0.66);
+      ctx.quadraticCurveTo(ax + hh * 0.235, base - hh * 0.52, hand.x + hh * 0.03, hand.y);
+      ctx.stroke();
+      ctx.lineCap = 'butt';
       ctx.restore();
-      // VELA floats beside her, glowing.
-      const vs = H * 0.085;
+      // VELA does not float (§4.9): Albor carries her by the handle, the lamp lit. Her box is 100 units;
+      // the handle's tube is at (50, 8.8) and the chassis is 84 wide, a 26-cm instrument by a person.
+      const vw = hh * 0.22;
+      const k = vw / 84;
       const st: PortraitState = {
         speaker: 'vela',
         mood: 'happy',
@@ -1046,8 +1079,12 @@ export class Cinematic {
       };
       ctx.save();
       ctx.globalAlpha *= figs;
-      ctx.translate(W * 0.33 - vs / 2, base - vs * 1.18);
-      ctx.scale(vs / 100, vs / 100);
+      // She swings a little from the hand (a damped pendulum, still under Reduce motion).
+      const swing = rm ? 0 : Math.sin(t * 1.4) * 0.05;
+      ctx.translate(hand.x, hand.y);
+      ctx.rotate(swing);
+      ctx.translate(-50 * k, -8.8 * k);
+      ctx.scale(k, k);
       drawVela(ctx, st, t);
       ctx.restore();
     }
