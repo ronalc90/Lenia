@@ -14,7 +14,8 @@ const ctxOf = (n = 4) => ({ speciesName: (id: string) => NAMES[id] ?? '?', night
 
 /** A finished session as the game hands it to the report (game/session.ts summarize). */
 function summaryOf(over: Partial<SessionSummary> & { datos: SessionSummary['datos'] }): SessionSummary {
-  return { n: 4, seconds: 30, essence: over.datos.essence, species: [], best: null, records: [], vela: 'poor', keep: [], nightReady: false, ...over };
+  const d = over.datos;
+  return { n: 4, seconds: 30, essence: d.essence, species: [], best: null, records: [], vela: 'poor', keep: [], nightReady: false, goals: [], fromLight: d.fromEssence, discovery: 0, lessReason: null, ...over };
 }
 
 describe('the session report tells a story (docs/CLARIDAD2.md §2.9)', () => {
@@ -48,7 +49,7 @@ describe('the session report tells a story (docs/CLARIDAD2.md §2.9)', () => {
     noteEncargo(session, fx);
     noteEncargo(session, fx);
     const d = computeDatos(session, fx, 1);
-    const sum = summaryOf({ datos: d, species: [{ id: 'a', isNew: true }, { id: 'b', isNew: true }], records: [{ kind: 'essence', value: 2000, previous: 900 }] });
+    const sum = summaryOf({ datos: d, species: [{ id: 'a', isNew: true }, { id: 'b', isNew: true }], records: [{ kind: 'essence', value: 2000, previous: 900, name: { es: 'Más luz en una sesión', en: 'Most glow in a session' } }] });
     for (const data of [{}, { encargoNames: [{ es: 'Ten 3 criaturas a la vez', en: 'Have 3 creatures at once' }, { es: 'Atrapa un Destello', en: 'Catch a Spark' }], swept: 24 }] as ReportData[]) {
       const rows = reportRows(sum, data, 'es', ctxOf(3));
       const total = rows.find((r) => r.kind === 'total')!;
@@ -69,7 +70,7 @@ describe('the session report tells a story (docs/CLARIDAD2.md §2.9)', () => {
     noteSpecies(session, fx, 'a', true);
     noteEncargo(session, fx);
     const d = computeDatos(session, fx, 1);
-    const sum = summaryOf({ datos: d, species: [{ id: 'a', isNew: true }], records: [{ kind: 'essence', value: 300, previous: 200 }] });
+    const sum = summaryOf({ datos: d, species: [{ id: 'a', isNew: true }], records: [{ kind: 'essence', value: 300, previous: 200, name: { es: 'Más luz en una sesión', en: 'Most glow in a session' } }] });
     const rows = reportRows(sum, { encargoNames: [{ es: 'Ten 3 criaturas a la vez', en: 'Have 3 creatures at once' }] }, 'es', ctxOf());
     const label = (k: string) => rows.filter((r) => r.kind === k).map((r) => r.label);
     expect(label('species')).toEqual(['Especie nueva · Remolino violeta']);
