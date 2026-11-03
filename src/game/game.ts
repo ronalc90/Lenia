@@ -101,6 +101,8 @@ import {
   type UpgradeDef,
 } from './defs';
 import { computeProduction, wrapDist, type YieldDetail } from './economy';
+import { deathCause, explodeCause, predictContacts } from './contact';
+import { DEFLECT } from '../sim/deflect';
 import {
   collectAt as collectAtDrops,
   collectDrop,
@@ -409,6 +411,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
   let recentSeeds: { x: number; y: number; t: number; r: number; step: number }[] = [];
   /** State of each creature in the previous report (a 'died' creature that was exploded dissolved). */
   let lastStates = new Map<number, Creature['state']>();
+  /** Where every body was in the previous report, outline radius included (accident causes, ADR-030). */
+  let lastBodies = new Map<number, { x: number; y: number; r: number }>();
   let pendingMutations: { x: number; y: number; parent: string; t: number }[] = [];
   let brush: { x: number; y: number; lastMs: number } | null = null;
   let saturatedToastT = 0;
@@ -1410,12 +1414,15 @@ export function createGame(deps: GameDeps, save?: string): Game {
             break;
           }
           s.stats.deaths++;
-          bus.emit('creatureDied', { id: ev.id, x: ev.x, y: ev.y });
+          bus.emit('creatureDied', { id: ev.id, x: ev.x, y: ev.y, cause: causeOfDeath(ev.id, ev.x, ev.y) });
           unlockJournal('firstDeath');
           break;
         case 'exploded':
           s.stats.explosions++;
-          bus.emit('creatureExploded', { id: ev.id, x: ev.x, y: ev.y });
+          {
+            const cause = causeOfBlob(ev.id, ev.x, ev.y);
+            bus.emit('creatureExploded', cause ? { id: ev.id, x: ev.x, y: ev.y, cause } : { id: ev.id, x: ev.x, y: ev.y });
+          }
           unlockJournal('firstExplosion');
           break;
         case 'divided':
@@ -1454,9 +1461,42 @@ export function createGame(deps: GameDeps, save?: string): Game {
     const L = collectable();
     if (L) pocket(releaseDrops(L, stableIds));
     lastStates = new Map(creatures.map((c) => [c.id, c.state]));
+    lastBodies = new Map(creatures.filter((c) => c.state !== 'dead').map((c) => [c.id, { x: c.x, y: c.y, r: outline(c.radius) }]));
     const st = stableCount();
     s.eraStablePeak = Math.max(s.eraStablePeak, st);
     s.stats.stablePeak = Math.max(s.stats.stablePeak, st);
+  }
+
+  // ── accidents, explained (ADR-030, contact.ts) ──
+
+  /** A body's outline from the detector's radius of gyration (the deflector's extent). */
+  const outline = (r: number): number => (Number.isFinite(r) && r > 0 ? r : 0.5 * s.calib.R) * DEFLECT.extentK;
+
+  /** The bodies of the previous report but one (where the neighbours were when it went). */
+  function neighbours(id: number): { x: number; y: number; r: number }[] {
+    const out: { x: number; y: number; r: number }[] = [];
+    for (const [k, b] of lastBodies) if (k !== id) out.push(b);
+    return out;
+  }
+
+  function causeOfDeath(id: number, x: number, y: number): 'faded' | 'glass' | 'crowd' {
+    const me = lastBodies.get(id) ?? { x, y, r: outline(0) };
+    return deathCause(me, neighbours(id), s.calib.R, dish);
+  }
+
+  function causeOfBlob(id: number, x: number, y: number): 'touch' | 'crowd' | null {
+    const me = lastBodies.get(id) ?? { x, y, r: outline(0) };
+    return explodeCause(me, neighbours(id), overgrown, 0.5 * s.calib.R);
+  }
+
+  /** Pairs about to touch on the running dish (GameView.dangers): the red warning link. */
+  function dangerViews(): { a: number; b: number; inS: number }[] {
+    const se = ses();
+    if (!se || se.phase !== 'running' || overgrown) return [];
+    const bodies = creatures
+      .filter((c) => c.state === 'stable' || c.state === 'born')
+      .map((c) => ({ id: c.id, x: c.x, y: c.y, r: outline(c.radius), vx: c.vx, vy: c.vy, state: c.state, behavior: c.behavior }));
+    return predictContacts(bodies, C.SIM_STEPS_PER_SEC * fx.simPace, dish);
   }
 
   // ───────────────────────────── economy tick ────────────────────────
@@ -1894,6 +1934,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     portraitQueue = [];
     lastFounder = null;
     lastStates = new Map();
+    lastBodies = new Map();
     golden = null;
     brush = null;
     baseEps = 0;
@@ -2654,7 +2695,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       dish: dish ? { ...dish } : null,
       buffs: s.buffs.map((b) => ({ id: b.id, name: TEXT.bloom, remaining: b.remaining, mult: b.mult })),
       creatures: creatureViews(),
-      ...(sv ? { drops: dropViews(), pipettes: pipetteViews() } : {}),
+      ...(sv ? { drops: dropViews(), pipettes: pipetteViews(), dangers: dangerViews() } : {}),
       objective: obj ? objectiveText(obj.id, objCur, obj.target, sessions) : null,
       objectiveProgress: obj ? { current: Math.min(objCur, obj.target), target: obj.target, reward: objectiveReward(obj) } : null,
       settings: { ...s.settings },
