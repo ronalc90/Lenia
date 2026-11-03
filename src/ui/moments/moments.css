@@ -112,6 +112,11 @@
   opacity: 1;
   transform: translate(-50%, 0) scale(1);
 }
+/* A hidden card is off the page: `display: flex` above beat the browser's [hidden], and an invisible card
+   caught taps over the dish while its brief label showed (release check RF-06). */
+.mo-card[hidden] {
+  display: none;
+}
 .mo-card.rm {
   transform: translate(-50%, 0);
   transition: opacity var(--bl-t-base) linear;
