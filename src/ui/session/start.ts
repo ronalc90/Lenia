@@ -10,7 +10,8 @@ import { TREE_BY_ID, nodeText } from '../../game/tree';
 import { SESSION_UI, WORLD_TEXT } from '../../game/treeText';
 import { WORLD_BY_ID, bestWorld, type WorldId } from '../../game/worlds';
 import { fmt, fmtClock } from '../format';
-import { renderPattern } from '../portrait';
+import { mountPortrait } from '../portrait';
+import { DURATION, EASING, SPRING, springEasing } from '../art/motion';
 import { Portrait } from '../story/portraits';
 import { artIcon, WORLD_ICON } from '../art/icons';
 import { worldArt, worldColors } from '../art/worlds';
@@ -121,8 +122,10 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
   function paintWorldPortraits(): void {
     for (const m of card.querySelectorAll<HTMLElement>('.ss-world .sp')) {
       const sp = opts.worldSpecies?.(m.dataset.w as WorldId)?.find((x) => x.code === m.dataset.code);
-      if (sp?.portrait) m.appendChild(renderPattern(sp.portrait, 40, 0.85));
-      if (!sp?.found) m.insertAdjacentHTML('beforeend', '<i>?</i>');
+      // Found: the creature, sharp; not found yet: a dashed ring with a drawn «?» (B-1), never a grey blob.
+      if (sp?.found && sp.portrait) mountPortrait(m, sp.portrait, 36, { fill: 0.85 });
+      else if (!m.querySelector('.qm')) m.insertAdjacentHTML('beforeend', `<span class="qm">${treeIcon('question', 20)}</span>`);
+      m.classList.toggle('unfound', !sp?.found);
     }
   }
 
@@ -132,6 +135,7 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
       return open;
     },
     show(start, extras = {}) {
+      const entering = !open;
       current = { start, extras };
       const l = opts.lang();
       const gifts: string[] = [];
@@ -174,7 +178,7 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
         <div class="ss-actions"><button type="button" class="ss-btn primary" data-act="go">${treeIcon('play', 24)}<span class="tx">${esc(SESSION_UI.startGo[l])}</span></button></div>`;
       for (const m of card.querySelectorAll<HTMLElement>('[data-sp]')) {
         const info = opts.speciesInfo?.(m.dataset.sp!);
-        if (info?.portrait) m.appendChild(renderPattern(info.portrait, 52, 0.8, info.hue));
+        if (info?.portrait) mountPortrait(m, info.portrait, m.classList.contains('mini') ? 26 : 52, { hue: info.hue, fill: 0.8 });
       }
       paintWorldPortraits();
       card.setAttribute('aria-label', SESSION_UI.startTitle(start.n)[l]);
@@ -187,15 +191,36 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
       const on = card.querySelector('.ss-world.on') as HTMLElement | null;
       if (list && on) list.scrollLeft = Math.max(0, on.offsetLeft - list.offsetLeft - 12);
       requestAnimationFrame(() => layer.classList.add('show'));
+      // The card rises 32 px with the default spring, its sections 60 ms apart (B-5); not again when the
+      // player only picks another world.
+      if (entering && !rm() && typeof card.animate === 'function') {
+        card.animate([{ transform: 'translateY(32px)', opacity: 0 }, { transform: 'none', opacity: 1 }], {
+          duration: SPRING.default.ms,
+          easing: springEasing('default'),
+        });
+        let k = 0;
+        for (const sec of card.children)
+          (sec as HTMLElement).animate?.([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], {
+            duration: DURATION.sheet,
+            delay: Math.min(5, k++) * 60,
+            easing: EASING.enter,
+            fill: 'backwards',
+          });
+      }
     },
     hide() {
       if (!open) return;
       open = false;
       cancelAnimationFrame(raf);
       layer.classList.remove('show');
+      if (!rm() && typeof card.animate === 'function')
+        card.animate([{ transform: 'none', opacity: 1 }, { transform: 'translateY(32px)', opacity: 0 }], { duration: DURATION.sheetOut, easing: EASING.exit, fill: 'forwards' });
       setTimeout(() => {
-        if (!open) layer.hidden = true;
-      }, rm() ? 0 : 320);
+        if (!open) {
+          layer.hidden = true;
+          for (const a of card.getAnimations()) a.cancel();
+        }
+      }, rm() ? 0 : DURATION.sheetOut + 20);
     },
     dispose() {
       layer.remove();

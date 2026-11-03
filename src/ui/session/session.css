@@ -59,9 +59,8 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--bl-surface) 90%, transparent);
   border: 1.5px solid var(--ss-line2);
-  box-shadow: 0 6px 18px var(--ss-shadow);
-  backdrop-filter: blur(6px);
-  transition: border-color 0.25s, background 0.25s;
+  box-shadow: var(--bl-elev-2);
+  transition: border-color var(--bl-t-base), background var(--bl-t-base);
   pointer-events: none;
 }
 .ss-dial {
@@ -86,7 +85,7 @@
   stroke: currentColor;
   stroke-width: 4;
   stroke-linecap: round;
-  transition: stroke-dashoffset 0.4s linear, stroke 0.25s;
+  transition: stroke-dashoffset var(--bl-t-card) linear, stroke var(--bl-t-base);
 }
 .ss-dial .ic {
   position: absolute;
@@ -103,16 +102,17 @@
 .ss-time b {
   grid-area: 1 / 1;
   display: block;
-  font: 800 1.9rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-headline)/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
+  /* The last-10 tick grows away from the dial, never over it (B-7, zoom-clock-warn.png). */
+  transform-origin: left center;
 }
 .ss-time small {
   grid-area: 2 / 1;
   display: block;
   margin-top: 3px;
-  font: 700 0.66rem/1 var(--bl-font-ui);
+  font: 700 var(--bl-fs-caption)/1 var(--bl-font-ui);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--bl-text2);
@@ -139,18 +139,16 @@
 .ss-hud[data-state='count'] .ss-time b {
   color: var(--bl-warn);
 }
-.ss-hud[data-state='warn'] {
-  animation: ss-warn 1s ease-in-out infinite;
-}
 .ss-hud[data-state='count'] .ss-time b.tick {
-  animation: ss-tick 0.45s var(--bl-ease-standard);
+  animation: ss-tick var(--bl-t-story) var(--bl-ease-standard);
 }
 .ss-hud[data-state='over'] .ss-time b {
   color: var(--bl-danger);
 }
 .ss-hud.sprint {
   border-color: var(--bl-gold);
-  box-shadow: 0 0 0 3px rgba(var(--ss-gold-rgb), 0.25), 0 6px 18px var(--ss-shadow);
+  box-shadow: var(--bl-elev-2);
+  outline: 3px solid rgba(var(--ss-gold-rgb), 0.25);
 }
 .ss-sprint {
   display: none;
@@ -159,7 +157,7 @@
   border-radius: 999px;
   background: var(--bl-gold);
   color: #2a1d00;
-  font: 800 0.74rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-caption)/1 var(--bl-font-ui);
   white-space: nowrap;
 }
 .ss-hud.sprint .ss-sprint {
@@ -167,22 +165,23 @@
 }
 .ss-plus {
   position: absolute;
+  z-index: 2;
   left: 50%;
   top: 100%;
-  margin-top: 4px;
-  transform: translateX(-50%);
+  /* Docked on the clock's lower edge (hud.ts extended() animates it there and into the digits). */
+  transform: translate(-50%, calc(-50% - 4px));
   padding: 4px 10px;
   border-radius: 999px;
   background: var(--bl-good);
   color: var(--bl-night);
-  font: 800 0.86rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-small)/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  animation: ss-plus 1.6s var(--bl-ease-standard) forwards;
+  pointer-events: none;
 }
 .ss-plus small {
   margin-left: 4px;
-  font: 700 0.7rem/1 var(--bl-font-ui);
+  font: 700 var(--bl-fs-caption)/1 var(--bl-font-ui);
   opacity: 0.85;
 }
 
@@ -194,15 +193,14 @@
   top: 22%;
   transform: translate(-50%, -50%);
   padding: 14px 26px;
-  border-radius: 20px;
+  border-radius: var(--bl-r-lg);
   background: var(--bl-warn);
   color: #261400;
-  font: 800 1.6rem/1 var(--bl-font-display);
+  font: 800 var(--bl-fs-headline)/1 var(--bl-font-display);
   letter-spacing: -0.01em;
   white-space: nowrap;
-  box-shadow: 0 12px 34px rgba(var(--ss-warn-rgb), 0.45);
+  box-shadow: var(--bl-glow-candle);
   pointer-events: none;
-  animation: ss-banner 2.2s var(--bl-ease-standard) forwards;
 }
 .ss-stamp {
   position: absolute;
@@ -212,15 +210,28 @@
   transform: translate(-50%, -50%) rotate(-8deg);
   padding: 18px 34px;
   border: 6px solid var(--bl-danger);
-  border-radius: 22px;
+  border-radius: var(--bl-r-lg);
   color: var(--bl-danger);
   background: color-mix(in srgb, var(--bl-surface) 70%, transparent);
-  font: 800 3rem/1 var(--bl-font-display);
+  /* Fraunces 36/700 (B-7): a rubber stamp of the lab, not a system serif. */
+  font: 700 var(--bl-fs-display)/1 var(--bl-font-display);
+  font-variation-settings: 'SOFT' 100, 'opsz' 72;
   letter-spacing: 0.02em;
   text-transform: uppercase;
   white-space: nowrap;
   pointer-events: none;
-  animation: ss-stamp 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+.ss-stamp-ripple {
+  position: absolute;
+  z-index: 30;
+  left: 50%;
+  top: 46%;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  border: 3px solid var(--bl-danger);
+  pointer-events: none;
+  opacity: 0;
 }
 
 /* ───── Cards (start & summary) ───── */
@@ -240,7 +251,7 @@
   inset: 0;
   background: var(--ss-scrim);
   opacity: 0;
-  transition: opacity 0.25s;
+  transition: opacity var(--bl-t-base);
 }
 .ss-layer.show .ss-scrim {
   opacity: 1;
@@ -253,12 +264,12 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 18px 16px max(16px, env(safe-area-inset-bottom));
-  border-radius: 24px 24px 0 0;
+  border-radius: var(--bl-r-xl) var(--bl-r-xl) 0 0;
   background: var(--bl-surface);
   border-top: 3px solid var(--bl-accent);
-  box-shadow: 0 -16px 50px var(--ss-shadow);
+  box-shadow: var(--bl-elev-3);
   transform: translateY(105%);
-  transition: transform 0.34s var(--bl-ease-standard);
+  transition: transform var(--bl-t-card) var(--bl-ease-standard);
 }
 .ss-layer.show .ss-card {
   transform: none;
@@ -272,13 +283,13 @@
     align-items: center;
   }
   .ss-card {
-    border-radius: 24px;
+    border-radius: var(--bl-r-xl);
     border-top: 0;
     border: 1px solid var(--ss-line2);
     border-top: 4px solid var(--bl-accent);
     transform: translateY(30px) scale(0.97);
     opacity: 0;
-    transition: transform 0.3s var(--bl-ease-standard), opacity 0.25s;
+    transition: transform var(--bl-t-sheet) var(--bl-ease-standard), opacity var(--bl-t-base);
   }
   .ss-layer.show .ss-card {
     opacity: 1;
@@ -293,7 +304,7 @@
 .ss-head h2 {
   flex: 1;
   margin: 0;
-  font: 700 1.5rem/1.1 var(--bl-font-display);
+  font: 700 var(--bl-fs-title)/1.1 var(--bl-font-display);
   letter-spacing: -0.01em;
 }
 .ss-chip {
@@ -305,7 +316,7 @@
   background: var(--bl-surface2);
   border: 1px solid var(--ss-line);
   color: var(--bl-text2);
-  font: 700 0.8rem/1 var(--bl-font-ui);
+  font: 700 var(--bl-fs-caption)/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -324,10 +335,10 @@
   position: relative;
   flex: 1;
   padding: 10px 14px;
-  border-radius: 16px;
+  border-radius: var(--bl-r-lg);
   background: var(--bl-surface2);
   border: 1px solid var(--ss-line2);
-  font: 600 0.98rem/1.3 var(--bl-font-ui);
+  font: 600 var(--bl-fs-body)/1.3 var(--bl-font-ui);
 }
 .ss-bubble::before {
   content: '';
@@ -345,13 +356,13 @@
 .ss-box {
   margin: 12px 0;
   padding: 12px;
-  border-radius: 16px;
+  border-radius: var(--bl-r-lg);
   background: var(--bl-surface2);
   border: 1px solid var(--ss-line);
 }
 .ss-box h4 {
   margin: 0 0 10px;
-  font: 800 0.72rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-caption)/1 var(--bl-font-ui);
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--bl-text2);
@@ -381,7 +392,7 @@
   align-items: center;
   gap: 6px;
   padding: 5px 9px 5px 6px;
-  border-radius: 10px;
+  border-radius: var(--bl-r-md);
   background: var(--bl-surface);
   border: 1px solid var(--ss-line2);
   min-height: 40px;
@@ -391,16 +402,16 @@
 }
 .ss-t b {
   display: block;
-  font: 800 1rem/1.05 var(--bl-font-ui);
+  font: 800 var(--bl-fs-body)/1.05 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
 }
 .ss-t span.l {
   display: block;
-  font: 600 0.66rem/1.15 var(--bl-font-ui);
+  font: 600 var(--bl-fs-caption)/1.15 var(--bl-font-ui);
   color: var(--bl-text2);
 }
 .ss-op {
-  font: 800 1.05rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-body)/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
   color: var(--bl-text3);
 }
@@ -408,12 +419,12 @@
   flex: none;
   min-width: 60px;
   text-align: right;
-  font: 800 1.15rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-lead)/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
   color: var(--bl-aurora);
 }
 .ss-row.in {
-  animation: ss-in 0.35s var(--bl-ease-standard) both;
+  animation: ss-in var(--bl-t-card) var(--bl-ease-standard) both;
 }
 .ss-row.pending {
   opacity: 0;
@@ -425,7 +436,7 @@
   gap: 10px;
   margin-top: 8px;
   padding: 10px 12px;
-  border-radius: 14px;
+  border-radius: var(--bl-r-md);
   background: color-mix(in srgb, var(--bl-aurora) 14%, var(--bl-surface));
   border: 2px solid var(--bl-aurora);
 }
@@ -433,21 +444,21 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font: 800 1rem/1.1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-body)/1.1 var(--bl-font-ui);
   color: var(--bl-aurora);
 }
 .ss-total b {
-  font: 900 2.1rem/1 var(--bl-font-ui);
+  font: 900 var(--bl-fs-display)/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
   color: var(--bl-aurora);
   letter-spacing: -0.03em;
 }
 .ss-total.done b {
-  animation: ss-bump 0.5s var(--bl-ease-standard);
+  animation: ss-bump var(--bl-t-story) var(--bl-ease-standard);
 }
 .ss-minnote {
   margin: 6px 0 0;
-  font: 600 0.78rem/1.3 var(--bl-font-ui);
+  font: 600 var(--bl-fs-caption)/1.3 var(--bl-font-ui);
   color: var(--bl-text2);
 }
 
@@ -482,7 +493,7 @@
 .ss-sp .nm {
   display: block;
   margin-top: 4px;
-  font: 700 0.68rem/1.15 var(--bl-font-ui);
+  font: 700 var(--bl-fs-caption)/1.15 var(--bl-font-ui);
   color: var(--bl-text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -498,7 +509,7 @@
   border-radius: 999px;
   background: var(--bl-good);
   color: var(--bl-night);
-  font: 800 0.62rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-caption)/1 var(--bl-font-ui);
 }
 .ss-best {
   display: flex;
@@ -520,12 +531,12 @@
 }
 .ss-best b {
   display: block;
-  font: 800 1rem/1.2 var(--bl-font-ui);
+  font: 800 var(--bl-fs-body)/1.2 var(--bl-font-ui);
 }
 .ss-best span {
   display: block;
   margin-top: 2px;
-  font: 800 0.92rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-small)/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
   color: var(--bl-accent);
 }
@@ -540,11 +551,11 @@
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  border-radius: 12px;
+  border-radius: var(--bl-r-md);
   background: rgba(var(--ss-gold-rgb), 0.14);
   border: 1px solid rgba(var(--ss-gold-rgb), 0.5);
   color: var(--bl-text);
-  font: 700 0.8rem/1.2 var(--bl-font-ui);
+  font: 700 var(--bl-fs-caption)/1.2 var(--bl-font-ui);
 }
 .ss-rec .rt-ic {
   color: var(--bl-gold);
@@ -574,7 +585,7 @@
     gap: 8px;
     min-height: 56px;
     padding: 0 12px;
-    font-size: 1rem !important;
+    font-size: var(--bl-fs-body) !important;
   }
 }
 .ss-btn {
@@ -585,31 +596,28 @@
   gap: 10px;
   min-height: 60px;
   padding: 0 18px;
-  border-radius: 18px;
+  border-radius: var(--bl-r-lg);
   border: 1.5px solid var(--ss-line2);
   background: var(--bl-surface2);
   color: var(--bl-text) !important;
-  font: 800 1.08rem/1 var(--bl-font-ui) !important;
+  font: 800 var(--bl-fs-lead)/1 var(--bl-font-ui) !important;
   cursor: pointer;
 }
 .ss-btn.primary {
   border: 0;
   background: var(--bl-accent-fill);
   color: var(--bl-accent-ink) !important;
-  box-shadow: var(--bl-shadow-glow);
+  box-shadow: var(--bl-glow-accent);
 }
 .ss-btn small {
   display: block;
   margin-top: 3px;
-  font: 700 0.74rem/1.15 var(--bl-font-ui);
+  font: 700 var(--bl-fs-caption)/1.15 var(--bl-font-ui);
   opacity: 0.85;
 }
 .ss-btn .tx {
   min-width: 0;
   text-align: left;
-}
-.ss-btn:active {
-  transform: scale(0.98);
 }
 .ss-btn:focus-visible {
   outline: 3px solid var(--bl-gold);
@@ -667,7 +675,7 @@
 }
 .ss-start-time b {
   display: block;
-  font: 900 2.3rem/1 var(--bl-font-ui);
+  font: 900 var(--bl-fs-display)/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.03em;
   color: var(--bl-accent);
@@ -675,7 +683,7 @@
 .ss-start-time span {
   display: block;
   margin-top: 4px;
-  font: 700 0.95rem/1.25 var(--bl-font-ui);
+  font: 700 var(--bl-fs-body)/1.25 var(--bl-font-ui);
 }
 .ss-gifts {
   display: flex;
@@ -688,10 +696,10 @@
   gap: 7px;
   min-height: 40px;
   padding: 6px 12px 6px 8px;
-  border-radius: 12px;
+  border-radius: var(--bl-r-md);
   background: var(--bl-surface);
   border: 1px solid var(--ss-line2);
-  font: 700 0.86rem/1.2 var(--bl-font-ui);
+  font: 700 var(--bl-fs-small)/1.2 var(--bl-font-ui);
 }
 .ss-gift .rt-ic {
   color: var(--c, var(--bl-accent));
@@ -718,10 +726,10 @@
   align-items: center;
   gap: 6px;
   padding: 5px 10px 5px 5px;
-  border-radius: 12px;
+  border-radius: var(--bl-r-md);
   border: 1.5px solid var(--bc, var(--ss-line2));
   background: var(--bl-surface);
-  font: 700 0.84rem/1 var(--bl-font-ui);
+  font: 700 var(--bl-fs-small)/1 var(--bl-font-ui);
 }
 .ss-new .n .rt-ic {
   color: var(--bc);
@@ -730,7 +738,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font: 700 0.95rem/1.3 var(--bl-font-ui);
+  font: 700 var(--bl-fs-body)/1.3 var(--bl-font-ui);
 }
 .ss-goal .rt-ic {
   color: var(--bl-gold);
@@ -741,7 +749,7 @@
   justify-content: center;
   gap: 8px;
   margin: 12px 0 0;
-  font: 700 0.9rem/1.3 var(--bl-font-ui);
+  font: 700 var(--bl-fs-small)/1.3 var(--bl-font-ui);
   color: var(--bl-text2);
   text-align: center;
 }
@@ -763,18 +771,9 @@
 :where([data-theme='light']) .ss-layer .b-core { --bc: #0f1720; }
 
 /* ───── Animations ───── */
-@keyframes ss-warn {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(var(--ss-warn-rgb), 0.5), 0 6px 18px var(--ss-shadow);
-  }
-  50% {
-    box-shadow: 0 0 0 8px rgba(var(--ss-warn-rgb), 0), 0 6px 18px var(--ss-shadow);
-  }
-}
 @keyframes ss-tick {
   0% {
-    transform: scale(1.35);
+    transform: scale(1.12);
   }
   100% {
     transform: scale(1);
@@ -885,13 +884,13 @@
   flex-direction: column;
   gap: 6px;
   padding: 10px 12px 10px;
-  border-radius: 16px;
+  border-radius: var(--bl-r-lg);
   text-align: left;
   cursor: pointer;
   color: var(--bl-text);
   background: var(--bl-bg);
   border: 2px solid rgba(230, 237, 243, 0.18);
-  transition: border-color 0.2s, transform 0.15s var(--bl-ease-standard), box-shadow 0.2s;
+  transition: border-color var(--bl-t-base), transform var(--bl-t-quick) var(--bl-ease-standard), box-shadow var(--bl-t-base);
 }
 .ss-world > svg.bl-world {
   position: absolute;
@@ -907,12 +906,10 @@
 .ss-world:hover {
   border-color: color-mix(in srgb, var(--wc) 60%, transparent);
 }
-.ss-world:active {
-  transform: scale(0.98);
-}
 .ss-world.on {
   border-color: var(--wc);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--wc) 28%, transparent);
+  box-shadow: none;
+  outline: 3px solid color-mix(in srgb, var(--wc) 28%, transparent);
 }
 .ss-world:focus-visible {
   outline: 3px solid var(--bl-accent);
@@ -926,7 +923,7 @@
 .ss-wtop b {
   flex: 1;
   min-width: 0;
-  font: 700 1.08rem/1.15 var(--bl-font-display);
+  font: 700 var(--bl-fs-lead)/1.15 var(--bl-font-display);
   color: var(--bl-text);
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
 }
@@ -937,7 +934,7 @@
   border-radius: 999px;
   background: var(--bl-good);
   color: var(--bl-night);
-  font: 800 0.66rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-caption)/1 var(--bl-font-ui);
   font-style: normal;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -953,7 +950,7 @@
   color: var(--bl-surface);
 }
 .ss-wdesc {
-  font: 500 0.82rem/1.3 var(--bl-font-ui);
+  font: 500 var(--bl-fs-small)/1.3 var(--bl-font-ui);
   color: var(--bl-text);
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
 }
@@ -966,7 +963,7 @@
   position: relative;
   width: 42px;
   height: 42px;
-  border-radius: 12px;
+  border-radius: var(--bl-r-md);
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -986,13 +983,13 @@
 }
 .ss-wsp .sp i {
   position: absolute;
-  font: 800 0.9rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-small)/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
   font-style: normal;
   color: var(--bl-text2);
 }
 .ss-wfoot {
-  font: 800 0.78rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-caption)/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
   color: var(--wc);
 }
@@ -1003,7 +1000,7 @@
   align-items: center;
   gap: 6px;
   margin: -2px 0 8px;
-  font: 700 0.86rem/1.25 var(--bl-font-ui);
+  font: 700 var(--bl-fs-small)/1.25 var(--bl-font-ui);
   color: var(--bl-accent);
 }
 
@@ -1018,13 +1015,12 @@
   max-width: min(92vw, 420px);
   margin-top: 6px;
   padding: 4px 12px 4px 8px;
-  border-radius: 18px;
+  border-radius: var(--bl-r-lg);
   border: 1px solid var(--ss-line2);
   background: color-mix(in srgb, var(--bl-surface) 86%, transparent);
-  backdrop-filter: blur(6px);
-  box-shadow: 0 4px 14px var(--ss-shadow);
+  box-shadow: var(--bl-elev-2);
   color: var(--bl-text);
-  font: 700 0.8rem/1.15 var(--bl-font-ui);
+  font: 700 var(--bl-fs-caption)/1.15 var(--bl-font-ui);
   cursor: pointer;
   position: relative;
 }
@@ -1035,7 +1031,7 @@
 }
 .ss-prev .d {
   color: var(--bl-aurora);
-  font: 800 0.9rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-small)/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -1048,7 +1044,7 @@
   color: var(--bl-good);
 }
 .ss-prev.bump .d {
-  animation: ss-bump 0.4s var(--bl-ease-standard);
+  animation: ss-bump var(--bl-t-card) var(--bl-ease-standard);
 }
 .ss-hudwrap {
   display: flex;
@@ -1069,7 +1065,7 @@
 .ss-sp .kept {
   display: block;
   margin-top: 2px;
-  font: 600 0.62rem/1.2 var(--bl-font-ui);
+  font: 600 var(--bl-fs-caption)/1.2 var(--bl-font-ui);
   color: var(--bl-good);
 }
 .ss-kept {
@@ -1078,7 +1074,7 @@
   justify-content: center;
   gap: 6px;
   margin: 8px 0 0;
-  font: 600 0.82rem/1.3 var(--bl-font-ui);
+  font: 600 var(--bl-fs-small)/1.3 var(--bl-font-ui);
   color: var(--bl-text2);
 }
 .ss-whint {
@@ -1086,12 +1082,10 @@
   align-items: center;
   gap: 6px;
   margin: -2px 0 8px;
-  font: 700 0.9rem/1.3 var(--bl-font-ui);
+  font: 700 var(--bl-fs-small)/1.3 var(--bl-font-ui);
   color: var(--bl-accent);
 }
-.ss-plus.long {
-  animation-duration: 3.1s;
-}
+
 
 /* The night moves on (QA4 F-12): a short celebration over the Tree. */
 .ss-night {
@@ -1102,7 +1096,7 @@
   align-items: flex-end;
   justify-content: center;
   opacity: 0;
-  transition: opacity 0.25s ease;
+  transition: opacity var(--bl-t-base) var(--bl-ease-standard);
   cursor: pointer;
 }
 .ss-night.show {
@@ -1123,13 +1117,13 @@
 }
 .ss-night-text h2 {
   margin: 0 0 6px;
-  font: 800 2.4rem/1.1 var(--bl-font-display, Georgia, serif);
+  font: 800 var(--bl-fs-display)/1.1 var(--bl-font-display, Georgia, serif);
   color: #ffe6b0;
   text-shadow: 0 0 18px rgba(255, 200, 120, 0.6);
 }
 .ss-night-text p {
   margin: 0 0 10px;
-  font: 600 1.05rem/1.35 var(--bl-font-ui, system-ui, sans-serif);
+  font: 600 var(--bl-fs-body)/1.35 var(--bl-font-ui, system-ui, sans-serif);
 }
 .ss-night-text small {
   color: var(--bl-text2, #a7b3bf);
@@ -1143,7 +1137,148 @@
   border-radius: 999px;
   background: var(--bl-candle, #ffb86b);
   color: var(--bl-night, #0b0e12);
-  font: 800 0.66rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-caption)/1 var(--bl-font-ui);
   font-style: normal;
   letter-spacing: 0.03em;
+}
+
+/* ═════════════ Polish (docs/ARTE-PULIDO.md B-3, B-5, B-11) ═════════════ */
+
+/* Cards come in with WAAPI (summary.ts / start.ts: 32 px, default spring); no competing transition. */
+.ss-card,
+.ss-layer.show .ss-card {
+  transform: none;
+  opacity: 1;
+  transition: none;
+}
+.ss-card {
+  border-top: 0;
+  box-shadow: var(--bl-elev-3);
+}
+@media (min-width: 700px) {
+  .ss-card {
+    border: 0;
+    /* Laptop: never taller than the screen, the title never cut (B-11). */
+    max-height: calc(100dvh - 32px);
+  }
+}
+.ss-head h2 {
+  font: 700 var(--bl-fs-headline)/1.1 var(--bl-font-display);
+  font-variation-settings: 'SOFT' 100;
+  letter-spacing: -0.01em;
+}
+.ss-chip {
+  border: 0;
+}
+.ss-bubble,
+.ss-bubble::before {
+  border-color: transparent;
+}
+/* Groups, not boxes inside boxes (B-3): a surface change, no border. */
+.ss-box {
+  border: 0;
+  background: var(--bl-surface2);
+}
+.ss-box h4 {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--bl-text3);
+}
+
+/* The equation: tiles on the box's surface without borders, rows divided by a 1-px line at 8 %. */
+.ss-row {
+  border-bottom: 1px solid color-mix(in srgb, var(--bl-text) 8%, transparent);
+  padding: 8px 0;
+}
+.ss-t {
+  border: 0;
+  background: var(--bl-surface);
+}
+.ss-rhs {
+  min-width: 56px;
+}
+/* From the first frame the rows are there, at 35 %: the structure reads, never an empty box (B-11). */
+.ss-row.pending {
+  opacity: 0.35;
+}
+.ss-row.in {
+  animation: none;
+  transition: opacity var(--bl-t-quick) var(--bl-ease-standard);
+}
+.ss-total {
+  position: relative;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--bl-r-md);
+  background: color-mix(in srgb, var(--bl-aurora) 16%, var(--bl-surface));
+}
+.ss-total b {
+  font: 800 var(--bl-fs-hero)/1 var(--bl-font-ui);
+  font-variant-numeric: tabular-nums;
+}
+.ss-total.done b {
+  animation: none;
+}
+/* One light of aurora crosses the total when it lands (transform only). */
+.ss-sweep {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 25%, color-mix(in srgb, var(--bl-aurora) 30%, transparent) 50%, transparent 75%);
+  transform: translateX(-110%);
+  pointer-events: none;
+}
+
+/* The fixed footer: content fades out under it over 32 px (B-11). */
+.ss-actions {
+  background: linear-gradient(to top, var(--bl-surface) calc(100% - 32px), color-mix(in srgb, var(--bl-surface) 0%, transparent));
+  padding-top: 32px;
+}
+.ss-btn {
+  border: 1.5px solid var(--bl-line2);
+}
+.ss-btn.primary {
+  border: 0;
+  box-shadow: var(--bl-elev-1);
+}
+
+/* Portraits on the card's own surface: ink on paper in the light theme (B-14). */
+:where([data-theme='light']) .ss-sp .pic,
+:where([data-theme='light']) .ss-best .pic {
+  background: var(--bl-surface3);
+}
+.ss-sp .pic > canvas.pt-cv,
+.ss-best .pic > canvas.pt-cv {
+  width: 100%;
+  height: 100%;
+}
+/* A world's species not found yet: a dashed ring with a drawn «?» (B-1). */
+.ss-world .sp.unfound {
+  background: transparent;
+  border: 1.5px dashed var(--bl-line2);
+}
+.ss-world .sp .qm,
+.rt-sp .qm {
+  display: grid;
+  place-items: center;
+  color: var(--bl-text3);
+}
+/* Chips inside a group carry no border (B-3): the surface says they are separate. */
+.ss-gift {
+  border: 0;
+}
+.ss-new .n {
+  border: 0;
+  background: color-mix(in srgb, var(--bc, var(--bl-accent)) 12%, var(--bl-surface));
+}
+.ss-gift .mini {
+  /* A round portrait never gives way to a long line of text next to it. */
+  flex: none;
+  border-width: 1.5px;
+}
+:where([data-theme='light']) .ss-gift .mini {
+  background: var(--bl-surface3);
+}
+.ss-gift .mini > canvas.pt-cv {
+  width: 100%;
+  height: 100%;
 }

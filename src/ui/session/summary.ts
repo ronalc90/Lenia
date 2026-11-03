@@ -15,9 +15,10 @@ import { velaLine } from '../../game/session';
 import { DATOS_NAME, SESSION_UI } from '../../game/treeText';
 import { fmt, fmtClock, fmtRate } from '../format';
 import type { PriceExplain } from '../moments/price';
-import { renderPattern } from '../portrait';
+import { mountPortrait } from '../portrait';
 import { Portrait } from '../story/portraits';
 import { treeIcon } from '../tree/icons';
+import { countUp, ease, pop, staggerDelay, DURATION, EASING, SPRING, springEasing } from '../art/motion';
 import '../art/art.css';
 import './session.css';
 
@@ -54,6 +55,13 @@ export interface SessionSummaryView {
   hide(): void;
   dispose(): void;
 }
+
+/**
+ * The summary's tally (docs/ARTE-PULIDO.md B-11, B-6), ms: rows light from `start`, `step` apart, each
+ * counting in `row`; the total counts in `total` (easeOutCubic), pops in `pop` and an aurora light
+ * crosses it in `sweep`. Everything within `budget`.
+ */
+export const SUMMARY_TALLY = { start: 200, step: 120, row: 300, total: 900, pop: 260, sweep: 600, budget: 1800 } as const;
 
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const dec = (x: number, l: Lang): string => String(Math.round(x * 100) / 100).replace('.', l === 'es' ? ',' : '.');
@@ -176,7 +184,7 @@ function rowHtml(r: EqRow, i: number, pending: boolean): string {
       )}</span></span></span>`;
     })
     .join('');
-  return `<div class="ss-row${pending ? ' pending' : ''}" data-i="${i}"><div class="ss-lhs">${tiles}</div><div class="ss-rhs">= ${esc(r.result)}</div></div>`;
+  return `<div class="ss-row${pending ? ' pending' : ''}" data-i="${i}"><div class="ss-lhs">${tiles}</div><div class="ss-rhs">= <span class="v">${esc(r.result)}</span></div></div>`;
 }
 
 export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOptions): SessionSummaryView {
@@ -239,9 +247,8 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
 
   function paintPortraits(): void {
     for (const pic of card.querySelectorAll<HTMLElement>('[data-sp]')) {
-      if (pic.firstChild) continue;
       const info = opts.speciesInfo(pic.dataset.sp!);
-      if (info?.portrait) pic.appendChild(renderPattern(info.portrait, 120, 0.78, info.hue));
+      if (info?.portrait) mountPortrait(pic, info.portrait, pic.closest('.ss-best') ? 56 : 60, { hue: info.hue, fill: 0.78 });
     }
   }
 
@@ -284,6 +291,71 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
     if (over > 0) card.scrollBy({ top: over, behavior: smooth && !rm() ? 'smooth' : 'auto' });
   }
 
+  /**
+   * The tally (B-11): the rows are there from the first frame at 35 % (the structure reads, never an
+   * empty box); each one lights up and counts its result in 300 ms, 120 ms after the one before; then
+   * the total counts in 900 ms (easeOutCubic), pops (1 → 1.08 → 1) and a light of aurora crosses its
+   * box. All of it within 1.8 s; a tap anywhere jumps to the end.
+   */
+  let finish: (() => void) | null = null;
+  function tally(sum: SessionSummary, l: Lang): void {
+    const rowEls = [...card.querySelectorAll<HTMLElement>('.ss-row')];
+    const totalEl = card.querySelector('.ss-total') as HTMLElement;
+    const totalNum = totalEl.querySelector('b') as HTMLElement;
+    const cancels: (() => void)[] = [];
+    const T = SUMMARY_TALLY;
+    const START = T.start;
+    // 120 ms apart, squeezed when there are many rows so the whole tally stays within its budget.
+    const STEP = Math.min(T.step, (T.budget - T.start - T.total) / Math.max(1, rowEls.length - 1));
+    const ROW_MS = T.row;
+    const light = (r: HTMLElement) => {
+      if (!r.classList.contains('pending')) return;
+      r.classList.remove('pending');
+      r.classList.add('in');
+      const v = r.querySelector('.ss-rhs .v') as HTMLElement | null;
+      const m = v ? /^([+]?)(.*)$/.exec(v.textContent ?? '') : null;
+      const n = m ? Number(l === 'es' ? m[2].replace(/[.\s]/g, '').replace(',', '.') : m[2].replace(/[,\s]/g, '')) : NaN;
+      if (v && m && Number.isFinite(n) && n > 1) cancels.push(countUp(v, 0, n, (x) => `${m[1]}${fmt(x, l)}`, ROW_MS));
+    };
+    const done = () => {
+      for (const r of rowEls) light(r);
+      for (const c of cancels) c();
+      totalNum.textContent = fmt(sum.datos.total, l);
+      totalEl.classList.add('done');
+      finish = null;
+    };
+    finish = () => {
+      clearTimers();
+      done();
+    };
+    rowEls.forEach((r, i) => {
+      timers.push(
+        setTimeout(() => {
+          light(r);
+          opts.onSound?.('tally');
+        }, START + i * STEP),
+      );
+    });
+    // The total starts counting as the last row lights (its own 300-ms count runs alongside).
+    const t0 = START + Math.max(0, rowEls.length - 1) * STEP;
+    timers.push(
+      setTimeout(() => {
+        revealTotal(true);
+        cancels.push(countUp(totalNum, 0, sum.datos.total, (x) => fmt(x, l), T.total, ease.outCubic));
+        timers.push(
+          setTimeout(() => {
+            done();
+            pop(totalNum, 1.08, T.pop);
+            const sweep = totalEl.querySelector('.ss-sweep') as HTMLElement | null;
+            sweep?.animate?.([{ transform: 'translateX(-110%)' }, { transform: 'translateX(110%)' }], { duration: T.sweep, easing: EASING.standard });
+            opts.onSound?.('total');
+          }, T.total),
+        );
+      }, t0),
+    );
+    void staggerDelay;
+  }
+
   const api: SessionSummaryView = {
     el: layer,
     get isOpen() {
@@ -313,7 +385,7 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
         <div class="ss-box ss-eqbox"><h4>${esc(SESSION_UI.equationTitle[l])}</h4>
           <p class="ss-formula">${treeIcon('drop', 16)}${esc(SESSION_UI.conversionRule(sum.datos.div)[l])}</p>
           ${rows.map((r, i) => rowHtml(r, i, staged)).join('')}
-          <div class="ss-total${staged ? '' : ' done'}"><span class="lbl">${treeIcon('datos', 26)}${esc(DATOS_NAME[l])}</span><b>${staged ? '0' : fmt(sum.datos.total, l)}</b></div>
+          <div class="ss-total${staged ? '' : ' done'}"><span class="ss-sweep" aria-hidden="true"></span><span class="lbl">${treeIcon('datos', 26)}${esc(DATOS_NAME[l])}</span><b>${staged ? '0' : fmt(sum.datos.total, l)}</b></div>
           <p class="ss-kept">${esc(SESSION_UI.datosKept[l])}</p>
           ${sum.datos.minimum > 0 ? `<p class="ss-minnote">${esc(SESSION_UI.minimumNote(C.DATOS_MIN)[l])}</p>` : ''}
         </div>
@@ -329,48 +401,38 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
       paintPortraits();
       startVela(vela);
       if (!staged) requestAnimationFrame(() => revealTotal(false));
-      if (staged) {
-        const rowEls = [...card.querySelectorAll<HTMLElement>('.ss-row')];
-        const step = 380;
-        rowEls.forEach((r, i) => {
-          timers.push(
-            setTimeout(() => {
-              r.classList.remove('pending');
-              r.classList.add('in');
-              opts.onSound?.('tally');
-            }, 450 + i * step),
-          );
+      // The card rises 32 px with the default spring; its sections follow 60 ms apart (B-5).
+      if (!rm() && typeof card.animate === 'function') {
+        card.animate([{ transform: 'translateY(32px)', opacity: 0 }, { transform: 'none', opacity: 1 }], {
+          duration: SPRING.default.ms,
+          easing: springEasing('default'),
         });
-        const totalEl = card.querySelector('.ss-total') as HTMLElement;
-        const totalNum = totalEl.querySelector('b') as HTMLElement;
-        const t0 = 450 + rowEls.length * step;
-        timers.push(
-          setTimeout(() => {
-            revealTotal(true);
-            const start = performance.now();
-            const dur = 900;
-            const tick = () => {
-              const k = Math.min(1, (performance.now() - start) / dur);
-              totalNum.textContent = fmt(Math.round(sum.datos.total * (1 - Math.pow(1 - k, 3))), l);
-              if (k < 1 && open) requestAnimationFrame(tick);
-              else {
-                totalEl.classList.add('done');
-                opts.onSound?.('total');
-              }
-            };
-            requestAnimationFrame(tick);
-          }, t0),
-        );
+        let k = 0;
+        for (const sec of card.children)
+          (sec as HTMLElement).animate?.([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], {
+            duration: DURATION.sheet,
+            delay: Math.min(5, k++) * 60,
+            easing: EASING.enter,
+            fill: 'backwards',
+          });
       }
+      if (staged) tally(sum, l);
     },
     hide() {
       if (!open) return;
       open = false;
       clearTimers();
+      finish = null;
       layer.classList.remove('show');
+      // Out in 200 ms `exit`, downwards (B-5).
+      if (!rm() && typeof card.animate === 'function')
+        card.animate([{ transform: 'none', opacity: 1 }, { transform: 'translateY(32px)', opacity: 0 }], { duration: DURATION.sheetOut, easing: EASING.exit, fill: 'forwards' });
       setTimeout(() => {
-        if (!open) layer.hidden = true;
-      }, rm() ? 0 : 320);
+        if (!open) {
+          layer.hidden = true;
+          for (const a of card.getAnimations()) a.cancel();
+        }
+      }, rm() ? 0 : DURATION.sheetOut + 20);
     },
     dispose() {
       clearTimers();
@@ -379,6 +441,11 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
   };
   card.addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null;
+    // A tap anywhere while it counts jumps to the end of the tally (B-11).
+    if (finish) {
+      finish();
+      if (!b) return;
+    }
     if (!b) return;
     if (b.dataset.act === 'tree') opts.onTree();
     else opts.onNext();
