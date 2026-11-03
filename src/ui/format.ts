@@ -101,7 +101,10 @@ export function fmtShort(n: number, lang: Lang = 'en'): string {
   });
 }
 
-/** Rate per second: "0.35", "1.2", "45.6", "999", "1.23K". */
+/**
+ * Rate per second, legacy precision ("0.35", "1.2", "45.6", "999", "1.23K"). Kept for the call sites of
+ * other packages until they move to fmtPerSec (their tests pin this format); new code uses fmtPerSec.
+ */
 export function fmtRate(n: number, lang: Lang = 'en'): string {
   const sp = seps(lang);
   return signed(n, (a) => {
@@ -111,6 +114,49 @@ export function fmtRate(n: number, lang: Lang = 'en'): string {
     if (a < 1000) return String(floorEps(a));
     return suffixed(a, 1, sp);
   });
+}
+
+/**
+ * Rate per second (docs/CLARIDAD2.md §2.13): whole numbers from 1 ("+12/s"), one decimal below it
+ * ("0,3"), "1.23K" from 1000. Floored like every amount; a rate above 0 never reads "0" (a living
+ * creature that "da +0/s" was QA-CLARIDAD #200), so the smallest one shows 0,1.
+ */
+export function fmtPerSec(n: number, lang: Lang = 'en'): string {
+  const sp = seps(lang);
+  return signed(n, (a) => {
+    if (a === 0) return '0';
+    if (a < 1) return Math.max(0.1, floorEps(a * 10) / 10).toFixed(1).replace('.', sp.decimal);
+    if (a < 1000) return String(floorEps(a));
+    return suffixed(a, 1, sp);
+  });
+}
+
+/** A multiplier this close to a whole number reads as that number (×2,97 → ×3, ×1,002 → ×1). */
+const MULT_SNAP = 0.05;
+/** From here a multiplier reads ×N; below it, a bonus reads as a percentage (+25 %, +60 %). */
+const MULT_WHOLE_FROM = 2 - MULT_SNAP;
+
+/**
+ * A multiplier for the main flow, never with decimals (docs/CLARIDAD2.md §2.13): "×3"; "casi ×3" /
+ * "almost ×3" when it rounds UP by more than 0,05 (×2,91), so it never promises more than it gives;
+ * "+25 %" / "−15 %" under ×2 (a small bonus or a discount: ×1,25 read "×1" would say "nothing");
+ * "×1" when it does nothing. The exact factor lives behind «Ver cuentas» (fmtFactor).
+ */
+export function fmtMult(x: number, lang: Lang = 'en'): string {
+  if (!Number.isFinite(x) || x <= 0) return '×0';
+  const pct = (p: number) => (lang === 'es' ? `${p} %` : `${p}%`);
+  if (Math.abs(x - 1) < 0.005) return '×1';
+  if (x < 1) return `−${pct(Math.max(1, Math.round((1 - x) * 100)))}`;
+  if (x < MULT_WHOLE_FROM) return `+${pct(Math.max(1, Math.round((x - 1) * 100)))}`;
+  const n = Math.round(x);
+  if (n - x > MULT_SNAP) return lang === 'es' ? `casi ×${fmt(n, lang)}` : `almost ×${fmt(n, lang)}`;
+  return `×${fmt(n, lang)}`;
+}
+
+/** The exact factor for «Ver cuentas» / "Show the maths": at most 2 decimals, no trailing zeros ("×2,25", "×3"). */
+export function fmtFactor(x: number, lang: Lang = 'en'): string {
+  const v = Math.round(x * 100) / 100;
+  return `×${v >= 1000 ? fmt(Math.round(v), lang) : String(v).replace('.', seps(lang).decimal)}`;
 }
 
 /** Fixed decimals with the locale decimal mark (multipliers "×1.30"). */

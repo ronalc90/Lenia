@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { datosMissingText, fmt, fmtClock, fmtDuration, fmtParam, fmtRate, fmtShort, gateCount, timesText } from './format';
+import { datosMissingText, fmt, fmtClock, fmtDuration, fmtFactor, fmtMult, fmtParam, fmtPerSec, fmtRate, fmtShort, gateCount, timesText } from './format';
 
 describe('fmt (currency)', () => {
   it('uses thousands separators up to 999,999', () => {
@@ -68,7 +68,7 @@ describe('fmtShort', () => {
   });
 });
 
-describe('fmtRate', () => {
+describe('fmtRate (legacy precision, until PB/PC move to fmtPerSec)', () => {
   it('shows sensible precision per magnitude', () => {
     expect(fmtRate(0)).toBe('0');
     expect(fmtRate(0.354)).toBe('0.35');
@@ -76,6 +76,57 @@ describe('fmtRate', () => {
     expect(fmtRate(45.67)).toBe('45.6');
     expect(fmtRate(456.7)).toBe('456');
     expect(fmtRate(4567)).toBe('4.56K');
+  });
+});
+
+describe('fmtPerSec (docs/CLARIDAD2.md §2.13)', () => {
+  it('rates ≥ 1 show whole numbers', () => {
+    expect(fmtPerSec(1.25)).toBe('1');
+    expect(fmtPerSec(12.9)).toBe('12');
+    expect(fmtPerSec(45.67, 'es')).toBe('45');
+    expect(fmtPerSec(456.7)).toBe('456');
+    expect(fmtPerSec(4567)).toBe('4.56K');
+  });
+
+  it('rates under 1 keep one decimal and a living one never reads "+0"', () => {
+    expect(fmtPerSec(0)).toBe('0');
+    expect(fmtPerSec(0.354)).toBe('0.3');
+    expect(fmtPerSec(0.354, 'es')).toBe('0,3');
+    expect(fmtPerSec(0.04)).toBe('0.1');
+  });
+});
+
+describe('friendly multipliers (docs/CLARIDAD2.md §2.13: no two-decimal multipliers in the main flow)', () => {
+  it('×2,91 reads "casi ×3"', () => {
+    expect(fmtMult(2.91, 'es')).toBe('casi ×3');
+    expect(fmtMult(2.91, 'en')).toBe('almost ×3');
+    expect(fmtMult(2.71, 'es')).toBe('casi ×3');
+  });
+
+  it('a whole multiplier, or one that rounds down or up by at most 0.05, reads ×N', () => {
+    expect(fmtMult(3, 'es')).toBe('×3');
+    expect(fmtMult(2.97, 'es')).toBe('×3');
+    expect(fmtMult(2.3, 'es')).toBe('×2');
+    expect(fmtMult(12.4, 'en')).toBe('×12');
+  });
+
+  it('small bonuses and discounts read as whole percentages, and ×1 as ×1', () => {
+    expect(fmtMult(1.25, 'es')).toBe('+25 %');
+    expect(fmtMult(1.1, 'en')).toBe('+10%');
+    expect(fmtMult(0.85, 'es')).toBe('−15 %');
+    expect(fmtMult(1, 'es')).toBe('×1');
+    expect(fmtMult(1.002, 'es')).toBe('×1');
+  });
+
+  it('never shows two decimals', () => {
+    for (const x of [0.5, 0.77, 1.05, 1.333, 1.6, 1.94, 1.96, 2.25, 2.91, 5.55, 17.08])
+      for (const l of ['es', 'en'] as const) expect(fmtMult(x, l)).not.toMatch(/\d[.,]\d/);
+  });
+
+  it('"Ver cuentas" keeps the exact factor, at most 2 decimals, without trailing zeros', () => {
+    expect(fmtFactor(2.25, 'es')).toBe('×2,25');
+    expect(fmtFactor(1.5, 'en')).toBe('×1.5');
+    expect(fmtFactor(3, 'es')).toBe('×3');
   });
 });
 
