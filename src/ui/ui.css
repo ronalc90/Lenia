@@ -5646,3 +5646,96 @@ button.chip {
     letter-spacing: 0.08em;
   }
 }
+
+/* «Copiar» over the seed pill (Copiadora, docs/CLARIDAD2.md §2.12, QA-CLARIDAD #39): a 48 px label-maker
+   button; its strip lists this world's species to copy. Grey with the reason when there is none. */
+.copy-btn {
+  position: absolute;
+  left: 50%;
+  bottom: 62px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  max-width: calc(100% - 140px);
+  padding: 0 16px;
+  border-radius: var(--bl-r-lg);
+  background: rgba(14, 19, 26, 0.88);
+  border: 1px solid rgba(var(--good-rgb), 0.6);
+  color: #e7ffd3;
+  font: inherit;
+  font-size: var(--bl-fs-small);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.copy-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.copy-btn.on {
+  background: rgba(var(--good-rgb), 0.16);
+}
+.copy-btn.off {
+  border-color: var(--line-2);
+  color: var(--dim);
+  cursor: default;
+}
+.copy-btn.shake {
+  animation: bl-shake var(--bl-t-card);
+}
+.copy-strip {
+  position: absolute;
+  left: 50%;
+  bottom: 118px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  padding: 8px;
+  border-radius: var(--bl-r-lg);
+  background: rgba(14, 19, 26, 0.94);
+  border: 1px solid var(--line-2);
+  pointer-events: auto;
+}
+.copy-strip .cs-title {
+  width: 100%;
+  text-align: center;
+  color: var(--dim);
+  font-size: var(--bl-fs-small);
+}
+.copy-strip .cs-sp {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 0 12px;
+  border-radius: var(--bl-r-md);
+  border: 1px solid var(--sp, var(--line-2));
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--bl-fs-small);
+  cursor: pointer;
+}
+.copy-strip .cs-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--sp, var(--accent));
+}
+.copy-strip .cs-cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--c-essence);
+}
+/* Free seeds on the pill: a gift, so the gain colour (docs/CLARIDAD2.md §2.11). */
+.mode-pill .mp-cost.mp-free {
+  color: var(--good);
+}

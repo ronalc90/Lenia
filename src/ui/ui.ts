@@ -18,6 +18,8 @@ import { behaviorName, getLang, setLang, stateName, t, tx } from './i18n';
 import { icon, logo } from './icons';
 import { DishInput } from './input';
 import { dropAt, dropsOnSegment, routeTap } from './dishTap';
+import { copyPick } from './copyPick';
+import { PressGuard } from './pressGuard';
 import { FlyLayer, flyDuration } from './fx/fly';
 import { Readout, wholeRate } from './fx/readout';
 import { dishFx } from './fx/stage';
@@ -293,12 +295,6 @@ export function scrollIntoViewY(el: HTMLElement, margin = 8): void {
   else if (r.bottom > b.bottom - margin) sc.scrollTop += Math.min(r.bottom - b.bottom + margin, r.top - b.top - margin);
 }
 
-/** A multiplier with two decimals at most, in the player's language: ×1,25 / ×1.56. */
-function multText(x: number, lang: Lang): string {
-  const v = Math.round(x * 100) / 100;
-  return String(v).replace('.', lang === 'es' ? ',' : '.');
-}
-
 /**
  * Restart a one-shot CSS animation class now (a style read, never a forced layout: P3). Re-adding the
  * class on the next frame lost the restart when called from a tap: no style recalc came between the
@@ -371,6 +367,8 @@ class BiolumaUI implements UI {
   private fabClean!: HTMLButtonElement;
   private cleanArmed = 0;
   private tapGuardUntil = 0;
+  /** Phantom-tap guard of each dock button (QA-CLARIDAD #17): src/ui/pressGuard.ts. */
+  private readonly pressGuards = new Map<HTMLElement, PressGuard>();
   private cleanHold = 0;
   private cleanHeld = false;
   private fabCentre!: HTMLButtonElement;
@@ -379,6 +377,11 @@ class BiolumaUI implements UI {
   private lastSeedCost = -1;
   /** Slot reserved next to the seed cost for the price meter (src/ui/moments wires it). */
   readonly seedMeterSlot = h('span', { class: 'mp-meter' });
+  /** «Copiar» over the seed pill once the Copiadora is bought (QA-CLARIDAD #39), and its species strip. */
+  private copyBtn!: HTMLButtonElement;
+  private copyStrip!: HTMLElement;
+  private copyKey = '';
+  private copyOpen = false;
   /** Objective bar content while deps.objectiveOverride() (the Encargos badge). */
   readonly objectiveSlot = h('div', { class: 'obj-slot', hidden: true });
   private objOverride = false;
@@ -693,6 +696,28 @@ class BiolumaUI implements UI {
         priceInfo(e);
       }
     });
+    this.copyBtn = h('button', { type: 'button', class: 'copy-btn', hidden: true, 'data-testid': 'copy' });
+    this.copyStrip = h('div', { class: 'copy-strip', hidden: true, role: 'listbox' });
+    this.copyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (this.copyBtn.getAttribute('aria-disabled') === 'true') {
+        retriggerClass(this.copyBtn, 'shake');
+        this.sound('deny');
+        return;
+      }
+      this.copyOpen = !this.copyOpen;
+      this.sound(this.copyOpen ? 'open' : 'close');
+      this.copyKey = '';
+      if (this.v) this.updateDishUI(this.v);
+    });
+    this.copyStrip.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest('[data-copy]') as HTMLElement | null;
+      if (!b) return;
+      e.stopPropagation();
+      this.copyOpen = false;
+      this.sound('toggle');
+      this.enterPrint(b.dataset.copy!);
+    });
     this.buffsEl = h('div', { class: 'buffs' });
     this.dishUI = h(
       'div',
@@ -705,6 +730,8 @@ class BiolumaUI implements UI {
       this.fabCentre,
       this.buffsEl,
       this.modePill,
+      this.copyStrip,
+      this.copyBtn,
       this.overgrownEl,
     );
     // The objective floats over the top of the dish: it never pushes the dish or the panel.
@@ -715,22 +742,25 @@ class BiolumaUI implements UI {
     this.bestiaryDot = h('span', { class: 'dot pulse', hidden: true });
     this.bestiaryLabel = h('span', { class: 'dock-l' });
     this.bestiaryBtn = h('button', { type: 'button', class: 'dock-btn dock-bestiary', 'data-tab': 'bestiary' }, ic('bestiary', 26), this.bestiaryLabel, this.bestiaryDot);
-    this.bestiaryBtn.addEventListener('click', () => {
-      if (this.tapGuarded()) return;
+    this.bestiaryBtn.addEventListener('click', (e) => {
+      if (this.tapGuarded() || !this.pressOk(this.bestiaryBtn, e)) return;
       this.sound(this.bestiaryOpen ? 'close' : 'open');
       this.openBestiary(!this.bestiaryOpen);
     });
     this.treeLabel = h('span', { class: 'dock-l' });
     this.treeBtn = h('button', { type: 'button', class: 'dock-btn dock-main dock-tree', hidden: true }, ic('tree', 26), this.treeLabel);
-    this.treeBtn.addEventListener('click', () => {
-      if (this.tapGuarded()) return;
+    this.treeBtn.addEventListener('click', (e) => {
+      if (this.tapGuarded() || !this.pressOk(this.treeBtn, e)) return;
       this.sound('open');
       this.deps.onOpenTree?.();
     });
     this.boostBtn = h('button', { type: 'button', class: 'dock-btn dock-main dock-boost', hidden: true });
-    this.boostBtn.addEventListener('click', () => {
-      if (!this.tapGuarded()) this.onBoostTap();
+    this.boostBtn.addEventListener('click', (e) => {
+      if (!this.tapGuarded() && this.pressOk(this.boostBtn, e)) this.onBoostTap();
     });
+    for (const b of [this.bestiaryBtn, this.treeBtn, this.boostBtn]) this.pressGuards.set(b, new PressGuard(B.DOCK_UNCOVER_GUARD_MS));
+    // Every press inside a dock button's box: on the button, or on whatever covered it (VELA's box).
+    window.addEventListener('pointerdown', (e) => this.notePress(e), { capture: true, passive: true });
     this.dock = h(
       'nav',
       { class: 'bl-dock' },
@@ -865,6 +895,7 @@ class BiolumaUI implements UI {
       document.documentElement.classList.toggle('bl-rm', view.settings.reduceMotion);
     }
     this.applyTheme();
+    this.sampleCovers();
     const bestiary = this.ensureBestiary();
 
     this.updateHUD(view);
@@ -1348,33 +1379,45 @@ class BiolumaUI implements UI {
       this.savePrefs();
       this.showDockTip(this.boostBtn, this.boostTip());
     }
-    const bk = `${b.cost}|${b.count}|${b.affordable}|${wait}|${b.needsLife}|${lang}`;
+    const late = !!b.noTime;
+    const bk = `${b.cost}|${b.count}|${b.affordable}|${wait}|${b.needsLife}|${late}|${lang}`;
     if (bk === this.boostKey) return;
     this.boostKey = bk;
-    const mult = `×${multText(b.nextMult, lang)}`;
-    this.boostBtn.className = `dock-btn dock-main dock-boost${b.affordable ? ' can' : ''}${wait > 0 || b.needsLife ? ' wait' : ''}`;
+    // What one more adds, in whole percent and in the gain colour (never "×1,25", §2.11, §2.13).
+    const pct = Math.round(((b.nextMult - b.mult) / Math.max(1e-9, b.mult)) * 100);
+    this.boostBtn.className = `dock-btn dock-main dock-boost${b.affordable ? ' can' : ''}${wait > 0 || b.needsLife || late ? ' wait' : ''}`;
     this.boostBtn.textContent = '';
-    // "Abono" over "×1,25 · 💧 15" (what it does · its price), "×1,25 · en 0:12" while it is not on sale
-    // yet, or "Falta vida" with nothing alive. Two short lines: it fits a phone dock next to the preview.
-    const bx = h('span', { class: 'bx' }, mult);
+    // «Nutrientes» over «listo en 7 s» while not on sale yet, «+25 % · 💧 16» on sale (gain · price ↑),
+    // «Falta vida» with nothing alive, «Ya no da tiempo» in the last seconds (docs/CLARIDAD2.md §2.7).
+    // Two short lines: it fits a phone dock next to the preview.
+    const bx = h('span', { class: 'bx' }, t('boostGain', { pct }));
     this.boostBtn.append(
       ic('nutrient', 26),
       h(
         'span',
         { class: 'dock-tx' },
         h('b', null, tx(TEXT.boost)),
-        b.needsLife && wait === 0
-          ? h('small', null, tx(SESSION_UI.boostNeedsLife))
-          : wait > 0
-            ? h('small', null, bx, ` · ${tx(SESSION_UI.boostWait(fmtClock(wait)))}`)
-            : h('small', { class: b.affordable ? '' : 'short' }, bx, ' · ', h('span', { class: 'mono', html: `${icon('essence', 13)}${fmtShort(b.cost, lang)}` })),
+        late
+          ? h('small', null, tx(SESSION_UI.boostNoTime))
+          : b.needsLife && wait === 0
+            ? h('small', null, tx(SESSION_UI.boostNeedsLife))
+            : wait > 0
+              ? h('small', null, t('boostReadyIn', { s: wait }))
+              : h('small', { class: b.affordable ? '' : 'short' }, bx, ' · ', h('span', { class: 'mono cost', html: `${icon('essence', 13)}${fmtShort(b.cost, lang)}` })),
       ),
     );
-    setAttr(this.boostBtn, 'aria-label', `${tx(TEXT.boost)} ${mult}: ${fmt(b.cost, lang)} ${t('essence')}. ${tx(SESSION_UI.boostDesc)}`);
+    const said = late
+      ? SESSION_UI.boostNoTime
+      : b.needsLife && wait === 0
+        ? SESSION_UI.boostNoLife
+        : wait > 0
+          ? SESSION_UI.boostReady(wait)
+          : SESSION_UI.boostCost(fmt(b.cost, lang));
+    setAttr(this.boostBtn, 'aria-label', `${tx(said)}. ${tx(SESSION_UI.boostDesc)}`);
     setAttr(this.boostBtn, 'title', `${tx(SESSION_UI.boostDesc)} ${tx(SESSION_UI.boostPrice)}`);
   }
 
-  /** What Abono is, what it changes ("ahora +2/s → +2,5/s") and its one price rule (QA4 F-17). */
+  /** What Nutrientes do, what they change ("Ahora 2 luz/s → 3 luz/s") and the price rule (QA4 F-17, §2.7). */
   private boostTip(): string {
     const v = this.v;
     const b = v?.boost;
@@ -1382,8 +1425,8 @@ class BiolumaUI implements UI {
     if (!v || !b || !(v.essencePerSec > 0) || !(b.mult > 0)) return base;
     const after = (v.essencePerSec * b.nextMult) / b.mult;
     const l = this.lang;
-    const ba = l === 'es' ? `Ahora +${fmtRate(v.essencePerSec, l)}/s → con Abono +${fmtRate(after, l)}/s.` : `Now +${fmtRate(v.essencePerSec, l)}/s → with Fertiliser +${fmtRate(after, l)}/s.`;
-    return `${ba} ${base}`;
+    // «Ahora 2 luz/s → con Nutrientes 3 luz/s. Hasta el final de la sesión. El siguiente cuesta el doble.»
+    return tx(SESSION_UI.boostTip(wholeRate(v.essencePerSec, l), wholeRate(after, l)));
   }
 
   /** A one-time line over a dock button (what it does), gone after a few seconds or a tap. */
@@ -1419,7 +1462,7 @@ class BiolumaUI implements UI {
     if (b.affordable && this.actions.buyBoost()) {
       this.sound('buy');
       this.vibrate(15);
-      this.fxBurst(this.boostBtn, 'var(--good)', `×${multText(b.nextMult, this.lang)}`);
+      this.fxBurst(this.boostBtn, 'var(--good)', t('boostGain', { pct: Math.round(((b.nextMult - b.mult) / Math.max(1e-9, b.mult)) * 100) }));
       this.boostKey = '';
       this.dock.querySelector('.dock-tip')?.remove();
       return;
@@ -1560,6 +1603,34 @@ class BiolumaUI implements UI {
     return performance.now() < this.tapGuardUntil;
   }
 
+  /** A press anywhere: the dock buttons under it learn whether they were the target or were covered. */
+  private notePress(e: PointerEvent): void {
+    const now = performance.now();
+    for (const [b, g] of this.pressGuards) {
+      if (b.hidden) continue;
+      const r = b.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) continue;
+      g.press(e.target instanceof Node && b.contains(e.target), now);
+    }
+  }
+
+  /** Something covers a visible dock button right now (sampled with each view, ~10×/s). */
+  private sampleCovers(): void {
+    const now = performance.now();
+    for (const [b, g] of this.pressGuards) {
+      if (b.hidden) continue;
+      const r = b.getBoundingClientRect();
+      if (r.width <= 0) continue;
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      if (hit && !b.contains(hit)) g.covered(now);
+    }
+  }
+
+  /** May this dock click act (QA-CLARIDAD #17)? A keyboard or programmatic click has no press (detail 0). */
+  private pressOk(b: HTMLElement, e: MouseEvent): boolean {
+    return this.pressGuards.get(b)?.click(performance.now(), e.detail === 0) ?? true;
+  }
+
   /** The whole dish again: zoom 1, centred, not following anyone (QA4 F-09). Each session starts so. */
   resetView(): void {
     this.follow = null;
@@ -1605,6 +1676,41 @@ class BiolumaUI implements UI {
     if (this.v) this.updateDishUI(this.v);
   }
 
+  /** «Copiar» and its strip of this world's species (src/ui/copyPick.ts); hidden in the copy or eraser mode. */
+  private updateCopy(v: GameView): void {
+    const cp = copyPick(v);
+    const on = cp.show && this.mode === 'seed';
+    if (!on) this.copyOpen = false;
+    const open = on && cp.enabled && this.copyOpen;
+    const lang = this.lang;
+    const key = on ? `${cp.enabled}|${open}|${cp.species.map((s) => `${s.id}:${s.cost}:${s.name}`).join(',')}|${lang}` : '';
+    if (key === this.copyKey) return;
+    this.copyKey = key;
+    show(this.copyBtn, on);
+    show(this.copyStrip, open);
+    if (!on) return;
+    this.copyBtn.textContent = '';
+    this.copyBtn.append(ic('print', 20), h('span', null, cp.enabled ? t('copyBtn') : tx(cp.reason!)));
+    this.copyBtn.classList.toggle('off', !cp.enabled);
+    this.copyBtn.classList.toggle('on', open);
+    setAttr(this.copyBtn, 'aria-disabled', cp.enabled ? 'false' : 'true');
+    setAttr(this.copyBtn, 'aria-expanded', open ? 'true' : 'false');
+    this.copyStrip.textContent = '';
+    if (!open) return;
+    this.copyStrip.append(h('span', { class: 'cs-title' }, t('copyPickTitle')));
+    for (const s of cp.species) {
+      const chip = h(
+        'button',
+        { type: 'button', class: 'cs-sp', role: 'option', 'data-copy': s.id },
+        h('span', { class: 'cs-dot' }),
+        h('b', null, s.name),
+        h('span', { class: 'mono cs-cost', html: s.cost === 0 ? t('copyFree') : `${icon('essence', 13)}${fmtShort(s.cost, lang)}` }),
+      );
+      if (s.hue !== undefined) chip.style.setProperty('--sp', `hsl(${Math.round(s.hue)} 70% 60%)`);
+      this.copyStrip.append(chip);
+    }
+  }
+
   private updateDishUI(v: GameView): void {
     const lang = this.lang;
     // Speed
@@ -1623,13 +1729,14 @@ class BiolumaUI implements UI {
     show(this.overgrownEl, flooded && !!this.actions.sterilizeDish);
     show(this.fabClean, !!this.actions.sterilizeDish);
     if (this.mode === 'print' && !v.species.some((s) => s.id === this.printId)) this.mode = 'seed';
+    this.updateCopy(v);
 
     // Mode pill
     let key: string;
     const printSp = this.mode === 'print' ? v.species.find((s) => s.id === this.printId) : undefined;
     if (printSp) key = `print|${printSp.name}|${lang}`;
     else if (this.mode === 'erase') key = `erase|${lang}`;
-    else key = `seed|${v.canSeed}|${fmtShort(v.seedCost, lang)}|${v.seedsGrowing ? 1 : 0}|${lang}`;
+    else key = `seed|${v.canSeed}|${fmtShort(v.seedCost, lang)}|${v.seedsGrowing ? 1 : 0}|${v.charges?.free ?? 0}|${lang}`;
     if (key !== this.modeKey) {
       this.modeKey = key;
       const pill = this.modePill;
@@ -1668,7 +1775,12 @@ class BiolumaUI implements UI {
           pill.setAttribute('role', 'button');
           pill.setAttribute('tabindex', '0');
         }
-        const cost = h('span', { class: 'mp-cost mono', html: `${icon('essence', 15)}${fmtShort(v.seedCost, lang)}` });
+        // Free seeds waiting: the pill says so instead of a price it will not charge (§5.2 task 6).
+        const free = v.charges?.free ?? 0;
+        const cost =
+          free > 0
+            ? h('span', { class: 'mp-cost mp-free mono' }, t('seedFreeN', { n: String(free) }))
+            : h('span', { class: 'mp-cost mono', html: `${icon('essence', 15)}${fmtShort(v.seedCost, lang)}` });
         if (growing) pill.append(ic('seed', 24), h('span', { class: 'mp-wait' }, ic('time', 16), t('seedWait')), cost, this.seedMeterSlot);
         else pill.append(ic('seed', 24), cost, this.seedMeterSlot);
         // The "i" is the visible affordance; its click bubbles to the pill's handler.

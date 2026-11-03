@@ -124,6 +124,14 @@ const S = {
   print: { es: 'Imprimir', en: 'Print' },
   makeCopy: { es: 'Hacer una copia', en: 'Make a copy' },
   copyFree: { es: 'Gratis', en: 'Free' },
+  // The seed pill's «Copiar» (Copiadora, docs/CLARIDAD2.md §2.12): which species of this world to copy.
+  copyBtn: { es: 'Copiar', en: 'Copy' },
+  // The seed pill while seeds are free (docs/CLARIDAD2.md §5.2 task 6: «1 semilla gratis»).
+  seedFreeN: { es: '{n} gratis', en: '{n} free' },
+  // The Nutrientes button's second line (docs/CLARIDAD2.md §2.7 item 6): waiting, a gain in whole percent.
+  boostReadyIn: { es: 'listo en {s} s', en: 'ready in {s} s' },
+  boostGain: { es: '+{pct} %', en: '+{pct}%' },
+  copyPickTitle: { es: '¿Cuál copias?', en: 'Which one?' },
   copyHint: { es: 'Pon otra igual en la placa. Cuesta luz.', en: 'Put another one like it on the dish. Costs glow.' },
   outOfRegime: {
     es: 'Esta especie vive en otro mundo: {world}.',
