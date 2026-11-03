@@ -149,10 +149,12 @@ for (const policy of policies) {
     checks.push(`${tag} session 1: ≥ 60 light, ≥ 15 Datos, ≥ 3 buys, first buy ≤ 45 s: ${s1ok ? 'OK' : 'FAIL'} (${fmtN(s1e)} · ${s1} · ${s1buys} · ${Number.isFinite(fb) ? fb.toFixed(0) + ' s' : '—'}; runs ${s1rows.map((x) => x.datos).join('/')})`);
     const cap15 = Array.from({ length: Math.min(5, N) }, (_, i) => cappedAt(i));
     checks.push(`${tag} production waiting in full drops ≤ 10 % in S1–S5: ${cap15.every((x) => x <= 10) ? 'OK' : 'FAIL'} (${cap15.map((x) => x.toFixed(1)).join('/')} %)`);
-    const fastFrom = med(res.map((r) => ownedFrom(r, 'pipetteFast')));
-    const capFast = Number.isFinite(fastFrom) ? Array.from({ length: Math.max(0, Math.min(N, nEnd) - fastFrom + 1) }, (_, i) => cappedAt(fastFrom - 1 + i)) : [];
+    // A planner that taps every ripe drop never needs Pipetas rápidas: then the gate reads from S6 on.
+    const fastFrom0 = med(res.map((r) => ownedFrom(r, 'pipetteFast')));
+    const fastFrom = Number.isFinite(fastFrom0) ? fastFrom0 : 6;
+    const capFast = Array.from({ length: Math.max(0, Math.min(N, nEnd) - fastFrom + 1) }, (_, i) => cappedAt(fastFrom - 1 + i));
     const worstFast = capFast.length ? Math.max(...capFast) : NaN;
-    checks.push(`${tag} ≤ 3 % waiting once it has Pipetas rápidas (from S${Number.isFinite(fastFrom) ? fastFrom : '—'}): ${worstFast <= 3 ? 'OK' : 'FAIL'} (worst ${Number.isFinite(worstFast) ? worstFast.toFixed(1) : '—'} %)`);
+    checks.push(`${tag} ≤ 3 % waiting once it has Pipetas rápidas (from S${fastFrom}${Number.isFinite(fastFrom0) ? '' : ', never bought: it taps'}): ${worstFast <= 3 ? 'OK' : 'FAIL'} (worst ${Number.isFinite(worstFast) ? worstFast.toFixed(1) : '—'} %)`);
     // B3: the first ring-3 purchase after Night 2 opens.
     const ring3 = res.map((r) => {
       const n2 = r.rows.findIndex((x) => x.night >= 2);
