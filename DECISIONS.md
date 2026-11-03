@@ -536,6 +536,13 @@ ADR that supersedes the old one.
   extrapolated to the current step with the heading the last turns gave them (`src/sim/extrapolate.ts`): with the
   async readback the stale heading put a turn's pivot ~6 cells off the centroid and tore the starter apart before the
   first seed (`tests/unit/starter-lag.test.ts`).
+- **Amendment v0.019 (owner: "la semilla se vuelve loca y va a toda velocidad" at every run start;
+  docs/ARTE-PULIDO.md A-6, §7.3):** the starter and the Nevera creatures still incubate `PREINCUBATE_STEPS` real steps,
+  but **unlit**: synchronous snapshots, at most ~8 ms of work a frame, the dish shows a progress arc instead of a
+  creature racing in the dark. When incubation ends the culture is lit over 700 ms with the dish holding still, then
+  the time-lapse ramps from rest to `SESSION_SIM_PACE` over `SESSION_PACE_RAMP_S` = 1 s of dish stepping
+  (`src/sim/reveal.ts`, `src/sim/reveal.test.ts`). The clock counts dish time, so a run is never shorter in dish life;
+  the detector gates and "only stable pays" are unchanged. Session bot before/after: identical (it models whole steps).
 
 
 ## ADR-028: Contract removals of the sessions cycle (d9da2ef) and the retired classic loop
