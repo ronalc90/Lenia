@@ -207,36 +207,30 @@
   color: var(--bl-text, #e6edf3);
 }
 
-/* ── look picker ── */
+/* ── the coat rack (docs/ARTE-REALISTA.md §5.5): each button is a coat on its hook; the picked one comes
+   off the hook and gets the 2-px focus ring, both drawn in its canvas. Reduce motion: only the ring. ── */
 .bl-intro-picker {
   display: flex;
-  gap: 12px;
+  gap: 8px;
 }
 .bl-intro-picker[hidden] {
   display: none;
 }
 .bl-intro-look {
   flex: 0 0 auto;
-  width: 72px;
-  height: 72px;
+  width: 76px;
+  height: 114px;
   padding: 0;
-  border-radius: var(--bl-r-lg);
-  border: 2px solid var(--bl-line, rgba(127, 127, 127, 0.3));
-  background: radial-gradient(circle at 50% 60%, #1a2a44, #0b111c 75%);
+  border-radius: var(--bl-r-md);
+  border: 1px solid var(--bl-line, rgba(127, 127, 127, 0.3));
+  background: #10161c;
   cursor: pointer;
-  transition: transform var(--bl-t-quick) var(--bl-ease-standard, ease), border-color var(--bl-t-quick);
+  overflow: hidden;
 }
 .bl-intro-look canvas {
   width: 100%;
   height: 100%;
   display: block;
-  border-radius: var(--bl-r-lg);
-}
-.bl-intro-look.on {
-  border-color: var(--bl-accent, #5bc0eb);
-  box-shadow: none;
-  outline: 3px solid color-mix(in srgb, var(--bl-accent, #5bc0eb) 30%, transparent);
-  transform: scale(1.06);
 }
 
 /* ── buttons ── */
@@ -340,6 +334,10 @@
   .bl-intro-nav {
     margin-top: 12px;
   }
+  .bl-intro-look {
+    width: 92px;
+    height: 138px;
+  }
 }
 
 /* ── light theme: the text card is warm paper; the picture stays night ── */
@@ -358,6 +356,7 @@
 }
 [data-theme='light'] .bl-intro-look {
   border-color: rgba(68, 80, 93, 0.25);
+  background: #e9ecef;
 }
 
 /* ── Settings entry ── */

@@ -4,7 +4,8 @@
  *
  * Ten panels, each an animated Canvas 2D illustration (scenes.ts) above / beside one or two short
  * lines (src/story/introScript.ts, ≤ 12 words each, es + en). Every panel has "Siguiente" (the
- * primary action) and a "Saltar intro" link; the third panel lets the player pick their doctor.
+ * primary action) and a "Saltar intro" link; the third panel lets the player pick their lab coat from
+ * the rack (docs/ARTE-REALISTA.md §5.5).
  * Tapping the picture also advances. Keyboard: → / Enter / Space next, ← back, Esc skip.
  *
  * The illustrations are always night (the dish, GDD §14); the text card follows the theme (paper
@@ -14,10 +15,9 @@
 import './intro.css';
 import type { Lang, Text } from '../../core/types';
 import { INTRO_PANELS, INTRO_UI, type IntroLine, type IntroPanel } from '../../story/introScript';
-import { drawDoctorBust, getPlayerLook, PLAYER_LOOK_IDS, PLAYER_LOOK_NAMES, playerSpec, setPlayerLook, type PlayerLookId } from '../art/characters';
+import { drawBataCard, getPlayerLook, PLAYER_LOOK_IDS, PLAYER_LOOK_NAMES, setPlayerLook, type PlayerLookId } from '../art/characters';
 import { restartClass } from '../art/motion';
 import { Portrait } from '../art/portraits';
-import { featherEdges } from '../art/vela';
 import { loadPhoto } from '../art/photos';
 import { INTRO_PHOTOS, paintScene, releaseSceneLayers } from './scenes';
 
@@ -142,6 +142,10 @@ export function createIntro(root: HTMLElement, opts: IntroOptions): Intro {
     btn.append(cv);
     btn.addEventListener('click', (ev) => {
       ev.stopPropagation();
+      if (id !== look) {
+        prevLook = look;
+        pickedAt = clock;
+      }
       look = id;
       setPlayerLook(id);
       opts.onSound?.('pick');
@@ -163,6 +167,9 @@ export function createIntro(root: HTMLElement, opts: IntroOptions): Intro {
   // ── text ──
   let portraits: { p: Portrait; line: IntroLine }[] = [];
   let shownAt = 0;
+  /** The coat rack (§5.5): when the player last picked a coat on this panel (the clock), and the one before. */
+  let pickedAt: number | null = null;
+  let prevLook: PlayerLookId | null = null;
 
   function renderPanel(p: IntroPanel): void {
     const l = L();
@@ -206,6 +213,8 @@ export function createIntro(root: HTMLElement, opts: IntroOptions): Intro {
   function show(i: number, dir: 1 | -1 = 1): void {
     index = Math.max(0, Math.min(panels.length - 1, i));
     shownAt = clock;
+    pickedAt = null;
+    prevLook = null;
     overlay.classList.toggle('rm', rm());
     renderPanel(panels[index]);
     if (!rm()) {
@@ -305,7 +314,8 @@ export function createIntro(root: HTMLElement, opts: IntroOptions): Intro {
   let dpr = 1;
   function fit(): void {
     const r = art.getBoundingClientRect();
-    const d = Math.min(2, (globalThis.devicePixelRatio as number | undefined) ?? 1);
+    // Up to DPR 3: the people's and VELA's kits size their caches by the screen's DPR (1–3).
+    const d = Math.min(3, (globalThis.devicePixelRatio as number | undefined) ?? 1);
     const w = Math.max(1, Math.round(r.width));
     const h = Math.max(1, Math.round(r.height));
     if (w !== cw || h !== ch || d !== dpr) {
@@ -316,28 +326,30 @@ export function createIntro(root: HTMLElement, opts: IntroOptions): Intro {
       canvas.height = Math.round(h * d);
     }
   }
-  function drawLooks(t: number): void {
+  /** The 220-ms drawer of §6.4 (ease-out, no overshoot): the coat coming off its hook. */
+  const drawer = (p: number) => 1 - (1 - Math.max(0, Math.min(1, p))) ** 3;
+  /** Each button is a coat on the rack (P2's drawBataCard): the picked one lifts and its card swings. */
+  function drawLooks(t: number, frozen: boolean): void {
     if (picker.hidden) return;
+    const theme = overlay.closest('[data-theme]')?.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    const since = pickedAt === null || frozen ? null : clock - pickedAt;
     for (const b of lookBtns) {
-      const size = b.cv.clientWidth || 56;
+      const w = b.cv.clientWidth || 76;
+      const h = b.cv.clientHeight || 114;
       const d = dpr;
-      if (b.cv.width !== Math.round(size * d)) {
-        b.cv.width = Math.round(size * d);
-        b.cv.height = Math.round(size * d);
+      if (b.cv.width !== Math.round(w * d) || b.cv.height !== Math.round(h * d)) {
+        b.cv.width = Math.round(w * d);
+        b.cv.height = Math.round(h * d);
       }
       const c = b.cv.getContext('2d');
       if (!c) continue;
       c.setTransform(1, 0, 0, 1, 0, 0);
       c.clearRect(0, 0, b.cv.width, b.cv.height);
-      const k = (size * d) / 100;
-      c.setTransform(k, 0, 0, k, 0, 0);
-      c.translate(50, 50);
-      c.scale(1.18, 1.18);
-      c.translate(-50, -46);
-      const on = b.id === look;
-      drawDoctorBust(c, playerSpec(b.id), { mood: on ? 'happy' : 'neutral', moodAge: 10, talk: 0, talking: false, blink: 0, reduceMotion: rm(), gesture: 'rest' }, t);
-      c.setTransform(k, 0, 0, k, 0, 0);
-      featherEdges(c, 3);
+      c.setTransform(d, 0, 0, d, 0, 0);
+      let sel = 0;
+      if (b.id === look) sel = since === null ? 1 : drawer(since / 0.22);
+      else if (b.id === prevLook && since !== null) sel = 1 - drawer(since / 0.16);
+      drawBataCard(c, b.id, w, h, t, rm(), sel, { lang: L(), theme, age: b.id === look && since !== null ? since : Infinity });
     }
   }
   function frame(now: number): void {
@@ -351,7 +363,8 @@ export function createIntro(root: HTMLElement, opts: IntroOptions): Intro {
     if (ctx) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, cw, ch);
-      paintScene(ctx, panels[index].id, { w: cw, h: ch, t, rm: rm(), look, lang: L(), dpr });
+      const pickAge = pickedAt === null || frozen !== null ? undefined : clock - pickedAt;
+      paintScene(ctx, panels[index].id, { w: cw, h: ch, t, rm: rm(), look, lang: L(), dpr, pickAge });
     }
     const pt = frozen ?? clock;
     portraits.forEach(({ p }, i) => {
@@ -362,7 +375,7 @@ export function createIntro(root: HTMLElement, opts: IntroOptions): Intro {
       p.state.reduceMotion = rm();
       p.frame(pt, frozen !== null ? 0 : dt, talking ? 0.3 + 0.7 * Math.abs(Math.sin(pt * 12)) : 0, talking);
     });
-    drawLooks(pt);
+    drawLooks(pt, frozen !== null);
   }
   show(index);
   raf = requestAnimationFrame(frame);
