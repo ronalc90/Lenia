@@ -544,6 +544,21 @@ async function runCase(c) {
     }
     return false;
   };
+  /** A dock button with nothing on top of it for half a second (the phantom-tap guard's 350 ms, QA#17). */
+  const dockReady = async (sel) => {
+    for (let i = 0; i < 25; i++) {
+      const free = await page.evaluate((sel) => {
+        const el = document.querySelector(sel);
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        return !!hit && el.contains(hit);
+      }, sel);
+      if (free) break;
+      await page.waitForTimeout(200);
+    }
+    await page.waitForTimeout(500);
+  };
   /** Like a player: tap the ripest drop of light on the dish (ADR-030), if there is one. */
   const collectOnce = async () => {
     const r = await page.evaluate(() => {
@@ -732,6 +747,9 @@ async function runCase(c) {
     }
     // QA#19/#40 (docs/CLARIDAD2.md §2.3): the clock does not move while the Bestiary is open.
     if (k === 2 && (await view()).session?.phase === 'running' && (await settle(`bestiary clock ${k}`), (await view()).session?.phase === 'running')) {
+      // The dock ignores a tap for 350 ms after something stopped covering it (QA#17): like a player, tap the
+      // button once it is plainly there (a card just closed over the dock on a wide screen).
+      await dockReady('.bl-dock [data-tab="bestiary"]');
       await tapSel('.bl-dock [data-tab="bestiary"]');
       await page.waitForTimeout(800);
       if (await page.evaluate(() => !!window.bioluma.ui.drawerOpen)) {
@@ -770,7 +788,7 @@ async function runCase(c) {
       // A player collects the ripe light (ADR-030) and keeps sowing while there is room and light.
       if (!answered) await collectOnce();
       if (!answered && v.creatures < 4) await seedOnce();
-      // Abono when it glows.
+      // Nutrientes when it glows.
       if (boosted < 1 && (await visible('.dock-boost.can'))) {
         const before = await page.evaluate(() => window.bioluma.game.view().boost?.count ?? 0);
         if (boostTries === 0) await shot(`s${k}-boost-ready`);
@@ -795,10 +813,10 @@ async function runCase(c) {
         if (after > before) {
           boosted++;
           await shot(`s${k}-boost-bought`);
-          say(`Session ${k}: bought Abono from the dock${boostTries > 1 ? ` (tap ${boostTries})` : ''}.`);
+          say(`Session ${k}: bought Nutrientes from the dock${boostTries > 1 ? ` (tap ${boostTries})` : ''}.`);
         } else if (boostTries >= 4) {
           boosted++;
-          problems.push(`[${c.name}] session ${k}: Abono glowed but ${boostTries} taps did not buy it (under the finger: ${[...boostCovers].join(', ') || 'the button'})`);
+          problems.push(`[${c.name}] session ${k}: Nutrientes glowed but ${boostTries} taps did not buy it (under the finger: ${[...boostCovers].join(', ') || 'the button'})`);
         }
       }
       // A Spark crossing the dish: tap it.
