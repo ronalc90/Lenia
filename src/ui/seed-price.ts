@@ -1,84 +1,65 @@
 /**
- * The seed price, explained from whatever `view.seedPrice` carries (owner: "prices must never feel
- * random"). Generic on purpose: a factor that is ×1 or absent is not shown, so the same UI is right
- * with today's crowding/saturation rule and with a fixed price per session plus a slot limit.
+ * The seed price, explained: ONE module (docs/CLARIDAD2.md §2.11; the old copy in src/ui/moments/seedprice.ts
+ * is gone). Owner: "prices must never feel random".
  *
- *   seedPriceSheetExplain(view, lang, opts)  → PriceExplain for the generic price sheet (src/ui/moments/price)
- *   seedPriceChange(prev, next, lang)        → the one-line "why it changed" chip, or null
- *   createSeedMeter(lang)                    → slot dots + ↑/↓ reason chip for the seed pill
+ *   seedPriceSheetExplain(view, lang, opts)  → the price card for the shared sheet (src/ui/moments/price)
+ *   seedPriceChange(prev, next, lang)        → the label-maker chip that says what changed, or null
+ *   createSeedMeter(lang)                    → the room in words + that chip, for the seed pill
  *
- * Words a five-year-old understands: "sitios", "vivas", "placa llena". Both languages.
- * Sessions loop (docs/CICLO.md): base × «Semillas baratas» × a small step per seed bought this session;
- * living creatures never raise it, the limit is room (CLARIDAD J-121, J-75).
+ * The colour rule (tokens MEANING): a cost is amber, with ↑ or the price ("4 luz", "×3 ↑ placa llena"); a gain is
+ * green with ×, + or − ("−15 % ↓ Semillas baratas": a discount is a gain); a factor at ×1 is not shown.
+ * Sessions loop: one price (base × «Semillas baratas»); living creatures NEVER raise it (the old
+ * "+1 criatura viva → ×1,25" read as a prize and was the classic loop's surcharge); the limit is room. The
+ * classic loop (PHASE-2B-REMOVE) folds its crowding into the price instead of naming the living as a cost.
  */
 import type { GameView, Lang, SeedPriceView, Text } from '../core/types';
-import { NODE_TEXT } from '../game/treeText';
+import { NODE_TEXT, SESSION_UI } from '../game/treeText';
 import { moIcon } from './moments/icons';
 import { PriceTicker, type PriceExplain, type PriceReason, type PriceRowView, type PriceTermView } from './moments/price';
-import { fmt, fmtFixed } from './format';
+import { fmt, fmtMult } from './format';
 
 /** What the game may send (fields beyond the base can disappear when a rule is removed). */
 export type SeedPriceParts = Pick<SeedPriceView, 'base'> & Partial<Omit<SeedPriceView, 'base'>>;
 
 const T = {
-  title: { es: '¿Cuánto cuesta sembrar?', en: 'What does a seed cost?' },
-  base: { es: 'una semilla', en: 'one seed' },
+  title: { es: 'Precio de la semilla', en: 'Seed price' },
+  base: { es: 'base', en: 'base' },
+  unit: { es: '{n} luz', en: '{n} glow' },
   bought1: { es: '1 comprada hoy', en: '1 bought today' },
   boughtN: { es: '{n} compradas hoy', en: '{n} bought today' },
-  alive1: { es: '1 viva', en: '1 alive' },
-  aliveN: { es: '{n} vivas', en: '{n} alive' },
   full: { es: 'placa llena', en: 'dish full' },
   total: { es: 'precio', en: 'price' },
-  slots: { es: 'Sitios', en: 'Room' },
-  slotsLeft1: { es: 'Queda 1', en: '1 left' },
-  slotsLeft: { es: 'Quedan {n}', en: '{n} left' },
-  slotsNone: { es: 'Está llena', en: 'It is full' },
-  slotsOver: { es: '{n} de más', en: '{n} too many' },
-  // The room count next to the price: words, not bare dots (docs/ARTE.md §2.11).
-  room1: { es: '1 sitio', en: '1 spot' },
-  roomN: { es: '{n} sitios', en: '{n} spots' },
-  roomFull: { es: 'Llena', en: 'Full' },
-  free1: { es: 'Tienes 1 semilla gratis', en: 'You have 1 free seed' },
-  freeN: { es: 'Tienes {n} semillas gratis', en: 'You have {n} free seeds' },
-  big: { es: 'Mantén pulsado: semilla grande ×{m}', en: 'Hold: big seed ×{m}' },
+  // The room: wells of a multiwell plate and words (docs/ARTE-REALISTA.md §6.9; plan §6 #2).
+  wells: { es: 'Huecos', en: 'Room' },
+  room1: { es: 'Cabe 1 más', en: 'Room for 1 more' },
+  roomN: { es: 'Caben {n} más', en: 'Room for {n} more' },
+  roomFull: { es: 'Placa llena · caben {n}', en: 'Dish full · holds {n}' },
+  roomOver: { es: '{n} de más', en: '{n} too many' },
+  // The pill's short room words.
+  pill1: { es: 'Cabe 1 más', en: '1 more' },
+  pillN: { es: 'Caben {n} más', en: '{n} more' },
+  pillFull: { es: 'Llena · caben {n}', en: 'Full · holds {n}' },
+  big: { es: 'Mantén pulsado: semilla grande {m}', en: 'Hold: big seed {m}' },
   growing: { es: 'Hay semillas naciendo: espera un poco.', en: 'Seeds are hatching: wait a moment.' },
-  ruleFixed: { es: 'Sembrar cuesta siempre lo mismo: {b} de Esencia.', en: 'A seed always costs the same: {b} Essence.' },
-  ruleBase: { es: 'Cada semilla cuesta {b} de Esencia.', en: 'Each seed costs {b} Essence.' },
-  ruleStep: {
-    es: 'Cada semilla que compras hoy cuesta un poquito más. En la próxima sesión vuelve a costar lo de siempre.',
-    en: 'Each seed you buy today costs a tiny bit more. Next session it costs the usual price again.',
-  },
-  ruleCheap: { es: 'Con «{node}» cuesta menos.', en: 'With “{node}” it costs less.' },
-  ruleCrowd: { es: 'Cuantas más criaturas viven, más cuesta.', en: 'The more creatures live, the more it costs.' },
+  ruleSession: { es: 'Una semilla cuesta lo mismo toda la sesión.', en: 'A seed costs the same all session long.' },
+  ruleStep: { es: 'Hoy cada semilla sube un poco.', en: 'Today each seed costs a little more.' },
   ruleSat: { es: 'Con la placa llena, cuesta mucho más.', en: 'With the dish full, it costs much more.' },
-  ruleSlots: { es: 'En la placa caben {n}.', en: 'The dish has room for {n}.' },
-  today: { es: 'Ahora cuesta {t}.', en: 'It costs {t} now.' },
-  todayBecause: { es: 'Ahora cuesta {t} porque {why}.', en: 'It costs {t} now because {why}.' },
-  whyAlive1: { es: 'hay 1 criatura viva', en: '1 creature is alive' },
-  whyAliveN: { es: 'hay {n} criaturas vivas', en: '{n} creatures are alive' },
-  whyFull: { es: 'la placa está llena', en: 'the dish is full' },
-  whyBought1: { es: 'ya compraste 1 hoy', en: 'you already bought 1 today' },
-  whyBoughtN: { es: 'ya compraste {n} hoy', en: 'you already bought {n} today' },
   fullTree: { es: '¿Placa llena? Compra «{node}» en el Árbol.', en: 'Dish full? Buy “{node}” in the Tree.' },
   seeTree: { es: 'Ver en el Árbol', en: 'See in the Tree' },
-  and: { es: ' y ', en: ' and ' },
   freeNow: { es: 'La próxima es gratis.', en: 'The next one is free.' },
   seeDish: { es: 'Más sitio: ver la Placa', en: 'More room: see the Dish' },
   close: { es: 'Cerrar', en: 'Close' },
-  // Reason chips (one line, next to the price, ~2 s).
-  rsFree: { es: '¡Gratis! (lluvia de semillas)', en: 'Free! (seed shower)' },
-  rsStep: { es: 'Una más hoy → un poquito más', en: 'One more today → a tiny bit more' },
-  rsSession: { es: 'Sesión nueva → precio de siempre', en: 'New session → usual price' },
-  rsCheap: { es: '{node} → más barato', en: '{node} → cheaper' },
+  // The label-maker chip (Mono capitals in CSS), only when something really changed.
+  rsFree: { es: '¡Gratis!', en: 'Free!' },
+  rsCheap: { es: '{pct} · {node}', en: '{pct} · {node}' },
   rsSlots: { es: 'Placa más grande: caben {n}', en: 'Bigger dish: room for {n}' },
-  rsFull: { es: 'Placa llena → ×{s}', en: 'Dish full → ×{s}' },
-  rsRoom: { es: 'Hay sitio otra vez → más barato', en: 'Room again → cheaper' },
-  rsAlive1: { es: '+1 criatura viva → ×{m}', en: '+1 creature alive → ×{m}' },
-  rsAliveN: { es: '+{n} criaturas vivas → ×{m}', en: '+{n} creatures alive → ×{m}' },
+  rsFull: { es: 'Placa llena {s}', en: 'Dish full {s}' },
+  rsRoom: { es: 'Hay sitio otra vez', en: 'Room again' },
+  rsSession: { es: 'Sesión nueva: precio de siempre', en: 'New session: usual price' },
   rsBase: { es: 'Nuevo precio: {b}', en: 'New price: {b}' },
   rsUp: { es: 'Sube el precio', en: 'Price up' },
   rsDown: { es: 'Baja el precio', en: 'Price down' },
-  rsBig: { es: 'Semilla grande ×{m}', en: 'Big seed ×{m}' },
+  rsBig: { es: 'Semilla grande {m}', en: 'Big seed {m}' },
 } satisfies Record<string, Text>;
 
 function tr(text: Text, lang: Lang, vars?: Record<string, string | number>): string {
@@ -87,29 +68,30 @@ function tr(text: Text, lang: Lang, vars?: Record<string, string | number>): str
   return s;
 }
 
-/** "1,50" → "1,5", "3,00" → "3". */
-function mult(n: number, lang: Lang): string {
-  return fmtFixed(n, 2, lang).replace(/[.,]?0+$/, '');
-}
-
 const EPS = 1e-9;
 const active = (m: number | undefined): m is number => typeof m === 'number' && Number.isFinite(m) && m > 1 + EPS;
 /** A discount factor in use (below ×1). */
 const cheaper = (m: number | undefined): m is number => typeof m === 'number' && Number.isFinite(m) && m > 0 && m < 1 - EPS;
 
 /**
- * The per-seed step only when it moves the whole-Esencia price (×1,05 on 3 still reads 3: saying
- * "it went up" there would be a lie).
+ * The classic loop's crowding is part of the price itself (never a "+1 viva" factor): the base the card shows.
+ * In the sessions loop crowdMult is 1 and this is the base.
+ */
+const baseOf = (p: SeedPriceParts): number => p.base * (active(p.crowdMult) ? p.crowdMult : 1);
+
+/**
+ * The per-seed step (SEED_PRICE_STEP; 1 from ADR-030 on) only while it moves the whole-Luz price: ×1,05 on 3
+ * still reads 3, and saying "it went up" there would be a lie.
  */
 function stepShows(p: SeedPriceParts): p is SeedPriceParts & { stepMult: number } {
   if (!active(p.stepMult)) return false;
-  const before = p.base * (cheaper(p.cheapMult) ? p.cheapMult : 1);
+  const before = baseOf(p) * (cheaper(p.cheapMult) ? p.cheapMult : 1);
   return Math.max(1, Math.round(before * p.stepMult)) > Math.max(1, Math.round(before));
 }
 
-function boughtText(p: SeedPriceParts, one: Text, many: Text, lang: Lang): string {
+function boughtText(p: SeedPriceParts, lang: Lang): string {
   const n = Math.max(0, p.bought ?? 0);
-  return n === 1 ? tr(one, lang) : tr(many, lang, { n });
+  return n === 1 ? tr(T.bought1, lang) : tr(T.boughtN, lang, { n });
 }
 
 /** Room on the dish, when the game counts it. */
@@ -119,83 +101,61 @@ function slotsOf(p: SeedPriceParts): { free: number; used: number; over: number 
   return { free: p.freeSlots, used, over: Math.max(0, used - p.freeSlots) };
 }
 
-/** The factors shown in the equation: the base always, the others only while they change the price. */
+/** "Caben 2 más", "Cabe 1 más", "Placa llena · caben 3", "1 de más". */
+function roomText(s: { free: number; used: number; over: number }, lang: Lang): string {
+  const left = Math.max(0, s.free - s.used);
+  return s.over > 0 ? tr(T.roomOver, lang, { n: s.over }) : left === 0 ? tr(T.roomFull, lang, { n: s.free }) : left === 1 ? tr(T.room1, lang) : tr(T.roomN, lang, { n: left });
+}
+
+/**
+ * The readings of the card, left to right: the base price (a cost: amber, no arrow), then only the factors that
+ * change it now: a discount (gain, ↓), a full dish or today's step (cost, ↑).
+ */
 export function seedPriceTerms(p: SeedPriceParts, lang: Lang): PriceTermView[] {
-  const terms: PriceTermView[] = [{ icon: 'drop', value: fmt(p.base, lang), label: tr(T.base, lang), active: true }];
-  if (active(p.crowdMult)) {
-    const n = Math.max(0, p.alive ?? 0);
-    terms.push({ icon: 'creatures', value: `×${mult(p.crowdMult, lang)}`, label: n === 1 ? tr(T.alive1, lang) : tr(T.aliveN, lang, { n }), active: true });
-  }
-  if (active(p.satMult)) terms.push({ icon: 'slot', value: `×${mult(p.satMult, lang)}`, label: tr(T.full, lang), active: true, tone: 'warn' });
-  if (cheaper(p.cheapMult)) terms.push({ icon: 'gift', value: `×${mult(p.cheapMult, lang)}`, label: NODE_TEXT.cheapSeeds.name[lang], active: true, tone: 'good' });
-  if (stepShows(p)) terms.push({ icon: 'creatures', value: `×${mult(p.stepMult, lang)}`, label: boughtText(p, T.bought1, T.boughtN, lang), active: true });
+  const terms: PriceTermView[] = [{ icon: 'drop', value: tr(T.unit, lang, { n: fmt(baseOf(p), lang) }), label: tr(T.base, lang), active: true, tone: 'cost' }];
+  if (cheaper(p.cheapMult)) terms.push({ icon: 'gift', value: fmtMult(p.cheapMult, lang), sign: '↓', label: NODE_TEXT.cheapSeeds.name[lang], active: true, tone: 'gain' });
+  if (active(p.satMult)) terms.push({ icon: 'slot', value: fmtMult(p.satMult, lang), sign: '↑', label: tr(T.full, lang), active: true, tone: 'cost' });
+  if (stepShows(p)) terms.push({ icon: 'up', value: fmtMult(p.stepMult, lang), sign: '↑', label: boughtText(p, lang), active: true, tone: 'cost' });
   return terms;
 }
 
-/** "Ahora cuesta 9 porque hay 2 criaturas vivas y la placa está llena." — only the reasons that apply. */
-export function seedPriceToday(p: SeedPriceParts, cost: number, lang: Lang): string {
-  if ((p.freeSeeds ?? 0) > 0) return tr(T.freeNow, lang);
-  const why: string[] = [];
-  if (active(p.crowdMult)) {
-    const n = Math.max(0, p.alive ?? 0);
-    why.push(n === 1 ? tr(T.whyAlive1, lang) : tr(T.whyAliveN, lang, { n }));
-  }
-  if (active(p.satMult)) why.push(tr(T.whyFull, lang));
-  if (stepShows(p)) why.push(boughtText(p, T.whyBought1, T.whyBoughtN, lang));
-  const total = fmt(cost, lang);
-  return why.length ? tr(T.todayBecause, lang, { t: total, why: why.join(tr(T.and, lang)) }) : tr(T.today, lang, { t: total });
+/** The free seeds waiting, or nothing: the equation already says what it costs and why. */
+export function seedPriceToday(p: SeedPriceParts, _cost: number, lang: Lang): string | undefined {
+  return (p.freeSeeds ?? 0) > 0 ? tr(T.freeNow, lang) : undefined;
 }
 
-/** The rule in plain words, built from the factors that exist. */
+/** The rule in one sentence (plan §6 #10): "Una semilla cuesta 4 de luz. Siempre." */
 export function seedPriceRule(p: SeedPriceParts, lang: Lang): string {
-  const b = fmt(p.base, lang);
-  // A rule is told while it changes the price (×1 crowding in the sessions loop is no rule at all);
-  // the per-session step is told from the first seed, since it is the rule of that loop.
-  const crowd = active(p.crowdMult);
-  const sat = active(p.satMult);
-  const step = typeof p.stepMult === 'number';
-  const parts = [crowd || sat || step ? tr(T.ruleBase, lang, { b }) : tr(T.ruleFixed, lang, { b })];
-  if (step) parts.push(tr(T.ruleStep, lang));
-  if (cheaper(p.cheapMult)) parts.push(tr(T.ruleCheap, lang, { node: NODE_TEXT.cheapSeeds.name[lang] }));
-  if (crowd) parts.push(tr(T.ruleCrowd, lang));
-  if (sat) parts.push(tr(T.ruleSat, lang));
-  const slots = slotsOf(p);
-  if (slots) parts.push(tr(T.ruleSlots, lang, { n: slots.free }));
-  return parts.join(' ');
+  if (active(p.satMult)) return tr(T.ruleSat, lang);
+  if (stepShows(p)) return tr(T.ruleStep, lang);
+  if (cheaper(p.cheapMult)) return tr(T.ruleSession, lang);
+  return SESSION_UI.seedAlways(fmt(baseOf(p), lang))[lang];
 }
 
-/** The seed price as a PriceExplain for the generic price sheet, or null when the game sends no breakdown. */
+/** The seed price as a PriceExplain for the shared price sheet, or null when the game sends no breakdown. */
 export function seedPriceSheetExplain(v: GameView, lang: Lang, o: { onSeeDish?(): void; onSeeTree?(): void } = {}): PriceExplain | null {
   const p = v.seedPrice as SeedPriceParts | undefined;
   if (!p || !Number.isFinite(p.base)) return null;
   const rows: PriceRowView[] = [];
   const slots = slotsOf(p);
-  if (slots) {
-    const left = Math.max(0, slots.free - slots.used);
-    rows.push({
-      icon: 'slot',
-      label: tr(T.slots, lang),
-      dots: slots,
-      text: slots.over > 0 ? tr(T.slotsOver, lang, { n: slots.over }) : left === 0 ? tr(T.slotsNone, lang) : left === 1 ? tr(T.slotsLeft1, lang) : tr(T.slotsLeft, lang, { n: left }),
-      tone: slots.over > 0 ? 'warn' : undefined,
-    });
-  }
+  if (slots) rows.push({ icon: 'slot', label: tr(T.wells, lang), dots: slots, text: roomText(slots, lang), tone: slots.over > 0 ? 'cost' : undefined });
   const freeSeeds = p.freeSeeds ?? 0;
-  if (freeSeeds > 0) rows.push({ icon: 'gift', text: freeSeeds === 1 ? tr(T.free1, lang) : tr(T.freeN, lang, { n: freeSeeds }), tone: 'good' });
+  if (freeSeeds > 0) rows.push({ icon: 'gift', text: SESSION_UI.freeSeeds(freeSeeds, fmt(baseOf(p), lang))[lang], tone: 'gain' });
   if (v.seedsGrowing) rows.push({ icon: 'clock', text: tr(T.growing, lang), tone: 'grey' });
-  if (active(p.bigMult) && v.tools.longPress) rows.push({ icon: 'big', text: tr(T.big, lang, { m: mult(p.bigMult, lang) }) });
+  if (active(p.bigMult) && v.tools.longPress) rows.push({ icon: 'big', text: tr(T.big, lang, { m: fmtMult(p.bigMult, lang) }), tone: 'cost' });
   const full = !!p.full || (slots !== null && slots.used >= slots.free);
   const crowded = (slots?.over ?? 0) > 0 || active(p.satMult) || (p.capacity !== undefined && full);
   // Sessions loop: room comes from the research tree («Más sitio»), not from a Lab upgrade (J-75).
   const tree = p.capacity !== undefined;
-  if (tree && full) rows.push({ icon: 'slot', text: tr(T.fullTree, lang, { node: NODE_TEXT.slots.name[lang] }), tone: 'warn' });
+  if (tree && full) rows.push({ icon: 'slot', text: tr(T.fullTree, lang, { node: NODE_TEXT.slots.name[lang] }), tone: 'info' });
   const see = tree ? o.onSeeTree : o.onSeeDish;
   return {
     title: tr(T.title, lang),
     icon: 'tag',
-    total: fmt(v.seedCost, lang),
+    total: tr(T.unit, lang, { n: fmt(v.seedCost, lang) }),
     totalLabel: tr(T.total, lang),
     totalIcon: 'essence',
+    totalTone: 'cost',
     terms: seedPriceTerms(p, lang),
     rows,
     rule: seedPriceRule(p, lang),
@@ -209,8 +169,6 @@ export function seedPriceSheetExplain(v: GameView, lang: Lang, o: { onSeeDish?()
 export interface SeedPriceSnap {
   cost: number;
   base: number;
-  alive: number;
-  crowdMult: number | undefined;
   satMult: number | undefined;
   freeSlots: number | undefined;
   freeSeeds: number;
@@ -221,53 +179,38 @@ export interface SeedPriceSnap {
 export function seedPriceSnap(v: GameView): SeedPriceSnap | null {
   const p = v.seedPrice as SeedPriceParts | undefined;
   if (!p) return null;
-  return {
-    cost: v.seedCost,
-    base: p.base,
-    alive: p.alive ?? 0,
-    crowdMult: p.crowdMult,
-    satMult: p.satMult,
-    freeSlots: p.freeSlots,
-    freeSeeds: p.freeSeeds ?? 0,
-    stepMult: p.stepMult,
-    cheapMult: p.cheapMult,
-  };
+  return { cost: v.seedCost, base: baseOf(p), satMult: p.satMult, freeSlots: p.freeSlots, freeSeeds: p.freeSeeds ?? 0, stepMult: p.stepMult, cheapMult: p.cheapMult };
 }
 
-/** One line saying why the seed price just changed (only causes the game still has), or null. */
+/**
+ * The label-maker chip (docs/ARTE-REALISTA.md §6.9): what changed, in one line, or null when nothing the player
+ * can see changed. Never "+1 criatura viva": a creature on the dish does not move the price (and in the classic
+ * loop, where it did, a rise reads "Sube el precio" and a fall "Hay sitio otra vez": nothing cheers a death).
+ */
 export function seedPriceChange(prev: SeedPriceSnap, next: SeedPriceSnap, lang: Lang): PriceReason | null {
   const dir: -1 | 0 | 1 = next.cost < prev.cost - EPS ? -1 : next.cost > prev.cost + EPS ? 1 : 0;
   if (next.freeSeeds > prev.freeSeeds) return { text: tr(T.rsFree, lang), dir: -1 };
   if (typeof next.freeSlots === 'number' && typeof prev.freeSlots === 'number' && next.freeSlots > prev.freeSlots)
     return { text: tr(T.rsSlots, lang, { n: next.freeSlots }), dir: dir || -1 };
-  if (!dir) return null;
   const k0 = prev.cheapMult ?? 1;
   const k1 = next.cheapMult ?? 1;
-  if (k1 < k0 - EPS && dir < 0) return { text: tr(T.rsCheap, lang, { node: NODE_TEXT.cheapSeeds.name[lang] }), dir };
+  if (k1 < k0 - EPS) return { text: tr(T.rsCheap, lang, { pct: fmtMult(k1, lang), node: NODE_TEXT.cheapSeeds.name[lang] }), dir: -1 };
+  if (!dir) return null;
   const t0 = prev.stepMult ?? 1;
   const t1 = next.stepMult ?? 1;
-  if (t1 > t0 + EPS && dir > 0) return { text: tr(T.rsStep, lang), dir };
   if (t1 < t0 - EPS && dir < 0) return { text: tr(T.rsSession, lang), dir };
   const s0 = prev.satMult ?? 1;
   const s1 = next.satMult ?? 1;
-  if (s1 > s0 + EPS) return { text: tr(T.rsFull, lang, { s: mult(s1, lang) }), dir: 1 };
-  if (s1 < s0 - EPS) return { text: s1 <= 1 + EPS ? tr(T.rsRoom, lang) : tr(T.rsFull, lang, { s: mult(s1, lang) }), dir: -1 };
-  const c0 = prev.crowdMult ?? 1;
-  const c1 = next.crowdMult ?? 1;
-  const d = next.alive - prev.alive;
-  if (Math.abs(c1 - c0) > EPS && d !== 0) {
-    if (d > 0) return { text: d === 1 ? tr(T.rsAlive1, lang, { m: mult(c1, lang) }) : tr(T.rsAliveN, lang, { n: d, m: mult(c1, lang) }), dir: 1 };
-    // Fewer creatures: room again (never "one died → cheaper": nothing cheers a death).
-    return { text: tr(T.rsRoom, lang), dir: -1 };
-  }
+  if (s1 > s0 + EPS) return { text: tr(T.rsFull, lang, { s: fmtMult(s1, lang) }), dir: 1 };
+  if (s1 < s0 - EPS) return { text: tr(T.rsRoom, lang), dir: -1 };
   if (Math.abs(next.base - prev.base) > EPS) return { text: tr(T.rsBase, lang, { b: fmt(next.base, lang) }), dir };
   return { text: tr(dir > 0 ? T.rsUp : T.rsDown, lang), dir };
 }
 
-/** "Semilla grande ×2,25" while the player holds for a big seed (null when there is no big seed). */
+/** "Semilla grande ×2" while the player holds for a big seed (null when there is no big seed). */
 export function bigSeedChip(v: GameView, lang: Lang): PriceReason | null {
   const m = (v.seedPrice as SeedPriceParts | undefined)?.bigMult;
-  return active(m) ? { text: tr(T.rsBig, lang, { m: mult(m, lang) }), dir: 1 } : null;
+  return active(m) ? { text: tr(T.rsBig, lang, { m: fmtMult(m, lang) }), dir: 1 } : null;
 }
 
 export interface SeedMeter {
@@ -279,8 +222,8 @@ export interface SeedMeter {
 }
 
 /**
- * The room left on the dish next to the seed price, in words ("2 sitios", "Llena"; only when the game
- * counts room), and the ↑/↓ "why" chip, which floats above the pill (absolutely positioned: the pill
+ * The room left on the dish next to the seed price, in words ("Caben 2 más", "Llena · caben 3"; only when the
+ * game counts room), and the label-maker chip, which floats above the pill (absolutely positioned: the pill
  * never changes size because of it).
  */
 export function createSeedMeter(lang: () => Lang): SeedMeter {
@@ -305,13 +248,10 @@ export function createSeedMeter(lang: () => Lang): SeedMeter {
         el.classList.toggle('over', !!slots && slots.over > 0);
         if (slots) {
           const left = Math.max(0, slots.free - slots.used);
-          const words = slots.over > 0 ? tr(T.slotsOver, L, { n: slots.over }) : left === 0 ? tr(T.roomFull, L) : left === 1 ? tr(T.room1, L) : tr(T.roomN, L, { n: left });
+          const words = slots.over > 0 ? tr(T.roomOver, L, { n: slots.over }) : left === 0 ? tr(T.pillFull, L, { n: slots.free }) : left === 1 ? tr(T.pill1, L) : tr(T.pillN, L, { n: left });
           dots.innerHTML = `${moIcon('creatures', 14)}<span>${words}</span>`;
           dots.classList.toggle('full', left === 0 || slots.over > 0);
-          el.setAttribute(
-            'aria-label',
-            slots.over > 0 ? tr(T.slotsOver, L, { n: slots.over }) : left === 0 ? tr(T.slotsNone, L) : left === 1 ? tr(T.slotsLeft1, L) : tr(T.slotsLeft, L, { n: left }),
-          );
+          el.setAttribute('aria-label', roomText(slots, L));
         } else {
           dots.innerHTML = '';
           el.removeAttribute('aria-label');

@@ -645,12 +645,14 @@ html[data-theme='light'] .mo-seg-o button.on {
   position: relative;
   width: min(460px, calc(100% - 16px));
   margin-bottom: max(10px, env(safe-area-inset-bottom));
-  padding: 14px;
+  padding: 14px 16px;
   border-radius: var(--bl-r-lg);
-  color: var(--mo-text);
-  background: linear-gradient(180deg, var(--mo-bg), var(--mo-bg2));
-  border: 1.5px solid color-mix(in srgb, var(--mo-warn) 45%, transparent);
-  box-shadow: var(--bl-elev-3);
+  /* A calculation slip from the lab notebook (docs/ARTE-REALISTA.md §6.9): plate paper, a 1-px rule, one
+     elevation (§6.3: no big shadows). */
+  color: var(--bl-plate-ink, var(--mo-text));
+  background: var(--bl-plate-paper, var(--mo-bg));
+  border: 1px solid var(--bl-plate-rule, var(--mo-line));
+  box-shadow: var(--bl-elev-2);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -679,12 +681,13 @@ html[data-theme='light'] .mo-seg-o button.on {
   display: flex;
   align-items: center;
   gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--bl-plate-rule, var(--mo-line));
 }
 .mo-sp-head h3 {
   flex: 1;
   margin: 0;
-  font-size: var(--bl-fs-title);
-  font-weight: 800;
+  font: 650 var(--bl-fs-title) / 1.2 var(--mo-display);
 }
 .mo-sp-hi {
   display: grid;
@@ -692,83 +695,95 @@ html[data-theme='light'] .mo-seg-o button.on {
   width: 38px;
   height: 38px;
   border-radius: var(--bl-r-md);
-  color: #0b0e12;
-  background: var(--mo-warn);
-}
-html[data-theme='light'] .mo-sp-hi {
-  color: #fff;
+  color: var(--bl-plate-ink2, var(--mo-dim));
+  border: 1px solid var(--bl-plate-rule, var(--mo-line));
 }
 .mo-sp-x {
   appearance: none;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border-radius: var(--bl-r-md);
-  border: 1px solid var(--mo-line);
+  border: 1px solid var(--bl-plate-rule, var(--mo-line));
   background: transparent;
-  color: var(--mo-dim);
+  color: var(--bl-plate-ink2, var(--mo-dim));
   display: grid;
   place-items: center;
   cursor: pointer;
 }
+/* The equation: each factor is a READING (a 22-px tabular figure over its 14-px label), "=" and the total big. */
 .mo-sp-eq {
   display: flex;
-  align-items: stretch;
-  justify-content: center;
-  gap: 4px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 4px 10px;
 }
 .mo-sp-tile {
-  flex: 1 1 0;
+  flex: 0 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 8px 4px;
-  border-radius: var(--bl-r-md);
-  border: 1.5px solid var(--mo-line);
-  background: var(--mo-bg);
-  color: var(--mo-dim);
-  text-align: center;
-}
-.mo-sp-tile.on {
-  color: var(--mo-text);
-}
-.mo-sp-tile.on {
-  border-color: color-mix(in srgb, var(--mo-info) 55%, transparent);
-}
-.mo-sp-tile.on.t-warn {
-  border-color: var(--mo-warn);
-  background: color-mix(in srgb, var(--mo-warn) 12%, var(--mo-bg));
-}
-.mo-sp-tile.k-total {
-  border-color: var(--mo-info);
-  background: color-mix(in srgb, var(--mo-info) 12%, var(--mo-bg));
+  align-items: flex-start;
+  gap: 2px;
+  padding: 2px 0;
+  color: var(--bl-plate-ink, var(--mo-text));
+  text-align: left;
 }
 .mo-sp-ti {
-  color: var(--mo-info);
-  height: 18px;
+  display: none;
 }
-.t-warn .mo-sp-ti {
-  color: var(--mo-warn);
+.mo-sp-v {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font: 700 var(--bl-fs-title) / 1.1 var(--mo-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
-.mo-sp-tile:not(.on) .mo-sp-ti {
-  color: var(--mo-dim);
-}
-.mo-sp-tile.t-warn.on .mo-sp-v {
-  color: var(--mo-warn);
+.mo-sp-sg {
+  font-size: var(--bl-fs-body);
+  font-weight: 800;
 }
 .mo-sp-l {
-  font-size: var(--bl-fs-caption);
+  font-size: var(--bl-fs-small);
   line-height: 1.2;
   font-weight: 600;
-  color: var(--mo-dim);
+  color: var(--bl-plate-ink2, var(--mo-dim));
   overflow-wrap: anywhere;
 }
+/* The meaning colours (docs/CLARIDAD2.md §2.11): cost amber, gain green, off grey with a hair underline. */
+.mo-sp-tile.t-cost .mo-sp-v,
+.mo-sp-tile.t-warn .mo-sp-v {
+  color: var(--bl-cost, var(--mo-warn));
+}
+.mo-sp-tile.t-gain .mo-sp-v,
+.mo-sp-tile.t-good .mo-sp-v {
+  color: var(--bl-gain, var(--mo-good));
+}
+.mo-sp-tile:not(.on),
+.mo-sp-tile.t-off,
+.mo-sp-tile.t-grey {
+  color: var(--bl-off, var(--mo-grey));
+}
+.mo-sp-tile:not(.on) .mo-sp-v,
+.mo-sp-tile.t-off .mo-sp-v {
+  color: var(--bl-off, var(--mo-grey));
+  font-weight: 600;
+  border-bottom: 1px solid var(--bl-plate-rule, var(--mo-line));
+}
+.mo-sp-tile.k-total .mo-sp-v {
+  font: 700 var(--bl-fs-display) / 1 var(--mo-display);
+  font-variant-numeric: tabular-nums;
+}
 .mo-sp-op {
-  align-self: center;
-  font: 800 var(--bl-fs-body) var(--mo-mono);
-  color: var(--mo-dim);
-  padding: 0 1px;
+  align-self: flex-start;
+  font: 600 var(--bl-fs-title) / 1.1 var(--mo-mono);
+  color: var(--bl-plate-ink2, var(--mo-dim));
+  padding: 2px 0 0;
+}
+.mo-sp-op.eq {
+  font-size: var(--bl-fs-display);
+  line-height: 1;
 }
 .mo-sp-row {
   display: flex;
@@ -777,55 +792,50 @@ html[data-theme='light'] .mo-sp-hi {
   min-height: 32px;
   font-size: var(--bl-fs-small);
   font-weight: 600;
-  color: var(--mo-text);
+  color: var(--bl-plate-ink, var(--mo-text));
 }
 .mo-sp-row .mo-ic {
-  color: var(--mo-dim);
+  color: var(--bl-plate-ink2, var(--mo-dim));
   flex: none;
 }
 .mo-sp-rl {
-  color: var(--mo-dim);
+  color: var(--bl-plate-ink2, var(--mo-dim));
   font-size: var(--bl-fs-small);
 }
 .mo-sp-rv {
   flex: 1;
 }
-.mo-sp-row.t-warn .mo-sp-rv {
-  color: var(--mo-warn);
+.mo-sp-row.t-warn .mo-sp-rv,
+.mo-sp-row.t-cost .mo-sp-rv {
+  color: var(--bl-cost, var(--mo-warn));
   font-weight: 700;
 }
-.mo-sp-row.t-warn,
-.mo-sp-row.t-good {
-  color: var(--mo-text);
-}
-.mo-sp-row.t-good .mo-ic {
-  color: var(--mo-good);
+.mo-sp-row.t-good .mo-ic,
+.mo-sp-row.t-gain .mo-ic,
+.mo-sp-row.t-gain .mo-sp-rv {
+  color: var(--bl-gain, var(--mo-good));
 }
 .mo-sp-rule {
   margin: 0;
   font-size: var(--bl-fs-body);
   font-weight: 600;
   line-height: 1.4;
-  color: var(--mo-text);
+  color: var(--bl-plate-ink, var(--mo-text));
 }
 .mo-sp-hint {
   margin: 0;
   padding: 10px 12px;
   border-radius: var(--bl-r-md);
   font-size: var(--bl-fs-small);
-  font-weight: 600;
-  line-height: 1.35;
-  background: color-mix(in srgb, var(--mo-info) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--mo-info) 30%, transparent);
-}
-.mo-sp-hint {
   font-weight: 700;
+  line-height: 1.35;
+  border: 1px solid var(--bl-plate-rule, var(--mo-line));
 }
 .mo-sp .mo-btn {
   --mo-c: var(--mo-info);
 }
 
-/* ───────────── slot meter + price ticker (next to the seed button) ───────────── */
+/* ───────────── room wells + label-maker chip (next to the seed button) ───────────── */
 
 .mo-meter,
 .mo-ticker {
@@ -835,7 +845,8 @@ html[data-theme='light'] .mo-sp-hi {
   display: inline-flex;
   align-items: center;
 }
-/* The reason chip floats above the price pill for ~2 s (the pill keeps its width). */
+/* The change chip is a label-maker strip (docs/ARTE-REALISTA.md §6.9): dark aluminium tape, Mono 13 px capitals,
+   in as a 160-ms drawer, out in a 120-ms fade, no bounce. It floats above the price (the pill keeps its width). */
 .mo-why {
   position: absolute;
   left: 50%;
@@ -843,13 +854,17 @@ html[data-theme='light'] .mo-sp-hi {
   translate: -50% 0;
   display: none;
   max-width: min(320px, 80vw);
-  padding: 6px 12px;
-  border-radius: var(--bl-r-md);
+  padding: 5px 10px;
+  border-radius: 0;
   white-space: normal;
   text-align: center;
-  font: 800 var(--bl-fs-small)/1.2 var(--mo-font);
-  color: #0b0e12;
-  box-shadow: var(--bl-elev-2);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font: 700 var(--bl-fs-caption)/1.25 var(--bl-font-mono, monospace);
+  color: #e8eaeb;
+  background: var(--bl-mat-alu-dark, #2a3036);
+  border-left: 3px solid var(--bl-plate-rule, #2a3540);
+  box-shadow: var(--bl-elev-1);
   pointer-events: none;
   z-index: 5;
 }
@@ -859,24 +874,25 @@ html[data-theme='light'] .mo-sp-hi {
   animation: mo-why calc(var(--bl-t-celebrate) * 3) var(--mo-ease) both;
 }
 .mo-why.up {
-  background: var(--mo-warn);
+  border-left-color: var(--bl-screen-amber, #f2a541);
 }
 .mo-why.down {
-  background: var(--mo-good);
+  border-left-color: var(--mo-good);
 }
 .mo-why.flat {
-  background: var(--mo-info);
+  border-left-color: var(--mo-info);
 }
+/* 2.1 s in all: the drawer is the first 7.6 % (160 ms), the fade the last 5.7 % (120 ms). */
 @keyframes mo-why {
   0% {
     opacity: 0;
-    transform: translateY(6px) scale(0.9);
+    transform: translateY(6px);
   }
-  10% {
+  7.6% {
     opacity: 1;
     transform: none;
   }
-  85% {
+  94.3% {
     opacity: 1;
   }
   100% {
@@ -896,33 +912,33 @@ html[data-theme='light'] .mo-sp-hi {
 .mo-dots {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
 }
 .mo-dots em {
   font: 700 var(--bl-fs-caption) var(--mo-mono);
   font-style: normal;
-  color: var(--mo-bad);
+  color: var(--bl-cost, var(--mo-warn));
 }
-.mo-dot {
+/* A well of a multiwell plate: a 0.75-px (detail) rim, filled cyan when a creature is in it, amber rim if extra. */
+.mo-well {
   display: inline-block;
-  width: 9px;
-  height: 9px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  border: 1.5px solid var(--mo-good);
-  opacity: 0.85;
+  border: var(--bl-line-detail, 0.75px) solid var(--bl-plate-ink2, var(--mo-dim));
+  background: color-mix(in srgb, var(--bl-plate-ink2, #9aa6b2) 10%, transparent);
 }
-.mo-dot.on {
-  background: var(--mo-good);
-  box-shadow: none;
+.mo-well.on {
+  border-color: var(--mo-info);
+  background: radial-gradient(circle at 40% 35%, var(--bl-screen-teal-core, #dcfff6), var(--mo-info) 70%);
 }
-.mo-dot.over {
-  border-color: var(--mo-bad);
-  background: var(--mo-bad);
-  box-shadow: none;
+.mo-well.over {
+  border: var(--bl-line-emph, 2px) solid var(--bl-cost, var(--mo-warn));
+  background: transparent;
 }
-.mo-sp .mo-dot {
-  width: 13px;
-  height: 13px;
+.mo-sp .mo-well {
+  width: 18px;
+  height: 18px;
 }
 .mo-meter-arrow {
   display: inline-grid;

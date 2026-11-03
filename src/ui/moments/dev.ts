@@ -29,7 +29,8 @@ import { catalogByCode, catalogPattern, paramsOf } from '../../sim/catalog';
 import { applySeedCpu } from '../../sim/seed';
 import { moIcon } from './icons';
 import { createMomentsUI } from './momentsUI';
-import { SlotMeter, bigSeedReason, createSeedPriceSheet } from './seedprice';
+import { bigSeedChip, createSeedMeter, seedPriceSheetExplain } from '../seed-price';
+import { createPriceSheet } from './price';
 import { StatusLayer } from './status';
 import { createSpeciesCard, createSpeciesCompare, speciesInputFromView } from './species-card';
 
@@ -244,7 +245,8 @@ paintSim();
 const bus = new Bus<GameEvents>();
 let golden: { x: number; y: number } | null = null;
 let fakeStates: CreatureView[] | null = null;
-const demoPrice: SeedPriceView = { base: 2, alive: 2, crowdMult: 1.5, freeSlots: 1, used: 2, satMult: 3, bigMult: 2.25, freeSeeds: 3 };
+/** The sessions loop's price (docs/CLARIDAD2.md §2.11): 4 luz with «Semillas baratas», room for 4, 3 in use. */
+const demoPrice: SeedPriceView = { base: 4, alive: 3, crowdMult: 1, freeSlots: 4, used: 3, satMult: 1, bigMult: 2.25, freeSeeds: 0, cheapMult: 0.85, stepMult: 1, capacity: 4 };
 
 /** Two registered species (the dish runs Orbium rules; the second is a demo of a different one). */
 const SPECIES: SpeciesView[] = [
@@ -335,7 +337,7 @@ function view(): GameView {
     samples: 4,
     genome: 0,
     era: 1,
-    seedCost: 9,
+    seedCost: 3,
     seedPrice: demoPrice,
     canSeed: true,
     pipette: { active: false, progress: 0 },
@@ -421,13 +423,17 @@ const ui = createMomentsUI(app, moments, {
   },
 });
 
-const meter = new SlotMeter(() => lang);
+const meter = createSeedMeter(() => lang);
 root.querySelector('.meter-slot')!.appendChild(meter.el);
 meter.update(view());
-const priceSheet = createSeedPriceSheet(app, { lang: () => lang, reduceMotion: () => reduce, onSeeDish: () => undefined });
-root.querySelector('.dv-price')!.addEventListener('click', () => priceSheet.open(view()));
+const priceSheet = createPriceSheet(app, { reduceMotion: () => reduce });
+const openPrice = () => {
+  const x = seedPriceSheetExplain(view(), lang, { onSeeTree: () => undefined });
+  if (x) priceSheet.open(x);
+};
+root.querySelector('.dv-price')!.addEventListener('click', openPrice);
 // ONE tap on the price opens the explanation.
-root.querySelector('.dv-seed')!.addEventListener('click', () => priceSheet.open(view()));
+root.querySelector('.dv-seed')!.addEventListener('click', openPrice);
 
 const status = new StatusLayer();
 ovCv.addEventListener('click', (e) => {
@@ -667,7 +673,7 @@ if (replay && MOMENT_BY_ID.has(replay)) {
   ui.debug.prepare();
   if (freeze !== null) ui.debug.freezeAt(freeze);
 }
-if (q.get('price') === '1') priceSheet.open(view());
+if (q.get('price') === '1') openPrice();
 
 function openHelp(): void {
   const modal = document.createElement('div');
@@ -710,26 +716,29 @@ function openSpecies(mode: 'card' | 'vs', id = 'sp1'): void {
 if (q.get('card')) openSpecies('card', q.get('card')!);
 if (q.get('guide') === '1') ui.openBehaviorGuide((q.get('focus') as Behavior | null) ?? null);
 
-/** ?ticker=up|full|down|free|big → the seed price changes and says why (chip above the price). */
+/** ?ticker=cheap|free|room|big → the seed price changes and the label-maker chip says what changed. */
 const ticker = q.get('ticker');
 if (ticker) {
-  const before: SeedPriceView = { base: 2, alive: 1, crowdMult: 1.25, freeSlots: 2, used: 1, satMult: 1, bigMult: 2.25, freeSeeds: 0 };
+  const before: SeedPriceView = { base: 4, alive: 1, crowdMult: 1, freeSlots: 3, used: 1, satMult: 1, bigMult: 2.25, freeSeeds: 0, cheapMult: 1, stepMult: 1, capacity: 3 };
   const after: Record<string, SeedPriceView> = {
-    up: { ...before, alive: 2, used: 2, crowdMult: 1.5 },
-    full: { ...before, alive: 3, used: 3, crowdMult: 1.75, satMult: 3 },
-    down: { ...before, alive: 0, used: 0, crowdMult: 1 },
+    cheap: { ...before, cheapMult: 0.85 },
     free: { ...before, freeSeeds: 5 },
+    room: { ...before, freeSlots: 4, capacity: 4 },
     big: before,
   };
-  const costOf = (p: SeedPriceView) => p.base * p.crowdMult * p.satMult;
+  const costOf = (p: SeedPriceView) => (p.freeSeeds > 0 ? 0 : Math.max(1, Math.round(p.base * (p.cheapMult ?? 1))));
   const v0 = view();
   meter.update({ ...v0, seedPrice: before, seedCost: costOf(before) });
-  const p1 = after[ticker] ?? after.up;
+  const p1 = after[ticker] ?? after.cheap;
   setTimeout(() => {
     const priceEl = root.querySelector('.dv-seed .price') as HTMLElement;
-    priceEl.textContent = String(Math.round(costOf(p1) * 100) / 100).replace('.', lang === 'es' ? ',' : '.');
-    meter.update({ ...v0, seedPrice: p1, seedCost: costOf(p1) });
-    if (ticker === 'big') meter.flash(bigSeedReason(before, lang));
+    priceEl.textContent = String(costOf(p1));
+    const v1 = { ...v0, seedPrice: p1, seedCost: costOf(p1), tools: { ...v0.tools, longPress: true } };
+    meter.update(v1);
+    if (ticker === 'big') {
+      const chip = bigSeedChip(v1, lang);
+      if (chip) meter.flash(chip);
+    }
   }, 300);
 }
 if (q.get('vs') === '1') openSpecies('vs');
@@ -768,7 +777,7 @@ if (q.get('menu') !== '0') {
   );
   section('Panels', [
     ['help', openHelp],
-    ['price sheet', () => priceSheet.open(view())],
+    ['price sheet', () => openPrice()],
     ['status pills', () => (statusOn = !statusOn)],
     ['species card', () => openSpecies('card')],
     ['species vs', () => openSpecies('vs')],

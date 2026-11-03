@@ -2,20 +2,8 @@
 export { createMomentsUI, type MomentsUI, type MomentsUIOptions, type MomentsSound, type PortraitLike } from './momentsUI';
 export { createHelp, type HelpSheet } from './help';
 export { drawCreatureStatus, drawBehaviorGlyph, statusInfo, pickStatusIds, placePill, StatusLayer, type StatusInfo } from './status';
-export {
-  createSeedPriceSheet,
-  SlotMeter,
-  drawSlotMeter,
-  priceTerms,
-  seedPriceExplain,
-  seedPriceReason,
-  seedPriceToday,
-  bigSeedReason,
-  snapOf,
-  type SeedPriceSheet,
-  type PriceBreakdown,
-  type PriceSnap,
-} from './seedprice';
+// The seed price lives in ONE module (docs/CLARIDAD2.md §2.11): src/ui/seed-price.ts.
+export { createSeedMeter, seedPriceSheetExplain, seedPriceChange, bigSeedChip, type SeedMeter } from '../seed-price';
 export { Illustration, ILLUSTRATION_KINDS, ILLUS_W, ILLUS_H } from './illustrations';
 export {
   createSpeciesCard,

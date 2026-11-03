@@ -9,19 +9,25 @@
  *                             the rule in plain words and an optional action.
  *                             Seeds use it today (seedprice.ts); tree nodes or
  *                             upgrades can pass their own PriceExplain.
- *  - PriceTicker              the little ↑ amber / ↓ green arrow plus a one-line
- *                             reason chip (~2 s) shown next to a price whenever
- *                             it changes ("+1 criatura viva → ×1,25").
+ *  - PriceTicker              a label-maker strip (docs/ARTE-REALISTA.md §6.9) next to
+ *                             a price when something really changed ("¡GRATIS! ↓",
+ *                             "−15 % · SEMILLAS BARATAS ↓"), ~2 s.
+ *
+ * The colour rule (docs/CLARIDAD2.md §2.11, tokens MEANING): tone 'cost' = amber with ↑ or
+ * the price; 'gain' = green with ×, + or − (a discount is a gain); 'off' = grey ×1.
  */
 import { moIcon, type MoIconName } from './icons';
 
-export type PriceTone = 'info' | 'good' | 'warn' | 'bad' | 'grey';
+/** 'cost' / 'gain' / 'off' are the meaning colours (--bl-cost / --bl-gain / --bl-off); the rest are older tones. */
+export type PriceTone = 'info' | 'good' | 'warn' | 'bad' | 'grey' | 'cost' | 'gain' | 'off';
 
 export interface PriceTermView {
   icon: MoIconName;
-  /** "2", "×1,25", "×3". */
+  /** "4 luz", "−15 %", "×3". */
   value: string;
-  /** What this factor is, today ("2 vivas", "placa llena: 1 de más"). */
+  /** ↑ a cost that raises the price, ↓ a gain that lowers it (shown after the value). */
+  sign?: '↑' | '↓';
+  /** What this factor is, today ("Semillas baratas", "placa llena"). */
   label: string;
   /** Changes the price right now (inactive factors are shown dimmed at ×1). */
   active: boolean;
@@ -45,6 +51,8 @@ export interface PriceExplain {
   total: string;
   totalLabel: string;
   totalIcon: MoIconName;
+  /** Meaning of the total: 'cost' for a price (amber), 'gain' for something earned (green). */
+  totalTone?: PriceTone;
   /** Factors multiplied left to right (the first one is the base). */
   terms: PriceTermView[];
   rows?: PriceRowView[];
@@ -60,11 +68,14 @@ function esc(s: string): string {
   return s.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]!);
 }
 
-/** Slot dots markup (free slots filled per creature, extra ones reddish). */
+/**
+ * The room as the wells of a multiwell plate (docs/ARTE-REALISTA.md §6.9): one well per place on the dish, filled
+ * cyan when a creature is in it; extra ones (classic loop only) get an amber rim.
+ */
 export function dotsHtml(d: { free: number; used: number; over: number }, max = 6): string {
   const out: string[] = [];
-  for (let i = 0; i < d.free; i++) out.push(`<i class="mo-dot${i < Math.min(d.used, d.free) ? ' on' : ''}"></i>`);
-  for (let i = 0; i < Math.min(d.over, max); i++) out.push('<i class="mo-dot over"></i>');
+  for (let i = 0; i < d.free; i++) out.push(`<i class="mo-well${i < Math.min(d.used, d.free) ? ' on' : ''}"></i>`);
+  for (let i = 0; i < Math.min(d.over, max); i++) out.push('<i class="mo-well over"></i>');
   if (d.over > max) out.push(`<em>+${d.over - max}</em>`);
   return out.join('');
 }
@@ -77,7 +88,7 @@ export function priceSheetHtml(x: PriceExplain): string {
           t.tone ? ` t-${t.tone}` : ''
         }">
           <span class="mo-sp-ti">${moIcon(t.icon, 18)}</span>
-          <b class="mo-sp-v">${esc(t.value)}</b>
+          <b class="mo-sp-v">${esc(t.value)}${t.sign ? `<span class="mo-sp-sg" aria-hidden="true">${t.sign}</span>` : ''}</b>
           <span class="mo-sp-l">${esc(t.label)}</span>
         </div>`,
     )
@@ -97,7 +108,7 @@ export function priceSheetHtml(x: PriceExplain): string {
       <button type="button" class="mo-sp-x" aria-label="${esc(x.closeLabel)}">${moIcon('close', 20)}</button>
     </div>
     <div class="mo-sp-eq">${tiles}<span class="mo-sp-op eq" aria-hidden="true">=</span>
-      <div class="mo-sp-tile k-total on"><span class="mo-sp-ti">${moIcon(x.totalIcon, 18)}</span><b class="mo-sp-v">${esc(x.total)}</b><span class="mo-sp-l">${esc(x.totalLabel)}</span></div>
+      <div class="mo-sp-tile k-total on${x.totalTone ? ` t-${x.totalTone}` : ''}"><span class="mo-sp-ti">${moIcon(x.totalIcon, 18)}</span><b class="mo-sp-v">${esc(x.total)}</b><span class="mo-sp-l">${esc(x.totalLabel)}</span></div>
     </div>
     <p class="mo-sp-rule">${esc(x.rule)}</p>
     ${rows}
