@@ -1,5 +1,10 @@
-import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+
+// No Node types in this project (zero dependencies): node:fs through a dynamic import, as css-lint.test.ts does.
+const { readdirSync, readFileSync } = (await import('node:' + 'fs')) as unknown as {
+  readFileSync(p: string, enc: 'utf8'): string;
+  readdirSync(p: string, o: { withFileTypes: true }): { name: string; isDirectory(): boolean }[];
+};
 
 /**
  * ADR-030 (docs/CLARIDAD2.md §2.1): the in-run currency is «Luz» / "Glow" on screen and the boost is
