@@ -17,7 +17,7 @@ import { cylinderRamp, grainPattern, kelvin } from '../vector';
 import { LINE } from '../tokens';
 import { drawAlborPolaroid, drawAlborProfile } from './albor';
 import { COAT_IDS, type CoatId } from './coats';
-import { COAT_GLOVE, drawGlovedHand, handTip, type DoctorMood, type DoctorSpec, type Gesture } from './doctor';
+import { COAT_GLOVE, drawForearm, drawGlovedHand, handTip, type DoctorMood, type DoctorSpec, type Gesture } from './doctor';
 import { hash, metrics, pageLang, rrect, spot, sprite, type Ctx2D, TAU } from './kit';
 
 /** Albor is never drawn as a coat: she is seen from behind or in profile (no `coat`). */
@@ -285,7 +285,7 @@ const YOU_POSTURE: Record<DoctorMood, [number, number, number]> = {
 };
 
 /** Notebook geometry in the box: the right page's lines (y of each baseline), x span. */
-const NB = { x0: 53, x1: 76, y0: 27, dy: 6.6, lines: 3 } as const;
+const NB = { x0: 53, x1: 72, y0: 27, dy: 6.6, lines: 3 } as const;
 
 function paintNotebook(c: Ctx2D, css: number): void {
   c.save();
@@ -476,6 +476,7 @@ export function drawYouPortrait(ctx: Ctx2D, s: PeoplePose, t: number, lookId: Pl
   const wx = nibX + lx - rx * hk;
   const wy = nibY + ly + jitter - ry * hk;
   spot(ctx, wx - 16, wy - 4, 22, 11, -0.5, '20,12,6', 0.3 * Math.min(1, power));
+  drawForearm(ctx, lookId, wx, wy, hk, 100.4);
   drawGlovedHand(ctx, 'pen', wx, wy, hk, lookId, { angle: a, sleeve: 0 });
   ctx.restore();
   // The lamp (VELA's, to the right): its pool of light on the desk and the darkness around it.
@@ -488,6 +489,12 @@ export function drawYouPortrait(ctx: Ctx2D, s: PeoplePose, t: number, lookId: Pl
   dark.addColorStop(1, `rgba(6,5,8,${Math.max(0.2, 0.8 - 0.45 * power)})`);
   ctx.fillStyle = dark;
   ctx.fillRect(0, 0, 100, 100);
+  // The forearm leaves the lamp's pool: it sinks into the dark toward the bottom edge.
+  const low = ctx.createLinearGradient(0, 78, 0, 100);
+  low.addColorStop(0, 'rgba(6,5,8,0)');
+  low.addColorStop(1, 'rgba(6,5,8,0.62)');
+  ctx.fillStyle = low;
+  ctx.fillRect(0, 78, 100, 22);
   ctx.globalCompositeOperation = 'screen';
   const pool = ctx.createRadialGradient(76, 40, 2, 70, 46, 60);
   pool.addColorStop(0, `rgba(${warm[0]},${warm[1]},${warm[2]},${0.3 * power})`);

@@ -175,6 +175,16 @@ describe('the people of scientific realism', () => {
     }
   });
 
+  it('keep your writing hand inside the portrait at every instant, in every mood and coat', () => {
+    for (const look of PLAYER_LOOK_IDS)
+      for (const mood of DOCTOR_MOODS)
+        for (let t = 0; t < 4; t += 0.31) {
+          const r = recorder();
+          drawYouPortrait(r.ctx, people({ mood, talking: true, talk: 0.7 }), t, look);
+          inside(r.pts, -1, -1, 101, 101, `${look} ${mood} ${t.toFixed(2)}`);
+        }
+  });
+
   it('let the vapour out when Albor speaks, and keep one still puff under Reduce motion', () => {
     const puffs = (talking: boolean, rm: boolean, t: number) => {
       const r = recorder();

@@ -18,7 +18,7 @@ import { cylinderRamp, kelvin, makeCanvas, type LayerCanvas } from '../vector';
 import { BOUNCE, LINE } from '../tokens';
 import { drawAlborBack } from './albor';
 import { COAT_IDS, drawCoat, type CoatId } from './coats';
-import { addShape, bounds, curve, edgeBand, hash, parsePath, rgbOf, spot, sprite, trace, tube, type Ctx2D, type Shape, TAU } from './kit';
+import { addShape, bounds, curve, edgeBand, hash, metrics, parsePath, rgbOf, spot, sprite, trace, tube, type Ctx2D, type Shape, TAU } from './kit';
 
 // ── Types kept from the chibi era (the intro scenes and the dev pages still pass them) ───────────────
 
@@ -1003,6 +1003,35 @@ export function drawGlovedHand(ctx: Ctx2D, pose: HandPose, x: number, y: number,
     paintHand(c, rig, look, g, angle, css, len);
     c.restore();
   });
+  ctx.restore();
+}
+
+/**
+ * The forearm in its sleeve, from under the cuff of a hand drawn with `sleeve: 0` at the wrist (wx,
+ * wy) and scale `k`, straight down to `endY` (current units): for a hand that must reach the bottom edge
+ * of a box without leaving it. Not cached (one gradient): the end moves with the hand.
+ */
+export function drawForearm(ctx: Ctx2D, look: CoatId, wx: number, wy: number, k: number, endY: number): void {
+  const y1 = (endY - wy) / Math.max(1e-3, k);
+  const y0 = look === 'beanie' ? 12 : 18;
+  if (y1 <= y0) return;
+  const [w0, w1] = look === 'beanie' ? [32, 36] : [27, 33];
+  const we = w0 + (w1 - w0) * Math.min(1, (y1 - y0) / 90);
+  const colors = look === 'beanie' ? PARKA_RED : COTTON;
+  ctx.save();
+  ctx.translate(wx, wy);
+  ctx.scale(k, k);
+  ctx.beginPath();
+  ctx.moveTo(-w0 / 2, y0);
+  ctx.quadraticCurveTo(-w0 / 2 - 0.8, (y0 + y1) / 2, -we / 2, y1);
+  ctx.lineTo(we / 2, y1);
+  ctx.quadraticCurveTo(w0 / 2 + 0.8, (y0 + y1) / 2, w0 / 2, y0);
+  ctx.closePath();
+  ctx.fillStyle = cylinderRamp(ctx, -we / 2 - 1, 0, we / 2 + 1, 0, colors, COTTON_AT);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(14,18,24,0.85)';
+  ctx.lineWidth = LINE.contour / Math.max(0.2, metrics(ctx).css);
+  ctx.stroke();
   ctx.restore();
 }
 
