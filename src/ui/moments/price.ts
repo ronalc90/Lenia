@@ -227,8 +227,11 @@ export class PriceTicker {
     this.arrow.className = `mo-meter-arrow ${r.dir ? `show ${cls}` : ''}`;
     this.chip.textContent = r.text;
     this.chip.className = `mo-why show ${cls}`;
-    // Restart the CSS animations.
-    void this.chip.offsetWidth;
+    // Restart the CSS animations from their first frame: a style read, never a forced layout (B-6, P3).
+    for (const el of [this.chip, this.arrow]) {
+      if (typeof el.getAnimations !== 'function') continue;
+      for (const a of el.getAnimations()) a.currentTime = 0;
+    }
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       this.arrow.className = 'mo-meter-arrow';

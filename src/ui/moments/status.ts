@@ -1,6 +1,11 @@
 /**
- * Creature status pills, drawn by the dish overlay right above each creature,
- * so anyone can tell creatures apart and see what each one is doing:
+ * Quiet dish labels (docs/ARTE-PULIDO.md B-8): by default no permanent pill. Every creature carries a
+ * 6-px state dot on its top edge (green alive, grey fading, orange accident; a hollow ring while it
+ * forms, whose progress the incubation arc shows). A pill appears for 2.5 s after an event (it comes
+ * alive, it bursts, it fades), and in Era 1 a compact one (22 px, no border, "+2,3/s" and the behaviour
+ * glyph) on the best earners; never more than 2 on screen. "Naciendo 77 %" is gone: the arc says it.
+ *
+ * The full pill says (what the older, always-on pills said):
  *
  *   ◔ Naciendo 62 %        forming: a ring fills up to "stable" (~400 steps)
  *   ✓ Estable +1,2/s  ➜    paying, with its behaviour glyph once classified
@@ -25,6 +30,12 @@ const SANS = 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 const MONO = 'Inter, "Inter Fallback", system-ui, sans-serif';
 const FONT_LABEL = `700 12px ${SANS}`;
 const FONT_DETAIL = `600 12px ${MONO}`;
+/** The compact pill's text: 13/600 (the caption size, B-8). */
+const FONT_COMPACT = `600 13px ${MONO}`;
+/** Pills on screen at once (B-8; the old limit was STATUS_MAX = 6). */
+export const PILLS_MAX = 2;
+/** How long a creature's pill stays after an event (s). */
+export const PILL_EVENT_S = 2.5;
 const FORMING = '#9FD3F0';
 const GREY = '#9AA6B2';
 
@@ -364,14 +375,15 @@ function drawPill(
     ctx.lineTo(tx + 5, box.y + box.h - 0.5);
   }
   ctx.fill();
-  // Body.
+  // Body: dark glass, no rim (the state icon carries the colour; B-8).
   ctx.beginPath();
   ctx.roundRect(box.x, box.y, box.w, box.h, box.h / 2);
   ctx.fill();
-  ctx.lineWidth = selected ? 2 : 1.4;
-  ctx.strokeStyle = info.color;
-  ctx.globalAlpha *= selected ? 1 : 0.85;
-  ctx.stroke();
+  if (selected) {
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = info.color;
+    ctx.stroke();
+  }
   ctx.globalAlpha = a;
   const cy = box.y + box.h / 2;
   let x = box.x + 8;
@@ -395,6 +407,75 @@ function drawPill(
 }
 
 /**
+ * Which creatures wear a pill now (B-8, pure: tested): those with an event in the last 2.5 s (newest
+ * first, full pill), then — in Era 1, labels on — the best earners as compact pills (only once the clock
+ * runs: a compact pill IS its rate). Forming creatures never: the incubation arc says it. At most 2.
+ */
+export function pickPills(
+  creatures: readonly CreatureView[],
+  eventAt: ReadonlyMap<number, number>,
+  time: number,
+  o: { onAll: boolean; earning: boolean; max?: number },
+): { id: number; compact: boolean }[] {
+  const max = o.max ?? PILLS_MAX;
+  const out: { id: number; compact: boolean }[] = [];
+  const events = creatures
+    .filter((c) => c.state !== 'born' && time - (eventAt.get(c.id) ?? -1e9) < PILL_EVENT_S)
+    .sort((a, b) => (eventAt.get(b.id) ?? 0) - (eventAt.get(a.id) ?? 0) || a.id - b.id);
+  for (const c of events) if (out.length < max) out.push({ id: c.id, compact: false });
+  if (o.onAll && o.earning && out.length < max) {
+    const best = creatures.filter((c) => c.state === 'stable' && c.eps > 0 && !out.some((p) => p.id === c.id)).sort((a, b) => b.eps - a.eps || a.id - b.id);
+    for (const c of best) if (out.length < max) out.push({ id: c.id, compact: true });
+  }
+  return out;
+}
+
+const DOT_COLOR: Record<CreatureState, string> = { born: FORMING, stable: UI.good, exploded: UI.warn, dead: GREY };
+
+/** The 6-px state dot on a creature's top edge (no text, no allocation). */
+function drawStateDot(ctx: CanvasRenderingContext2D, c: CreatureView, x: number, y: number, a: number): void {
+  ctx.globalAlpha = a;
+  ctx.beginPath();
+  ctx.arc(x, y, c.state === 'born' ? 3.4 : 3, 0, TAU);
+  if (c.state === 'born') {
+    ctx.strokeStyle = DOT_COLOR.born;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    return;
+  }
+  ctx.fillStyle = '#0B0E12';
+  ctx.globalAlpha = a * 0.7;
+  ctx.beginPath();
+  ctx.arc(x, y, 4.4, 0, TAU);
+  ctx.fill();
+  ctx.globalAlpha = a;
+  ctx.fillStyle = DOT_COLOR[c.state];
+  ctx.beginPath();
+  ctx.arc(x, y, 3, 0, TAU);
+  ctx.fill();
+}
+
+const COMPACT_H = 22;
+
+/** The compact pill: 22 px, no border, surface at 72 %, "+2,3/s" and the behaviour glyph (B-8). */
+function drawCompact(ctx: CanvasRenderingContext2D, text: string, tw: number, behavior: Behavior | null, box: Box, a: number, time: number, rm: boolean): void {
+  ctx.save();
+  ctx.globalAlpha *= a;
+  ctx.fillStyle = 'rgba(20,26,33,0.72)';
+  ctx.beginPath();
+  ctx.roundRect(box.x, box.y, box.w, box.h, box.h / 2);
+  ctx.fill();
+  const cy = box.y + box.h / 2;
+  ctx.font = FONT_COMPACT;
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#E6EDF3';
+  ctx.fillText(text, box.x + 9, cy + 0.5);
+  if (behavior) drawBehaviorGlyph(ctx, behavior, box.x + 9 + tw + 10, cy, time, rm);
+  ctx.restore();
+}
+
+/**
  * Stateful helper for the overlay: picks which creatures get a pill, fades
  * pills in/out, avoids overlaps and draws them. One call per overlay frame.
  */
@@ -409,6 +490,10 @@ interface PillCache {
   wl: number;
   wd: number;
   w: number;
+  /** Compact pill: its text ("+2,3/s"), measured once, and its width. */
+  ctext: string;
+  ctw: number;
+  cw: number;
 }
 
 interface PillHit {
@@ -440,6 +525,12 @@ export class StatusLayer {
   private picked = new Map<number, number>();
   private order: CreatureView[] = [];
   private cache = new Map<number, PillCache>();
+  /** Last state seen per creature and when its last event happened (overlay seconds). */
+  private prevState = new Map<number, CreatureState>();
+  private eventAt = new Map<number, number>();
+  private compact = new Set<number>();
+  private bucket = -1;
+  private earning = true;
   /** Pills placed this frame (overlap avoidance) and the ones drawn (for taps): pooled, reused every frame. */
   private boxes: PlacedBox[] = [];
   private nBoxes = 0;
@@ -468,10 +559,14 @@ export class StatusLayer {
     if (e && e.state === c.state && e.pct === pct && e.eps === eps && e.behavior === behavior && e.lang === lang) return e;
     const info = statusInfo(c, lang, STABLE_AGE_STEPS, earning);
     const m = measure(ctx, info);
+    const ctext = info.detail ?? '';
+    ctx.font = FONT_COMPACT;
+    const ctw = ctext ? ctx.measureText(ctext).width : 0;
+    const cw = 9 + ctw + (behavior ? 20 : 0) + 9;
     if (!e) {
-      e = { state: c.state, pct, eps, behavior, lang, info, wl: m.wl, wd: m.wd, w: m.w };
+      e = { state: c.state, pct, eps, behavior, lang, info, wl: m.wl, wd: m.wd, w: m.w, ctext, ctw, cw };
       this.cache.set(c.id, e);
-    } else Object.assign(e, { state: c.state, pct, eps, behavior, lang, info, wl: m.wl, wd: m.wd, w: m.w });
+    } else Object.assign(e, { state: c.state, pct, eps, behavior, lang, info, wl: m.wl, wd: m.wd, w: m.w, ctext, ctw, cw });
     return e;
   }
 
@@ -482,45 +577,69 @@ export class StatusLayer {
     toScreen: (c: CreatureView) => { x: number; y: number; r: number } | null,
     o: { lang: Lang; time: number; dt: number; reduceMotion: boolean; onAll: boolean; selectedId: number | null; view: { w: number; h: number }; earning?: boolean },
   ): void {
+    // Events (B-8): a creature that comes alive, bursts or fades shows its pill for 2.5 s.
+    const time = o.time;
+    for (const c of creatures) {
+      const prev = this.prevState.get(c.id);
+      if (prev !== undefined && prev !== c.state) this.eventAt.set(c.id, time);
+      this.prevState.set(c.id, c.state);
+    }
     const key = this.key;
-    if (key.list !== creatures || key.onAll !== o.onAll || key.sel !== o.selectedId) {
+    const earning = o.earning ?? true;
+    // The pick is redone when the list changes or an event ages out (a few times a second at most).
+    const bucket = Math.floor(time * 4);
+    if (key.list !== creatures || key.onAll !== o.onAll || key.sel !== o.selectedId || this.bucket !== bucket || this.earning !== earning) {
+      if (key.list !== creatures) {
+        for (const id of this.alpha.keys()) if (!creatures.some((c) => c.id === id)) this.alpha.delete(id);
+        for (const id of this.cache.keys()) if (!creatures.some((c) => c.id === id)) this.cache.delete(id);
+        for (const id of this.prevState.keys()) if (!creatures.some((c) => c.id === id)) {
+          this.prevState.delete(id);
+          this.eventAt.delete(id);
+        }
+      }
       key.list = creatures;
       key.onAll = o.onAll;
       key.sel = o.selectedId;
+      this.bucket = bucket;
+      this.earning = earning;
       this.picked.clear();
-      for (const p of pickStatusIds(creatures, { onAll: o.onAll, selectedId: o.selectedId })) this.picked.set(p.id, p.alpha);
-      // Selected first so it always gets the best spot.
+      this.compact.clear();
+      for (const p of pickPills(creatures, this.eventAt, time, { onAll: o.onAll, earning })) {
+        this.picked.set(p.id, 1);
+        if (p.compact) this.compact.add(p.id);
+      }
+      // Pills first in the selected/event order so they get the best spots.
       this.order.length = 0;
       for (const c of creatures) this.order.push(c);
-      this.order.sort((a, b) => (b.id === o.selectedId ? 1 : 0) - (a.id === o.selectedId ? 1 : 0));
-      // Forget creatures that are gone.
-      for (const id of this.alpha.keys()) if (!creatures.some((c) => c.id === id)) this.alpha.delete(id);
-      for (const id of this.cache.keys()) if (!creatures.some((c) => c.id === id)) this.cache.delete(id);
+      this.order.sort((a, b) => (this.picked.has(b.id) ? 1 : 0) - (this.picked.has(a.id) ? 1 : 0));
     }
     const picked = this.picked;
     const k = o.reduceMotion ? 1 : Math.min(1, o.dt * 6);
     this.nBoxes = 0;
     this.nHits = 0;
     for (const c of this.order) {
+      const p = toScreen(c);
+      if (!p || p.x < -p.r || p.y < -p.r || p.x > o.view.w + p.r || p.y > o.view.h + p.r) continue;
       const target = picked.get(c.id) ?? 0;
       const cur = this.alpha.get(c.id) ?? 0;
       const a = cur + (target - cur) * k;
-      if (a < 0.02 && target === 0) {
-        this.alpha.delete(c.id);
-        continue;
-      }
-      this.alpha.set(c.id, a);
-      const p = toScreen(c);
-      if (!p || p.x < -p.r || p.y < -p.r || p.x > o.view.w + p.r || p.y > o.view.h + p.r) continue;
-      const pc = this.infoOf(ctx, c, o.lang, o.earning ?? true);
+      if (a < 0.02 && target === 0) this.alpha.delete(c.id);
+      else this.alpha.set(c.id, a);
+      // The dot shows while the pill is away (they cross-fade).
+      if (a < 0.98) drawStateDot(ctx, c, p.x, p.y - p.r - 2, 1 - a);
+      if (a < 0.02) continue;
+      const pc = this.infoOf(ctx, c, o.lang, earning);
+      const compact = this.compact.has(c.id);
+      if (compact && !pc.ctext) continue;
       if (this.nBoxes === this.boxes.length) this.boxes.push({ x: 0, y: 0, w: 0, h: 0, below: false, blocked: false });
       const box = this.boxes[this.nBoxes];
-      placePillInto(box, p.x, p.y, p.r, pc.w, PILL_H, this.boxes, this.nBoxes, o.view);
+      placePillInto(box, p.x, p.y, p.r, compact ? pc.cw : pc.w, compact ? COMPACT_H : PILL_H, this.boxes, this.nBoxes, o.view);
       const selected = c.id === o.selectedId;
       // No free spot: this pill waits (the selected one always shows).
       if (box.blocked && !selected) continue;
       this.nBoxes++;
-      drawPill(ctx, pc.info, pc, box, p.x, a, selected, o.time, o.reduceMotion);
+      if (compact) drawCompact(ctx, pc.ctext, pc.ctw, pc.behavior, box, a, o.time, o.reduceMotion);
+      else drawPill(ctx, pc.info, pc, box, p.x, a, selected, o.time, o.reduceMotion);
       if (a > 0.5) {
         if (this.nHits === this.hits.length) this.hits.push({ box, id: 0, behavior: null, state: 'born' });
         const h = this.hits[this.nHits++];
@@ -530,5 +649,6 @@ export class StatusLayer {
         h.state = c.state;
       }
     }
+    ctx.globalAlpha = 1;
   }
 }

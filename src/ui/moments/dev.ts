@@ -832,7 +832,7 @@ if (q.get('clips') === '1') {
         cv.height = 64;
         cv.style.cssText = 'width:96px;height:96px;image-rendering:auto;border:1px solid #1b232c';
         const src = c.paint(f * (c.total - 1));
-        if (src) cv.getContext('2d')!.drawImage(src, 0, 0);
+        if (src) cv.getContext('2d')!.drawImage(src, 0, 0, cv.width, cv.height);
         row.appendChild(cv);
       }
       box.appendChild(row);

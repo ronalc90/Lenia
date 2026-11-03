@@ -7,8 +7,7 @@
  * the eye should notice. Reduce motion shows the same diagram as a slow
  * cross-fade between its key frames (no movement).
  */
-import { BEHAVIOR_COLOR, UI, matterColor, matterLUT } from '../../core/palette';
-import { accentHueToOklch, tintRow } from '../../sim/tintlut';
+import { BEHAVIOR_COLOR, UI } from '../../core/palette';
 import type { Behavior, Lang, Pattern } from '../../core/types';
 import { BEHAVIOR_MULT } from '../../game/balance';
 import { DATOS_PER_NEW_SPECIES, SEED_PRICE_STEP, SEED_PRICE_STEP_MAX, SESSION_SEED_PRICE } from '../../game/cycleBalance';
@@ -17,6 +16,7 @@ import { catalogPattern } from '../../sim/catalog';
 import { clip, countBlobs, pumpAll, rulesClip, type LeniaClip } from './clips';
 import { drawBehaviorGlyph } from './status';
 import { fmtRate } from '../format';
+import { portraitCanvas, portraitPx } from '../portrait';
 
 export const ILLUS_W = 260;
 export const ILLUS_H = 140;
@@ -372,57 +372,15 @@ function gauge(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, v
   ctx.restore();
 }
 
-/** Sprite of a catalog/bestiary pattern (matter colormap), cached. */
-const patCache = new WeakMap<Pattern, Map<number, HTMLCanvasElement>>();
-let baseLut: Uint8Array | null = null;
-
-/**
- * The pattern in matter colours; with `hue`, in its species' tint row (the same colours as on the
- * dish, sim/tintlut), so a new species wears its own colour from first sight (docs/ESPECIES.md).
- */
-function patternCanvas(p: Pattern, hue?: number): HTMLCanvasElement | null {
-  if (typeof document === 'undefined') return null;
-  const key = hue === undefined ? -1 : Math.round(hue);
-  let byHue = patCache.get(p);
-  let c = byHue?.get(key);
-  if (c) return c;
-  c = document.createElement('canvas');
-  c.width = p.w;
-  c.height = p.h;
-  const ctx = c.getContext('2d');
-  if (ctx) {
-    let lut: Uint8Array | null = null;
-    if (hue !== undefined) {
-      baseLut ??= matterLUT();
-      lut = new Uint8Array(256 * 4);
-      tintRow(baseLut, accentHueToOklch(hue), lut, 0);
-    }
-    const img = ctx.createImageData(p.w, p.h);
-    for (let i = 0; i < p.w * p.h; i++) {
-      const [r0, g0, b0, a] = matterColor(p.data[i]);
-      const k = Math.max(0, Math.min(255, Math.round(p.data[i] * 255))) * 4;
-      img.data[i * 4] = lut ? lut[k] : r0;
-      img.data[i * 4 + 1] = lut ? lut[k + 1] : g0;
-      img.data[i * 4 + 2] = lut ? lut[k + 2] : b0;
-      img.data[i * 4 + 3] = Math.round(a * 255);
-    }
-    ctx.putImageData(img, 0, 0);
-  }
-  if (!byHue) patCache.set(p, (byHue = new Map()));
-  byHue.set(key, c);
-  return c;
-}
-
 function drawPattern(ctx: CanvasRenderingContext2D, p: Pattern, x: number, y: number, size: number, alpha = 1, hue?: number): void {
-  const c = patternCanvas(p, hue);
-  if (!c) return;
-  const s = size / Math.max(p.w, p.h);
+  if (typeof document === 'undefined') return;
+  // Sharp at the canvas's own resolution (B-1): the shared portrait renderer (B-spline, bloom), cached.
+  const k = Math.abs(ctx.getTransform().a) || 1;
+  const c = portraitCanvas(p, portraitPx(size * k, 1), { hue, fill: 0.8, theme: 'dark' });
   ctx.save();
   ctx.globalAlpha *= alpha;
   ctx.imageSmoothingEnabled = true;
-  ctx.shadowColor = 'rgba(91,192,235,0.8)';
-  ctx.shadowBlur = 6;
-  ctx.drawImage(c, x - (p.w * s) / 2, y - (p.h * s) / 2, p.w * s, p.h * s);
+  ctx.drawImage(c, x - size / 2, y - size / 2, size, size);
   ctx.restore();
 }
 

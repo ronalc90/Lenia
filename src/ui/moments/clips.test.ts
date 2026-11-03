@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MOMENTS } from '../../moments/catalog';
-import { CLIP_SPECS, LeniaClip, countBlobs, rulesClip } from './clips';
+import { CLIP_SPECS, LeniaClip, bsplineTaps, countBlobs, rulesClip } from './clips';
 import { ILLUSTRATION_KINDS } from './illustrations';
 import { MS } from './strings';
 
@@ -91,5 +91,24 @@ describe('moments UI coverage', () => {
       expect(v.es.trim(), k).not.toBe('');
       expect(v.en.trim(), k).not.toBe('');
     }
+  });
+});
+
+describe('smooth clip painting (B-1)', () => {
+  it('upsampling keeps the matter: every sub-pixel weighs its four cells to exactly one', () => {
+    for (const K of [2, 4, 8]) {
+      const { w, o } = bsplineTaps(K);
+      for (let k = 0; k < K; k++) {
+        const sum = w[k * 4] + w[k * 4 + 1] + w[k * 4 + 2] + w[k * 4 + 3];
+        expect(sum).toBeCloseTo(1, 6);
+        expect(o[k] === 0 || o[k] === -1).toBe(true);
+      }
+    }
+  });
+  it('the sub-pixels of a cell mirror each other, so a creature is not shifted by the upsampling', () => {
+    const { w } = bsplineTaps(4);
+    // Sub-pixel k and K-1-k sit symmetrically about the cell centre.
+    expect(w[0 * 4 + 1]).toBeCloseTo(w[3 * 4 + 2], 6);
+    expect(w[1 * 4 + 1]).toBeCloseTo(w[2 * 4 + 2], 6);
   });
 });

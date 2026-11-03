@@ -21,6 +21,7 @@ import type { Behavior, Lang, Pattern, UpgradeView } from '../../core/types';
 import { BRIEF_MS } from '../../moments/config';
 import type { Moments } from '../../moments/moments';
 import type { Chip, MomentAction, MomentId, MomentView, UiTarget, VelaMood } from '../../moments/types';
+import { restartClass } from '../art/motion';
 import { Portrait } from '../story/portraits';
 import { behaviorRowsHtml, createBehaviorGuideSheet, type BehaviorGuideSheet, type ExtraBooster } from './behavior-guide';
 import { createHelp, type HelpSheet } from './help';
@@ -725,9 +726,7 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
   // Taps outside the card do nothing (the game is paused); nudge the button.
   catcher.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    okBtn.classList.remove('nudge');
-    void okBtn.offsetWidth;
-    okBtn.classList.add('nudge');
+    restartClass(okBtn, 'nudge');
   });
   const onKey = (e: KeyboardEvent) => {
     if (!act || act.phase === 'exit' || guideSheet?.isOpen) return;
@@ -740,8 +739,26 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
 
   // ───────────── brief labels ─────────────
 
+  /**
+   * What a brief label must never cover (integrator review): the HUD, the dish's corner buttons, its seed
+   * pill and the objective. Measured once when a brief starts (they do not move during its 3 s).
+   */
+  const BRIEF_AVOID = '.bl-hud, .bl-dish-ui > :not(.toasts):not([hidden]), .bl-dish > .bl-objective:not([hidden])';
+  const briefAvoid: { l: number; t: number; r: number; b: number }[] = [];
+  function measureBriefAvoid(): void {
+    briefAvoid.length = 0;
+    if (typeof document === 'undefined') return;
+    const lr = layerRect();
+    for (const el of document.querySelectorAll<HTMLElement>(BRIEF_AVOID)) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1) continue;
+      briefAvoid.push({ l: r.left - lr.left, t: r.top - lr.top, r: r.right - lr.left, b: r.bottom - lr.top });
+    }
+  }
+
   function startBrief(m: MomentView): void {
     brief = { m, at: clock() };
+    measureBriefAvoid();
     const lang = L();
     const chip = m.chips[0];
     briefEl.style.setProperty('--mo-c', m.color);
@@ -750,9 +767,7 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
     }`;
     briefEl.hidden = false;
     briefEl.classList.toggle('rm', rm());
-    briefEl.classList.remove('show');
-    void briefEl.offsetWidth;
-    briefEl.classList.add('show');
+    restartClass(briefEl, 'show');
     layer.classList.add('on');
     opts.onSound?.('brief');
     kick();
@@ -796,6 +811,15 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
     const h = briefEl.offsetHeight || 40;
     x = clamp(x, w / 2 + 8, lr.width - w / 2 - 8);
     y = clamp(y, h / 2 + 8, lr.height - h / 2 - 8);
+    // Step out of a control it would cover: below one in the upper half, above one in the lower half.
+    for (let pass = 0; pass < 2; pass++)
+      for (const a of briefAvoid) {
+        const M = 6;
+        if (x + w / 2 > a.l - M && x - w / 2 < a.r + M && y + h / 2 > a.t - M && y - h / 2 < a.b + M) {
+          y = (a.t + a.b) / 2 < lr.height / 2 ? a.b + M + h / 2 : a.t - M - h / 2;
+          y = clamp(y, h / 2 + 8, lr.height - h / 2 - 8);
+        }
+      }
     const age = t - brief.at;
     const life = BRIEF_MS / 1000;
     const fade = age > life - 0.5 ? Math.max(0, (life - age) / 0.5) : 1;

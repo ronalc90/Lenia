@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CreatureView } from '../../core/types';
 import { STATUS_MAX } from '../../moments/config';
-import { pickStatusIds, placePill, statusInfo } from './status';
+import { pickPills, pickStatusIds, PILLS_MAX, placePill, statusInfo } from './status';
 
 function cv(id: number, state: CreatureView['state'], age = 500, over: Partial<CreatureView> = {}): CreatureView {
   return { id, x: id * 10, y: 50, r: 8, state, behavior: null, speciesId: null, speciesName: null, eps: state === 'stable' ? 1.2 : 0, age, ...over };
@@ -104,5 +104,37 @@ describe('the LIFE card drawing says the creature\'s own rate (RF-10)', () => {
     expect(liveRateBadge(0, 'es')).toBeNull();
     expect(liveRateBadge(2, 'es')).toBe('+2,0/s');
     expect(liveRateBadge(undefined, 'en')).toBe('+1/s');
+  });
+});
+
+describe('quiet dish labels (B-8)', () => {
+  it('no pill by default: only after an event, for 2.5 s', () => {
+    const cs = [cv(1, 'stable'), cv(2, 'stable'), cv(3, 'born', 50)];
+    expect(pickPills(cs, new Map(), 10, { onAll: false, earning: true })).toEqual([]);
+    const ev = new Map([[2, 9]]);
+    expect(pickPills(cs, ev, 10, { onAll: false, earning: true })).toEqual([{ id: 2, compact: false }]);
+    expect(pickPills(cs, ev, 11.6, { onAll: false, earning: true })).toEqual([]);
+  });
+
+  it('never more than 2 on screen, newest events first, forming creatures never (the arc says it)', () => {
+    const cs = [cv(1, 'stable'), cv(2, 'exploded'), cv(3, 'dead'), cv(4, 'born', 300)];
+    const ev = new Map([
+      [1, 9.0],
+      [2, 9.5],
+      [3, 9.8],
+      [4, 9.9],
+    ]);
+    const p = pickPills(cs, ev, 10, { onAll: true, earning: true });
+    expect(p.map((x) => x.id)).toEqual([3, 2]);
+    expect(p.length).toBeLessThanOrEqual(PILLS_MAX);
+  });
+
+  it('Era 1 with labels on: compact pills on the best earners, only while the clock runs', () => {
+    const cs = [{ ...cv(1, 'stable'), eps: 1 }, { ...cv(2, 'stable'), eps: 3 }, { ...cv(3, 'stable'), eps: 2 }];
+    expect(pickPills(cs, new Map(), 10, { onAll: true, earning: true })).toEqual([
+      { id: 2, compact: true },
+      { id: 3, compact: true },
+    ]);
+    expect(pickPills(cs, new Map(), 10, { onAll: true, earning: false })).toEqual([]);
   });
 });

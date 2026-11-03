@@ -14,6 +14,31 @@ import { applySeedCpu } from '../../sim/seed';
 
 const LUT = matterLUT();
 
+/**
+ * Painted clip frames are upsampled to about this many pixels a side (B-1: a 64-cell world drawn
+ * 300 px wide showed its cells as stairs). Cubic B-spline, wrapping (the clip world is a torus).
+ */
+const CLIP_PAINT_PX = 256;
+
+/** Cubic B-spline weights of the K sub-positions of one cell (t = sub-pixel offset), with tap offsets. */
+export function bsplineTaps(K: number): { w: Float32Array; o: Int8Array } {
+  const w = new Float32Array(K * 4);
+  const o = new Int8Array(K);
+  for (let k = 0; k < K; k++) {
+    const u = (k + 0.5) / K - 0.5;
+    const i = Math.floor(u);
+    const t = u - i;
+    o[k] = i;
+    const t2 = t * t;
+    const t3 = t2 * t;
+    w[k * 4] = (1 - t) ** 3 / 6;
+    w[k * 4 + 1] = (3 * t3 - 6 * t2 + 4) / 6;
+    w[k * 4 + 2] = (-3 * t3 + 3 * t2 + 3 * t + 1) / 6;
+    w[k * 4 + 3] = t3 / 6;
+  }
+  return { w, o };
+}
+
 export interface ClipSpec {
   key: string;
   /** Grid side (power of two). */
@@ -52,6 +77,10 @@ export class LeniaClip {
   private img: ImageData | null = null;
   private painted = -1;
   private paintedTint = '';
+  /** Upsampling factor of painted frames, its B-spline taps and the reusable row pass. */
+  private readonly K: number;
+  private taps: { w: Float32Array; o: Int8Array } | null = null;
+  private rows: Float32Array | null = null;
 
   constructor(spec: ClipSpec) {
     this.spec = spec;
@@ -62,10 +91,11 @@ export class LeniaClip {
     if (spec.warmup) this.sim.step(spec.warmup);
     this.record();
     this.stepsToNext = spec.every;
+    this.K = Math.max(1, Math.round(CLIP_PAINT_PX / spec.N));
     this.canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
     if (this.canvas) {
-      this.canvas.width = spec.N;
-      this.canvas.height = spec.N;
+      this.canvas.width = spec.N * this.K;
+      this.canvas.height = spec.N * this.K;
       this.ctx = this.canvas.getContext('2d');
     }
   }
@@ -140,32 +170,67 @@ export class LeniaClip {
     if (!this.ctx || !this.canvas) return null;
     if (idx === this.painted && tint === this.paintedTint) return this.canvas;
     const N = this.N;
-    if (!this.img) this.img = this.ctx.createImageData(N, N);
+    const K = this.K;
+    const M = N * K;
+    if (!this.img) this.img = this.ctx.createImageData(M, M);
+    this.taps ??= bsplineTaps(K);
+    this.rows ??= new Float32Array(N * M);
+    const { w, o } = this.taps;
+    const rows = this.rows;
     const d = this.img.data;
     const a = this.frames[idx].a;
-    for (let p = 0; p < N * N; p++) {
-      const li = a[p] * 4;
-      let r = LUT[li];
-      let g = LUT[li + 1];
-      let b = LUT[li + 2];
-      if (tint === 'grey') {
-        const l = r * 0.3 + g * 0.59 + b * 0.11;
-        r = g = b = l * 0.8;
-      } else if (tint === 'warn') {
-        const l = (r * 0.3 + g * 0.59 + b * 0.11) / 255;
-        r = 242 * l + 30 * (1 - l);
-        g = 140 * l + 20 * (1 - l);
-        b = 60 * l + 20 * (1 - l);
+    // Rows: each cell row upsampled along x (wrapping).
+    for (let y = 0; y < N; y++) {
+      const src = y * N;
+      const dst = y * M;
+      for (let X = 0; X < M; X++) {
+        const k = X % K;
+        const c = Math.floor(X / K) + o[k];
+        const wk = k * 4;
+        rows[dst + X] =
+          w[wk] * a[src + ((c - 1 + N) % N)] + w[wk + 1] * a[src + ((c + N) % N)] + w[wk + 2] * a[src + ((c + 1) % N)] + w[wk + 3] * a[src + ((c + 2) % N)];
       }
-      d[p * 4] = r;
-      d[p * 4 + 1] = g;
-      d[p * 4 + 2] = b;
-      d[p * 4 + 3] = LUT[li + 3];
+    }
+    // Columns, then the colormap (same LUT and tints as before, now per output pixel).
+    for (let Y = 0; Y < M; Y++) {
+      const k = Y % K;
+      const c = Math.floor(Y / K) + o[k];
+      const wk = k * 4;
+      const r0 = ((c - 1 + N) % N) * M;
+      const r1 = ((c + N) % N) * M;
+      const r2 = ((c + 1) % N) * M;
+      const r3 = ((c + 2) % N) * M;
+      for (let X = 0; X < M; X++) {
+        const v = w[wk] * rows[r0 + X] + w[wk + 1] * rows[r1 + X] + w[wk + 2] * rows[r2 + X] + w[wk + 3] * rows[r3 + X];
+        const p = Y * M + X;
+        this.shade(d, p, Math.max(0, Math.min(255, Math.round(v))), tint);
+      }
     }
     this.ctx.putImageData(this.img, 0, 0);
     this.painted = idx;
     this.paintedTint = tint;
     return this.canvas;
+  }
+
+  /** One output pixel through the matter colormap (and the grey / warn tints). */
+  private shade(d: Uint8ClampedArray, p: number, level: number, tint: '' | 'grey' | 'warn'): void {
+    const li = level * 4;
+    let r = LUT[li];
+    let g = LUT[li + 1];
+    let b = LUT[li + 2];
+    if (tint === 'grey') {
+      const l = r * 0.3 + g * 0.59 + b * 0.11;
+      r = g = b = l * 0.8;
+    } else if (tint === 'warn') {
+      const l = (r * 0.3 + g * 0.59 + b * 0.11) / 255;
+      r = 242 * l + 30 * (1 - l);
+      g = 140 * l + 20 * (1 - l);
+      b = 60 * l + 20 * (1 - l);
+    }
+    d[p * 4] = r;
+    d[p * 4 + 1] = g;
+    d[p * 4 + 2] = b;
+    d[p * 4 + 3] = LUT[li + 3];
   }
 }
 
