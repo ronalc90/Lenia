@@ -7,6 +7,7 @@ import type { Lang } from '../../core/types';
 import type { Moments } from '../../moments/moments';
 import type { ExplainMode, StatusLabelMode } from '../../moments/types';
 import { moIcon } from './icons';
+import { plateLabel, plateOf } from './plates';
 import { MS, tr } from './strings';
 
 export interface HelpSheet {
@@ -52,7 +53,7 @@ export function createHelp(
               return `<li class="locked"><span class="mo-help-dot">?</span><span class="mo-help-t"><b>${tr(MS.helpLocked, L)}</b></span></li>`;
             return `<li style="--mo-c:${d.color}">
               <span class="mo-help-dot">${moIcon(d.icon, 20)}</span>
-              <span class="mo-help-t"><b>${d.title[L]}</b><small>${d.lines[0][L]}</small></span>
+              <span class="mo-help-t">${plateOf(d.illustration) ? `<em class="mo-help-plate">${plateLabel(plateOf(d.illustration)!.no, L)}</em>` : ''}<b>${d.title[L]}</b><small>${d.lines[0][L]}</small></span>
               <button type="button" class="mo-help-play" data-id="${d.id}" aria-label="${tr(MS.helpWatch, L)}: ${d.title[L]}">${moIcon('spark', 16)}${tr(MS.helpWatch, L)}</button>
             </li>`;
           })

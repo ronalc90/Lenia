@@ -2080,3 +2080,12 @@ html[data-theme='light'] .mo-bh-glyph {
   margin-top: 4px;
   transform: rotate(-135deg);
 }
+
+/* «¿Qué pasó?» collects the plates: each one with its number (§6.5 rule 1). */
+.mo-help-plate {
+  display: block;
+  font: 600 var(--bl-fs-caption)/1.2 var(--bl-font-mono, monospace);
+  font-style: normal;
+  letter-spacing: 0.12em;
+  color: var(--mo-dim);
+}
