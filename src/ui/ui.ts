@@ -9,7 +9,7 @@ import './ui.css';
 import { bus } from '../core/bus';
 import type { Camera } from '../core/camera';
 import { BEHAVIOR_COLOR } from '../core/palette';
-import type { Behavior, BuyQty, GameActions, GameView, Lang, Text } from '../core/types';
+import type { Behavior, BuyQty, DropView, GameActions, GameView, Lang, Text } from '../core/types';
 import { TABS, type Ctx, type Panel, type TabId, type TextSize, type ThemePref, type ToastKind } from './ctx';
 import { h, ic, loadJSON, reconcile, saveJSON, setAttr, setHTML, setStyle, setText, show, toggle, vibrate } from './dom';
 import * as B from '../game/balance';
@@ -21,6 +21,7 @@ import { dropAt, dropsOnSegment, routeTap } from './dishTap';
 import { FlyLayer, flyDuration } from './fx/fly';
 import { Readout, wholeRate } from './fx/readout';
 import { dishFx } from './fx/stage';
+import { DROP_FX } from './fx/drops';
 import type { FxAnchors } from './fx/types';
 import { TEXT } from '../game/content';
 import {
@@ -163,6 +164,11 @@ export interface UIDeps {
    * the dish then draws only the red link. Without it the dish labels each new pair itself, once.
    */
   contactTold?(): boolean;
+  /**
+   * Optional (ADR-030 §2.5): true once the first fusion's card was seen; later fusions get a 2 s label at the
+   * spot («Se juntaron: sin forma no da luz»). Without it, fusions only flash.
+   */
+  mergeTold?(): boolean;
 }
 
 export type UISound = 'tap' | 'tab' | 'open' | 'close' | 'buy' | 'deny' | 'toggle' | 'hold' | 'confirm' | 'warn';
@@ -941,6 +947,12 @@ class BiolumaUI implements UI {
       return (c && around(this.overlay.creatureScreen(c.id), 70)) || q('.bl-dish');
     }
     if (id === 'golden') return around(this.overlay.goldenScreen(), 60) || q('.bl-dish');
+    // (ADR-030 §2.4 step 6) The ripest drop of light on the dish, as drawn (its 64 px touch target).
+    if (id === 'drop') {
+      let best: DropView | null = null;
+      for (const d of this.v?.drops ?? []) if (d.amount > 0 && (!best || d.fill > best.fill)) best = d;
+      return best ? around(this.overlay.drops.posOf(best.id), 2 * DROP_FX.tapPx) : null;
+    }
     return null;
   }
 
@@ -2330,7 +2342,11 @@ class BiolumaUI implements UI {
       }
       ov.puff(e.x, e.y);
     });
-    bus.on('creatureExploded', (e) => ov.explodedPulse(e.x, e.y));
+    bus.on('creatureExploded', (e) => {
+      ov.explodedPulse(e.x, e.y);
+      // A fusion seen again (ADR-030 §2.5): its 2 s label at the spot; the first one has its card.
+      if (e.cause === 'touch' && this.deps.mergeTold?.()) ov.wentDark(e.x, e.y, tx(TEXT.merged), false);
+    });
     // Shapeless matter dissolved (lysis, clean-up): it fades like a puff; it was never a creature that died.
     bus.on('creatureDissolved', (e) => {
       ov.puff(e.x, e.y);

@@ -15,22 +15,23 @@
  * are atlas indices, positions are written into reused objects.
  */
 import type { DropView } from '../../core/types';
+import { LIGHT_POP_MS, LIGHT_RIPE_SHARE, LIGHT_TAP_RADIUS_PX } from '../../game/cycleBalance';
 import { rgba } from '../art/vector';
 import { SPR, type SpriteAtlas } from './sprites';
 import type { TapDrop } from '../dishTap';
 
 /**
- * Feel numbers of the drops. `ripe`, `tapPx`, `popMs` mirror PA's cycleBalance LIGHT_RIPE_SHARE,
- * LIGHT_TAP_RADIUS_PX and LIGHT_POP_MS (docs/CLARIDAD2.md §3.2); the integrator points them at those
- * constants once the collection package lands. The rest is drawing.
+ * Feel numbers of the drops. `ripe`, `tapPx`, `popMs` are the game's cycleBalance LIGHT_RIPE_SHARE,
+ * LIGHT_TAP_RADIUS_PX and LIGHT_POP_MS (docs/CLARIDAD2.md §3.2): the dish draws what the game counts.
+ * The rest is drawing.
  */
 export const DROP_FX = {
   /** A drop is ripe (its glow breathes, "¡Lista!" the first time) at this share of its cap. */
-  ripe: 0.75,
+  ripe: LIGHT_RIPE_SHARE,
   /** Touch radius in CSS px at any zoom: a 64 px target (CLAUDE.md asks for 48). */
-  tapPx: 32,
+  tapPx: LIGHT_TAP_RADIUS_PX,
   /** The bead drawing in when collected, ms (Reduce motion: a fade of the same length). */
-  popMs: 150,
+  popMs: LIGHT_POP_MS,
   /** Bead radius (CSS px at zoom 1): empty → full, by the square root of the fill (its area grows with the light). */
   rMin: 4,
   rMax: 11,
