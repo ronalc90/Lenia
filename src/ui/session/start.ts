@@ -160,8 +160,16 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
       current = { start, extras };
       const l = opts.lang();
       const gifts: string[] = [];
-      // Esencia is Luz on screen (ADR-030 §2.1).
-      if (start.startEssence > 0)
+      // Esencia is Luz on screen (ADR-030 §2.1). Light from an Encargo met between sessions says where it comes
+      // from: «20 luz + 300 de un encargo que cumpliste en el Árbol = 320» (QA-CLARIDAD #26, SessionStart.carry).
+      const carry = Math.max(0, Math.round(start.carry ?? 0));
+      if (carry > 0)
+        gifts.push(
+          `<span class="ss-gift" style="--c:var(--bl-accent)">${treeIcon('drop', 20)}${esc(
+            SESSION_UI.startCarry(fmt(start.startEssence, l), fmt(carry, l), fmt(start.startEssence + carry, l))[l],
+          )}</span>`,
+        );
+      else if (start.startEssence > 0)
         gifts.push(`<span class="ss-gift" style="--c:var(--bl-accent)">${treeIcon('drop', 20)}${esc(l === 'es' ? `${fmt(start.startEssence, l)} de luz` : `${fmt(start.startEssence, l)} glow`)}</span>`);
       // «1 semilla gratis · las demás, 4 de luz»: does sowing cost? Said with the price (QA-CLARIDAD #14b).
       if (start.freeSeeds > 0)
