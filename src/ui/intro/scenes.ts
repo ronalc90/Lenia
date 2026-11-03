@@ -121,8 +121,16 @@ function photo(id: PhotoId): HTMLImageElement | null {
   return peekPhoto(id);
 }
 
-/** Static layers (the rooms) drawn once per scene × size × DPR × photo state (§3.9). */
-const layers = new LayerCache(12);
+/**
+ * Static layers (the rooms) drawn once per scene × size × DPR × photo state (§3.9). Each is a full-size
+ * canvas, so few are kept (Safari caps a page's canvas memory) and the intro frees them when it closes.
+ */
+const layers = new LayerCache(6);
+
+/** Frees the cached rooms (the intro closed). */
+export function releaseSceneLayers(): void {
+  layers.clear();
+}
 
 /** Draws a static layer from the cache, or directly when no offscreen canvas can be made. */
 function cached(ctx: CanvasRenderingContext2D, key: string, e: SceneEnv, paint: (c: Ctx2D) => void): void {

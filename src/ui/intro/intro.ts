@@ -19,7 +19,7 @@ import { restartClass } from '../art/motion';
 import { Portrait } from '../art/portraits';
 import { featherEdges } from '../art/vela';
 import { loadPhoto } from '../art/photos';
-import { INTRO_PHOTOS, paintScene } from './scenes';
+import { INTRO_PHOTOS, paintScene, releaseSceneLayers } from './scenes';
 
 export const INTRO_STORAGE_KEY = 'bioluma.intro';
 
@@ -229,6 +229,7 @@ export function createIntro(root: HTMLElement, opts: IntroOptions): Intro {
     opts.onSound?.('done');
     cancelAnimationFrame(raf);
     document.removeEventListener('keydown', onKey, true);
+    releaseSceneLayers();
     overlay.classList.add('out');
     const r: IntroResult = { skipped, look, panel: index };
     setTimeout(() => overlay.remove(), rm() ? 0 : 260);
@@ -261,6 +262,7 @@ export function createIntro(root: HTMLElement, opts: IntroOptions): Intro {
       open = false;
       cancelAnimationFrame(raf);
       document.removeEventListener('keydown', onKey, true);
+      releaseSceneLayers();
       overlay.remove();
     },
   };
