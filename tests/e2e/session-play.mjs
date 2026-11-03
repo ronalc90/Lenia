@@ -588,7 +588,16 @@ async function runCase(c) {
           say(`Start card ${k}: ${worlds} Worlds, picked the newest one.`);
         } else say(`Start card ${k}: the Tree's gifts, the Encargo, "¡Empezar!".`);
         await settle(`start ${k}`);
-        await tapSel('.ss-layer:not(.ss-welcome) [data-act="go"]');
+        // QA#14 (docs/CLARIDAD2.md §2.12): «¡Empezar!» waits until the Nevera creature is lit on the dish
+        // (a software-rendered test browser incubates slowly; a phone takes a fraction of a second).
+        const goSel = '.ss-layer:not(.ss-welcome) [data-act="go"]';
+        if (await page.locator(goSel).isDisabled()) {
+          await shot(`s${k}-start-waking`);
+          const lit = await page.waitForFunction(() => !!window.bioluma.culture?.lit, null, { timeout: 180000 }).then(() => true, () => false);
+          if (!lit) problems.push(`[${c.name}] session ${k}: the dish never lit behind the start card`);
+          else if (await page.locator(goSel).isDisabled()) problems.push(`[${c.name}] session ${k}: «¡Empezar!» stayed disabled with the dish lit`);
+        }
+        await tapSel(goSel);
         await page.waitForTimeout(600);
       } else problems.push(`[${c.name}] session ${k}: no start card`);
       await checkStable(`session ${k} ready`);
