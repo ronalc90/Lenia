@@ -26,7 +26,7 @@ import * as C from '../../game/cycleBalance';
 import { BEHAVIOR_NAMES } from '../../game/content';
 import type { DatosBreakdown, RecordHit, SessionGoal, SessionSummary } from '../../game/session';
 import { velaLine } from '../../game/session';
-import { DATOS_NAME, NODE_TEXT, SESSION_UI, TREE_UI, WORLD_TEXT } from '../../game/treeText';
+import { DATO_NAME, DATOS_NAME, NODE_TEXT, SESSION_UI, TREE_UI, WORLD_TEXT } from '../../game/treeText';
 import { fmt, fmtClock, fmtMult, fmtPerSec } from '../format';
 import type { PriceExplain } from '../moments/price';
 import { plateLabel, plateOf, scaleBar, scaleText } from '../moments/plates';
@@ -234,7 +234,8 @@ const FIRST_STEPS: readonly FirstStep[] = ['sow', 'creature', 'collect'];
 export function reportRows(sum: SessionSummary, data: ReportData, l: Lang, ctx: ReportCtx): ReportRow[] {
   const d = sum.datos;
   const rows: ReportRow[] = [];
-  const D = DATOS_NAME[l];
+  // «1 Dato», «2 Datos» (the report read «÷ 25 … 1 Datos»).
+  const Dn = (n: number) => (n === 1 ? DATO_NAME : DATOS_NAME)[l];
   const plus = (n: number) => `+${fmt(n, l)}`;
   const prev = data.previous ?? null;
   rows.push({ kind: 'light', label: SESSION_UI.collected[l], value: fmt(d.essence, l), adds: 0 });
@@ -242,7 +243,7 @@ export function reportRows(sum: SessionSummary, data: ReportData, l: Lang, ctx: 
   rows.push({
     kind: 'div',
     label: `÷ ${d.div}`,
-    value: `${fmt(d.base, l)} ${D}`,
+    value: `${fmt(d.base, l)} ${Dn(d.base)}`,
     adds: d.base,
     note: prev ? `${trend} ${SESSION_UI.yesterday(fmt(prev.fromLight, l))[l]}` : undefined,
     noteTone: prev && trend === '↑' ? 'gain' : undefined,
@@ -307,7 +308,7 @@ export function reportRows(sum: SessionSummary, data: ReportData, l: Lang, ctx: 
   if (d.minimum > 0) rows.push({ kind: 'minimum', label: SESSION_UI.minimumNote(C.DATOS_MIN)[l], value: plus(d.minimum), adds: d.minimum, tone: 'gain' });
   if ((data.swept ?? 0) > 0)
     rows.push({ kind: 'swept', label: SESSION_UI.sweptEnd[l], value: `+${fmt(data.swept!, l)} ${SESSION_UI.luz[l].toLowerCase()}`, adds: 0, note: SESSION_UI.sweptNote[l], tone: 'off' });
-  rows.push({ kind: 'total', label: REPORT_TEXT.total[l], value: `${fmt(d.total, l)} ${D}`, adds: 0 });
+  rows.push({ kind: 'total', label: REPORT_TEXT.total[l], value: `${fmt(d.total, l)} ${Dn(d.total)}`, adds: 0 });
   // Fewer Datos than the session before (QA-CLARIDAD #36): why, on a neutral line (never red), and what to do.
   if (prev && d.total < prev.total) {
     rows.push({
@@ -578,7 +579,7 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
         ${headlineHtml(head, l)}
         <div class="ss-rp-sheet" role="table" aria-label="${esc(SESSION_UI.equationTitle[l])}">
           ${rowsHtml(rows, staged)}
-          <div class="ss-rp-total${staged ? '' : ' done'}"><span class="k">${esc(total.label)}</span><span class="lead" aria-hidden="true"></span><b>${staged ? '0' : fmt(sum.datos.total, l)}</b><span class="u">${esc(DATOS_NAME[l])}</span><span class="reg" aria-label="${esc(REPORT_TEXT.registered[l])}">${esc(REPORT_TEXT.registered[l])}</span></div>
+          <div class="ss-rp-total${staged ? '' : ' done'}"><span class="k">${esc(total.label)}</span><span class="lead" aria-hidden="true"></span><b>${staged ? '0' : fmt(sum.datos.total, l)}</b><span class="u">${esc((sum.datos.total === 1 ? DATO_NAME : DATOS_NAME)[l])}</span><span class="reg" aria-label="${esc(REPORT_TEXT.registered[l])}">${esc(REPORT_TEXT.registered[l])}</span></div>
           ${less ? `<p class="ss-rp-less">${esc(less.label)}${less.note ? `<b>${esc(less.note)}</b>` : ''}</p>` : ''}
           <p class="ss-rp-kept">${esc(SESSION_UI.datosKept[l])}</p>
         </div>
