@@ -1549,7 +1549,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     } else if (earning) addEssence(eps * dt);
     const se = ses();
     if (se && earning) {
-      freezeBoost(se, eps, s.research?.records.eps ?? 0);
+      freezeBoost(se, eps);
       noteProduction(se, eps, stableCount());
       let best: { id: number; v: number } | null = null;
       for (const [id, v] of perCreature) if (!best || v > best.v) best = { id, v };
@@ -3115,7 +3115,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     buyBoost() {
       const se = ses();
       if (!se || se.phase !== 'running' || !boostOffered(se) || boostTooLate(se) || boostWait(se) > 0 || !(eps > 0)) return false;
-      freezeBoost(se, eps, s.research?.records.eps ?? 0);
+      freezeBoost(se, eps);
       const cost = boostCost(se, eps);
       if (!(s.essence >= cost)) return false;
       s.essence -= cost;

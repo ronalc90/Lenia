@@ -55,7 +55,7 @@ const PLAN: Record<string, [string, number, number, number][]> = {
   time: [['clock', 1, 6, 1.5], ['clock2', 2, 3, 2], ['fridge', 2, 3, 2], ['sprint', 3, 3, 2], ['encTime', 3, 2, 2], ['clock3', 3, 3, 2], ['clock4', 4, 3, 2]],
   dropper: [['dropper', 1, 3, 2], ['startEssence', 2, 4, 2], ['freeSeeds', 3, 3, 2], ['stabilizer', 3, 5, 1.5], ['bigSeed', 3, 1, 2], ['autoSeeder', 3, 6, 1.5], ['cheapSeeds', 4, 3, 2], ['dropperMax', 5, 1, 2]],
   dish: [['dish', 1, 2, 3], ['slots', 2, 3, 2], ['crowdCost', 3, 2, 2], ['nursery', 3, 1, 2], ['incubator', 3, 2, 3], ['dishXL', 4, 1, 2], ['ecosystem', 4, 2, 2]],
-  life: [['culture', 1, 5, 1.5], ['nutrient', 2, 3, 2], ['culture2', 3, 3, 2], ['swimAffinity', 3, 3, 2], ['stillAffinity', 3, 3, 2], ['colonyAffinity', 4, 3, 2], ['symbiosis', 4, 1, 2], ['abundance', 4, 1, 2], ['eternalLife', 5, 99, 1.1]],
+  life: [['culture', 1, 5, 1.5], ['nutrient', 2, 3, 2], ['culture2', 3, 3, 2], ['swimAffinity', 3, 3, 2], ['stillAffinity', 3, 3, 2], ['colonyAffinity', 4, 3, 2], ['symbiosis', 4, 1, 2], ['abundance', 4, 1, 2], ['eternalLife', 5, C.ETERNAL_LIFE_MAX, 1.1]],
   discovery: [['notebook', 1, 3, 2], ['print', 2, 1, 2], ['cataloguing', 3, 5, 1.5], ['archive', 3, 2, 2], ['microscope', 3, 2, 2], ['discoBonus', 4, 2, 2], ['rareSpores', 4, 1, 2], ['mutations', 4, 1, 2], ['encyclopedia', 5, 3, 2]],
   // Plan rings and node count; the world order follows the measured yield (docs/CICLO.md §4.3).
   worlds: [['worldCold', 1, 1, 2], ['worldGyro', 2, 1, 2], ['worldShields', 3, 1, 2], ['worldHelix', 3, 1, 2], ['worldLegs', 4, 1, 2], ['worldGiants', 5, 1, 2]],

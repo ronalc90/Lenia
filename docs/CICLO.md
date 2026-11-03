@@ -225,12 +225,12 @@ En pantalla, cada número es entero y se puede comprobar:
 - **Pincel y Formas de semilla** (ring/noise): retirados — eran elecciones con contra (más sorpresa, menos éxito). La
   Gota grande se queda (pura ganancia).
 
-## 4. El Árbol: 7 rutas rectas
+## 4. El Árbol: 8 rutas rectas (Corrección ADR-030: ↓ Recoger)
 
 ### 4.1 Forma
 
-`src/game/tree.ts` (datos y lógica, puros) · `src/ui/tree/` (pantalla). **54 nodos**: el **centro** (la noche) y **7
-rutas rectas** de 6 a 9 pasos. Reglas fijas (con test):
+`src/game/tree.ts` (datos y lógica, puros) · `src/ui/tree/` (pantalla). **60 nodos**: el **centro** (la noche) y **8
+rutas rectas** de 6 a 9 pasos (la 8.ª, ↓ Recoger, la añadió el ADR-030 en la dirección que estaba libre). Reglas fijas (con test):
 
 - **Cadena estricta:** el paso *k* solo necesita el paso *k − 1* de su ruta (nivel ≥ 1); el primero, el centro. Sin
   cruces, sin dos requisitos, sin caminos sin salida.
@@ -246,7 +246,8 @@ rutas rectas** de 6 a 9 pasos. Reglas fijas (con test):
 | ↑ | ⏱ **Reloj** | celeste | más tiempo por sesión y un arranque más rápido |
 | ↗ | 💧 **Gotero** | turquesa | semillas que prenden más y más para sembrar |
 | → | 🧫 **Placa** | lavanda | una placa más grande, con sitio para todas |
-| ↘ | 🌱 **Vida** | rosa | cada criatura da más Esencia por segundo |
+| ↘ | 🌱 **Vida** | rosa | cada criatura da más luz por segundo |
+| ↓ | 🧪 **Recoger** | plata de instrumento | pipetas que recogen la luz por ti (ADR-030) |
 | ↙ | 🔬 **Descubrir** | naranja | más Datos por cada cosa nueva |
 | ← | 🌍 **Mundos** | violeta | reglas nuevas donde nacen otras especies (sustituye a Calibrar) |
 | ↖ | ✨ **Destello** | dorado | la chispa dorada viene más y regala más |
@@ -332,15 +333,26 @@ de la ruta comprados). Tablas generadas del código: `npx vite-node scripts/tree
 | 5 | Mundo 6 · Patas | 4 · 3 | 1 | 12.000 (×2) | 14 especies para encontrar → 16 especies para encontrar |
 | 6 | Mundo 7 · Gigantes | 5 · 4 | 1 | 80.000 (×2) | 16 especies para encontrar → 17 especies para encontrar |
 
+**Recoger** — Pipetas que recogen la luz por ti.
+
+| # | Nodo | Anillo · 🌙 | Niveles | Precios (×factor) | Antes → después (de 0 al máximo) |
+|---|---|---|---|---|---|
+| 1 | Pipeta | 1 · 1 | 3 | 2 · 4 · 8 (×2) | Recoges tú → 1 pipeta → 2 pipetas → 3 pipetas |
+| 2 | Pipetas rápidas | 2 · 1 | 3 | 15 · 30 · 60 (×2) | Una gota cada 2,5 s → Una gota cada 2 s → Una gota cada 1,6 s → Una gota cada 1,3 s |
+| 3 | Gotas grandes | 2 · 1 | 3 | 15 · 30 · 60 (×2) | La gota guarda 4 s de luz → La gota guarda 6 s de luz → La gota guarda 8 s de luz → La gota guarda 10 s de luz |
+| 4 | Más pipetas | 3 · 2 | 5 | 400 · 600 · 900 · 1400 · 2000 (×1,5) | 3 pipetas → 4 pipetas → 5 pipetas → 6 pipetas → 7 pipetas → 8 pipetas |
+| 5 | Pipetas con imán | 3 · 2 | 2 | 400 · 800 (×2) | Una gota por viaje → Y las gotas a 1 criatura de distancia → Y las gotas a 2 criaturas de distancia |
+| 6 | Pipeta maestra | 4 · 3 | 1 | 12.000 (×2) | Las pipetas tardan 1,3 s → La luz llega sola, al momento |
+
 **Destello** — La chispa dorada viene más y regala más.
 
 | # | Nodo | Anillo · 🌙 | Niveles | Precios (×factor) | Antes → después (de 0 al máximo) |
 |---|---|---|---|---|---|
-| 1 | Destello frecuente | 1 · 1 | 3 | 2 · 4 · 8 (×2) | Llega cada 40–45 s → Llega cada 34–38 s → Llega cada 29–33 s → Llega cada 25–28 s |
+| 1 | Destello frecuente | 1 · 1 | 3 | 2 · 4 · 8 (×2) | El primero llega a los 6–12 s → El primero llega a los 5–10 s → El primero llega a los 4–9 s → El primero llega a los 4–7 s |
 | 2 | Destello lento | 2 · 1 | 2 | 15 · 30 (×2) | Se queda 8 s → Se queda 11 s → Se queda 14 s |
 | 3 | Destello del tiempo | 2 · 1 | 2 | 15 · 30 (×2) | +0 s por chispa → +2 s por chispa → +4 s por chispa |
-| 4 | Primer destello | 3 · 2 | 1 | 400 (×2) | La primera a los 6–12 s → La primera a los 2–4 s |
-| 5 | Regalos mejores | 3 · 2 | 3 | 400 · 800 · 1600 (×2) | Regalo: 10 s de Esencia → Regalo: 12 s de Esencia → Regalo: 14 s de Esencia → Regalo: 16 s de Esencia |
+| 4 | Primer destello | 3 · 2 | 1 | 400 (×2) | La primera a los 4–7 s → La primera a los 1–2 s |
+| 5 | Regalos mejores | 3 · 2 | 3 | 400 · 800 · 1600 (×2) | Regalo: 10 s de luz → Regalo: 12 s de luz → Regalo: 14 s de luz → Regalo: 16 s de luz |
 | 6 | Destello sabio | 3 · 2 | 2 | 400 · 800 (×2) | +0 Datos por chispa → +1 Dato por chispa → +2 Datos por chispa |
 | 7 | Semillas mágicas | 4 · 3 | 1 | 12.000 (×2) | 1 semilla segura por chispa → 3 semillas seguras por chispa |
 

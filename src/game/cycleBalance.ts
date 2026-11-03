@@ -139,7 +139,11 @@ export const CREATURE_ALIVE_MS = 450;
 export const DISSOLVE_MS = 600;
 /** The night moves on: the celebration over the Tree (moon, stars, VELA), unless tapped away. [QA4 F-12] */
 export const NIGHT_CELEBRATION_MS = 3200;
-/** Floating "+N" income numbers of one creature, at most one per this many seconds (balance INCOME_POP_INTERVAL 1,5 s outside sessions). [design: Esencia must be seen flowing from second 1] */
+/**
+ * @deprecated (ADR-030: in sessions the drops of light show it flowing; no 'income' pops there. The classic loop
+ * keeps balance INCOME_POP_INTERVAL.) Floating "+N" income numbers of one creature, at most one per this many
+ * seconds. [design: Esencia must be seen flowing from second 1]
+ */
 export const SESSION_INCOME_POP_INTERVAL = 0.8;
 /** A fresh seed blocks its spot this long (balance RECENT_SEED_MEMORY 12 s was ~1 birth at 30 steps/s; one birth at pace 3 is 4,4 s). [design] */
 export const SESSION_RECENT_SEED_MEMORY = 5;
@@ -538,8 +542,12 @@ export const SYMBIOSIS_TREE_MULT = 1.5;
 export const ABUNDANCE_MULT = 1.5;
 /** Vida eterna: production ×this per level, no end (the Datos sink of the last nights). [plan] */
 export const ETERNAL_LIFE_MULT = 1.1;
-/** Vida eterna: levels offered (practically endless; the UI prints ∞). [plan] */
-export const ETERNAL_LIFE_MAX = 99;
+/**
+ * Vida eterna: levels offered (practically endless; the UI prints ∞ from ENDLESS_LEVELS = 99). [plan; bot B2c:
+ * with Nutrientes priced once per run (ADR-030) the planner reached all 99 levels at session 37, bought
+ * nothing more and the last nights dipped −6/−7 %; 199 keeps the sink endless to the story's end]
+ */
+export const ETERNAL_LIFE_MAX = 199;
 /**
  * Vida eterna: price factor per level = its effect (each level costs 10 % more and gives 10 % more),
  * so the last nights keep growing a steady ~15–20 % per session instead of stalling. [plan: ×1,5; bot:
