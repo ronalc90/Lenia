@@ -80,7 +80,8 @@ try {
     await introSkip.waitFor({ state: 'visible', timeout: 4000 }).catch(() => undefined);
     if (!(await introSkip.isVisible().catch(() => false))) throw new Error(`[${vp.name}] the opening intro did not open after the title`);
     await introSkip.click();
-    await page.waitForTimeout(600);
+    // It fades out (260 ms); a slow software-GL frame can hold the close for a while, so wait up to 4 s.
+    for (let i = 0; i < 20 && (await page.locator('[data-testid="intro"]').isVisible().catch(() => false)); i++) await page.waitForTimeout(200);
     if (await page.locator('[data-testid="intro"]').isVisible().catch(() => false)) throw new Error(`[${vp.name}] "Saltar intro" did not close the intro`);
     // The story tutorial (VELA) starts a moment after the title; skipping all of it takes two taps.
     const skip = page.locator('[data-testid="tutorial-skip"]');
