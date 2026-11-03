@@ -111,6 +111,16 @@ export const SIM_PACE_MAX = 4;
  */
 export const PREINCUBATE_STEPS = 1250;
 /**
+ * Pace ramp, seconds: once the pre-incubated culture is lit (docs/ARTE-PULIDO.md A-6, §7.3: it holds
+ * still during the 700 ms light-up), the dish's time-lapse climbs from rest to SESSION_SIM_PACE over
+ * this long, counted only while the dish steps (a start card that pauses it never hands over a dish
+ * already at full speed). Owner bug: "la
+ * criatura inicial corre a toda velocidad al empezar". Before the clock it pays nothing; after it, the
+ * clock counts dish time, so a run is never shorter in dish life (session bot before/after: identical,
+ * it models whole steps). src/sim/reveal.ts. [owner; ARTE-PULIDO §7.3]
+ */
+export const SESSION_PACE_RAMP_S = 1;
+/**
  * Creatures every session starts with, alive (pure templates of the world's species, pre-incubated):
  * even run 1 has an Orbium paying from its first second. The Nevera node adds to it. [owner: "empezar
  * con criaturas ya vivas"; RITMO §4.2]
