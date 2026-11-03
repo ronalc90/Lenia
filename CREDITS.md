@@ -115,7 +115,8 @@ reference for envelopes, not as a library.
 ## Art
 
 **No AI-generated art is used in the game.** The app icon (`public/icon.svg`) and the in-game icons are drawn as SVG
-by hand/in code; the dish, the creatures and the colormap are rendered live by the simulation. Bestiary portraits and
+by hand/in code; the dish, the creatures and the colormap are rendered live by the simulation. Apart from the PNG
+renderings of that icon, the only raster images in the game are the archive photographs listed below. Bestiary portraits and
 store screenshots are captured from the game itself.
 
 ### Reference photographs (repository only, never shipped)
@@ -133,6 +134,31 @@ licence; all are downscaled copies.
 | `ref-panel-incubadora-co2.jpg` | Darja.Lavogina | <https://commons.wikimedia.org/wiki/File:CO2_inkubaator_rakukultuur_DL20221105.jpg> | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) (rescaled and recompressed) |
 
 The VELA prototype in `docs/arte-realista/prototipo/` (code and its two renders) was written for this project.
+
+## Fotografías de archivo (archive photographs)
+
+Since ADR-029 the intro and a few scenes show **archive photographs taken by people** in still shots: public domain
+or CC BY, none generated, none of an identifiable person. They ship in `public/art/photos/` (WebP, 226 KB in all,
+each under 50 KB) and the game lists the same credits on its Credits screen (`PHOTOS` in `src/ui/art/photos.ts`).
+Every photo was **recortada, reescalada y recomprimida** for the game: downscaled (all but two) and recompressed to
+WebP here, and cropped and darkened on screen by the scene that shows it, if it needs to (each one's changes are
+below).
+The full provenance of each file (title, date, why it is not AI, intended use) is in `docs/arte-realista/fotos/`.
+**No agency or institution named here endorses Bioluma**; no logo of theirs is used.
+
+| File | What | Author / credit | Source | Licence | Changes |
+|---|---|---|---|---|---|
+| `estacion-aurora-noaa.webp` | Aurora australis and the Milky Way over the NOAA Atmospheric Research Observatory, South Pole (2013) | Ross Burgener, NOAA/OAR/ESRL/GMD; **NOAA Photo Library** (image anta0151) | <https://commons.wikimedia.org/wiki/File:Aurora_australis_and_Milky_Way_seen_over_NOAA_Atmospheric_Research_Observatory_at_South_Pole_Station_(19771223522).jpg> (via <https://www.flickr.com/photos/noaaphotolib/19771223522/>) | Public domain, US federal government work ([PDM 1.0](https://creativecommons.org/publicdomain/mark/1.0/)); the Flickr copy also carries [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/), which this credit satisfies | 4272 × 2830 → 900 × 596, WebP; may be cropped and darkened on screen; the station is never named in the game |
+| `cupula-aurora-nsf.webp` | The geodesic dome of Amundsen-Scott South Pole Station under the aurora australis (2002) | Jonathan Berry, **National Science Foundation** | <https://commons.wikimedia.org/wiki/File:Amundsen-Scott_dome_Aurora_1.jpg> | Public domain, US federal government work ([PDM 1.0](https://creativecommons.org/publicdomain/mark/1.0/)) | 2100 × 1575 → 800 × 600, WebP; may be cropped and darkened on screen |
+| `placa-microscopio-nci.webp` | A tissue culture dish under a microscope, gloved hands adjusting it (1980) | Linda Bartlett, **National Cancer Institute** (NCI Visuals Online, image 2006) | <https://commons.wikimedia.org/wiki/File:Petri_dish.jpg> | Public domain, US federal government work ([PDM 1.0](https://creativecommons.org/publicdomain/mark/1.0/)) | 2700 × 1800 → 960 × 640, WebP; may be cropped and darkened on screen |
+| `pipeta-guante-csiro.webp` | "CSIRO researcher with pipette", a gloved hand using a pipette (2010) | **Morgan Brown / CSIRO** (CSIRO ScienceImage 11401) | <https://commons.wikimedia.org/wiki/File:CSIRO_ScienceImage_11401_CSIRO_researcher_with_pipette.jpg> | **[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)** | 1771 × 2657 → 640 × 960, colour-graded, WebP; may be cropped and darkened on screen |
+| `pipeteo-nci.webp` | "Pipetting", gloved hands attaching a pipette to a pipet aid (2005) | Diane A. Reid, **National Cancer Institute** (NCI Visuals Online, image 3870) | <https://commons.wikimedia.org/wiki/File:Pipetting_(1).jpg> | Public domain, US federal government work ([PDM 1.0](https://creativecommons.org/publicdomain/mark/1.0/)) | 2284 × 1815 → 960 × 763, WebP; may be cropped and darkened on screen |
+| `congelador-guante-cdc.webp` | A gloved hand storing influenza samples in a freezer (2017) | **CDC** / Emily Cramer (content provider), Todd Jordan (videographer); CDC Public Health Image Library, PHIL 22155 | <https://wwwn.cdc.gov/phil/Details.aspx?pid=22155> | Public domain, US federal government work; credit as the CDC asks, no endorsement implied ([CDC terms](https://www.cdc.gov/other/agencymaterials.html)) | 700 × 393 JPEG → WebP; may be cropped and darkened on screen |
+| `incubadora-hearson-eb1911.webp` | "Hearson's Bacteriological Incubator, petroleum lamp", engraving, fig. 9 of "Incubators" (1911) | Anonymous engraver, **Encyclopaedia Britannica**, 11th edition | <https://commons.wikimedia.org/wiki/File:EB1911_Incubators_-_Fig._9.%E2%80%94Hearson%E2%80%99s_Bacteriological_Incubator,_petroleum_lamp.jpg> | Public domain (published 1911; [PDM 1.0](https://creativecommons.org/publicdomain/mark/1.0/)) | 448 × 618 scan → lossless WebP in 8 greys; may be cropped on screen |
+
+The two NCI photos were checked on their Wikimedia Commons pages, which copy NCI's record fields ("Reuse
+Restrictions: None" for image 3870); NCI Visuals Online itself could not be reached when they were added, so check those two records again before
+a store release.
 
 ## Code
 

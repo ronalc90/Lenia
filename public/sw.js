@@ -3,9 +3,11 @@
  * Small and conservative:
  *  - precaches the app shell ('.' and index.html) plus the same-origin assets index.html references
  *    (scripts, styles, icons and the self-hosted fonts of its @font-face rules, docs/ARTE-PULIDO.md §7.1),
+ *    and the archive photographs of the intro (ADR-029, src/ui/art/photos.ts), which no HTML references,
  *  - navigation requests: network first, fall back to the cached shell when offline,
  *  - other same-origin GET requests: cache first (Vite assets are content-hashed, so this is safe);
  *    files without a hash (icons, manifest) are served from cache and refreshed in the background,
+ *    except the photos, which never change within a release (each release precaches its own),
  *  - never touches cross-origin requests, non-GET requests or Range requests,
  *  - old caches are deleted on activate.
  *
@@ -20,6 +22,18 @@ const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 
 const SCOPE = new URL('./', self.location.href);
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon.svg', './icon-192.png'];
+
+/** Archive photographs (public/art/photos/, ≤ 600 KB in all): the intro looks the same offline. Mirrors PHOTO_IDS. */
+const PHOTOS = [
+  'estacion-aurora-noaa',
+  'cupula-aurora-nsf',
+  'placa-microscopio-nci',
+  'pipeta-guante-csiro',
+  'pipeteo-nci',
+  'congelador-guante-cdc',
+  'incubadora-hearson-eb1911',
+].map((id) => `./art/photos/${id}.webp`);
+const PHOTO = /\/art\/photos\/[a-z0-9-]+\.webp$/;
 
 /** Vite emits content-hashed files such as assets/index-3f9a1c2b.js. */
 const HASHED = /[-.][A-Za-z0-9_-]{8}\.(?:js|css|woff2?|png|jpg|jpeg|svg|webp|json|wasm)$/;
@@ -45,7 +59,7 @@ function referencedAssets(html) {
 async function precache() {
   const cache = await caches.open(CACHE_NAME);
   // Individual adds: one missing file must not make the whole install fail.
-  await Promise.allSettled(SHELL.map((u) => cache.add(new Request(u, { cache: 'reload' }))));
+  await Promise.allSettled([...SHELL, ...PHOTOS].map((u) => cache.add(new Request(u, { cache: 'reload' }))));
   try {
     const res = await fetch(new Request('./index.html', { cache: 'reload' }));
     if (res.ok) {
@@ -126,5 +140,5 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(networkFirst(request));
     return;
   }
-  event.respondWith(cacheFirst(request, !HASHED.test(url.pathname)));
+  event.respondWith(cacheFirst(request, !HASHED.test(url.pathname) && !PHOTO.test(url.pathname)));
 });
