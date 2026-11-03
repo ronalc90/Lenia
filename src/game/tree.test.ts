@@ -141,7 +141,7 @@ describe('always more: "antes → después"', () => {
     const fx = treeEffects({ pipette: 3, pipetteMore: 5, pipetteFast: 3, dropBig: 3, pipetteMagnet: 2, pipetteMaster: 1 });
     expect(fx).toMatchObject({ pipettes: 8, pipetteCycle: C.PIPETTE_CYCLE_S[3], dropCapSeconds: 10, magnetR: 4, pipetteInstant: true });
     expect([0, 1, 2].map((l) => nodeCost('pipette', l))).toEqual([2, 4, 8]);
-    expect([0, 1, 2, 3, 4].map((l) => nodeCost('pipetteMore', l))).toEqual([400, 600, 900, 1400, 2000]);
+    expect([0, 1, 2, 3, 4].map((l) => nodeCost('pipetteMore', l))).toEqual([0, 1, 2, 3, 4].map((l) => niceRound(C.TREE_RING_START[3] * 1.5 ** l)));
     expect(nodeCost('pipetteMaster', 0)).toBe(12000);
   });
 

@@ -382,9 +382,12 @@ export const DATOS_PER_RECORD = 2;
  * play-test: "≥ 2 buys after every session, 3–5 early" — bot: ring 1 at 2 so the 12–25 Datos of
  * sessions 1–4 buy three to five levels (at 3, sessions 2–4 stalled at two buys and the same
  * Esencia); ring 5 at 6 000 so the last nights (20–40 K Datos per
- * session) still buy two or more levels, Vida eterna included]
+ * session) still buy two or more levels, Vida eterna included; ADR-030 experiment B3 (docs/RITMO.md §9): ring 3
+ * at 400 / 250 / 200 all hold the HARD rule and end the story at 1,9–2,0 h; 200, the cheapest, brings the first
+ * ring-3 buy a session sooner (planner 7 → 6 sessions after Night 2, kid 13 → 11) and halves the idle
+ * player's night-4 plateau]
  */
-export const TREE_RING_START: Record<number, number> = { 1: 2, 2: 15, 3: 400, 4: 12000, 5: 80000 };
+export const TREE_RING_START: Record<number, number> = { 1: 2, 2: 15, 3: 200, 4: 12000, 5: 80000 };
 /** Level-to-level price factor. [plan] */
 export const TREE_GROWTH = 2;
 /** Price factor of nodes with many levels (≥ TREE_LONG_LEVELS). [plan] */
