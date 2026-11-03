@@ -77,6 +77,8 @@ export interface VelaDrawOptions {
   lang?: Lang;
   /** What the alarm band names (default «PLACA LLENA» / "DISH FULL"). */
   alarm?: Text | null;
+  /** A screen line of the scene's own instead of the state's label (the intro's «MC-7 · AUTOTEST OK»). */
+  label?: Text | null;
 }
 
 const TAU = Math.PI * 2;
@@ -1307,6 +1309,7 @@ const D = {
   trace: SCRATCH_TRACE as Float32Array,
   ampK: 1,
   alarm: DEFAULT_ALARM as Text,
+  label: null as Text | null,
 };
 
 let alarmMemo: { p: Text | null; lang: Lang; s: string } = { p: null, lang: 'es', s: '' };
@@ -1571,7 +1574,7 @@ function paintScreen(c: Ctx2D, detail: 0 | 1 | 2): void {
         glyph(c, st.glyph, x, yL, f);
         x += f * 1.2;
       }
-      const label = st.label[F.lang];
+      const label = (D.label ?? st.label)[F.lang];
       c.fillText(label, x, yL);
       if (D.mood === 'thinking') {
         // «…» typing out at 2.5 Hz (still under Reduce motion: all three).
@@ -2049,6 +2052,7 @@ function frameLook(s: VelaPose, t: number, opts: VelaDrawOptions): void {
   D.talking = s.talking || (!rm && !!opts.scope && opts.scope.speaking);
   D.talk = rm ? 0.6 : clamp01(s.talk);
   D.alarm = opts.alarm ?? DEFAULT_ALARM;
+  D.label = opts.label ?? null;
   // Standby dims the screen in 400 ms; the label fades in over 200 ms; the awed flash is one per change.
   const fade = rm ? 1 : clamp01(age / 0.4);
   D.level = st.screen + (1 - st.screen) * (1 - fade) * (s.mood === 'sleepy' ? 1 : 0);

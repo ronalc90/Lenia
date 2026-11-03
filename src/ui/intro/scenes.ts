@@ -23,7 +23,7 @@
  * rack's coats, the gloved hand and Albor's Polaroid arrive with P2's `drawBataCard`, `drawGlovedHand`
  * and `drawAlborPolaroid`, §7.2).
  */
-import type { Lang } from '../../core/types';
+import type { Lang, Text } from '../../core/types';
 import { COAT_IDS, drawAlborPolaroid, drawBataCard, drawGlovedHand, type PlayerLookId } from '../art/characters';
 import { LayerCache, kelvin, type Ctx2D } from '../art/vector';
 import { MATERIAL, PLATE, PLATE_MM_PER_CELL, ROUTE_COLOR, type RouteId } from '../art/tokens';
@@ -119,6 +119,9 @@ const tr = (e: SceneEnv, es: string, en: string) => (e.lang === 'en' ? en : es);
 const dprOf = (e: SceneEnv) => (e.dpr && e.dpr > 0 ? e.dpr : 1);
 /** How P1's VELA is told the DPR and the language of her screen. */
 const draw = (e: SceneEnv) => ({ dpr: dprOf(e), lang: e.lang ?? 'es' });
+/** VELA's screen lines of the intro (docs/ARTE-REALISTA.md §6.6): her self-test, then ready. */
+const AUTOTEST: Text = { es: 'MC-7 · AUTOTEST OK', en: 'MC-7 · SELF-TEST OK' };
+const READY: Text = { es: 'LISTA', en: 'READY' };
 
 /** A photo if it has loaded (it starts loading on the first ask), else null: the vector fallback draws. */
 function photo(id: PhotoId): HTMLImageElement | null {
@@ -836,7 +839,9 @@ const candle: Painter = (ctx, e) => {
   const [cx0, cy0] = velaCableAt(v);
   probeCable(ctx, cx0, cy0, dx + drx * 0.95, dy + drx * 0.12, 6 * u, Math.max(2, 2.2 * u));
   dish3q(ctx, dx, dy, drx, 0.36, 0.5 + 0.5 * warm, (c, rr) => culture(c, rr, [{ code: 'O2u', x: -0.2, y: 0.05, size: trueSize('O2u'), rot: 0.6, alpha: 0.6 + 0.4 * warm }]), warm);
-  velaOnBench(ctx, v, mood, rm ? 10 : t < 0.5 ? t : t < 2.2 ? t - 0.5 : t - 2.2, t, rm, warm, [], draw(e));
+  // Her self-test once the screen is up (§6.6), then her own label.
+  const selfTest = !rm && t >= 0.5 && t < 2.2 ? AUTOTEST : null;
+  velaOnBench(ctx, v, mood, rm ? 10 : t < 0.5 ? t : t < 2.2 ? t - 0.5 : t - 2.2, t, rm, warm, [], { ...draw(e), label: selfTest });
   // The room before the lamp: dark, lifting as the filament heats.
   const [lx, ly] = velaLampAt(v);
   darkness(ctx, w, h, lx, ly, Math.max(w, h) * (0.25 + warm * 1.1), 0.82 - warm * 0.5);
@@ -1375,7 +1380,7 @@ const go: Painter = (ctx, e) => {
   const [cx0, cy0] = velaCableAt(v);
   probeCable(ctx, cx0, cy0, dx + drx * 0.95, dy + drx * 0.1, 5 * u, Math.max(2, 2.2 * u));
   dish3q(ctx, dx, dy, drx, 0.38, 1, (c, rr) => culture(c, rr, [{ code: 'O2u', x: -0.1, y: 0, size: trueSize('O2u') * 1.4, rot: rm ? 0.5 : 0.5 + t * 0.2, alpha: 1 }]), 1);
-  velaOnBench(ctx, v, mood, rm ? 10 : t < 1.2 ? 10 : t - 1.2, t, rm, 1, [], draw(e));
+  velaOnBench(ctx, v, mood, rm ? 10 : t < 1.2 ? 10 : t - 1.2, t, rm, 1, [], { ...draw(e), label: mood === 'proud' ? READY : null });
   finish(ctx, e, 0.5);
 };
 
