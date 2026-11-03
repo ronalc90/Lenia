@@ -16,7 +16,7 @@ import type { Behavior, Text } from '../core/types';
 import * as C from './cycleBalance';
 import { TREE_BY_ID, buyNode, nextGoal, nightInfo, nodeLevel, treeEffects, type BuyResult, type TreeCtx, type TreeEffects } from './tree';
 import { freshCollect, validateCollect, type CollectState } from './collect';
-import { VELA_LINES } from './treeText';
+import { SESSION_UI, VELA_LINES } from './treeText';
 import { BASE_WORLD, isWorldId, type WorldId } from './worlds';
 
 // ───────────────────────────── types ───────────────────────────────
@@ -41,6 +41,17 @@ export interface SessionLog {
   essence: number;
   datos: number;
   species: number;
+  /** (ADR-030) Datos its light gave (fromEssence) and its discovery prizes (species, variants, ways of moving). */
+  light?: number;
+  prize?: number;
+}
+
+/** (ADR-030) A goal the summary names: a first step of the game's own chain, or a story Encargo. */
+export interface SessionGoal {
+  kind: 'step' | 'encargo';
+  name: Text;
+  /** Datos it paid in this session's summary. */
+  datos: number;
 }
 
 export interface ResearchState {
@@ -121,6 +132,8 @@ export interface SessionState {
   hold?: boolean;
   /** (ADR-030) Nutrientes: the price of the first one, frozen the moment it went on sale this session. */
   boostBase?: number;
+  /** (ADR-030, QA-CLARIDAD #24/#9) The goals met this session, by name (summary rows). */
+  goals?: SessionGoal[];
 }
 
 export type SessionEvent =
@@ -217,6 +230,10 @@ export interface SessionStart {
   fridgeSlots: number;
   /** Nodes bought since the last session. */
   fresh: string[];
+  /** (ADR-030, QA-CLARIDAD #26) Luz in the wallet from an Encargo met between sessions (on top of startEssence). */
+  carry?: number;
+  /** (ADR-030, QA-CLARIDAD #36) Species still to discover in each open world ("Te falta 1 por descubrir"). */
+  worldsLeft?: Record<string, number>;
 }
 
 /**
@@ -475,9 +492,10 @@ export function noteBehavior(s: SessionState, behavior: Behavior, firstEver: boo
  * fx.timePerEncargo seconds; in session 1 the Encargos are silent (CLARIDAD §3.3), so they do not
  * stretch the 15 s run to 35 s with "+5 s" chips nobody asked for (docs/RITMO.md §3.3).
  */
-export function noteEncargo(s: SessionState, fx: TreeEffects): SessionEvent[] {
+export function noteEncargo(s: SessionState, fx: TreeEffects, goal: Omit<SessionGoal, 'datos'> = { kind: 'encargo', name: SESSION_UI.encargoName }): SessionEvent[] {
   if (s.phase === 'over') return [];
   s.encargos++;
+  (s.goals ??= []).push({ ...goal, datos: C.DATOS_PER_ENCARGO });
   // Only an Encargo met while the clock runs adds time: one already met when the run is set up (a new
   // night's list ticking off what you already have) is not something the player did in this run, and
   // its +3 s made the night's first run an outlier the next one could not beat (bot: S5 −10 %).
@@ -534,6 +552,8 @@ export interface RecordHit {
   kind: RecordKind;
   value: number;
   previous: number;
+  /** (ADR-030) Its name for the summary row ("Más luz en una sesión"). */
+  name: Text;
 }
 
 export type VelaKey = keyof typeof VELA_LINES;
@@ -557,6 +577,25 @@ export interface SessionSummary {
    * swept at the end: `sweep` is the "Recogida final"), `gifts` without a drop; `capped` waited in full drops.
    */
   light?: { made: number; gifts: number; hand: number; pipette: number; sweep: number; capped: number };
+  /** (ADR-030) Every goal met, by name: the first steps and the Encargos (their Datos add up to the 'encargos' term). */
+  goals: SessionGoal[];
+  /** (ADR-030) Datos the light gave (= datos.fromEssence) and the one-time discovery prizes (species, variants, ways of moving). */
+  fromLight: number;
+  discovery: number;
+  /**
+   * (ADR-030, QA-CLARIDAD #36) It paid fewer Datos than the session before: the prize that session had, and its
+   * light's Datos then and now (shown on a neutral line, never red). Null otherwise.
+   */
+  lessReason: { prize: number; before: number; now: number; grew: boolean } | null;
+  /** (ADR-030) Filled by the game: the collection and where the next species lives (null = the collection is complete). */
+  collection?: { have: number; total: number; next: { world: WorldId; cost: number | null } | null };
+  /** (ADR-030) Filled by the game with lessReason: what to do about it ("compra Mundo 2 en el Árbol"). */
+  lessAction?: Text | null;
+}
+
+/** Datos of the one-time discovery terms of a breakdown. */
+function discoveryOf(d: DatosBreakdown): number {
+  return d.terms.filter((t) => t.kind === 'species' || t.kind === 'variants' || t.kind === 'behaviors').reduce((a, t) => a + t.value, 0);
 }
 
 /** Records beaten this session (from the second session on: the first one sets them silently). */
@@ -566,7 +605,7 @@ export function sessionRecords(s: SessionState, r: ResearchState): RecordHit[] {
   const out: RecordHit[] = [];
   for (const kind of ['essence', 'eps', 'creatures', 'species'] as RecordKind[]) {
     const prev = r.records[kind];
-    if (prev > 0 && now[kind] > prev) out.push({ kind, value: now[kind], previous: prev });
+    if (prev > 0 && now[kind] > prev) out.push({ kind, value: now[kind], previous: prev, name: SESSION_UI.recordName[kind] });
   }
   return out;
 }
@@ -646,7 +685,18 @@ export function summarize(s: SessionState, r: ResearchState, fx: TreeEffects, sp
     keep: s.keep.slice(0, fx.fridge),
     nightReady: ready,
     light: lightOf(s),
+    goals: (s.goals ?? []).map((g) => ({ ...g })),
+    fromLight: datos.fromEssence,
+    discovery: discoveryOf(datos),
+    lessReason: lessReasonOf(r, datos),
   };
+}
+
+function lessReasonOf(r: ResearchState, d: DatosBreakdown): SessionSummary['lessReason'] {
+  const prev = r.history[r.history.length - 1];
+  if (!prev || !(d.total < prev.datos)) return null;
+  const before = prev.light ?? 0;
+  return { prize: prev.prize ?? 0, before, now: d.fromEssence, grew: d.fromEssence > before };
 }
 
 function lightOf(s: SessionState): NonNullable<SessionSummary['light']> {
@@ -661,7 +711,7 @@ function applySummaryCore(r: ResearchState, s: SessionState, d: DatosBreakdown, 
   rec.creatures = Math.max(rec.creatures, s.peakCreatures);
   rec.species = Math.max(rec.species, s.species.length);
   void records;
-  const history = [...r.history, { n: s.n, seconds: Math.round(s.elapsed), essence: Math.round(s.essence), datos: d.total, species: s.species.length }];
+  const history = [...r.history, { n: s.n, seconds: Math.round(s.elapsed), essence: Math.round(s.essence), datos: d.total, species: s.species.length, light: d.fromEssence, prize: discoveryOf(d) }];
   return {
     ...r,
     datos: r.datos + d.total,
@@ -713,7 +763,15 @@ export function validateResearch(x: unknown, knownNodes?: (id: string) => boolea
     ? x.history
         .filter(isObj)
         .slice(-C.SESSION_HISTORY)
-        .map((h) => ({ n: Math.floor(num(h.n, 0)), seconds: num(h.seconds), essence: num(h.essence), datos: num(h.datos), species: Math.floor(num(h.species)) }))
+        .map((h) => ({
+          n: Math.floor(num(h.n, 0)),
+          seconds: num(h.seconds),
+          essence: num(h.essence),
+          datos: num(h.datos),
+          species: Math.floor(num(h.species)),
+          ...(typeof h.light === 'number' ? { light: num(h.light) } : {}),
+          ...(typeof h.prize === 'number' ? { prize: num(h.prize) } : {}),
+        }))
     : [];
   return {
     v: 1,
@@ -769,5 +827,12 @@ export function validateSession(x: unknown): SessionState | null {
     ...(x.planted === true ? { planted: true } : {}),
     ...(x.hold === true && phase === 'ready' ? { hold: true } : {}),
     ...(num(x.boostBase) > 0 ? { boostBase: num(x.boostBase) } : {}),
+    ...(Array.isArray(x.goals) ? { goals: x.goals
+          .filter(isObj)
+          .slice(0, 64)
+          .flatMap((g) => {
+            const nm = isObj(g.name) && typeof g.name.es === 'string' && typeof g.name.en === 'string' ? { es: g.name.es.slice(0, 120), en: g.name.en.slice(0, 120) } : null;
+            return nm ? [{ kind: g.kind === 'step' ? ('step' as const) : ('encargo' as const), name: nm, datos: num(g.datos, 0, 0, 1000) }] : [];
+          }) } : {}),
   };
 }

@@ -173,6 +173,7 @@ import {
   treeCtxOf,
   type ResearchState,
   type SessionEvent,
+  type SessionGoal,
   type SessionStart,
   type SessionState,
   type SessionSummary,
@@ -183,6 +184,7 @@ import {
   effectLine,
   multText,
   nightInfo,
+  nodeCost,
   nodeLevel,
   nodeText,
   exactTurns,
@@ -194,8 +196,8 @@ import {
   type BuyResult,
   type TreeEffects,
 } from './tree';
-import { isWorldId, REACHABLE_BEHAVIORS, WORLD_BY_ID, WORLDS, worldEssenceMult, worldOfSpecies, worldRoom, worldSpeciesGroups, type WorldId } from './worlds';
-import { NODE_TEXT, TREE_UI } from './treeText';
+import { isWorldId, REACHABLE_BEHAVIORS, TOTAL_WORLD_SPECIES, WORLD_BY_ID, WORLDS, worldEssenceMult, worldOfSpecies, worldRoom, worldSpeciesGroups, type WorldId } from './worlds';
+import { NODE_TEXT, SESSION_UI, TREE_UI, WORLD_TEXT } from './treeText';
 
 const NODE_TEXT_CATALOGUING = NODE_TEXT.cataloguing.name;
 import {
@@ -306,7 +308,7 @@ export interface Game {
   /** Read-only access to the raw state (tests, balance bot, debug overlay). */
   readonly state: Readonly<GameState>;
   /** Pay an Encargo reward (main.ts calls it when present). Sessions: it also counts as an Encargo of the session (+time, +Datos). */
-  grantEncargo(r: { essence: number; samples: number }): void;
+  grantEncargo(r: { essence: number; samples: number; name?: Text }): void;
   /** Which loop runs (GameDeps.cycle). */
   readonly cycle: 'classic' | 'sessions';
   /** (sessions) Datos, tree levels, night, worlds (null in classic). */
@@ -724,7 +726,12 @@ export function createGame(deps: GameDeps, save?: string): Game {
       if (!(p.amount > 0)) continue;
       s.essence += p.amount;
       total += p.amount;
-      if (p.by === 'hand') s.flags.collected = true;
+      if (p.by === 'hand' && !s.flags.collected) {
+        // A first step by name in the summary (no Datos of its own: the light it collects already counts).
+        s.flags.collected = true;
+        const se = ses();
+        if (se) (se.goals ??= []).push({ kind: 'step', name: SESSION_UI.firstStepNames.collect, datos: 0 });
+      }
       bus.emit('lightCollected', { x: p.x, y: p.y, amount: p.amount, by: p.by });
     }
     return total;
@@ -1677,7 +1684,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       if (sessions) {
         // An objective is an Encargo of the session: its Esencia (earned) and +time, +Datos.
         giveSessionEssence(reward, o.id === 'seed' ? TEXT.gift.firstSeed : o.id === 'stable' ? TEXT.gift.firstCreature : TEXT.gift.goal);
-        countEncargo();
+        countEncargo({ kind: 'step', name: stepName(o.id) });
       } else if (reward > 0) s.essence += reward;
       toast(TEXT.objectiveDone(reward), 'good');
     }
@@ -2013,18 +2020,49 @@ export function createGame(deps: GameDeps, save?: string): Game {
       return;
     }
     s.carry = { essence: (s.carry?.essence ?? 0) + x, encargos: s.carry?.encargos ?? 0 };
-    if (se?.phase === 'ready') s.essence += x;
+    if (se?.phase === 'ready') {
+      s.essence += x;
+      if (sessionStartInfo) sessionStartInfo.carry = s.carry.essence;
+    }
   }
 
   /** An Encargo / objective finished: +time and +Datos for the session (the next one when none runs). */
-  function countEncargo(): void {
+  function countEncargo(goal?: Omit<SessionGoal, 'datos'>): void {
     const se = ses();
     if (se?.phase === 'running') {
-      sessionEvents(noteEncargo(se, fx));
+      sessionEvents(noteEncargo(se, fx, goal));
       return;
     }
     s.carry = { essence: s.carry?.essence ?? 0, encargos: (s.carry?.encargos ?? 0) + 1 };
-    if (se?.phase === 'ready') sessionEvents(noteEncargo(se, fx));
+    if (se?.phase === 'ready') sessionEvents(noteEncargo(se, fx, goal));
+  }
+
+  /** A first step of the game's own chain, by name (the summary's "Primeros pasos", QA-CLARIDAD #9). */
+  function stepName(id: string): Text {
+    if (id === 'seed') return SESSION_UI.firstStepNames.sow;
+    if (id === 'stable') return SESSION_UI.firstStepNames.creature;
+    return objectiveText(id, 1, 1, true);
+  }
+
+  /** Species still to discover in each open world (the start card's "Te falta 1 por descubrir"). */
+  function worldsLeft(): Record<string, number> {
+    const have = new Set<string>();
+    for (const x of s.species) if (x.catalogCode) have.add(catalogGroup(x.catalogCode));
+    const out: Record<string, number> = {};
+    for (const w of fx.worlds) out[w] = worldSpeciesGroups(w).filter((g) => !have.has(g)).length;
+    return out;
+  }
+
+  /** The first world (in route order) with a species to discover, and its price when it is not open yet. */
+  function nextSpeciesWorld(): { world: WorldId; cost: number | null } | null {
+    const have = new Set<string>();
+    for (const x of s.species) if (x.catalogCode) have.add(catalogGroup(x.catalogCode));
+    for (const w of WORLDS) {
+      if (worldSpeciesGroups(w.id).every((g) => have.has(g))) continue;
+      const open = fx.worlds.includes(w.id);
+      return { world: w.id, cost: open || !w.node ? null : nodeCost(w.node, nodeLevel(s.research?.levels ?? {}, w.node)) };
+    }
+    return null;
   }
 
   /** Turn the session module's events into bus events (and the end of the session). */
@@ -2143,10 +2181,20 @@ export function createGame(deps: GameDeps, save?: string): Game {
     const prev = s.session ?? null;
     const again = prev?.phase === 'ready';
     const prevFresh = again ? (sessionStartInfo?.fresh ?? []) : [];
-    const b = beginSession(r, fx);
+    // A new run opens where a species still waits (QA-CLARIDAD #36): the pick stays, unless its world is
+    // complete and another open one is not (then the newest of those). The start card can still switch.
+    const left = worldsLeft();
+    if (!again && left[r.world] === 0) {
+      const open = fx.worlds.filter((w) => (left[w] ?? 0) > 0);
+      if (open.length) {
+        s.research = { ...r, world: open[open.length - 1] };
+        bus.emit('worldPicked', { world: s.research.world });
+      }
+    }
+    const b = beginSession(s.research!, fx);
     s.research = b.research;
     s.session = b.session;
-    sessionStartInfo = again ? { ...b.start, fresh: [...new Set([...prevFresh, ...b.start.fresh])] } : b.start;
+    sessionStartInfo = { ...b.start, fresh: again ? [...new Set([...prevFresh, ...b.start.fresh])] : b.start.fresh, carry: s.carry?.essence ?? 0, worldsLeft: left };
     lastSummary = null;
     const se = b.session;
     const first = se.n === 1;
@@ -2189,6 +2237,10 @@ export function createGame(deps: GameDeps, save?: string): Game {
     }
     noteKeep(se, [...best.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]));
     const sum = summarize(se, r, fx, s.species.length);
+    // The visible goal (QA-CLARIDAD #36): the collection, where the next species lives and what to do.
+    const next = nextSpeciesWorld();
+    sum.collection = { have: s.species.length, total: TOTAL_WORLD_SPECIES, next };
+    sum.lessAction = sum.lessReason && next ? (next.cost === null ? SESSION_UI.lessActionPlay(WORLD_TEXT[next.world].name) : SESSION_UI.lessAction(WORLD_TEXT[next.world].name)) : null;
     s.research = applySummary(r, se, sum, fx);
     lastSummary = sum;
     golden = null;
@@ -3399,7 +3451,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
         return;
       }
       giveSessionEssence(essence, TEXT.gift.encargo);
-      countEncargo();
+      const name = r?.name && typeof r.name.es === 'string' && typeof r.name.en === 'string' ? { es: r.name.es, en: r.name.en } : SESSION_UI.encargoName;
+      countEncargo({ kind: 'encargo', name });
       checkProgress();
     },
     cycle,

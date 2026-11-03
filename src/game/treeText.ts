@@ -150,8 +150,8 @@ export const VALUE_TEXT = {
   normalPrice: t('Precio normal', 'Normal price'),
   /** The dish size is seen in the animation, never as a number (J-93). */
   room: (n: number, d?: number) => (void d, t(`Sitio para ${plural(n, 'criatura', 'criaturas')}`, `Room for ${plural(n, 'creature', 'creatures')}`)),
-  /** RF-04: one more Placa level would not show on this device (low quality caps the dish). */
-  deviceDishMax: t('Tu aparato ya tiene la placa más grande', 'Your device already has the biggest dish'),
+  /** RF-04, QA-CLARIDAD #11: one more Placa level would not show on this device (low quality caps the dish). */
+  deviceDishMax: t('✓ Máximo en este móvil', '✓ Max on this device'),
   roomOnly: (n: number) => t(`Sitio para ${plural(n, 'criatura', 'criaturas')}`, `Room for ${plural(n, 'creature', 'creatures')}`),
   nursery: (n: number) => t(`${n} creciendo a la vez`, `${n} growing at once`),
   /** Incubadora: seconds a seed needs to be born (time-lapse × Incubadora). */
@@ -477,6 +477,10 @@ export const SESSION_UI = {
       }`,
     ),
   lessAction: (world: Text) => t(`Para descubrir otra: compra ${world.es} en el Árbol.`, `To discover another: buy ${world.en} in the Tree.`),
+  /** …when that World is already open. */
+  lessActionPlay: (world: Text) => t(`Para descubrir otra: juega en el ${world.es}.`, `To discover another: play in ${world.en}.`),
+  /** A story Encargo the integrator did not name (or one met between sessions). */
+  encargoName: t('Un encargo', 'A request'),
   /** VELA's tip on the summary after fusions ("Hoy se juntaron 2"). */
   mergedTip: (n: number) => t(`Hoy se juntaron ${n}. Siembra más lejos de las demás.`, `${n} merged today. Sow further from the others.`),
   /** Start card: where every Luz of the wallet comes from (QA-CLARIDAD #26). */

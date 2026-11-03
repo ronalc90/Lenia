@@ -22,6 +22,7 @@ import {
   nodeCost,
   nodeTotalCost,
   niceRound,
+  nightGateLines,
   possibleSpecies,
   priceRule,
   routeNodes,
@@ -433,7 +434,7 @@ describe('a device that cannot show a bigger dish (RF-04, low quality)', () => {
       expect(nodeCost('dishXL', 0)).toBe(full.dishXL);
       const ba = beforeAfter({ dish: 1 }, 'dish');
       expect(ba.better).toBe(false);
-      expect(ba.after?.es).toMatch(/aparato/);
+      expect(ba.after?.es).toMatch(/móvil/); // QA-CLARIDAD: «móvil», not «aparato»
       expect(ba.after?.en).toMatch(/device/);
       const all: Record<string, number> = { lab: C.NIGHT_MAX };
       for (const d of TREE_NODES) if (d.id !== 'dishXL' && d.id !== 'ecosystem' && d.id !== 'lab') all[d.id] = d.maxLevel;
@@ -462,5 +463,29 @@ describe('the Destello route waits for its first Spark (QA-CLARIDAD #13)', () =>
 
   it('Destello frecuente reads as the first Spark coming sooner too', () => {
     expect(beforeAfter({}, 'spark').after!.es).toContain('El primero llega a los');
+  });
+});
+
+describe('screen data of the Tree (ADR-030)', () => {
+  it('QA#11 a Placa level past this device\'s dish is the device\'s maximum, never affordable', () => {
+    setDishLevelLimit(1);
+    try {
+      const st = treeStates(ctx({ dish: 1 }, 1e6, 10, 3)).get('dish')!;
+      expect(st).toMatchObject({ deviceMax: true, affordable: false, block: 'device' });
+      expect(beforeAfter({ dish: 1 }, 'dish').after!.es).toBe('✓ Máximo en este móvil');
+      expect(treeStates(ctx({}, 1e6, 10, 3)).get('dish')!.deviceMax).toBe(false);
+    } finally {
+      setDishLevelLimit(Infinity);
+    }
+  });
+
+  it('QA#37 night gate lines say have and need, the prize first', () => {
+    const lines = nightGateLines(ctx({}, 0, 3, 3));
+    expect(lines.map((l) => l.es)).toEqual([
+      'Noche 2 · capítulo 2 de la historia. +10 % de Datos y mejoras nuevas. Nada se borra.',
+      `Juega ${C.NIGHT_GATES[0].sessions} sesiones · llevas 3`,
+      'Especies en tu colección · ✓ tienes 3 (hace falta 1)',
+    ]);
+    expect(nightGateLines(ctx({ lab: C.NIGHT_MAX }, 0, 99, 9))).toEqual([]);
   });
 });

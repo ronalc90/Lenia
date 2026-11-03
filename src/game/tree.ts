@@ -26,7 +26,7 @@ import { DISH_DIAMETERS } from '../core/dish';
 import { SEED_NURSERY_MAX } from './balance';
 import * as C from './cycleBalance';
 import { formatDuration, formatNumber } from './format';
-import { NODE_TEXT, VALUE_TEXT as V, type BranchId } from './treeText';
+import { NODE_TEXT, TREE_UI, VALUE_TEXT as V, type BranchId } from './treeText';
 import { BASE_WORLD, WORLD_BY_ID, WORLDS, worldSpeciesCount, type WorldId } from './worlds';
 
 export type { BranchId } from './treeText';
@@ -670,6 +670,16 @@ export function nightInfo(ctx: TreeCtx): NightInfo {
     !!gate && ctx.sessions >= gate.sessions && (ctx.species >= gate.species || ctx.sessions >= gate.sessions + C.NIGHT_GATE_FALLBACK);
   const cost = next ? nodeCost('lab', night) : Infinity;
   return { night, next, cost, gate, gateMet, ready: gateMet, affordable: gateMet && ctx.datos >= cost };
+}
+
+/**
+ * The centre's sheet in words (ADR-030, QA-CLARIDAD #37): the prize first ("Noche 2 · capítulo 2… Nada se
+ * borra."), then one line per condition with what the player has and what it needs. Empty at the last night.
+ */
+export function nightGateLines(ctx: TreeCtx): Text[] {
+  const ni = nightInfo(ctx);
+  if (!ni.next || !ni.gate) return [];
+  return [TREE_UI.nightPrize(ni.next), TREE_UI.gateSessions(ctx.sessions, ni.gate.sessions), TREE_UI.gateSpecies(ctx.species, ni.gate.species)];
 }
 
 /** Status of every node. Routes are walked centre outwards, so a node's prerequisite is decided first. */

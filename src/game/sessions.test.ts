@@ -545,3 +545,70 @@ describe('clear prices (ADR-030, docs/CLARIDAD2.md §2.7, §2.11)', () => {
     expect(st(fast.g).goldenTimer).toBeGreaterThanOrEqual(C.SESSION_GOLDEN_FIRST_DELAY[0] * f - 1e-9);
   });
 });
+
+describe('screen data of the run and its report (ADR-030)', () => {
+  it('QA#26 the start view says where every Luz of the wallet comes from', () => {
+    const { g } = sessionsGame();
+    g.actions.seedAt(150, 200);
+    g.actions.endSessionNow!();
+    g.grantEncargo({ essence: 30, samples: 0, name: { es: 'Ten 3 criaturas', en: 'Have 3 creatures' } }); // done in the Tree
+    g.actions.startSession!();
+    const start = g.sessionStart!;
+    expect(start.carry).toBe(30);
+    expect(start.startEssence + start.carry!).toBe(g.view().essence);
+  });
+
+  it('QA#36 the next session defaults to a world with species to find', () => {
+    const { g } = sessionsGame();
+    g.actions.seedAt(150, 200);
+    run(g, 6, report(stable(2)), 0.5); // the Classic world's one species enters the Bestiary
+    expect(g.state.species.some((x) => x.catalogCode === 'O2u')).toBe(true);
+    g.actions.endSessionNow!();
+    st(g).research!.datos = 1e3;
+    expect(g.buyNode('worldCold').ok).toBe(true);
+    expect(g.view().research!.world).toBe('cold');
+    // The player goes back to the Classic world, already complete, for one run (picked on the start card)…
+    g.actions.startSession!();
+    g.actions.pickWorld!('classic');
+    expect(g.view().session!.world).toBe('classic'); // their pick is kept
+    g.actions.seedAt(150, 200);
+    g.actions.endSessionNow!();
+    g.actions.startSession!();
+    // …so the next run opens where a species still waits.
+    expect(g.view().session!.world).toBe('cold');
+    expect(g.sessionStart!.worldsLeft).toMatchObject({ classic: 0, cold: 1 });
+  });
+
+  it('QA#36 a summary with fewer Datos than the one before says why', () => {
+    const { g } = sessionsGame();
+    g.actions.seedAt(150, 200);
+    run(g, 6, report(stable(2)), 0.5); // a first run that finds its species
+    g.actions.endSessionNow!();
+    const first = g.lastSummary!;
+    g.actions.startSession!();
+    g.actions.seedAt(150, 200);
+    g.actions.endSessionNow!();
+    const second = g.lastSummary!;
+    expect(second.datos.total).toBeLessThan(first.datos.total);
+    expect(second.lessReason).toMatchObject({ before: first.fromLight, now: second.fromLight });
+    expect(second.lessReason!.prize).toBe(first.discovery);
+    expect(first.lessReason ?? null).toBeNull();
+  });
+
+  it('QA#24/#9 the summary names every Encargo, record and first step it pays for', () => {
+    const { g } = sessionsGame();
+    g.actions.seedAt(150, 200);
+    run(g, 3, report(stable(2)), 0.5);
+    g.grantEncargo({ essence: 5, samples: 0, name: { es: 'Siembra 2 criaturas', en: 'Sow 2 creatures' } });
+    g.actions.endSessionNow!();
+    const sum = g.lastSummary!;
+    const steps = sum.goals.filter((x) => x.kind === 'step').map((x) => x.name.es);
+    expect(steps).toContain('sembrar');
+    expect(steps).toContain('primera criatura');
+    expect(sum.goals.filter((x) => x.kind === 'encargo').map((x) => x.name.es)).toEqual(['Siembra 2 criaturas']);
+    const paid = sum.datos.terms.find((t) => t.kind === 'encargos');
+    expect(sum.goals.reduce((a, x) => a + x.datos, 0)).toBe(paid?.value ?? 0);
+    for (const r of sum.records) expect(r.name.es.length).toBeGreaterThan(0);
+    expect(sum.collection).toMatchObject({ have: g.state.species.length, total: 7 });
+  });
+});
