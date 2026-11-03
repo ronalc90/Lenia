@@ -18,7 +18,8 @@ import { drawDoctorBust, getPlayerLook, PLAYER_LOOK_IDS, PLAYER_LOOK_NAMES, play
 import { restartClass } from '../art/motion';
 import { Portrait } from '../art/portraits';
 import { featherEdges } from '../art/vela';
-import { paintScene } from './scenes';
+import { loadPhoto } from '../art/photos';
+import { INTRO_PHOTOS, paintScene } from './scenes';
 
 export const INTRO_STORAGE_KEY = 'bioluma.intro';
 
@@ -289,6 +290,9 @@ export function createIntro(root: HTMLElement, opts: IntroOptions): Intro {
   }
   document.addEventListener('keydown', onKey, true);
 
+  // The archive photos start loading now; every panel draws without them until they arrive (photos.ts).
+  for (const id of INTRO_PHOTOS) void loadPhoto(id);
+
   // ── animation loop ──
   const ctx = canvas.getContext('2d');
   let raf = 0;
@@ -345,7 +349,7 @@ export function createIntro(root: HTMLElement, opts: IntroOptions): Intro {
     if (ctx) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, cw, ch);
-      paintScene(ctx, panels[index].id, { w: cw, h: ch, t, rm: rm(), look });
+      paintScene(ctx, panels[index].id, { w: cw, h: ch, t, rm: rm(), look, lang: L(), dpr });
     }
     const pt = frozen ?? clock;
     portraits.forEach(({ p }, i) => {
