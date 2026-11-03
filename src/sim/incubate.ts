@@ -68,8 +68,15 @@ export interface IncubationOptions {
   budgetMs: number;
   /** Detector cadence in steps (src/main.ts DETECT_EVERY). */
   every: number;
-  /** Fewest steps a frame queues (default INCUBATE.minSteps; tests in lockstep pass `every`). */
+  /** Fewest steps a frame queues (default INCUBATE.minSteps). */
   minSteps?: number;
+  /**
+   * Reads a frame takes whatever they cost (default 0: past the frame-start read, only reads that fit
+   * the budget). Lockstep e2e builds pass several, with minSteps = that many boundaries: a
+   * software-rendered test browser spends most of a frame drawing, so a frame there runs several
+   * boundaries (correctness only, no frame budget).
+   */
+  minReads?: number;
   /** Most steps a frame may queue (src/sim/reveal.ts REVEAL.hiddenBudget). */
   maxSteps: number;
 }
@@ -96,6 +103,7 @@ export class IncubationPacer {
   private readonly budget: number;
   private readonly every: number;
   private readonly min: number;
+  private readonly minReads: number;
   private readonly max: number;
   private readonly out: IncubationFrame = { ran: 0, reads: 0, ms: 0 };
 
@@ -104,6 +112,7 @@ export class IncubationPacer {
     this.every = Math.max(1, Math.floor(o.every));
     this.max = Math.max(1, Math.floor(o.maxSteps));
     this.min = Math.max(1, Math.min(this.max, Math.floor(o.minSteps ?? INCUBATE.minSteps)));
+    this.minReads = Math.max(0, Math.floor(o.minReads ?? 0));
     this.pace = Math.max(this.min, Math.min(this.max, INCUBATE.startSteps));
   }
 
@@ -129,7 +138,7 @@ export class IncubationPacer {
     let queued = false;
     while (out.ran < allow && !dish.contextLost) {
       if (io.due()) {
-        if (queued && !this.readFits(io.now() - t0, firstWait)) break;
+        if (queued && out.reads >= this.minReads && !this.readFits(io.now() - t0, firstWait)) break;
         const a = io.now();
         const wait = io.read();
         const cost = io.now() - a;

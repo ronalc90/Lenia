@@ -1155,14 +1155,17 @@ function boot(): void {
   const clockArg = { stepped: 0, speed: 1, wallDt: 0, paused: false };
   const renderArg: Parameters<NonNullable<typeof sim>['render']>[0] = { camera, time: 0, quality: fxQuality };
   /**
-   * Pacing of the unlit incubation's synchronous reads (src/sim/incubate.ts). Lockstep e2e builds keep
-   * one whole boundary a frame (a software-rendered test browser would otherwise incubate for minutes).
+   * Pacing of the unlit incubation's synchronous reads (src/sim/incubate.ts). Lockstep e2e builds run
+   * LOCKSTEP_INCUBATE_BOUNDARIES boundaries a frame, each read (a software-rendered test browser spends
+   * most of a frame drawing and would otherwise incubate for a minute).
    */
+  const LOCKSTEP_INCUBATE_BOUNDARIES = 4;
   const pacers = new Map<boolean, IncubationPacer>();
   const incubation = (lockstep: boolean): IncubationPacer => {
     let p = pacers.get(lockstep);
     if (!p) {
-      p = new IncubationPacer({ budgetMs: INCUBATE_FRAME_MS, every: DETECT_EVERY, maxSteps: REVEAL.hiddenBudget, ...(lockstep ? { minSteps: DETECT_EVERY } : {}) });
+      const fast = { minSteps: LOCKSTEP_INCUBATE_BOUNDARIES * DETECT_EVERY, minReads: LOCKSTEP_INCUBATE_BOUNDARIES };
+      p = new IncubationPacer({ budgetMs: INCUBATE_FRAME_MS, every: DETECT_EVERY, maxSteps: REVEAL.hiddenBudget, ...(lockstep ? fast : {}) });
       pacers.set(lockstep, p);
     }
     return p;

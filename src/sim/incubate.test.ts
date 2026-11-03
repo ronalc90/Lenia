@@ -18,7 +18,7 @@ const EVERY = 10;
 const BUDGET = 8;
 const VSYNC = 1000 / 60;
 
-function play(dev: Device, steps: number, opts: { minSteps?: number; maxFrames?: number } = {}) {
+function play(dev: Device, steps: number, opts: { minSteps?: number; minReads?: number; maxFrames?: number } = {}) {
   let clock = 0;
   let gpuFreeAt = 0;
   let step = 0;
@@ -48,7 +48,7 @@ function play(dev: Device, steps: number, opts: { minSteps?: number; maxFrames?:
     },
     now: () => clock,
   };
-  const pacer = new IncubationPacer({ budgetMs: BUDGET, every: EVERY, maxSteps: 400, minSteps: opts.minSteps });
+  const pacer = new IncubationPacer({ budgetMs: BUDGET, every: EVERY, maxSteps: 400, minSteps: opts.minSteps, minReads: opts.minReads });
   const frames: { ms: number; reads: number; ran: number }[] = [];
   let left = steps;
   let frameStart = 0;
@@ -142,6 +142,14 @@ describe('hidden incubation pacing', () => {
     const { frames } = play({ msPerStep: 30, renderMs: 300, detectMs: 1 }, 200, { minSteps: EVERY });
     expect(frames.every((f) => f.ran >= EVERY)).toBe(true);
     expect(frames.length).toBe(20);
+  });
+
+  it('lockstep e2e builds can run several boundaries a frame, each one read', () => {
+    const { frames, reads, blind } = play({ msPerStep: 30, renderMs: 300, detectMs: 1 }, 400, { minSteps: 4 * EVERY, minReads: 4 });
+    expect(frames.length).toBe(10);
+    expect(frames.every((f) => f.ran === 4 * EVERY && f.reads === 4)).toBe(true);
+    expect(blind).toEqual([]);
+    expect(reads).toEqual(Array.from({ length: 40 }, (_, i) => i * EVERY));
   });
 
   it('a lost context stops the frame', () => {
