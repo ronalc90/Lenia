@@ -146,11 +146,23 @@ export const SESSION_RECENT_SEED_MEMORY = 5;
 /** The Spark stays on the dish this long in a session (balance GOLDEN_LIFE 12 s: most of a 15–20 s run). [design] */
 export const SESSION_GOLDEN_LIFE = 8;
 /**
+ * @deprecated (ADR-030: replaced by RUN_CARD_MAX / RUN_QUIET_START_S; kept until ui.ts and moments drop it.)
  * Momentos (explainer cards) never open while a run shorter than this is on the clock: they wait for
  * the summary. A card in a 15 s run eats the run. Short toasts (≤ SESSION_TOAST_MAX_MS) still show. [design]
  */
 export const MOMENT_MIN_RUN_SECONDS = 60;
 export const SESSION_TOAST_MAX_MS = 1500;
+
+// ───────────────────────────── Interruptions (ADR-030; replaces MOMENT_MIN_RUN_SECONDS) ──
+
+/** Pausing cards per running session from session 2: one, and only for an accident seen for the first time. [QA-CLARIDAD #25; design] */
+export const RUN_CARD_MAX = 1;
+/** No card in the first seconds of a run. [QA-CLARIDAD §6.9] */
+export const RUN_QUIET_START_S = 5;
+/** Seconds between two toasts in a run (each ≤ SESSION_TOAST_MAX_MS). [design] */
+export const TOAST_GAP_S = 4;
+/** Collision warning horizon, seconds of dish time (game/contact.ts). [design: one swerve of the deflector plus a reaction] */
+export const CONTACT_WARN_S = 2;
 
 // ───────────────────────────── Luz: by hand first, then pipettes (ADR-030) ──
 
@@ -195,9 +207,13 @@ export const TUTORIAL_HOLD_MAX_S = 45;
  * raise it (no crowding, no saturation): more creatures only mean more Esencia. [owner]
  */
 export const SESSION_SEED_PRICE = 4;
-/** Each seed bought this session makes the next one ×this (free seeds do not count). [owner: "e.g. ×1.05"] */
-export const SEED_PRICE_STEP = 1.05;
-/** …never more than ×this over the base. [design] */
+/**
+ * One seed price for the whole session ("Una semilla cuesta 4 de luz. Siempre."). Was 1.05: the friendly
+ * rounding hid the first steps (4.2 → 4) and the sheet said "a bit more" while showing 4 (QA-CLARIDAD #21).
+ * [owner, ADR-030; bot B2 before/after in docs/RITMO.md §8]
+ */
+export const SEED_PRICE_STEP = 1;
+/** @deprecated (ADR-030: SEED_PRICE_STEP is 1; kept for the price plate until it drops the step.) …never more than ×this over the base. [design] */
 export const SEED_PRICE_STEP_MAX = 3;
 /**
  * The physical limit is room: creatures (alive, forming, or seeds not yet seen) the dish holds, by
@@ -234,6 +250,15 @@ export const BOOST_MIN_COST = 10;
  * the next one's Abonos dearer and the next session poorer]
  */
 export const BOOST_FROM_SECONDS = 8;
+/**
+ * Nutrientes (Abono) is not on sale in session 1, which teaches seeds, creatures and light (the planner bought
+ * none there anyway). Its price is set once per session, when it goes on sale (BOOST_SECONDS of the Luz/s of
+ * that moment, at least BOOST_MIN_COST), ×BOOST_GROWTH per one bought: it never rises on its own (QA-CLARIDAD
+ * #22; rule in session.ts boostCost). [CLARIDAD §3.3; ADR-030; bot B2]
+ */
+export const BOOST_FROM_SESSION = 2;
+/** Off sale in the last N seconds: bought at 0:01 it did nothing visible (QA-CLARIDAD #8). [design; ADR-030] */
+export const BOOST_UNTIL_REMAINING = 3;
 
 // ───────────────────────────── Spark (sessions) ────────────────────
 
@@ -551,7 +576,10 @@ export const ENCYCLOPEDIA_BONUS = 0.25;
 
 // ───────────────────────────── ✨ Destello ─────────────────────────
 
-/** Destello frecuente: spawn interval ×this per level (40–45 s → 25–28 s). [plan: ×0,8; bot] */
+/**
+ * Destello frecuente: spawn interval ×this per level (40–45 s → 25–28 s), and since ADR-030 the first Spark of a
+ * run too (6–12 s → 4–7 s), so a run of 15–45 s feels it (QA-CLARIDAD #13). [plan: ×0,8; bot B2]
+ */
 export const GOLDEN_INTERVAL_FACTOR = 0.85;
 /** Destello lento: extra life (s) per level (8 → 11 → 14 s on the dish). [plan: +4; RITMO: SESSION_GOLDEN_LIFE 8 s] */
 export const GOLDEN_LIFE_BONUS = 3;

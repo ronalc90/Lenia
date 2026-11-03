@@ -247,6 +247,12 @@ const dishSize = (fx: TreeEffects): Text => V.room(fx.capacity, DISH_DIAMETERS[M
 const plusPct = (x: number, what: (p: string) => Text): Text => what(pctNum(x));
 const range = (a: number, b: number): string => `${Math.round(a)}–${Math.round(b)}`;
 
+/** The first Spark's window in a run, "6–12": Primer destello's or the usual one, × Destello frecuente (ADR-030). */
+const firstSpark = (fx: TreeEffects): string => {
+  const [a, b] = fx.goldenFirstDelay ?? C.SESSION_GOLDEN_FIRST_DELAY;
+  return range(a * fx.goldenIntervalMult, b * fx.goldenIntervalMult);
+};
+
 /** Real seconds a seed needs to become a stable (paying) creature with these effects (time-lapse × Incubadora). */
 export function birthSeconds(fx: Pick<TreeEffects, 'simPace' | 'matureSpeed'>): number {
   const pace = Math.min(C.SIM_PACE_MAX, Math.max(1e-6, fx.simPace * fx.matureSpeed));
@@ -369,10 +375,10 @@ export const TREE_NODES: TreeNodeDef[] = [
 
   // ───── ✨ Destello ─────
   ...route('spark', [
-    { id: 'spark', ring: 1, icon: 'spark', maxLevel: 3, lower: true, apply: (fx, l) => void (fx.goldenIntervalMult *= Math.pow(C.GOLDEN_INTERVAL_FACTOR, l)), measure: (fx) => fx.goldenIntervalMult, show: (fx) => V.sparkEvery(range(C.SESSION_GOLDEN_INTERVAL[0] * fx.goldenIntervalMult, C.SESSION_GOLDEN_INTERVAL[1] * fx.goldenIntervalMult)) },
+    { id: 'spark', ring: 1, icon: 'spark', maxLevel: 3, lower: true, apply: (fx, l) => void (fx.goldenIntervalMult *= Math.pow(C.GOLDEN_INTERVAL_FACTOR, l)), measure: (fx) => fx.goldenIntervalMult, show: (fx) => V.firstSoon(firstSpark(fx)) },
     { id: 'sparkLife', ring: 2, icon: 'sparkLife', maxLevel: 2, apply: (fx, l) => void (fx.goldenLifeBonus += l * C.GOLDEN_LIFE_BONUS), measure: (fx) => fx.goldenLifeBonus, show: (fx) => V.sparkStays(C.SESSION_GOLDEN_LIFE + fx.goldenLifeBonus) },
     { id: 'sparkTime', ring: 2, icon: 'sparkTime', maxLevel: 2, apply: (fx, l) => void (fx.timePerGolden += l * C.TIME_PER_GOLDEN), measure: (fx) => fx.timePerGolden, show: (fx) => V.perSpark(fx.timePerGolden) },
-    { id: 'sparkFirst', ring: 3, icon: 'sparkFirst', maxLevel: 1, apply: (fx) => void (fx.goldenFirstDelay = [...C.GOLDEN_FIRST_FAST]), measure: (fx) => (fx.goldenFirstDelay ? 1 : 0), show: (fx) => V.firstSpark(range(...(fx.goldenFirstDelay ?? C.SESSION_GOLDEN_FIRST_DELAY))) },
+    { id: 'sparkFirst', ring: 3, icon: 'sparkFirst', maxLevel: 1, apply: (fx) => void (fx.goldenFirstDelay = [...C.GOLDEN_FIRST_FAST]), measure: (fx) => (fx.goldenFirstDelay ? 1 : 0), show: (fx) => V.firstSpark(firstSpark(fx)) },
     { id: 'sparkGift', ring: 3, icon: 'sparkGift', maxLevel: 3, apply: (fx, l) => void (fx.goldenRewardMult *= 1 + l * C.GOLDEN_GIFT_BONUS), measure: (fx) => fx.goldenRewardMult, show: (fx) => V.gifts(Math.round(C.SPARK_GIFT_SECONDS * fx.goldenRewardMult)) },
     { id: 'sparkDatos', ring: 3, icon: 'sparkDatos', maxLevel: 2, apply: (fx, l) => void (fx.datosPerGolden += l * C.GOLDEN_DATOS), measure: (fx) => fx.datosPerGolden, show: (fx) => V.datosPerSpark(fx.datosPerGolden) },
     { id: 'sparkMutagen', ring: 4, icon: 'sparkMutagen', maxLevel: 1, apply: (fx) => void (fx.mutagenSeeds = C.MUTAGEN_TREE_SEEDS), measure: (fx) => fx.mutagenSeeds, show: (fx) => V.sureSeeds(fx.mutagenSeeds) },
@@ -598,7 +604,8 @@ export interface TreeCtx {
 }
 
 export type NodeStatus = 'owned' | 'available' | 'locked' | 'mystery' | 'hidden';
-export type BuyBlock = 'maxed' | 'hidden' | 'locked' | 'night' | 'gate' | 'datos' | 'device' | 'unknown';
+/** 'later' (ADR-030): the Destello route waits for the run with the first Spark (NodeState.sessionNeeded). */
+export type BuyBlock = 'maxed' | 'hidden' | 'locked' | 'night' | 'gate' | 'datos' | 'device' | 'later' | 'unknown';
 
 /**
  * A prerequisite is met when it is owned, or when it is a Placa node this device cannot show at all (its
@@ -623,6 +630,10 @@ export interface NodeState {
   block: BuyBlock | null;
   /** Night that opens its ring when that is what keeps it closed. */
   nightNeeded: number | null;
+  /** (ADR-030) The Destello route shows "?" with "Llega en la sesión N" until the session before its first Spark ends. */
+  sessionNeeded: number | null;
+  /** (ADR-030, QA-CLARIDAD #11) A Placa level this device's dish cannot show: no price bar, no "Comprar". */
+  deviceMax: boolean;
   /** Prerequisites not owned yet. */
   missingRequires: string[];
   /** Datos still missing (0 when affordable). */
@@ -679,7 +690,10 @@ export function treeStates(ctx: TreeCtx): Map<string, NodeState> {
     const ringOpen = night >= ringNight(def.ring);
     let status: NodeStatus;
     let nightNeeded: number | null = null;
+    // The Destello route stays "?" until the run before the first Spark has been played (QA-CLARIDAD #13).
+    const sessionNeeded = def.branch === 'spark' && level < 1 && ctx.sessions < C.SPARK_FROM_SESSION - 1 ? C.SPARK_FROM_SESSION : null;
     if (level >= 1) status = 'owned';
+    else if (sessionNeeded !== null && !missingRequires.length) status = 'mystery';
     else if (!missingRequires.length && !ringOpen) {
       status = 'mystery';
       nightNeeded = ringNight(def.ring);
@@ -692,6 +706,7 @@ export function treeStates(ctx: TreeCtx): Map<string, NodeState> {
     if (maxed) block = 'maxed';
     else if (status === 'hidden') block = 'hidden';
     else if (nightNeeded !== null) block = 'night';
+    else if (sessionNeeded !== null) block = 'later';
     else if (status === 'mystery' || missingRequires.length) block = 'locked';
     else if (def.id === 'lab' && !ni.gateMet) block = 'gate';
     else if (beyondDevice(def.id, level)) block = 'device';
@@ -706,6 +721,8 @@ export function treeStates(ctx: TreeCtx): Map<string, NodeState> {
       affordable: block === null,
       block,
       nightNeeded,
+      sessionNeeded,
+      deviceMax: block === 'device',
       missingRequires,
       missingDatos: Number.isFinite(cost) ? Math.max(0, cost - ctx.datos) : 0,
     });

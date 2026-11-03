@@ -156,7 +156,8 @@ describe('always more: "antes → después"', () => {
     expect(beforeAfter({}, 'fridge')).toMatchObject({ before: { es: '1 criatura viva al empezar' }, after: { es: '2 criaturas vivas al empezar' } });
     expect(beforeAfter({}, 'cheapSeeds')).toMatchObject({ before: { es: 'Precio normal' }, after: { es: 'Semillas −15 %' } });
     expect(beforeAfter({}, 'autoSeeder')).toMatchObject({ before: { es: 'Nunca' }, after: { es: 'Cada 8 s' } });
-    expect(beforeAfter({}, 'spark')).toMatchObject({ before: { es: 'Llega cada 40–45 s' }, after: { es: 'Llega cada 34–38 s' } });
+    // ADR-030: Destello frecuente is felt in every run, through the first Spark (6–12 s × 0,85).
+    expect(beforeAfter({}, 'spark')).toMatchObject({ before: { es: 'El primero llega a los 6–12 s' }, after: { es: 'El primero llega a los 5–10 s' } });
     expect(beforeAfter({}, 'worldCold')).toMatchObject({ before: { es: '1 especie para encontrar' }, after: { es: '2 especies para encontrar' } });
     expect(beforeAfter({ clock: C.TIME_CLOCK_LEVELS }, 'clock').after).toBeNull();
   });
@@ -228,7 +229,8 @@ describe('prices: one rule, nothing hidden', () => {
 
 describe('reveal rules', () => {
   it('a new save sees the centre, the 8 first steps and "?" right behind them', () => {
-    const st = treeStates(ctx());
+    // (After the run before the first Spark: until then the Destello route is a "?" of its own, below.)
+    const st = treeStates(ctx({}, 0, C.SPARK_FROM_SESSION - 1));
     expect(st.get('lab')!.status).toBe('owned');
     for (const b of BRANCHES) {
       const [a, b2, c] = routeNodes(b);
@@ -271,7 +273,8 @@ describe('reveal rules', () => {
 
   it('counts what is affordable and the next goal', () => {
     expect(affordableNodes(ctx({}, 0))).toEqual([]);
-    expect(affordableNodes(ctx({}, C.TREE_RING_START[1])).sort()).toEqual(BRANCHES.map((b) => routeNodes(b)[0].id).sort());
+    expect(affordableNodes(ctx({}, C.TREE_RING_START[1], C.SPARK_FROM_SESSION - 1)).sort()).toEqual(BRANCHES.map((b) => routeNodes(b)[0].id).sort());
+    expect(affordableNodes(ctx({}, C.TREE_RING_START[1]))).not.toContain('spark');
     expect(nextGoal(ctx({}, 0))!.cost).toBe(C.TREE_RING_START[1]);
   });
 });
@@ -444,5 +447,20 @@ describe('a device that cannot show a bigger dish (RF-04, low quality)', () => {
       expect(st.get('ecosystem')).toMatchObject({ status: 'available', block: null, missingRequires: [] });
     });
     expect(treeStates({ levels: { lab: C.NIGHT_MAX, dish: 1 }, datos: 1e9, sessions: 999, species: 99 }).get('dish')!.block).toBeNull();
+  });
+});
+
+describe('the Destello route waits for its first Spark (QA-CLARIDAD #13)', () => {
+  it('the Destello route is hidden until session 3 ends', () => {
+    const before = treeStates(ctx({}, 1e6, C.SPARK_FROM_SESSION - 2, 1));
+    expect(before.get('spark')).toMatchObject({ status: 'mystery', block: 'later', sessionNeeded: C.SPARK_FROM_SESSION, affordable: false });
+    const after = treeStates(ctx({}, 1e6, C.SPARK_FROM_SESSION - 1, 1));
+    expect(after.get('spark')).toMatchObject({ status: 'available', block: null, sessionNeeded: null });
+    // Other routes are not touched.
+    expect(before.get('clock')!.affordable).toBe(true);
+  });
+
+  it('Destello frecuente reads as the first Spark coming sooner too', () => {
+    expect(beforeAfter({}, 'spark').after!.es).toContain('El primero llega a los');
   });
 });

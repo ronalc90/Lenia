@@ -179,6 +179,8 @@ export const VALUE_TEXT = {
   sparkStays: (s: number) => t(`Se queda ${s} s`, `Stays ${s} s`),
   perSpark: (s: number) => t(`+${s} s por chispa`, `+${s} s per spark`),
   firstSpark: (r: string) => t(`La primera a los ${r} s`, `First one at ${r} s`),
+  /** Destello frecuente (ADR-030): the first Spark of a run comes sooner ("6–12 s → 5–10 s"). */
+  firstSoon: (r: string) => t(`El primero llega a los ${r} s`, `The first one comes at ${r} s`),
   gifts: (sec: number) => t(`Regalo: ${sec} s de Esencia`, `Gift: ${sec} s of Essence`),
   datosPerSpark: (n: number) => t(`+${n} ${n === 1 ? 'Dato' : 'Datos'} por chispa`, `+${n} Data per spark`),
   sureSeeds: (n: number) => t(n === 1 ? '1 semilla segura por chispa' : `${n} semillas seguras por chispa`, n === 1 ? '1 sure seed per spark' : `${n} sure seeds per spark`),
@@ -311,6 +313,8 @@ export const TREE_UI = {
     have >= need
       ? t(`Especies en tu colección · ✓ tienes ${have} (hace falta ${need})`, `Species in your collection · ✓ you have ${have} (need ${need})`)
       : t(`Especies en tu colección · tienes ${have} (hace falta ${need})`, `Species in your collection · you have ${have} (need ${need})`),
+  /** The Destello route before its first Spark (ADR-030, QA-CLARIDAD #13). */
+  sparkLater: (n: number) => t(`Llega en la sesión ${n}`, `Comes in session ${n}`),
   /** "Nueva sesión" after buying a World. */
   playWorld: (name: Text) => t(`¡Juega en el ${name.es}!`, `Play in ${name.en}!`),
 };

@@ -173,6 +173,9 @@ describe('sessions cycle: gifts and boosts are proportional', () => {
     const { g, count } = sessionsGame();
     const rep = report(stable(3));
     g.actions.seedAt(150, 200);
+    g.actions.endSessionNow!(); // Nutrientes from session 2 (ADR-030)
+    g.actions.startSession!();
+    g.actions.seedAt(150, 200);
     run(g, 2, rep, 0.5);
     st(g).essence = 1e6;
     expect(g.actions.buyBoost!()).toBe(false); // on sale after BOOST_FROM_SECONDS of clock
@@ -186,7 +189,8 @@ describe('sessions cycle: gifts and boosts are proportional', () => {
     run(g, 1, rep, 0.5);
     expect(g.view().essencePerSec).toBeCloseTo(eps0 * C.BOOST_MULT, 6);
     expect(g.view().boost).toMatchObject({ count: 1, mult: C.BOOST_MULT });
-    expect(g.view().boost!.cost).toBe(Math.round(Math.max(C.BOOST_MIN_COST, C.BOOST_SECONDS * eps0 * C.BOOST_MULT) * C.BOOST_GROWTH));
+    // Frozen when it went on sale (ADR-030): the next one is the double, whatever the dish makes now.
+    expect(g.view().boost!.cost).toBe(Math.round(Math.max(C.BOOST_MIN_COST, C.BOOST_SECONDS * eps0) * C.BOOST_GROWTH));
     // Spent Esencia never lowers the Datos: they count Esencia earned.
     expect(g.session!.essence).toBeGreaterThan(0);
     expect(g.session!.spent).toBeGreaterThanOrEqual(cost0);
@@ -458,5 +462,86 @@ describe('session 1 tutorial: the player sows the first creature, the clock wait
     expect(((log.get('dishSeed') ?? []) as { specs: unknown[] }[]).flatMap((e) => e.specs)).toHaveLength(C.STARTER_CREATURES);
     expect(g.actions.seedAt(100, 120)).not.toBeNull();
     expect(g.view().session!.phase).toBe('running');
+  });
+});
+
+describe('clear prices (ADR-030, docs/CLARIDAD2.md §2.7, §2.11)', () => {
+  /** A game in session `n` (earlier ones ended at once), its clock running. */
+  function inSession(n: number, seed = 2) {
+    const x = sessionsGame(seed);
+    for (let k = 1; k < n; k++) {
+      x.g.actions.seedAt(150, 200);
+      x.g.actions.endSessionNow!();
+      x.g.actions.startSession!();
+    }
+    x.g.actions.seedAt(150, 200);
+    return x;
+  }
+
+  it('QA#21 the seed price never changes within a session', () => {
+    const { g } = inSession(1);
+    const s = st(g);
+    s.charges = { free: 0, guaranteed: 0 };
+    s.essence = 1000;
+    const prices = [g.view().seedCost];
+    g.actions.seedAt(30, 200);
+    prices.push(g.view().seedCost);
+    expect(g.view().seedPrice!.bought).toBe(1);
+    s.session!.bought = 12; // a busy run: the twelfth seed costs what the first did
+    prices.push(g.view().seedCost);
+    expect(new Set(prices)).toEqual(new Set([C.SESSION_SEED_PRICE]));
+    expect(g.view().seedPrice!.stepMult).toBe(1);
+  });
+
+  it('QA#5 no Nutrientes in session 1', () => {
+    const { g } = inSession(1);
+    st(g).essence = 1e6;
+    run(g, C.BOOST_FROM_SECONDS + 1, report(stable(2)), 0.5);
+    expect(g.view().boost).toBeNull();
+    expect(g.actions.buyBoost!()).toBe(false);
+  });
+
+  it('QA#22 the Nutrientes price does not rise while nothing is bought', () => {
+    const { g } = inSession(C.BOOST_FROM_SESSION);
+    st(g).essence = 1e6;
+    run(g, C.BOOST_FROM_SECONDS + 1, report(stable(1)), 0.5);
+    const b0 = g.view().boost!;
+    expect(b0.affordable).toBe(true);
+    const eps0 = g.view().essencePerSec;
+    expect(b0.cost).toBe(Math.round(Math.max(C.BOOST_MIN_COST, C.BOOST_SECONDS * eps0)));
+    expect(b0.nextCost).toBe(Math.round(b0.cost * C.BOOST_GROWTH));
+    run(g, 2, report(stable(3)), 0.5); // the dish makes three times the light: the price stays
+    expect(g.view().essencePerSec).toBeGreaterThan(eps0 * 2);
+    expect(g.view().boost!.cost).toBe(b0.cost);
+    expect(g.actions.buyBoost!()).toBe(true);
+    expect(g.view().boost!.cost).toBe(b0.nextCost);
+  });
+
+  it('QA#8 no Nutrientes in the last 3 s', () => {
+    const { g } = inSession(C.BOOST_FROM_SESSION);
+    st(g).essence = 1e6;
+    const rep = report(stable(1));
+    for (let i = 0; i < 400 && g.view().session!.remaining > C.BOOST_UNTIL_REMAINING; i++) g.tick(0.25, rep);
+    const b = g.view().boost!;
+    expect(b).toMatchObject({ noTime: true, affordable: false });
+    expect(g.actions.buyBoost!()).toBe(false);
+  });
+
+  it('QA#13 Destello frecuente brings the first Spark sooner', () => {
+    const plain = inSession(C.SPARK_FROM_SESSION, 5);
+    const fast = sessionsGame(5);
+    for (let k = 1; k < C.SPARK_FROM_SESSION; k++) {
+      if (k > 1) fast.g.actions.startSession!();
+      fast.g.actions.seedAt(150, 200);
+      fast.g.actions.endSessionNow!();
+    }
+    st(fast.g).research!.datos = 1e4;
+    for (let k = 0; k < 3; k++) expect(fast.g.buyNode('spark').ok).toBe(true);
+    fast.g.actions.startSession!();
+    fast.g.actions.seedAt(150, 200);
+    const f = Math.pow(C.GOLDEN_INTERVAL_FACTOR, 3);
+    expect(st(plain.g).goldenTimer).toBeGreaterThanOrEqual(C.SESSION_GOLDEN_FIRST_DELAY[0]);
+    expect(st(fast.g).goldenTimer).toBeLessThanOrEqual(C.SESSION_GOLDEN_FIRST_DELAY[1] * f + 1e-9);
+    expect(st(fast.g).goldenTimer).toBeGreaterThanOrEqual(C.SESSION_GOLDEN_FIRST_DELAY[0] * f - 1e-9);
   });
 });

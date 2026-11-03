@@ -119,6 +119,8 @@ export interface SessionState {
   planted?: boolean;
   /** (ADR-030) Session 1 tutorial: the clock waits for VELA's line (actions.startClock), not for a seed. */
   hold?: boolean;
+  /** (ADR-030) Nutrientes: the price of the first one, frozen the moment it went on sale this session. */
+  boostBase?: number;
 }
 
 export type SessionEvent =
@@ -366,12 +368,14 @@ export function boostMult(s: SessionState | null): number {
 }
 
 /**
- * Abono, one rule the player can read (QA4 F-17): it costs what the dish earns in BOOST_SECONDS at
- * its best this run (the run's peak Esencia/s, so a dip never makes it cheaper and the price only moves
- * up), at least BOOST_MIN_COST, ×BOOST_GROWTH per Abono already bought this session (the floor too).
+ * Nutrientes (Abono), one rule the player can read (QA4 F-17, QA-CLARIDAD #22): the first one costs what
+ * the dish makes in BOOST_SECONDS at the moment it goes on sale (at least BOOST_MIN_COST), frozen for the
+ * session ("hoy 16, el siguiente 32"); each one bought makes the next ×BOOST_GROWTH. It never rises on its
+ * own. Before it is frozen (not on sale yet) the price reads from the run's best Esencia/s so far.
  */
 export function boostCost(s: SessionState | null, eps: number): number {
   const k = s ? s.boosts : 0;
+  if (s && s.boostBase !== undefined && s.boostBase > 0) return Math.round(s.boostBase * Math.pow(C.BOOST_GROWTH, k));
   const now = Number.isFinite(eps) && eps > 0 ? eps : 0;
   const e = Math.max(now, s && Number.isFinite(s.peakEps) ? s.peakEps : 0);
   return Math.round(Math.max(C.BOOST_MIN_COST, C.BOOST_SECONDS * e) * Math.pow(C.BOOST_GROWTH, k));
@@ -381,6 +385,25 @@ export function boostCost(s: SessionState | null, eps: number): number {
 export function boostWait(s: SessionState | null): number {
   if (!s || s.phase !== 'running') return C.BOOST_FROM_SECONDS;
   return Math.max(0, C.BOOST_FROM_SECONDS - s.elapsed);
+}
+
+/** Nutrientes exist in this session at all (not in session 1: ADR-030). */
+export function boostOffered(s: SessionState | null): boolean {
+  return !!s && s.n >= C.BOOST_FROM_SESSION;
+}
+
+/** Too late for Nutrientes: the last BOOST_UNTIL_REMAINING seconds of a run (QA-CLARIDAD #8). */
+export function boostTooLate(s: SessionState | null): boolean {
+  return !!s && s.phase === 'running' && sessionRemaining(s) <= C.BOOST_UNTIL_REMAINING;
+}
+
+/**
+ * Freeze the Nutrientes price the first time it is on sale with something producing (call it every
+ * economic tick; a no-op once frozen).
+ */
+export function freezeBoost(s: SessionState, eps: number): void {
+  if (s.boostBase !== undefined || !boostOffered(s) || s.phase !== 'running' || boostWait(s) > 0 || !(eps > 0)) return;
+  s.boostBase = Math.max(C.BOOST_MIN_COST, C.BOOST_SECONDS * eps);
 }
 
 function extend(s: SessionState, seconds: number, reason: 'species' | 'encargo' | 'golden'): SessionEvent[] {
@@ -745,5 +768,6 @@ export function validateSession(x: unknown): SessionState | null {
     light: validateCollect(x.light),
     ...(x.planted === true ? { planted: true } : {}),
     ...(x.hold === true && phase === 'ready' ? { hold: true } : {}),
+    ...(num(x.boostBase) > 0 ? { boostBase: num(x.boostBase) } : {}),
   };
 }

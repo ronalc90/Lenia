@@ -138,7 +138,10 @@ import {
   beginSession,
   boostCost,
   boostMult,
+  boostOffered,
+  boostTooLate,
   boostWait,
+  freezeBoost,
   endSession,
   freshResearch,
   noteBehavior,
@@ -1500,6 +1503,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     } else if (earning) addEssence(eps * dt);
     const se = ses();
     if (se && earning) {
+      freezeBoost(se, eps);
       noteProduction(se, eps, stableCount());
       let best: { id: number; v: number } | null = null;
       for (const [id, v] of perCreature) if (!best || v > best.v) best = { id, v };
@@ -1730,7 +1734,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
   function armGolden(): void {
     const se = ses();
     if (se && se.n < C.SPARK_FROM_SESSION) return; // session 1 has no Spark (CLARIDAD §3.3)
-    s.goldenTimer = between(fx.goldenFirstDelay ?? C.SESSION_GOLDEN_FIRST_DELAY);
+    // Destello frecuente brings the first one sooner too (ADR-030, QA-CLARIDAD #13).
+    s.goldenTimer = between(fx.goldenFirstDelay ?? C.SESSION_GOLDEN_FIRST_DELAY) * fx.goldenIntervalMult;
   }
 
   function spawnGolden(): void {
@@ -2286,19 +2291,23 @@ export function createGame(deps: GameDeps, save?: string): Game {
       },
       // Session 1 hides the Datos pill: the player does not know what a Dato is yet (CLARIDAD §3.3).
       sessionPreview: se && se.phase !== 'over' && se.n > 1 ? sessionPreview(r, se, fx, species) : null,
-      boost: se
-        ? {
-            cost,
-            count: se.boosts,
-            mult: boostMult(se),
-            nextMult: boostMult(se) * C.BOOST_MULT,
-            // Abono multiplies what creatures make: with none making Essence it would buy nothing (and
-            // spend the Essence a seed needs), so it is not on sale then.
-            affordable: running && boostWait(se) === 0 && eps > 0 && s.essence >= cost,
-            wait: boostWait(se),
-            needsLife: eps <= 0,
-          }
-        : null,
+      // Nutrientes: not in session 1 (ADR-030); priced once when on sale; off sale in the last seconds.
+      boost:
+        se && boostOffered(se)
+          ? {
+              cost,
+              count: se.boosts,
+              mult: boostMult(se),
+              nextMult: boostMult(se) * C.BOOST_MULT,
+              // Abono multiplies what creatures make: with none making Essence it would buy nothing (and
+              // spend the Essence a seed needs), so it is not on sale then.
+              affordable: running && boostWait(se) === 0 && eps > 0 && !boostTooLate(se) && s.essence >= cost,
+              wait: boostWait(se),
+              needsLife: eps <= 0,
+              noTime: boostTooLate(se),
+              nextCost: Math.round(cost * C.BOOST_GROWTH),
+            }
+          : null,
     };
   }
 
@@ -2995,7 +3004,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
     buyBoost() {
       const se = ses();
-      if (!se || se.phase !== 'running' || boostWait(se) > 0 || !(eps > 0)) return false;
+      if (!se || se.phase !== 'running' || !boostOffered(se) || boostTooLate(se) || boostWait(se) > 0 || !(eps > 0)) return false;
+      freezeBoost(se, eps);
       const cost = boostCost(se, eps);
       if (!(s.essence >= cost)) return false;
       s.essence -= cost;
