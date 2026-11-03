@@ -8,13 +8,14 @@
  *  law      chaos → perfect orbits → a six-fold mandala that crystallises, a prism of dawn
  *  memory   creatures rise like lanterns and become a named constellation, warm dawn
  *  tide     they multiply, mutate and spill over the rim; the microscope light goes off; aurora
- *  albor    three taps answered by all; the Spark rises to become the sun; Albor at dawn with VELA
- *           in her hand; pull back: the station's lights form an Orbium inside someone's eyepiece
+ *  albor    three taps answered by all; the Spark rises to become the sun; Albor in profile at dawn,
+ *           VELA on a crate beside her; pull back: the station's lights form an Orbium inside someone's eyepiece
  */
 import type { Lang } from '../../core/types';
 import { ENDINGS } from '../../story/endings';
 import type { EndingId } from '../../story/types';
 import { catalogPattern } from '../../sim/catalog';
+import { drawAlborProfile } from '../art/characters';
 import { drawVela, type PortraitState } from './portraits';
 import { SPRITE_CODES, sprite, tinted, type Sprite } from './sprites';
 import { S, tr } from './strings';
@@ -245,7 +246,8 @@ export class Cinematic {
   private resize(): void {
     const W = this.el.clientWidth || 360;
     const H = this.el.clientHeight || 640;
-    const dpr = Math.min(2, (globalThis.devicePixelRatio as number | undefined) ?? 1);
+    // Up to DPR 3: P2's people kit sizes its caches by the screen's DPR (1–3).
+    const dpr = Math.min(3, (globalThis.devicePixelRatio as number | undefined) ?? 1);
     if (W !== this.W || H !== this.H || dpr !== this.dpr) {
       this.W = W;
       this.H = H;
@@ -956,7 +958,7 @@ export class Cinematic {
     }
   }
 
-  /** The secret ending's dawn: a warm sky, the sun on the sea, Albor on the shore carrying VELA. */
+  /** The secret ending's dawn: a warm sky, the sun on the sea, Albor in profile with VELA beside her. */
   private firstLight(ctx: CanvasRenderingContext2D, W: number, H: number, t: number, p: number, a: number, hy: number, sunX: number): void {
     const rm = this.opts.rm();
     ctx.save();
@@ -1007,7 +1009,7 @@ export class Cinematic {
     ctx.moveTo(0, hy);
     ctx.lineTo(W, hy);
     ctx.stroke();
-    // The shore with the station's little lights, and Albor with VELA.
+    // The shore with the station's little lights; Albor and VELA in the foreground.
     ctx.fillStyle = '#07080D';
     ctx.beginPath();
     ctx.moveTo(0, hy + 14);
@@ -1019,54 +1021,52 @@ export class Cinematic {
     ctx.fill();
     const figs = smooth(0.54, 0.64, p);
     if (figs > 0) {
-      const base = hy + 7;
-      const hh = H * 0.11;
-      const ax = W * 0.2;
+      // Albor, live, once (docs/ARTE-REALISTA.md §5.4): in profile against the dawn, close in the
+      // foreground, facing the sun (P2's drawAlborProfile, with this scene's own sky). Never a face on.
+      // She and VELA stay clear of the text card (centred, ≤ 560 px wide, its foot at 17 % from the
+      // bottom): beside it on a wide screen, under it on a tall one.
+      const half = Math.min(280, W / 2 - 24);
+      const side = W / 2 - half - 10;
+      let S2: number;
+      let ax: number;
+      let ay: number;
+      let vw: number;
+      let vcx: number;
+      let crateTop: number;
+      if (side >= H * 0.32) {
+        S2 = Math.min(H * 0.7, side / 0.62);
+        ax = -S2 * 0.1;
+        ay = H - S2 * 0.98;
+        vw = Math.min(S2 * 0.3, side * 0.8);
+        vcx = W - side / 2;
+        crateTop = H - S2 * 0.14;
+      } else {
+        const band = H * 0.17 - 6;
+        S2 = band / 0.59;
+        ax = -S2 * 0.06;
+        ay = H - S2 * 0.7;
+        vw = Math.min(W * 0.22, band * 0.75);
+        vcx = W * 0.72;
+        crateTop = H - band * 0.22;
+      }
+      const rise = rm ? 0 : (1 - figs) * S2 * 0.04;
       ctx.save();
       ctx.globalAlpha *= figs;
-      // Albor against the dawn (docs/ARTE-REALISTA.md §5.4): one dark silhouette (bob, parka, the arm that
-      // carries VELA) with the warm rim light of the sun on its right edge. Never a face.
-      const hand = { x: ax + hh * 0.25, y: base - hh * 0.38 };
-      ctx.fillStyle = '#0A0709';
-      ctx.beginPath();
-      ctx.arc(ax, base - hh * 0.86, hh * 0.1, 0, TAU);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(ax - hh * 0.17, base);
-      ctx.lineTo(ax - hh * 0.13, base - hh * 0.5);
-      ctx.quadraticCurveTo(ax - hh * 0.12, base - hh * 0.72, ax, base - hh * 0.74);
-      ctx.quadraticCurveTo(ax + hh * 0.12, base - hh * 0.72, ax + hh * 0.13, base - hh * 0.5);
-      ctx.lineTo(ax + hh * 0.17, base);
-      ctx.closePath();
-      ctx.fill();
-      // The arm, down and a little forward, holding the handle.
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = '#0A0709';
-      ctx.lineWidth = hh * 0.07;
-      ctx.beginPath();
-      ctx.moveTo(ax + hh * 0.1, base - hh * 0.66);
-      ctx.quadraticCurveTo(ax + hh * 0.2, base - hh * 0.52, hand.x, hand.y);
-      ctx.stroke();
-      // Rim light from the sun (right): head, shoulder and arm.
-      ctx.strokeStyle = 'rgba(255,200,140,0.75)';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.arc(ax, base - hh * 0.86, hh * 0.1, -0.9, 0.6);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(ax + hh * 0.13, base - hh * 0.5);
-      ctx.quadraticCurveTo(ax + hh * 0.12, base - hh * 0.72, ax, base - hh * 0.74);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(ax + hh * 0.135, base - hh * 0.66);
-      ctx.quadraticCurveTo(ax + hh * 0.235, base - hh * 0.52, hand.x + hh * 0.03, hand.y);
-      ctx.stroke();
-      ctx.lineCap = 'butt';
+      drawAlborProfile(ctx, ax, ay + rise, S2, { mood: 'happy', talk: 0, talking: false, reduceMotion: rm, moodAge: 10 }, t, { sky: false, flip: true, dawn: 0.6 + 0.6 * smooth(0.5, 0.7, p) });
       ctx.restore();
-      // VELA does not float (§4.9): Albor carries her by the handle, the lamp lit. Her box is 100 units;
-      // the handle's tube is at (50, 8.8) and the chassis is 84 wide, a 26-cm instrument by a person.
-      const vw = hh * 0.22;
+      // VELA does not float (§4.9): she is on a crate, the lamp lit. Her box is 100 units, the chassis
+      // 84 wide, the feet at y 90.2.
       const k = vw / 84;
+      const cx = vcx;
+      ctx.save();
+      ctx.globalAlpha *= figs;
+      // The crate: dark planks in silhouette, the sun's rim on its top edge.
+      ctx.fillStyle = '#0B0809';
+      ctx.fillRect(cx - vw * 0.62, crateTop, vw * 1.24, H - crateTop);
+      ctx.fillStyle = 'rgba(255,200,140,0.55)';
+      ctx.fillRect(cx - vw * 0.62, crateTop, vw * 1.24, 1.2);
+      ctx.fillStyle = 'rgba(255,200,140,0.12)';
+      for (let i = 1; i < 3; i++) ctx.fillRect(cx - vw * 0.62, crateTop + ((H - crateTop) * i) / 3, vw * 1.24, 1);
       const st: PortraitState = {
         speaker: 'vela',
         mood: 'happy',
@@ -1078,15 +1078,9 @@ export class Cinematic {
         pulses: [],
         reduceMotion: rm,
       };
-      ctx.save();
-      ctx.globalAlpha *= figs;
-      // She swings a little from the hand (a damped pendulum, still under Reduce motion).
-      const swing = rm ? 0 : Math.sin(t * 1.4) * 0.05;
-      ctx.translate(hand.x, hand.y);
-      ctx.rotate(swing);
-      ctx.translate(-50 * k, -8.8 * k);
+      ctx.translate(cx - 50 * k, crateTop - 90.2 * k);
       ctx.scale(k, k);
-      drawVela(ctx, st, t);
+      drawVela(ctx, st, t, { size: 100 * k, dpr: this.dpr });
       ctx.restore();
     }
     // Station windows on the shore.
