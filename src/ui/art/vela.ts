@@ -150,30 +150,6 @@ function featherGradients(ctx: CanvasRenderingContext2D, w: number): CanvasGradi
  * Fade the outer `w` units of the 100-box to transparent so glows never end in a hard canvas edge
  * (the portrait sits on any panel colour).
  */
-/**
- * The four edge gradients per context and width: they live in the 100-unit box (user space), so the
- * same objects serve every frame (portraits are drawn every animation frame; ARTE-PULIDO §6.1: no
- * gradients created per frame).
- */
-const featherCache = new WeakMap<CanvasRenderingContext2D, Map<number, CanvasGradient[]>>();
-
-function featherGradients(ctx: CanvasRenderingContext2D, w: number): CanvasGradient[] {
-  let byW = featherCache.get(ctx);
-  if (!byW) featherCache.set(ctx, (byW = new Map()));
-  let gs = byW.get(w);
-  if (!gs) {
-    const lin = (x0: number, y0: number, x1: number, y1: number) => {
-      const g = ctx.createLinearGradient(x0, y0, x1, y1);
-      g.addColorStop(0, 'rgba(0,0,0,1)');
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      return g;
-    };
-    gs = [lin(0, 0, 0, w), lin(0, 100, 0, 100 - w), lin(0, 0, w, 0), lin(100, 0, 100 - w, 0)];
-    byW.set(w, gs);
-  }
-  return gs;
-}
-
 export function featherEdges(ctx: CanvasRenderingContext2D, w = 5): void {
   const g = featherGradients(ctx, w);
   ctx.save();

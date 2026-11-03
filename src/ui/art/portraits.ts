@@ -162,12 +162,6 @@ export class Portrait {
    */
   private cssW = -1;
 
-  /**
-   * CSS width as the layout last reported it (ResizeObserver): fit() runs every frame, and reading
-   * clientWidth there forced a synchronous layout whenever the page had changed since the last one.
-   */
-  private cssW = -1;
-
   constructor(className = 'sty-portrait') {
     this.canvas = document.createElement('canvas');
     this.canvas.className = className;
