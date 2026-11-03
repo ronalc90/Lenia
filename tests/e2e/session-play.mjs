@@ -791,10 +791,15 @@ async function runCase(c) {
       const id = want.find((w) => ids.includes(w)) ?? ids[0];
       // Like a finger: tap the node, then wait until its sheet has come to rest (a slow software-GL frame
       // can hold a 300-ms slide past a fixed wait, and a tap computed mid-slide lands beside the button).
-      for (let t = 0; t < 2; t++) {
-        await tapSel(`.rt-node[data-id="${id}"]`);
-        await page.waitForTimeout(700);
-        await settle(`tree ${k}`);
+      // A sheet still sliding in on a loaded software-GL machine is not tapped again (a second tap on its
+      // node, moved by the camera's focus, closed it: "nothing bought" with 40 Datos in the wallet).
+      for (let t = 0; t < 3; t++) {
+        const opening = await page.evaluate((id) => !!document.querySelector(`.rt-sheet.show [data-buy="${id}"], .rt-sheet.show [data-why="${id}"]`), id);
+        if (!opening) {
+          await tapSel(`.rt-node[data-id="${id}"]`);
+          await page.waitForTimeout(700);
+          await settle(`tree ${k}`);
+        }
         if (await sheetAtRest(id)) break;
       }
       if (bought === 0) await shot(`s${k}-node-${id}`);
