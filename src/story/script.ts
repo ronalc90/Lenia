@@ -46,8 +46,9 @@ export const MAX_WORDS = 20;
 
 // ───────────────────────────── Names ─────────────────────────────
 
+/** VELA's name is the plate of her instrument (docs/ARTE-REALISTA.md §6.10). */
 export const SPEAKER_NAMES: Record<Speaker, Text> = {
-  vela: t('VELA', 'VELA'),
+  vela: t('VELA · MC-7', 'VELA · MC-7'),
   albor: t('Albor · cinta', 'Albor · tape'),
   committee: t('Comité', 'Committee'),
   coro: t('El Coro', 'The Choir'),

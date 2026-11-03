@@ -58,20 +58,21 @@
 
 /* ───────────── dialogue box ───────────── */
 
+/*
+ * The dialogue is an instrument panel (docs/ARTE-REALISTA.md §6.10): `surface` with a 1-px `plate.rule`
+ * edge and one elevation, VELA's MC-7 screen and lamp as the portrait (inside the box: nothing is
+ * cropped), her name as an engraved plate «VELA · MC-7» in Mono and lamp.3200.
+ */
 .sty-box {
   position: absolute;
   left: 50%;
   width: min(560px, calc(100% - 20px));
-  min-height: 92px;
+  min-height: 112px;
   padding: 12px 14px 14px 112px;
-  border-radius: var(--bl-r-lg);
-  /* surface2 with a warm candle edge (docs/ARTE.md §12): VELA's light, not a cold cyan glow. */
-  background:
-    radial-gradient(120% 140% at 0% 100%, rgba(255, 184, 107, 0.08), transparent 60%),
-    linear-gradient(180deg, var(--bl-surface2, #1b232c), var(--bl-surface, #141a21));
-  border: 1px solid var(--sty-line);
-  box-shadow:
-    var(--bl-elev-3), var(--bl-glow-candle);
+  border-radius: var(--bl-r-md);
+  background: var(--bl-surface, #141a21);
+  border: 1px solid var(--bl-plate-rule, #2a3540);
+  box-shadow: var(--bl-elev-2);
   pointer-events: auto;
   cursor: pointer;
   transform: translate(-50%, 0);
@@ -95,53 +96,19 @@
 .sty-box[hidden] {
   display: none;
 }
-.sty-box.enter {
-  opacity: 0;
-  transform: translate(-50%, 14px) scale(0.98);
-}
-.sty-box.at-top.enter {
-  transform: translate(-50%, -14px) scale(0.98);
-}
-.sty-box.who-albor {
-  --sty-line: rgba(242, 194, 123, 0.35);
-}
-.sty-box.who-committee {
-  --sty-line: rgba(228, 87, 46, 0.32);
-}
-.sty-box.who-coro {
-  --sty-line: rgba(184, 146, 255, 0.4);
-}
-.sty-box.who-you {
-  --sty-line: rgba(139, 152, 165, 0.3);
-}
+/* The portrait sits inside the box, on the panel (no pop, no dip: instruments do not bounce, §6.4). */
 .sty-portrait-wrap {
   position: absolute;
-  left: 0;
-  bottom: 2px;
-  width: 116px;
-  height: 116px;
+  left: 12px;
+  top: 12px;
+  width: 88px;
+  height: 88px;
   pointer-events: none;
 }
 .sty-box .sty-portrait {
-  width: 116px;
-  height: 116px;
+  width: 88px;
+  height: 88px;
   display: block;
-}
-.sty-box.pop .sty-portrait-wrap {
-  animation: sty-pop var(--bl-t-story) var(--sty-ease);
-}
-@keyframes sty-pop {
-  0% {
-    transform: translateY(10px) scale(0.82);
-    opacity: 0;
-  }
-  60% {
-    transform: translateY(-3px) scale(1.04);
-    opacity: 1;
-  }
-  100% {
-    transform: none;
-  }
 }
 .sty-name {
   display: flex;
@@ -149,13 +116,11 @@
   gap: 8px;
   min-height: 22px;
   margin-right: 70px;
-  font-size: var(--bl-fs-caption);
-  font-weight: 700;
-  letter-spacing: 0.14em;
+  /* The name plate (§6.10): Mono 13 px, tracking 0.12 em, in the pilot lamp's 3200 K. */
+  font: 700 var(--bl-fs-caption) / 1 var(--sty-mono);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  /* VELA's name in candle light (docs/ARTE.md §12). */
-  color: var(--sty-candle);
-  text-shadow: 0 0 10px currentColor;
+  color: var(--bl-lamp-3200, #ffb87b);
 }
 .sty-name .rec {
   width: 7px;
@@ -184,7 +149,8 @@
 }
 .sty-text {
   margin: 4px 0 0;
-  font-size: var(--bl-fs-lead);
+  /* Inter 17 px (§6.10), on the 16-px base of the layer. */
+  font-size: 1.0625em;
   line-height: 1.42;
   font-weight: 500;
   letter-spacing: 0.005em;
@@ -235,11 +201,12 @@
 }
 .sty-box.done .sty-next {
   opacity: 1;
-  animation: sty-bob var(--bl-t-celebrate) ease-in-out infinite;
+  /* A ready LED, not a bouncing arrow (§6.4): it blinks, it does not move. */
+  animation: sty-ready calc(var(--bl-t-celebrate) * 2) steps(1, end) infinite;
 }
-@keyframes sty-bob {
+@keyframes sty-ready {
   50% {
-    transform: translateY(4px);
+    opacity: 0.35;
   }
 }
 .sty-skip {
@@ -692,7 +659,6 @@
   animation: none !important;
   transition: opacity var(--bl-t-base) !important;
 }
-.sty.rm .sty-box.pop .sty-portrait-wrap,
 .sty.rm .sty-box.done .sty-next {
   animation: none !important;
 }
@@ -746,21 +712,20 @@
   gap: 10px;
   width: min(380px, calc(100% - 20px));
   padding: 10px 14px 12px 8px;
-  border-radius: var(--bl-r-lg);
-  background:
-    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--c) 16%, transparent), transparent 62%),
-    linear-gradient(180deg, #19212a, #0e131a);
-  border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
-  box-shadow:
-    var(--bl-elev-3);
+  /* A card hanging from the objective bar (docs/ARTE-REALISTA.md §6.10): the panel's surface and rule. */
+  border-radius: var(--bl-r-md);
+  background: var(--bl-surface, #141a21);
+  border: 1px solid var(--bl-plate-rule, #2a3540);
+  box-shadow: var(--bl-elev-2);
   pointer-events: auto;
   cursor: pointer;
   transform-origin: var(--ax, 50%) 0;
   opacity: 0;
-  transform: translateY(-12px) scale(0.86);
+  transform: translateY(-8px);
+  /* Drawer motion, no overshoot (§6.4). */
   transition:
-    opacity var(--bl-t-sheet) var(--bl-ease-standard),
-    transform var(--bl-t-card) cubic-bezier(0.2, 1.4, 0.4, 1);
+    opacity var(--bl-t-base) var(--bl-ease-standard),
+    transform var(--bl-t-base) var(--bl-ease-standard);
 }
 .enc-bubble[hidden] {
   display: none;
@@ -773,11 +738,10 @@
   left: calc(var(--ax, 50%) - 7px);
   width: 14px;
   height: 14px;
-  background: #19212a;
-  border-left: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
-  border-top: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+  background: var(--bl-surface, #141a21);
+  border-left: 1px solid var(--bl-plate-rule, #2a3540);
+  border-top: 1px solid var(--bl-plate-rule, #2a3540);
   transform: rotate(45deg);
-  border-top-left-radius: var(--bl-r-sm);
 }
 .enc-bubble.in {
   opacity: 1;
@@ -785,20 +749,18 @@
 }
 .enc-bubble.out {
   opacity: 0;
-  transform: translateY(-6px) scale(0.96);
-  transition-duration: var(--bl-t-sheet);
+  transform: translateY(-6px);
+  transition-duration: var(--bl-t-exit);
 }
 .enc-bubble.tuck {
   opacity: 0;
   transform: translateY(-26px) scale(0.3);
   transition:
     opacity var(--bl-t-card) var(--bl-ease-standard),
-    transform var(--bl-t-card) cubic-bezier(0.5, 0, 0.8, 0.4);
+    transform var(--bl-t-card) var(--bl-ease-exit);
 }
 .enc-bubble.cheer {
   border-color: color-mix(in srgb, #ffd166 55%, transparent);
-  box-shadow:
-    var(--bl-elev-3), var(--bl-glow-gold);
 }
 .enc-bubble .enc-face {
   flex: none;
@@ -819,13 +781,15 @@
   gap: 8px;
   min-height: 18px;
 }
+/* «ENCARGO» on label-maker tape (§6.9 aluDark, §6.10): embossed Mono capitals on a dark strip. */
 .enc-tag {
-  font-size: var(--bl-fs-caption);
-  font-weight: 700;
-  letter-spacing: 0.14em;
+  padding: 3px 8px 2px;
+  border-radius: 0;
+  background: var(--bl-mat-alu-dark, #2a3036);
+  font: 700 var(--bl-fs-caption) / 1 var(--bl-font-mono, ui-monospace, monospace);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--c);
-  text-shadow: 0 0 10px currentColor;
+  color: #eef1f3;
 }
 .enc-tag.done {
   color: #ffd166;

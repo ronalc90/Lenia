@@ -24,7 +24,7 @@ import { Portrait } from './portraits';
 import { Spotlight, type Rect } from './spotlight';
 import { sceneShowing, storyLook } from './dock';
 import { visibleShare, VISIBLE_SHARE } from './occlusion';
-import { DURATION, EASING, SPRING, springEasing } from '../art/motion';
+import { DURATION, EASING } from '../art/motion';
 import { S, tr } from './strings';
 
 export type StorySound = 'open' | 'blip' | 'choice' | 'chosen' | 'task' | 'done' | 'ending';
@@ -180,14 +180,14 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
     pause = 0.12;
     lastShown = -1;
     typedAt = -1;
+    // VELA speaks through her MC-7: the screen and the lamp, the medium avatar (ARTE-REALISTA §6.10).
+    portrait.framing = l.who === 'vela' ? 'close' : 'auto';
     portrait.set(l.who, l.mood, l.live);
     for (const c of [...box.classList]) if (c.startsWith('who-')) box.classList.remove(c);
     box.classList.add(`who-${l.who}`);
-    if (changed) {
-      // Restart the portrait pop when a new speaker takes the stage (no forced reflow: next frame).
-      box.classList.remove('pop');
-      requestAnimationFrame(() => box.classList.add('pop'));
-    }
+    // A new speaker: the portrait fades in (no pop: people and instruments do not bounce, §6.4).
+    if (changed && !rm() && typeof portraitWrap.animate === 'function')
+      portraitWrap.animate([{ opacity: 0 }, { opacity: 1 }], { duration: DURATION.quick, easing: EASING.standard });
     nameText.textContent = tr(l.name, L());
     if (l.who === 'albor' && !l.live) nameEl.prepend(recDot);
     else recDot.remove();
@@ -222,9 +222,8 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
   }
 
   /**
-   * VELA comes in (docs/ARTE-PULIDO.md B-12): anticipation — she dips 4 px in 80 ms, then rises into place
-   * with the fast spring; the bubble grows from its tail (0.9 → 1, default spring) and fades in over 140 ms.
-   * Reduce motion: an 80-ms fade.
+   * The panel comes in like a drawer (docs/ARTE-REALISTA.md §6.4): 8 px and a fade, ease-out, no overshoot,
+   * no dip of the portrait (the old pop and spring broke the instrument's motion). Reduce motion: 80-ms fade.
    */
   function showBox(): void {
     if (!box.hidden) return;
@@ -235,23 +234,14 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
       boxAnim = box.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 80, easing: 'linear' });
       return;
     }
-    box.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: EASING.standard });
+    const from = boxTop ? 'translate(-50%, -8px)' : 'translate(-50%, 8px)';
     boxAnim = box.animate(
       [
-        { transform: 'translate(-50%, 0) scale(.9)' },
-        { transform: 'translate(-50%, 0) scale(1)' },
+        { opacity: 0, transform: from },
+        { opacity: 1, transform: 'translate(-50%, 0)' },
       ],
-      { duration: SPRING.default.ms, easing: springEasing('default') },
+      { duration: DURATION.base, easing: EASING.standard },
     );
-    if (typeof portraitWrap.animate === 'function')
-      portraitWrap.animate(
-        [
-          { transform: 'translateY(0)' },
-          { transform: 'translateY(4px)', offset: 80 / (80 + SPRING.fast.ms) },
-          { transform: 'translateY(0)' },
-        ],
-        { duration: 80 + SPRING.fast.ms, easing: 'linear' },
-      );
   }
   let boxAnim: Animation | null = null;
   /** The box left to change side and comes back on the next frame (see place()). */
