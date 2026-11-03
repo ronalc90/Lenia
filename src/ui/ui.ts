@@ -17,6 +17,11 @@ import { fmt, fmtClock, fmtDuration, fmtRate, fmtShort } from './format';
 import { behaviorName, getLang, setLang, stateName, t, tx } from './i18n';
 import { icon, logo } from './icons';
 import { DishInput } from './input';
+import { dropsOnSegment, routeTap } from './dishTap';
+import { FlyLayer, flyDuration } from './fx/fly';
+import { Readout, wholeRate } from './fx/readout';
+import { dishFx } from './fx/stage';
+import type { FxAnchors } from './fx/types';
 import { TEXT } from '../game/content';
 import {
   ModalHost,
@@ -35,15 +40,30 @@ import { Toasts } from './toasts';
 import { SESSION_UI } from '../game/treeText';
 import { MOMENT_MIN_RUN_SECONDS, SESSION_TOAST_MAX_MS, SIM_STEPS_PER_SEC } from '../game/cycleBalance';
 import { earningNow } from './moments/status';
-import { installPressFeedback, pop, restartClass, setReduceMotion, springEasing, DURATION, EASING, SPRING } from './art/motion';
+import { installPressFeedback, pop, restartClass, setReduceMotion, DURATION, EASING } from './art/motion';
 
 /**
- * The Esencia counter in whole drops (QA4: "3.7", "1.7" next to "16" read as two kinds of number). Seeds
- * and the Abono cost whole Esencia, so the floor is what can be spent.
+ * The Luz counter in whole units (QA4: "3.7", "1.7" next to "16" read as two kinds of number). Seeds
+ * and the Nutrientes cost whole Luz, so the floor is what can be spent.
  */
 function essenceText(n: number, lang: Lang): string {
   return fmt(n < 1000 ? Math.floor(n + 1e-9) : n, lang);
 }
+
+/**
+ * Feel of collecting by hand (ADR-030 §2.2.1). The touch radii mirror cycleBalance LIGHT_TAP_RADIUS_PX
+ * through src/ui/fx/drops.ts DROP_FX; these are the UI's own.
+ */
+const COLLECT_UI = {
+  /** A guided swimmer's heading is sent at most this often while the finger moves (ms). */
+  steerEveryMs: 90,
+  /** …or at once when it turned more than this (radians). */
+  steerTurn: 0.08,
+  /** Motes per collection: 1, 2 from this share of the wallet, 3 from the next. */
+  moteShare: [0.04, 0.12],
+  /** The reason chip next to the counter ("+5 · primera semilla"), ms. */
+  giftMs: 2400,
+} as const;
 
 export interface UIDeps {
   actions: GameActions;
@@ -131,9 +151,21 @@ export interface UIDeps {
    * equation). Called when the sheet opens; `update` runs with every view, `dispose` on close.
    */
   speciesExtras?(container: HTMLElement, speciesId: string): { update(v: GameView): void; dispose(): void } | null;
+  /**
+   * Optional (ADR-030, docs/CLARIDAD2.md §2.5): the player guides swimmer `id` towards `heading` (radians in
+   * grid space, atan2(dy, dx) with y down, the screen's own orientation); null lets go. Renewed while the
+   * finger moves. The integrator hands it to src/sim/steer.ts `Steering.request`. Without it, a drag from a
+   * swimmer is a sweep like any other.
+   */
+  onSteer?(id: number, heading: number | null): void;
+  /**
+   * Optional: return true while a Momento tells the contact warning in words ("¡Cuidado! Se van a tocar");
+   * the dish then draws only the red link. Without it the dish labels each new pair itself, once.
+   */
+  contactTold?(): boolean;
 }
 
-export type UISound = 'tap' | 'tab' | 'open' | 'close' | 'buy' | 'deny' | 'toggle' | 'hold' | 'confirm';
+export type UISound = 'tap' | 'tab' | 'open' | 'close' | 'buy' | 'deny' | 'toggle' | 'hold' | 'confirm' | 'warn';
 
 export interface UI {
   /** Push the latest game view (call ~10×/s). */
@@ -286,6 +318,27 @@ class BiolumaUI implements UI {
   private essVal!: HTMLElement;
   private essGlow!: HTMLElement;
   private essRate!: HTMLElement;
+  private essLabel!: HTMLElement;
+  /** "+5 · primera semilla": why some Luz arrived without a drop (bus luzGift), beside the counter. */
+  private giftEl!: HTMLElement;
+  private gift: { key: string; amount: number; reason: Text; at: number } | null = null;
+  private giftTimer = 0;
+  /** The counter as an 8 Hz instrument readout that counts the light when it lands (ARTE-REALISTA §6.8). */
+  private readonly readout = new Readout();
+  /** Collected light flies to the counter (src/ui/fx/fly.ts, its own layer). */
+  private fly!: FlyLayer;
+  private flyQ = '';
+  // Collecting by hand and guiding (ADR-030)
+  private readonly sweepIds: number[] = [];
+  private sweepN = 0;
+  private steerId: number | null = null;
+  private steerAt = 0;
+  private steerSent = NaN;
+  /** Where the finger's own collection was drawn (overlay px), for the bus event that follows it. */
+  private handAt: { x: number; y: number; hue: number } | null = null;
+  private handTold = false;
+  private ripeTold = 0;
+  private outsideTold = false;
   /** Centre of the HUD: the session clock is mounted here (src/ui/session/flow.ts). */
   readonly clockSlot = h('div', { class: 'hud-clock' });
   /** Dock: the Datos preview pill is mounted here. */
@@ -419,6 +472,18 @@ class BiolumaUI implements UI {
     this.applyTextSize();
     this.build();
     this.root.appendChild(this.el);
+    const anchors: FxAnchors = {
+      rect: (id) => (id === 'bestiary' ? null : this.hudAnchor(id)),
+      arrive: (id, n) => {
+        if (id === 'essence' || id === 'datos') this.pulseHud(id, n);
+      },
+    };
+    this.fly = new FlyLayer(this.el, {
+      anchors: () => anchors,
+      light: () => document.documentElement.dataset.theme === 'light',
+      reduceMotion: () => !!this.v?.settings.reduceMotion,
+    });
+    this.wireCollection();
     this.toasts.setHold(() => !!this.deps.isNarrating?.() || !!this.splash?.visible);
     this.toasts.setMaxMs(() => (shortRunRunning(this.v?.session) ? SESSION_TOAST_MAX_MS : Infinity));
     this.bindBus();
@@ -510,12 +575,15 @@ class BiolumaUI implements UI {
     // The +8 % brightness of a pulse is a light layer over the number (opacity only, never a filter).
     this.essGlow = h('span', { class: 'ess-glow', 'aria-hidden': 'true' });
     this.essRate = h('span', { class: 'ess-rate mono zero' }, '+0/s');
+    // The instrument's engraved label (Mono, tracked), beside the figure: «LUZ 340 · +12 luz/s» (§6 #1).
+    this.essLabel = h('span', { class: 'ess-label', 'aria-hidden': 'true' });
     const essBtn = h(
       'button',
       { type: 'button', class: 'hud-ess' },
-      ic('essence', 24, 'ess-ic'),
-      h('span', { class: 'ess-col' }, h('span', { class: 'ess-numwrap' }, this.essVal, this.essGlow), this.essRate),
+      h('span', { class: 'ess-icwrap' }, ic('essence', 24, 'ess-ic'), h('span', { class: 'ess-icglow', 'aria-hidden': 'true' })),
+      h('span', { class: 'ess-col' }, h('span', { class: 'ess-top' }, this.essLabel, h('span', { class: 'ess-numwrap' }, this.essVal, this.essGlow)), this.essRate),
     );
+    this.giftEl = h('div', { class: 'luz-gift', 'aria-live': 'polite', hidden: true });
     this.essBtn = essBtn;
     // A long press is something else (a secret): only a short tap opens the stats.
     essBtn.addEventListener('pointerdown', () => (this.essDownAt = performance.now()));
@@ -545,6 +613,7 @@ class BiolumaUI implements UI {
       essBtn,
       this.clockSlot,
       h('div', { class: 'hud-actions' }, this.lbBtn, this.journalBtn, this.muteBtn, this.settingsBtn),
+      this.giftEl,
     );
 
     // Objective
@@ -722,12 +791,17 @@ class BiolumaUI implements UI {
       longPressEnabled: () => !!this.v?.tools.longPress,
       brushEnabled: () => !!this.v?.tools.brush,
       oneTouch: () => !!this.v?.settings.oneTouch,
+      holdTarget: (x, y) => routeTap('long', x, y, this.overlay.tapScene()).kind === 'card',
+      dragStart: (x, y) => this.onDragStart(x, y),
+      dragMove: (x0, y0, x1, y1) => this.onDragMove(x0, y0, x1, y1),
+      dragEnd: () => this.onDragEnd(),
     });
     this.relabelStatic();
   }
 
   /** Static labels that depend on the language. */
   private relabelStatic(): void {
+    setText(this.essLabel, tx(SESSION_UI.luz).toUpperCase());
     setAttr(this.journalBtn, 'aria-label', t('journal'));
     setAttr(this.journalBtn, 'title', t('journal'));
     setAttr(this.lbBtn, 'aria-label', t('ranking'));
@@ -813,6 +887,12 @@ class BiolumaUI implements UI {
     }
     this.overlay.draw(timeSec, dtSec);
     this.tweenEssence(dtSec);
+    if (this.flyQ !== dishFx.quality) {
+      this.flyQ = dishFx.quality;
+      this.fly.setMax(dishFx.profile.fly);
+    }
+    this.fly.frame(this.lastFrameAt);
+    if (this.steerId !== null) this.steerTick(false);
     this.updateCentre();
     this.positionCard();
   }
@@ -893,9 +973,9 @@ class BiolumaUI implements UI {
   }
 
   /**
-   * A mote (or a group) landed on a counter (B-6): the drop icon springs 1 → 1.18 → 1 (fast spring), the
-   * number brightens 8 % for 200 ms through an opacity layer (no filter) and ticks up a hair. Arrivals
-   * within 80 ms are one pulse. Reduce motion: nothing moves (the number already counts).
+   * A mote (or a group) landed on a counter (B-6, ARTE-REALISTA §6.8): the drop icon and the figure
+   * glow for 120 ms through opacity layers (no filter, no scale: an instrument lamp, not a cartoon).
+   * Arrivals within 80 ms are one pulse. Reduce motion: nothing moves (the number already counts).
    */
   pulseHud(id: 'essence' | 'datos', amount: number): void {
     if (!(amount > 0) || !!this.v?.settings.reduceMotion) return;
@@ -907,16 +987,10 @@ class BiolumaUI implements UI {
       if (prev) pop(prev, 1.08);
       return;
     }
-    const icon = this.essBtn.querySelector('.ess-ic') as HTMLElement | null;
-    if (icon && typeof icon.animate === 'function')
-      icon.animate([{ scale: '1' }, { scale: '1.18', offset: 0.3 }, { scale: '1' }], { duration: SPRING.fast.ms, easing: springEasing('fast') });
-    if (typeof this.essVal.animate === 'function') {
-      this.essVal.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-2px)', offset: 0.35 }, { transform: 'translateY(0)' }], {
-        duration: DURATION.base,
-        easing: EASING.standard,
-      });
-      this.essGlow.animate([{ opacity: 0 }, { opacity: 1, offset: 0.25 }, { opacity: 0 }], { duration: DURATION.base, easing: EASING.standard });
-    }
+    const glow = this.essBtn.querySelector('.ess-icglow') as HTMLElement | null;
+    const lamp = [{ opacity: 0 }, { opacity: 1, offset: 0.35 }, { opacity: 0 }];
+    if (glow && typeof glow.animate === 'function') glow.animate(lamp, { duration: 120 + 200, easing: EASING.standard });
+    if (typeof this.essGlow.animate === 'function') this.essGlow.animate(lamp, { duration: 120 + 200, easing: EASING.standard });
   }
 
   get drawerOpen(): boolean {
@@ -1062,9 +1136,10 @@ class BiolumaUI implements UI {
 
   private updateHUD(v: GameView): void {
     const lang = this.lang;
+    // No frames (a hidden tab, a test): the readout is told the value directly.
     if (this.dispEssence < 0 || performance.now() - this.lastFrameAt > 500) {
-      this.dispEssence = v.essence;
-      setText(this.essVal, essenceText(v.essence, lang));
+      this.dispEssence = this.readout.tick(v.essence, performance.now(), true);
+      setText(this.essVal, essenceText(this.dispEssence, lang));
     }
     const buffMult = v.buffs.reduce((m, b) => (b.mult > 1 ? m * b.mult : m), 1);
     // Honest HUD (QA4 F-20, B-7): before the first seed the clock and the Esencia wait. The HUD says the
@@ -1073,10 +1148,11 @@ class BiolumaUI implements UI {
     const eps = v.session && v.session.phase !== 'running' ? 0 : v.essencePerSec;
     // Before the clock runs: the rate it WILL pay, greyed, «al empezar» beside it where there is room
     // (a phone keeps the words for the screen reader: the line never runs under the clock, B-7).
+    // «+12 luz/s» in whole numbers (ADR-030 §6 #1): the unit says what the number is.
     const rateHTML =
       waiting && v.essencePerSec > 0
-        ? `+${fmtRate(v.essencePerSec, lang)}${t('perSec')}<span class="when"> ${t('atStart')}</span>`
-        : `+${fmtRate(eps, lang)}${t('perSec')}` + (buffMult > 1 && eps > 0 ? `<span class="buffx">×${fmtShort(buffMult, lang)}</span>` : '');
+        ? `${tx(SESSION_UI.luzPerSec(wholeRate(v.essencePerSec, lang)))}<span class="when"> ${t('atStart')}</span>`
+        : tx(SESSION_UI.luzPerSec(wholeRate(eps, lang))) + (buffMult > 1 && eps > 0 ? `<span class="buffx">×${fmtShort(buffMult, lang)}</span>` : '');
     setHTML(this.essRate, rateHTML);
     toggle(this.essRate, 'zero', eps <= 0);
     setAttr(this.essBtn, 'aria-label', t('essAria', { n: fmt(v.essence, lang), r: fmtRate(v.essencePerSec, lang) }));
@@ -1095,31 +1171,23 @@ class BiolumaUI implements UI {
     setAttr(this.muteBtn, 'title', v.settings.muted ? t('unmute') : t('mute'));
   }
 
-  /** A pop with el.animate() (the old class restart forced a reflow: P3). */
-  private bump(el: HTMLElement): void {
-    if (!this.v?.settings.reduceMotion) pop(el, 1.12);
-  }
-
+  /** The Luz readout: 8 Hz whole steps, ≤ 600 ms to a new value, light counted when it lands (§6.4). */
   private tweenEssence(dt: number): void {
+    void dt;
     const v = this.v;
     if (!v) return;
-    const target = v.essence;
-    if (this.dispEssence < 0 || target < this.dispEssence) this.dispEssence = target;
-    else {
-      // A sudden windfall (golden harvest, offline, big income) gets a glow pulse.
-      const jump = target - this.dispEssence;
-      const now = performance.now();
-      if (jump > Math.max(25, this.dispEssence * 0.06) && now - this.essGlowAt > 700) {
-        this.essGlowAt = now;
-        this.bump(this.essVal);
-        if (!this.v?.settings.reduceMotion && typeof this.essGlow.animate === 'function')
-          this.essGlow.animate([{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 0 }], { duration: DURATION.celebrate, easing: EASING.standard });
-      }
-      const k = 1 - Math.exp(-Math.min(dt, 0.1) * 9);
-      this.dispEssence += (target - this.dispEssence) * k;
-      if (target - this.dispEssence < Math.max(0.5, target * 0.0005)) this.dispEssence = target;
+    const before = this.dispEssence;
+    const shown = this.readout.tick(v.essence, this.lastFrameAt, !!v.settings.reduceMotion);
+    if (shown === before) return;
+    // A sudden windfall (golden harvest, offline return) lights the figure: a lamp, not a bounce.
+    const now = this.lastFrameAt;
+    if (before >= 0 && shown - before > Math.max(25, before * 0.06) && now - this.essGlowAt > 700) {
+      this.essGlowAt = now;
+      if (!v.settings.reduceMotion && typeof this.essGlow.animate === 'function')
+        this.essGlow.animate([{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 0 }], { duration: DURATION.celebrate, easing: EASING.standard });
     }
-    setText(this.essVal, essenceText(this.dispEssence, this.lang));
+    this.dispEssence = shown;
+    setText(this.essVal, essenceText(shown, this.lang));
   }
 
   // ───────────────────────────── objective ─────────────────────────────
@@ -1660,10 +1728,15 @@ class BiolumaUI implements UI {
         this.prefs.hints.push('long');
         this.savePrefs();
         this.showGestureHint(v.settings.oneTouch ? t('hintDoubleTap') : t('hintLongPress'), 'hand');
-      } else if (v.tools.brush && !v.settings.oneTouch && !this.prefs.hints.includes('brush')) {
+      } else if (v.tools.brush && !v.settings.oneTouch && !v.drops && !this.prefs.hints.includes('brush')) {
         this.prefs.hints.push('brush');
         this.savePrefs();
         this.showGestureHint(t('hintBrush'), 'motion');
+      } else if (this.deps.onSteer && !this.prefs.hints.includes('steer') && v.creatures.some((c) => c.state === 'stable' && c.behavior === 'swimmer')) {
+        // The first swimmer: it can be guided (§2.5). Said once; a guided drag also marks it as known.
+        this.prefs.hints.push('steer');
+        this.savePrefs();
+        this.showGestureHint(t('hintSteer'), 'motion');
       }
     }
   }
@@ -1708,6 +1781,11 @@ class BiolumaUI implements UI {
     const cam = this.camera;
     if (!cam.isOnDish(px, py)) {
       this.closeCard();
+      // Outside the glass nothing happens: say so once (QA-CLARIDAD, docs/CLARIDAD2.md §5.2 task 3).
+      if (!this.outsideTold && this.mode === 'seed' && !this.deps.isNarrating?.()) {
+        this.outsideTold = true;
+        this.showGestureHint(t('tapInside'), 'hand');
+      }
       return;
     }
     const g = cam.screenToGrid(px, py);
@@ -1735,9 +1813,25 @@ class BiolumaUI implements UI {
       } else if (pill.state === 'stable') this.openCard(pill.id);
       return;
     }
-    const hit = this.overlay.creatureAt(px, py);
-    if (hit !== null) {
-      this.openCard(hit);
+    // ADR-030 §2.2.1: a drop, or a creature with light, is collected; a tap never sows on either.
+    const route = routeTap('tap', px, py, this.overlay.tapScene());
+    if (route.kind === 'collect') {
+      this.closeCard();
+      this.collectDrop(route.drop);
+      return;
+    }
+    if (route.kind === 'card') {
+      this.openCard(route.id);
+      return;
+    }
+    if (route.kind === 'cardHint') {
+      // One-touch mode has no long press: the tap is its way to the card.
+      if (this.v.settings.oneTouch) this.openCard(route.id);
+      else if (!this.prefs.hints.includes('holdCard')) {
+        this.prefs.hints.push('holdCard');
+        this.savePrefs();
+        this.showGestureHint(t('hintHoldCard'), 'hand');
+      }
       return;
     }
     if (this.card) {
@@ -1753,6 +1847,14 @@ class BiolumaUI implements UI {
     if (!this.v) return;
     if (this.hitGolden(px, py)) return;
     if (!this.camera.isOnDish(px, py)) return;
+    // A long press on a creature opens its card (ADR-030: it was the short tap); elsewhere the big seed.
+    const route = routeTap('long', px, py, this.overlay.tapScene());
+    if (route.kind === 'card') {
+      this.vibrate(10);
+      this.openCard(route.id);
+      return;
+    }
+    if (!this.v.tools.longPress) return;
     const g = this.camera.screenToGrid(px, py);
     this.lastTapAt = performance.now();
     this.hideFirstHint();
@@ -1760,6 +1862,178 @@ class BiolumaUI implements UI {
     this.lastBigTap = performance.now();
     this.vibrate(18);
     this.deps.onDishTap(g.x, g.y, { big: true });
+  }
+
+  // ───────────────────────────── collecting light and guiding (ADR-030) ─────────────────────────────
+
+  /** Bus and overlay hooks of the collection: feedback, flights, gifts, warnings. */
+  private wireCollection(): void {
+    const ov = this.overlay;
+    ov.dangerText = (steer) => {
+      // A new pair about to touch: one soft warning tone and a short buzz (the label once per pair).
+      this.sound('warn');
+      this.vibrate([8, 40, 8]);
+      if (this.deps.contactTold?.()) return null;
+      return tx(steer && this.deps.onSteer ? TEXT.contactSteer : TEXT.contactSoon);
+    };
+    ov.drops.onRipe = (x, y) => {
+      // «¡Lista!» beside the first ripe drops of the first sessions (§2.2.2), never on a busy screen.
+      if (this.ripeTold >= 2 || (this.v?.session?.n ?? 1) > 3 || this.deps.isNarrating?.()) return;
+      this.ripeTold++;
+      ov.ripeLabel(x, y, t('dropReady'));
+    };
+    bus.on('lightCollected', (e) => {
+      let at = e.by === 'hand' && this.handAt ? this.handAt : null;
+      this.handTold = this.handTold || e.by === 'hand';
+      if (!at) {
+        // Where that drop is drawn (an owned one sits on its creature's outline), else its grid point.
+        const d = ov.drops.atGrid(e.x, e.y, 4);
+        const p = d ? null : ov.screenOf(e.x, e.y);
+        at = d ? { x: d.x, y: d.y, hue: ov.drops.hueOf(d.id) } : { x: p!.x, y: p!.y, hue: ov.drops.hueOf(-1) };
+      }
+      this.collectedAt(at.x, at.y, at.hue, e.amount, e.by);
+    });
+    bus.on('luzGift', (e) => this.showGift(e.amount, e.reason));
+  }
+
+  /**
+   * Collect drop `id` by hand: the bead draws in now, the game moves its light to the wallet, and the
+   * feedback (a "+N", motes to the counter, the pop) follows the game's lightCollected event, from where
+   * the drop was drawn.
+   */
+  private collectDrop(id: number): void {
+    const a = this.actions;
+    if (!a.collect && !a.collectAt) return;
+    const at = this.overlay.drops.take(id, this.overlayNow());
+    this.handAt = at;
+    this.handTold = false;
+    let got = 0;
+    if (a.collect) got = a.collect(id);
+    else if (at && a.collectAt) {
+      const g = this.camera.screenToGrid(at.x, at.y);
+      got = a.collectAt(g.x, g.y, 1);
+    }
+    // A game that pays without telling the bus still shows where the light went.
+    if (got > 0 && !this.handTold && at) this.collectedAt(at.x, at.y, at.hue, got, 'hand');
+    this.handAt = null;
+    if (got > 0) {
+      this.vibrate(6);
+      this.hideFirstHint();
+    }
+  }
+
+  /** The overlay's effect clock (s) for effects started from the UI. */
+  private overlayNow(): number {
+    return this.overlay.clock;
+  }
+
+  /** Feedback of light that left the dish at overlay point (x, y). */
+  private collectedAt(x: number, y: number, hue: number, amount: number, by: 'hand' | 'pipette' | 'sweep'): void {
+    if (!(amount > 0)) return;
+    const lang = this.lang;
+    this.overlay.collected(x, y, amount, hue, (n) => fmt(n, lang));
+    const d = this.dish.getBoundingClientRect();
+    const cx = d.left + x;
+    const cy = d.top + y;
+    const wallet = Math.max(1, this.v?.essence ?? 1);
+    const n = 1 + (amount >= COLLECT_UI.moteShare[0] * wallet ? 1 : 0) + (amount >= COLLECT_UI.moteShare[1] * wallet ? 1 : 0);
+    const now = performance.now();
+    this.fly.launch(cx, cy, 'essence', hueHex(hue, 70), by === 'sweep' ? 1 : n, now);
+    // The counter rises when the light lands, not before it leaves the dish.
+    if (!this.v?.settings.reduceMotion) {
+      const a = this.hudAnchor('essence');
+      const dist = a ? Math.hypot(a.left + a.width / 2 - cx, a.top + a.height / 2 - cy) : 300;
+      this.readout.hold(amount, now + flyDuration(dist) + (n - 1) * 60);
+    }
+  }
+
+  /** "+5 · primera semilla" beside the counter (bus luzGift): one chip, amounts of the same reason add up. */
+  private showGift(amount: number, reason: Text): void {
+    if (!(amount > 0)) return;
+    const now = performance.now();
+    const key = reason.es + '|' + reason.en;
+    const g = this.gift && this.gift.key === key && now - this.gift.at < COLLECT_UI.giftMs ? this.gift : null;
+    this.gift = { key, amount: (g?.amount ?? 0) + amount, reason, at: now };
+    setText(this.giftEl, tx(TEXT.giftLine(this.gift.amount, reason)));
+    show(this.giftEl, true);
+    if (!this.v?.settings.reduceMotion && typeof this.giftEl.animate === 'function' && !g)
+      this.giftEl.animate([{ opacity: 0, transform: 'translateY(-4px)' }, { opacity: 1, transform: 'none' }], { duration: DURATION.base, easing: EASING.enter });
+    clearTimeout(this.giftTimer);
+    this.giftTimer = window.setTimeout(() => {
+      show(this.giftEl, false);
+      this.gift = null;
+    }, COLLECT_UI.giftMs);
+  }
+
+  private onDragStart(x: number, y: number): 'steer' | 'sweep' | null {
+    if (!this.v || !this.camera.isOnDish(x, y)) return null;
+    const route = routeTap('drag', x, y, this.overlay.tapScene());
+    if (route.kind === 'steer' && this.deps.onSteer) {
+      this.steerId = route.id;
+      this.steerSent = NaN;
+      this.closeCard();
+      this.overlay.steerGuide(route.id, x, y);
+      if (!this.prefs.hints.includes('steer')) {
+        this.prefs.hints.push('steer');
+        this.savePrefs();
+      }
+      return 'steer';
+    }
+    if (route.kind === 'sweep' || route.kind === 'steer') {
+      // Without a guide (not wired), a drag from a swimmer is a sweep like any other.
+      if (!this.overlay.tapScene().collecting) return null;
+      this.sweepN = 0;
+      return 'sweep';
+    }
+    return null;
+  }
+
+  private onDragMove(x0: number, y0: number, x1: number, y1: number): void {
+    if (this.steerId !== null) {
+      this.overlay.steerGuide(this.steerId, x1, y1);
+      this.steerTick(false);
+      return;
+    }
+    // Sweep: every drop the finger passes over, once, as it passes (the feedback runs with the finger).
+    const before = this.sweepN;
+    this.sweepN = dropsOnSegment(this.overlay.tapScene(), x0, y0, x1, y1, this.sweepIds, this.sweepN);
+    for (let i = before; i < this.sweepN; i++) this.collectDrop(this.sweepIds[i]);
+  }
+
+  private onDragEnd(): void {
+    if (this.steerId !== null) {
+      this.steerTick(true);
+      this.steerId = null;
+      this.overlay.steerGuideEnd();
+    }
+    this.sweepN = 0;
+  }
+
+  /**
+   * The guided swimmer heads for the finger: the heading from where it is drawn now to the finger, sent
+   * while the finger moves (and as the swimmer moves under a still finger), at most every steerEveryMs.
+   */
+  private steerTick(final: boolean): void {
+    const id = this.steerId;
+    if (id === null) return;
+    const c = this.overlay.creatureDrawn(id);
+    const f = this.overlay.guidePoint();
+    if (!c || !f) {
+      this.deps.onSteer?.(id, null);
+      this.steerId = null;
+      this.overlay.steerGuideEnd();
+      return;
+    }
+    const dx = f.x - c.x;
+    const dy = f.y - c.y;
+    if (Math.hypot(dx, dy) < 12) return;
+    const h = Math.atan2(dy, dx);
+    const now = performance.now();
+    const turned = Number.isNaN(this.steerSent) ? Infinity : Math.abs(Math.atan2(Math.sin(h - this.steerSent), Math.cos(h - this.steerSent)));
+    if (!final && now - this.steerAt < COLLECT_UI.steerEveryMs && turned < COLLECT_UI.steerTurn) return;
+    this.steerAt = now;
+    this.steerSent = h;
+    this.deps.onSteer?.(id, h);
   }
 
   // ───────────────────────────── creature card ─────────────────────────────
@@ -2021,7 +2295,8 @@ class BiolumaUI implements UI {
     bus.on('seedBlocked', (e) => {
       // Refused for free, said on the spot: a red ring and why (first sentence big, the rest small).
       const room = this.v?.seedPrice?.capacity ?? this.v?.seedPrice?.freeSlots;
-      const msg = e.reason === 'tooClose' ? tx(TEXT.seedTooClose) : e.reason === 'full' && room ? tx(TEXT.dishFull(room)) : '';
+      // «¡Muy cerca! Si se tocan, se juntan y se apagan.» (docs/CLARIDAD2.md §6 #4): what would happen.
+      const msg = e.reason === 'tooClose' ? t('tooCloseSeed') : e.reason === 'full' && room ? tx(TEXT.dishFull(room)) : '';
       if (msg) {
         const cut = msg.search(/[.!] /);
         ov.seedBlocked(e.x, e.y, cut > 0 ? msg.slice(0, cut + 1) : msg, cut > 0 ? msg.slice(cut + 2) : '', e.near);
@@ -2039,8 +2314,18 @@ class BiolumaUI implements UI {
     bus.on('creatureBorn', (e) => ov.bornRing(e.x, e.y));
     bus.on('creatureStable', (e) => ov.stableDing(e.x, e.y));
     bus.on('creatureDied', (e) => {
-      ov.puff(e.x, e.y);
       if (this.card?.id === e.id) this.closeCard();
+      // Why it went dark (ADR-030 §2.5): a seed that never took fades grey with its cause in words, no
+      // particles of any colour (QA 071); a living creature that hit the glass says its light is still there.
+      if (e.cause) {
+        const alive = ov.stateOf(e.id) === 'stable';
+        const text =
+          e.cause === 'glass' ? tx(alive ? TEXT.deathGlassAlive : TEXT.deathGlass) : e.cause === 'crowd' ? tx(TEXT.deathCrowd) : alive ? '' : tx(TEXT.deathFaded);
+        if (alive) ov.puff(e.x, e.y);
+        ov.wentDark(e.x, e.y, text, !alive);
+        return;
+      }
+      ov.puff(e.x, e.y);
     });
     bus.on('creatureExploded', (e) => ov.explodedPulse(e.x, e.y));
     // Shapeless matter dissolved (lysis, clean-up): it fades like a puff; it was never a creature that died.

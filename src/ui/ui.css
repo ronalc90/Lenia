@@ -5587,3 +5587,61 @@ button.chip {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* ── ADR-030: the Luz counter as an instrument readout (ARTE-REALISTA §6.8, docs/CLARIDAD2.md §6 #1) ──
+   «LUZ 340 · +12 luz/s»: an engraved Mono label beside a tabular figure; the drop icon lights for 120 ms
+   when the light lands (an opacity layer, never a scale or a filter). */
+.ess-top {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.ess-label {
+  font: 600 13px/1 var(--instrument);
+  letter-spacing: 0.14em;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+.ess-icwrap {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+.ess-icglow {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(var(--accent-rgb), 0.6), rgba(var(--accent-rgb), 0) 100%);
+  opacity: 0;
+  pointer-events: none;
+}
+.ess-rate {
+  min-width: 9ch;
+}
+/* Why some Luz arrived without a drop: "+5 · primera semilla" under the counter, over the dish (no layout shift). */
+.luz-gift {
+  position: absolute;
+  left: max(10px, env(safe-area-inset-left));
+  top: calc(100% + 6px);
+  z-index: 4;
+  max-width: calc(100vw - 20px);
+  padding: 6px 10px;
+  border-radius: var(--bl-r-sm, 8px);
+  border: 1px solid var(--bl-plate-rule, var(--line-2));
+  background: var(--surface);
+  color: var(--bl-gain, var(--good));
+  font: 650 var(--bl-fs-small, 14px)/1.2 var(--bl-font-ui);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  pointer-events: none;
+}
+.luz-gift[hidden] {
+  display: none;
+}
+@media (max-width: 380px) {
+  .ess-label {
+    letter-spacing: 0.08em;
+  }
+}

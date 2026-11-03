@@ -6,9 +6,10 @@ import type { Behavior, CreatureState, Lang, Rarity, Text } from '../core/types'
 
 const S = {
   // Currencies & HUD
-  essence: { es: 'Esencia', en: 'Essence' },
+  // The in-run currency is Luz / Glow on screen (ADR-030); code ids stay `essence`.
+  essence: { es: 'Luz', en: 'Glow' },
   perSec: { es: '/s', en: '/s' },
-  essAria: { es: 'Esencia: {n}. Ganas {r} por segundo.', en: 'Essence: {n}. You earn {r} per second.' },
+  essAria: { es: 'Luz: {n}. Ganas {r} de luz por segundo.', en: 'Glow: {n}. You earn {r} glow per second.' },
   journal: { es: 'Bitácora', en: 'Journal' },
   settings: { es: 'Ajustes', en: 'Settings' },
   mute: { es: 'Silenciar', en: 'Mute' },
@@ -52,7 +53,7 @@ const S = {
   // Age in seconds of simulated time (CLARIDAD J-28: no simulation steps on screen).
   age: { es: 'Vive desde hace', en: 'Alive for' },
   yields: { es: 'Da', en: 'Gives' },
-  yieldsValue: { es: '+{v} Esencia/s', en: '+{v} Essence/s' },
+  yieldsValue: { es: '+{v} luz/s', en: '+{v} glow/s' },
   behavior: { es: 'Cómo se mueve', en: 'How it moves' },
 
   // Lab / upgrades
@@ -69,18 +70,29 @@ const S = {
   achievementsAll: { es: 'Ver logros', en: 'All achievements' },
   seedPriceWhy: { es: '¿Por qué cuesta esto?', en: 'Why does it cost this?' },
   seedWait: { es: 'Espera…', en: 'Wait…' },
-  deniedShort: { es: 'Te faltan {n} de Esencia', en: 'You need {n} more Essence' },
+  deniedShort: { es: 'Te faltan {n} de luz', en: 'You need {n} more glow' },
   deniedWait: { es: 'Espera a tus criaturas.', en: 'Wait for your creatures.' },
   seedWaitWhy: { es: 'Hay semillas naciendo: espera a que terminen.', en: 'Seeds are hatching: wait until they finish.' },
   behaviorGuide: { es: 'Maneras de moverse', en: 'Ways of moving' },
   behaviorGuideAria: { es: 'Guía: cómo se mueve cada una', en: 'Guide: how each one moves' },
-  multParts: { es: 'De dónde sale tu Esencia', en: 'Where your Essence comes from' },
+  multParts: { es: 'De dónde sale tu luz', en: 'Where your glow comes from' },
   overgrownTitle: { es: '¡La placa se desbordó!', en: 'The dish overflowed!' },
-  overgrownText: { es: 'La materia sin forma no da Esencia.', en: 'Shapeless matter gives no Essence.' },
+  overgrownText: { es: 'La materia sin forma no da luz.', en: 'Shapeless matter gives no glow.' },
   cleanDish: { es: 'Limpiar placa', en: 'Clean dish' },
   cleanConfirm: { es: '¿Limpiar? Toca otra vez', en: 'Clean? Tap again' },
   cleanHold: { es: 'Mantén pulsado para limpiar la placa', en: 'Hold to clean the dish' },
   recenter: { es: 'Centrar', en: 'Centre' },
+  // Collecting light by hand, the pipettes and the finger guide (ADR-030, docs/CLARIDAD2.md §2.2, §2.5)
+  /** A drop at its ripe share, the first times. */
+  dropReady: { es: '¡Lista!', en: 'Ready!' },
+  /** A tap on a creature whose drop is empty: the card moved to the long press. */
+  hintHoldCard: { es: 'Mantén pulsado para ver su ficha', en: 'Press and hold to see its card' },
+  /** The first swimmer on the dish. */
+  hintSteer: { es: 'Arrástrala para guiarla', en: 'Drag it to steer' },
+  /** A tap outside the glass, once. */
+  tapInside: { es: 'Toca dentro de la placa', en: 'Tap inside the dish' },
+  /** A refused tap next to a creature (§6 #4): what would happen, in a child's words. */
+  tooCloseSeed: { es: '¡Muy cerca! Si se tocan, se juntan y se apagan.', en: 'Too close! If they touch, they merge and go dark.' },
 
   // Bestiary
   registered: { es: 'Descubiertas', en: 'Found' },
@@ -92,7 +104,7 @@ const S = {
   },
   noMatches: { es: 'Ninguna especie coincide con el filtro.', en: 'No species match this filter.' },
   multiplier: { es: 'Rareza', en: 'Rarity' },
-  multiplierValue: { es: '×{v} Esencia', en: '×{v} Essence' },
+  multiplierValue: { es: '×{v} luz', en: '×{v} glow' },
   timesSeen: { es: 'La viste', en: 'Seen' },
   timesSeenValue: { es: '{n} veces', en: '{n} times' },
   /** Before the clock runs (B-7): the rate it will charge, never a contradicting +0/s. */
@@ -107,7 +119,7 @@ const S = {
   print: { es: 'Imprimir', en: 'Print' },
   makeCopy: { es: 'Hacer una copia', en: 'Make a copy' },
   copyFree: { es: 'Gratis', en: 'Free' },
-  copyHint: { es: 'Pon otra igual en la placa. Cuesta Esencia.', en: 'Put another one like it on the dish. Costs Essence.' },
+  copyHint: { es: 'Pon otra igual en la placa. Cuesta luz.', en: 'Put another one like it on the dish. Costs glow.' },
   outOfRegime: {
     es: 'Esta especie vive en otro mundo: {world}.',
     en: 'This species lives in another world: {world}.',
@@ -118,7 +130,7 @@ const S = {
 
   // Offline
   offlineTitle: { es: 'Mientras no estabas', en: 'While you were away' },
-  offlineIn: { es: 'de Esencia en {t}', en: 'Essence in {t}' },
+  offlineIn: { es: 'de luz en {t}', en: 'glow in {t}' },
   offlineGo: { es: 'Continuar', en: 'Continue' },
 
   // Journal modal
@@ -128,7 +140,7 @@ const S = {
   journalEmpty: { es: 'La bitácora está vacía… por ahora.', en: 'The journal is empty… for now.' },
   achievement: { es: 'Logro', en: 'Achievement' },
   statPlayTime: { es: 'Tiempo de juego', en: 'Play time' },
-  statTotalEssence: { es: 'Esencia total', en: 'Total Essence' },
+  statTotalEssence: { es: 'Luz total', en: 'Total glow' },
   statEraEssence: { es: 'Mejor sesión', en: 'Best session' },
   statSeeds: { es: 'Semillas', en: 'Seeds' },
   statBorn: { es: 'Criaturas nacidas', en: 'Creatures born' },
@@ -240,10 +252,10 @@ const S = {
 
   // Leaderboard
   ranking: { es: 'Ranking', en: 'Leaderboard' },
-  boardEssence: { es: 'Esencia', en: 'Essence' },
+  boardEssence: { es: 'Luz', en: 'Glow' },
   boardSpecies: { es: 'Especies', en: 'Species' },
   boardEra: { es: 'Noches', en: 'Nights' },
-  boardEssenceLong: { es: 'Esencia de por vida', en: 'Lifetime Essence' },
+  boardEssenceLong: { es: 'Luz de por vida', en: 'Lifetime glow' },
   nickTitle: { es: 'Elige tu nombre de científico', en: 'Choose your scientist name' },
   nickHint: { es: 'Entre 3 y 16 caracteres: letras, números, espacio, punto, _ o -.', en: '3 to 16 characters: letters, numbers, space, dot, _ or -.' },
   nickPlaceholder: { es: 'Dra. Placa', en: 'Dr. Petri' },
