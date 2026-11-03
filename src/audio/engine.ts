@@ -20,7 +20,7 @@ import { Composer, signatureFor, type NoteEvent, type Signature } from './score'
 import { EXTINCTION_NOTE_AT, EXTINCTION_SWEEP, SfxPlayer, SliderTone, type SfxName } from './sfx';
 
 /** Sounds the UI can request directly. */
-export type UISound = 'tap' | 'tab' | 'open' | 'close' | 'buy' | 'deny' | 'toggle' | 'hold' | 'confirm';
+export type UISound = 'tap' | 'tab' | 'open' | 'close' | 'buy' | 'deny' | 'toggle' | 'hold' | 'confirm' | 'warn';
 
 /** 'buy' maps to nothing: purchases already sound through the upgradeBought event. */
 const UI_SFX: Record<UISound, SfxName | null> = {
@@ -33,6 +33,7 @@ const UI_SFX: Record<UISound, SfxName | null> = {
   toggle: 'uiToggle',
   hold: 'uiHold',
   confirm: 'uiConfirm',
+  warn: 'contactWarn',
 };
 import { Instruments, Pad, VOICE_CAP, type NoiseBank } from './synth';
 import type { Chord } from './theory';
@@ -490,6 +491,14 @@ export class AudioCore {
       case 'income':
         this.play('income', this.grid(t, 0.5), { pan: this.panX((payload as GameEvents['income']).x) });
         break;
+      case 'lightCollected': {
+        // ADR-030: the player's own collection plucks at once (it answers a touch, so it is not put on the
+        // beat grid); a pipette's sip is a soft tick; the sweep at "¡Tiempo!" is told by the stamp, silent here.
+        const p = payload as GameEvents['lightCollected'];
+        if (p.by === 'hand') this.play('collect', t, { pan: this.panX(p.x) });
+        else if (p.by === 'pipette') this.play('pipette', t, { pan: this.panX(p.x) });
+        break;
+      }
       case 'speciesNew': {
         const p = payload as GameEvents['speciesNew'];
         const rare = p.rarity === 'rare' || p.rarity === 'veryRare';

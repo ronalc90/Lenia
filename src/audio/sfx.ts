@@ -48,6 +48,9 @@ export type SfxName =
   | 'offline'
   | 'behavior'
   | 'income'
+  | 'collect'
+  | 'pipette'
+  | 'contactWarn'
   | 'uiTap'
   | 'uiTab'
   | 'uiOpen'
@@ -406,6 +409,30 @@ const income: SfxFn = (e, t) => {
   return e.inst.glint(e.out, t, m, 0.35);
 };
 
+// ───────────────────────────── collected light (ADR-030) ─────────────────────────────
+
+/** A drop collected by hand: a short glassy pluck, one scale step higher per drop of a quick run (a swipe). */
+export const COLLECT_STEPS = [84, 86, 88, 91, 93, 96, 98, 100];
+
+const collect: SfxFn = (e, t) => {
+  const m = nearestPitchWithPc(COLLECT_STEPS[Math.min(COLLECT_STEPS.length - 1, e.n)], e.chord.stable);
+  tone(e, t, midiToFreq(m), 0.07, 0.11, 'sine', 0.002);
+  return e.inst.glint(e.out, t + 0.012, m + 12, 0.45);
+};
+
+/** A pipette sipping a drop: a soft, low glass tick (an instrument, quieter than the player's own hand). */
+const pipette: SfxFn = (e, t) => {
+  const m = nearestPitchWithPc(79, e.chord.stable);
+  tone(e, t, midiToFreq(m) * 2, 0.012, 0.012, 'square', 0.001, lowpass(e, 2600));
+  return tone(e, t + 0.004, midiToFreq(m), 0.04, 0.07, 'sine', 0.003);
+};
+
+/** Two creatures about to touch: two soft low pips (an instrument's warning, never an alarm siren). */
+const contactWarn: SfxFn = (e, t) => {
+  tone(e, t, midiToFreq(69), 0.05, 0.07, 'triangle', 0.003);
+  return tone(e, t + 0.13, midiToFreq(69), 0.045, 0.08, 'triangle', 0.003);
+};
+
 // ───────────────────────────── interface sounds ─────────────────────────────
 // Very short and soft: they confirm a touch without competing with the music.
 
@@ -490,6 +517,9 @@ export const SFX: Record<SfxName, SfxDef> = {
   offline: { fn: offline, channel: 'room', priority: 6, minInterval: 2, gain: 1 },
   behavior: { fn: behavior, channel: 'echo', priority: 5, minInterval: 0.6, gain: 1 },
   income: { fn: income, channel: 'echo', priority: 0, minInterval: 4, gain: 0.5 },
+  collect: { fn: collect, channel: 'room', priority: 5, minInterval: 0.04, gain: 1.1 },
+  pipette: { fn: pipette, channel: 'dry', priority: 1, minInterval: 0.12, gain: 0.7 },
+  contactWarn: { fn: contactWarn, channel: 'dry', priority: 5, minInterval: 1.5, gain: 1 },
   uiTap: { fn: uiTap, channel: 'dry', priority: 1, minInterval: 0.05, gain: 1 },
   uiTab: { fn: uiTab, channel: 'dry', priority: 2, minInterval: 0.08, gain: 1 },
   uiOpen: { fn: uiOpen, channel: 'room', priority: 2, minInterval: 0.15, gain: 1 },
@@ -514,6 +544,8 @@ export class SfxPlayer {
   private silent: AudioBuffer;
   private purchaseRun = 0;
   private lastPurchase = -Infinity;
+  private collectRun = 0;
+  private lastCollect = -Infinity;
   /** Counters for tests / debugging. */
   readonly stats = { played: 0, dropped: 0, stolen: 0 };
 
@@ -560,6 +592,11 @@ export class SfxPlayer {
       this.purchaseRun = t - this.lastPurchase < 1.2 ? this.purchaseRun + 1 : 0;
       this.lastPurchase = t;
       n = this.purchaseRun;
+    } else if (name === 'collect') {
+      // A swipe over several drops climbs the scale (each one is heard as one more).
+      this.collectRun = t - this.lastCollect < 0.6 ? this.collectRun + 1 : 0;
+      this.lastCollect = t;
+      n = this.collectRun;
     }
     const ctx = this.g.ctx;
     const vg = ctx.createGain();

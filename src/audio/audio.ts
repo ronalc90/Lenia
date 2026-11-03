@@ -58,6 +58,7 @@ const EVENTS: (keyof GameEvents)[] = [
   'creatureExploded',
   'creatureDivided',
   'income',
+  'lightCollected',
   'speciesNew',
   'behaviorNew',
   'upgradeBought',
