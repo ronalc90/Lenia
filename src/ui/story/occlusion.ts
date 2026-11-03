@@ -1,7 +1,7 @@
 /**
  * Is a spotlight target really on screen (owner bug, docs/ARTE-PULIDO.md B-10.1)? A rect alone says
  * nothing about what covers it: the Bestiary's dock button keeps its rect under the open drawer.
- * The test samples the centre and the four corners (inset 4 px) with `document.elementsFromPoint`.
+ * The test samples the centre and four points near the corners with `document.elementsFromPoint`.
  */
 
 export interface Box {
@@ -11,9 +11,16 @@ export interface Box {
   h: number;
 }
 
-/** The five sample points of a box: centre + corners inset by `inset` px. */
-export function samplePoints(r: Box, inset = 4): [number, number][] {
-  const i = Math.min(inset, r.w / 2, r.h / 2);
+/**
+ * Corner samples sit this share of the box's short side inside it: deep enough to land inside a rounded
+ * corner, even a pill's (radius = half the short side needs ≥ 0.15), so a visible button is never
+ * "covered" by its own parent (integrator review of v0.019).
+ */
+export const CORNER_INSET_SHARE = 0.3;
+
+/** The five sample points of a box: centre + four points near the corners (see CORNER_INSET_SHARE). */
+export function samplePoints(r: Box, minInset = 4): [number, number][] {
+  const i = Math.min(Math.max(minInset, CORNER_INSET_SHARE * Math.min(r.w, r.h)), r.w / 2, r.h / 2);
   return [
     [r.x + r.w / 2, r.y + r.h / 2],
     [r.x + i, r.y + i],
