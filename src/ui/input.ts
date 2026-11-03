@@ -1,8 +1,9 @@
 /**
- * Pointer input over the dish (doc §7):
- *  - one finger tap → tap (UI decides: golden / creature / seed / erase / print)
- *  - long press 400 ms → big seed (or double tap in one-touch mode)
- *  - one-finger drag → brush (when unlocked) or erase drag (eraser mode); never pans
+ * Pointer input over the dish (doc §7, ADR-030 §2.2.1):
+ *  - one finger tap → tap (UI decides: golden / drop / creature / seed / erase / print)
+ *  - long press 400 ms → bigTap: a creature's card, or the big seed (or double tap in one-touch mode)
+ *  - one-finger drag → what `dragStart` says: guide a swimmer ('steer') or collect the drops under the
+ *    finger ('sweep'); otherwise the brush (when unlocked) or erase drag (eraser mode); never pans
  *  - two fingers → pinch zoom + pan through the Camera
  *  - desktop: wheel zoom, right-click (and right-drag) erases
  */
@@ -22,6 +23,17 @@ export interface DishInputHooks {
   longPressEnabled(): boolean;
   brushEnabled(): boolean;
   oneTouch(): boolean;
+  /** A long press here opens something even without the big seed (a creature's card): start the timer. */
+  holdTarget?(px: number, py: number): boolean;
+  /**
+   * A one-finger drag started at (sx, sy) in seed mode: 'steer' (from a swimmer) or 'sweep' (collect
+   * light) take the drag; null leaves it to the brush / the accidental-swipe rule.
+   */
+  dragStart?(sx: number, sy: number): 'steer' | 'sweep' | null;
+  /** The finger moved during a steer / sweep drag, from (x0, y0) to (x1, y1). */
+  dragMove?(x0: number, y0: number, x1: number, y1: number): void;
+  /** The steer / sweep drag ended (finger up, a second finger, or cancelled). */
+  dragEnd?(): void;
 }
 
 const LONG_PRESS_MS = 400;
@@ -42,7 +54,7 @@ export class DishInput {
   private rect: DOMRect | null = null;
   private longTimer = 0;
   private longFired = false;
-  private dragging: 'none' | 'brush' | 'erase' | 'swipe' = 'none';
+  private dragging: 'none' | 'brush' | 'erase' | 'swipe' | 'steer' | 'sweep' = 'none';
   private pinched = false;
   private pinch: { d: number; mx: number; my: number } | null = null;
   private lastStroke: { x: number; y: number } | null = null;
@@ -105,6 +117,7 @@ export class DishInput {
     if (this.ptrs.size === 2) {
       // Second finger: switch to pinch, cancel everything single-finger.
       this.clearLong();
+      this.endDrag();
       this.dragging = 'none';
       this.pinched = true;
       this.pinch = this.pinchState();
@@ -116,8 +129,10 @@ export class DishInput {
     this.longFired = false;
     this.dragging = 'none';
     this.lastStroke = null;
-    if (this.hooks.mode() === 'seed' && this.hooks.longPressEnabled() && !this.hooks.oneTouch()) {
-      this.hooks.pressStart?.(p.x, p.y);
+    // A long press opens a creature's card (ADR-030) or charges the big seed; only the seed charges.
+    const card = this.hooks.mode() === 'seed' && !this.hooks.oneTouch() && !!this.hooks.holdTarget?.(p.x, p.y);
+    if (this.hooks.mode() === 'seed' && !this.hooks.oneTouch() && (card || this.hooks.longPressEnabled())) {
+      if (!card) this.hooks.pressStart?.(p.x, p.y);
       this.longTimer = window.setTimeout(() => {
         this.longTimer = 0;
         this.hooks.pressEnd?.();
@@ -160,7 +175,11 @@ export class DishInput {
     if (this.dragging === 'none' && moved > this.slop(ptr.type)) {
       this.clearLong();
       const mode = this.hooks.mode();
-      if (mode === 'erase') {
+      const took = mode === 'seed' ? (this.hooks.dragStart?.(ptr.sx, ptr.sy) ?? null) : null;
+      if (took) {
+        this.dragging = took;
+        this.lastStroke = { x: ptr.sx, y: ptr.sy };
+      } else if (mode === 'erase') {
         this.dragging = 'erase';
         this.lastStroke = { x: ptr.sx, y: ptr.sy };
         this.hooks.erase(ptr.sx, ptr.sy);
@@ -174,7 +193,17 @@ export class DishInput {
     }
     if (this.dragging === 'brush') this.strokeTo(p, (x, y) => this.hooks.brush(x, y));
     else if (this.dragging === 'erase') this.strokeTo(p, (x, y) => this.hooks.erase(x, y));
+    else if (this.dragging === 'steer' || this.dragging === 'sweep') {
+      const last = this.lastStroke ?? p;
+      this.hooks.dragMove?.(last.x, last.y, p.x, p.y);
+      this.lastStroke = { x: p.x, y: p.y };
+    }
   };
+
+  /** A steer / sweep drag ends: tell the UI once. */
+  private endDrag(): void {
+    if (this.dragging === 'steer' || this.dragging === 'sweep') this.hooks.dragEnd?.();
+  }
 
   /** Emit evenly spaced stroke points (≈3 grid cells apart) from the last one to p. */
   private strokeTo(p: { x: number; y: number }, fn: (x: number, y: number) => void): void {
@@ -218,6 +247,7 @@ export class DishInput {
     this.pinched = false;
     this.pinch = null;
     if (wasPinch || this.longFired || this.dragging !== 'none') {
+      this.endDrag();
       this.dragging = 'none';
       this.lastStroke = null;
       return;
@@ -255,6 +285,7 @@ export class DishInput {
     if (this.ptrs.size === 0) {
       this.pinched = false;
       this.pinch = null;
+      this.endDrag();
       this.dragging = 'none';
       this.lastStroke = null;
     }
