@@ -26,7 +26,7 @@ import * as C from '../../game/cycleBalance';
 import type { DatosBreakdown, RecordHit, SessionSummary } from '../../game/session';
 import { velaLine } from '../../game/session';
 import { DATOS_NAME, NODE_TEXT, SESSION_UI, TREE_UI } from '../../game/treeText';
-import { fmt, fmtClock, fmtMult, fmtRate } from '../format';
+import { fmt, fmtClock, fmtMult, fmtPerSec } from '../format';
 import type { PriceExplain } from '../moments/price';
 import { plateLabel, plateOf, scaleBar, scaleText } from '../moments/plates';
 import { mountPortrait } from '../portrait';
@@ -165,7 +165,7 @@ export interface ReportCtx {
 }
 
 function recordValue(r: RecordHit, l: Lang): { now: string; before: string } {
-  const f = (v: number) => (r.kind === 'eps' ? fmtRate(v, l) : fmt(v, l));
+  const f = (v: number) => (r.kind === 'eps' ? fmtPerSec(v, l) : fmt(v, l));
   return { now: f(r.value), before: f(r.previous) };
 }
 

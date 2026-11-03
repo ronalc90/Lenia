@@ -15,7 +15,7 @@ import type { IllustrationKind, MomentData } from '../../moments/types';
 import { catalogPattern } from '../../sim/catalog';
 import { clip, countBlobs, pumpAll, rulesClip, type LeniaClip } from './clips';
 import { drawBehaviorGlyph } from './status';
-import { fmtRate } from '../format';
+import { fmtPerSec } from '../format';
 import { portraitCanvas, portraitPx } from '../portrait';
 
 export const ILLUS_W = 260;
@@ -441,7 +441,7 @@ function seam(ctx: CanvasRenderingContext2D, u: number, loop: number): void {
  */
 export function liveRateBadge(amount: number | undefined, lang: Lang): string | null {
   if (amount === undefined) return '+1/s';
-  return amount > 0 ? `+${fmtRate(amount, lang)}/s` : null;
+  return amount > 0 ? `+${fmtPerSec(amount, lang)}/s` : null;
 }
 
 /** Gauge value for a clip frame: "how much matter vs. just right". */

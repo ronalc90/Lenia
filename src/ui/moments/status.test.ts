@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CreatureView } from '../../core/types';
 import { STATUS_MAX } from '../../moments/config';
-import { pickPills, pickStatusIds, PILLS_MAX, placePill, statusInfo } from './status';
+import { pickPills, pickStatusIds, PILLS_MAX, placePill, statusInfo, STATUS_LED, LABEL_INK } from './status';
 
 function cv(id: number, state: CreatureView['state'], age = 500, over: Partial<CreatureView> = {}): CreatureView {
   return { id, x: id * 10, y: 50, r: 8, state, behavior: null, speciesId: null, speciesName: null, eps: state === 'stable' ? 1.2 : 0, age, ...over };
@@ -22,9 +22,9 @@ describe('creature status pills: what they say', () => {
   it('stable creatures show what they earn and their behaviour', () => {
     const s = statusInfo(cv(1, 'stable', 900, { eps: 1.2, behavior: 'swimmer' }), 'es');
     expect(s.label).toBe('Viva');
-    expect(s.detail).toBe('+1,2/s');
+    expect(s.detail).toBe('+1/s'); // rates ≥ 1 in whole numbers (docs/CLARIDAD2.md §2.13)
     expect(s.behavior).toBe('swimmer');
-    expect(statusInfo(cv(1, 'stable', 900, { eps: 1.2 }), 'en').detail).toBe('+1.2/s');
+    expect(statusInfo(cv(1, 'stable', 900, { eps: 0.4 }), 'en').detail).toBe('+0.4/s'); // under 1: one decimal
   });
 
   it('accidents read plainly in both languages (no scary words)', () => {
@@ -94,7 +94,7 @@ describe('one rate before the first seed (RF-10)', () => {
     const waiting = statusInfo(cv(1, 'stable', 900, { eps: 2 }), 'es', undefined, false);
     expect(waiting.label).toBe('Viva');
     expect(waiting.detail).toBeNull();
-    expect(statusInfo(cv(1, 'stable', 900, { eps: 2 }), 'es', undefined, true).detail).toBe('+2,0/s');
+    expect(statusInfo(cv(1, 'stable', 900, { eps: 2 }), 'es', undefined, true).detail).toBe('+2/s');
   });
 });
 
@@ -102,7 +102,7 @@ describe('the LIFE card drawing says the creature\'s own rate (RF-10)', () => {
   it('no rate while the clock waits, the real rate while it runs, the generic +1/s only in a replay', async () => {
     const { liveRateBadge } = await import('./illustrations');
     expect(liveRateBadge(0, 'es')).toBeNull();
-    expect(liveRateBadge(2, 'es')).toBe('+2,0/s');
+    expect(liveRateBadge(2, 'es')).toBe('+2/s');
     expect(liveRateBadge(undefined, 'en')).toBe('+1/s');
   });
 });
@@ -136,5 +136,18 @@ describe('quiet dish labels (B-8)', () => {
       { id: 3, compact: true },
     ]);
     expect(pickPills(cs, new Map(), 10, { onAll: true, earning: false })).toEqual([]);
+  });
+});
+
+describe('status pills are instrument labels with an LED (docs/ARTE-REALISTA.md §6.9)', () => {
+  it('alive is a fixed green LED, forming a ring that fills, shapeless amber, fading grey', () => {
+    expect(STATUS_LED.stable).toMatchObject({ shape: 'dot', blink: false });
+    expect(STATUS_LED.born.shape).toBe('ring');
+    expect(STATUS_LED.exploded.shape).toBe('dot');
+    expect(STATUS_LED.dead.shape).toBe('dot');
+    expect(new Set([STATUS_LED.stable.color, STATUS_LED.exploded.color, STATUS_LED.dead.color]).size).toBe(3);
+    // A 6-px LED: the label never shouts in colour, the light does.
+    for (const k of ['born', 'stable', 'exploded', 'dead'] as const) expect(STATUS_LED[k].size).toBe(6);
+    expect(LABEL_INK).toMatch(/^#/);
   });
 });

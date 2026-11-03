@@ -21,15 +21,15 @@
 import { BEHAVIOR_COLOR, UI } from '../../core/palette';
 import type { Behavior, CreatureState, CreatureView, GameView, Lang } from '../../core/types';
 import { STABLE_AGE_STEPS, STATUS_MAX } from '../../moments/config';
-import { fmtRate } from '../format';
+import { fmtPerSec } from '../format';
 import { MS, tr } from './strings';
 
 const TAU = Math.PI * 2;
 const SANS = 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 /** Numbers in Inter (docs/ARTE.md §4: the mono is only for instruments). */
 const MONO = 'Inter, "Inter Fallback", system-ui, sans-serif';
-const FONT_LABEL = `700 12px ${SANS}`;
-const FONT_DETAIL = `600 12px ${MONO}`;
+const FONT_LABEL = `600 13px ${SANS}`;
+const FONT_DETAIL = `600 13px ${MONO}`;
 /** The compact pill's text: 13/600 (the caption size, B-8). */
 const FONT_COMPACT = `600 13px ${MONO}`;
 /** Pills on screen at once (B-8; the old limit was STATUS_MAX = 6). */
@@ -70,7 +70,7 @@ export function statusInfo(c: CreatureView, lang: Lang, stableAge = STABLE_AGE_S
       return {
         kind: 'stable',
         label: tr(MS.stStable, lang),
-        detail: earning && c.eps > 0 ? `+${fmtRate(c.eps, lang)}/s` : null,
+        detail: earning && c.eps > 0 ? `+${fmtPerSec(c.eps, lang)}/s` : null,
         color: UI.good,
         progress: null,
         behavior: c.behavior,
@@ -200,13 +200,29 @@ export interface DrawStatusOpts {
 
 const PILL_H = 24;
 
+/**
+ * The pills are instrument labels (docs/ARTE-REALISTA.md §6.9): dark glass rgba(6, 9, 13, .72) with a 1-px rule,
+ * ink text in Inter 13 px, and a 6-px LED that carries the state: alive = fixed green, forming = a ring that
+ * fills, shapeless = amber, fading = grey (the pill itself fades). No backdrop-filter.
+ */
+export const STATUS_LED: Record<CreatureView['state'], { color: string; shape: 'dot' | 'ring'; size: number; blink: boolean }> = {
+  stable: { color: UI.good, shape: 'dot', size: 6, blink: false },
+  born: { color: FORMING, shape: 'ring', size: 6, blink: false },
+  exploded: { color: UI.warn, shape: 'dot', size: 6, blink: false },
+  dead: { color: GREY, shape: 'dot', size: 6, blink: false },
+};
+/** Label ink on the dark glass (the LED carries the colour, never the words). */
+export const LABEL_INK = '#E6EDF3';
+const LABEL_GLASS = 'rgba(6,9,13,0.72)';
+const LABEL_RULE = 'rgba(154,166,178,0.35)';
+
 function measure(ctx: CanvasRenderingContext2D, info: StatusInfo): { w: number; wl: number; wd: number } {
   ctx.font = FONT_LABEL;
   const wl = ctx.measureText(info.label).width;
   ctx.font = FONT_DETAIL;
   const wd = info.detail ? ctx.measureText(info.detail).width : 0;
   const glyph = info.behavior ? 16 : 0;
-  return { w: 8 + 14 + 5 + wl + (wd ? 5 + wd : 0) + glyph + 9, wl, wd };
+  return { w: 8 + 8 + 6 + wl + (wd ? 5 + wd : 0) + glyph + 9, wl, wd };
 }
 
 /** Small behaviour glyph (shape + colour, never colour alone). */
@@ -272,54 +288,36 @@ export function drawBehaviorGlyph(ctx: CanvasRenderingContext2D, b: Behavior, x:
   ctx.restore();
 }
 
-function stateIcon(ctx: CanvasRenderingContext2D, info: StatusInfo, x: number, y: number, time: number, rm: boolean): void {
+/** The 6-px LED of a label (STATUS_LED): a lit dot with a small halo, or the forming ring filling up. */
+function drawLed(ctx: CanvasRenderingContext2D, info: StatusInfo, x: number, y: number): void {
+  const led = STATUS_LED[info.kind];
+  const r = led.size / 2;
   ctx.save();
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  if (info.kind === 'born') {
-    ctx.strokeStyle = 'rgba(159,211,240,0.25)';
-    ctx.lineWidth = 2.2;
+  if (led.shape === 'ring') {
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(159,211,240,0.3)';
     ctx.beginPath();
-    ctx.arc(x, y, 5.6, 0, TAU);
+    ctx.arc(x, y, r + 0.5, 0, TAU);
     ctx.stroke();
-    ctx.strokeStyle = info.color;
+    ctx.strokeStyle = led.color;
     ctx.beginPath();
-    ctx.arc(x, y, 5.6, -Math.PI / 2, -Math.PI / 2 + TAU * (info.progress ?? 0));
-    ctx.stroke();
-    if (!rm) {
-      const a = time * 4;
-      ctx.fillStyle = info.color;
-      ctx.beginPath();
-      ctx.arc(x + Math.cos(a) * 1.6, y + Math.sin(a) * 1.6, 1.1, 0, TAU);
-      ctx.fill();
-    }
-  } else if (info.kind === 'stable' || info.kind === 'exploded') {
-    ctx.fillStyle = info.color;
-    ctx.beginPath();
-    ctx.arc(x, y, 6.2, 0, TAU);
-    ctx.fill();
-    ctx.strokeStyle = '#0B0E12';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    if (info.kind === 'stable') {
-      ctx.moveTo(x - 2.8, y + 0.2);
-      ctx.lineTo(x - 0.6, y + 2.4);
-      ctx.lineTo(x + 3, y - 2);
-    } else {
-      ctx.moveTo(x - 2.3, y - 2.3);
-      ctx.lineTo(x + 2.3, y + 2.3);
-      ctx.moveTo(x + 2.3, y - 2.3);
-      ctx.lineTo(x - 2.3, y + 2.3);
-    }
+    ctx.arc(x, y, r + 0.5, -Math.PI / 2, -Math.PI / 2 + TAU * (info.progress ?? 0));
     ctx.stroke();
   } else {
-    ctx.strokeStyle = info.color;
-    ctx.lineWidth = 1.6;
-    ctx.setLineDash([2, 2]);
-    ctx.lineDashOffset = rm ? 0 : -time * 6;
+    // A lit LED: its glow first (a soft disc, no shadowBlur in the loop), then the lens.
+    ctx.globalAlpha *= 0.28;
+    ctx.fillStyle = led.color;
     ctx.beginPath();
-    ctx.arc(x, y, 5.4, 0, TAU);
-    ctx.stroke();
+    ctx.arc(x, y, r + 2.5, 0, TAU);
+    ctx.fill();
+    ctx.globalAlpha /= 0.28;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.beginPath();
+    ctx.arc(x - r * 0.35, y - r * 0.35, r * 0.32, 0, TAU);
+    ctx.fill();
   }
   ctx.restore();
 }
@@ -363,7 +361,7 @@ function drawPill(
   ctx.globalAlpha *= a;
   // Tail towards the creature.
   const tx = Math.max(box.x + 10, Math.min(box.x + box.w - 10, posX));
-  ctx.fillStyle = 'rgba(8,11,15,0.88)';
+  ctx.fillStyle = LABEL_GLASS;
   ctx.beginPath();
   if (box.below) {
     ctx.moveTo(tx - 5, box.y + 0.5);
@@ -375,24 +373,22 @@ function drawPill(
     ctx.lineTo(tx + 5, box.y + box.h - 0.5);
   }
   ctx.fill();
-  // Body: dark glass, no rim (the state icon carries the colour; B-8).
+  // Body: an instrument label, dark glass with a 1-px rule (the LED carries the colour; B-8, §6.9).
   ctx.beginPath();
-  ctx.roundRect(box.x, box.y, box.w, box.h, box.h / 2);
+  ctx.roundRect(box.x, box.y, box.w, box.h, 4);
   ctx.fill();
-  if (selected) {
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = info.color;
-    ctx.stroke();
-  }
+  ctx.lineWidth = selected ? 1.5 : 1;
+  ctx.strokeStyle = selected ? info.color : LABEL_RULE;
+  ctx.stroke();
   ctx.globalAlpha = a;
   const cy = box.y + box.h / 2;
   let x = box.x + 8;
-  stateIcon(ctx, info, x + 7, cy, time, rm);
-  x += 14 + 5;
+  drawLed(ctx, info, x + 4, cy);
+  x += 8 + 6;
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
   ctx.font = FONT_LABEL;
-  ctx.fillStyle = info.kind === 'dead' ? '#C9D1D9' : info.color;
+  ctx.fillStyle = info.kind === 'dead' ? '#C9D1D9' : LABEL_INK;
   ctx.fillText(info.label, x, cy + 0.5);
   x += m.wl;
   if (info.detail) {
@@ -461,15 +457,19 @@ const COMPACT_H = 22;
 function drawCompact(ctx: CanvasRenderingContext2D, text: string, tw: number, behavior: Behavior | null, box: Box, a: number, time: number, rm: boolean): void {
   ctx.save();
   ctx.globalAlpha *= a;
-  ctx.fillStyle = 'rgba(20,26,33,0.72)';
+  // The same instrument label as the full pill: dark glass, a 1-px rule, a 4-px corner (§6.9).
+  ctx.fillStyle = LABEL_GLASS;
   ctx.beginPath();
-  ctx.roundRect(box.x, box.y, box.w, box.h, box.h / 2);
+  ctx.roundRect(box.x, box.y, box.w, box.h, 4);
   ctx.fill();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = LABEL_RULE;
+  ctx.stroke();
   const cy = box.y + box.h / 2;
   ctx.font = FONT_COMPACT;
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#E6EDF3';
+  ctx.fillStyle = LABEL_INK;
   ctx.fillText(text, box.x + 9, cy + 0.5);
   if (behavior) drawBehaviorGlyph(ctx, behavior, box.x + 9 + tw + 10, cy, time, rm);
   ctx.restore();
