@@ -353,7 +353,8 @@ function boot(): void {
     isBlocked: () =>
       (uiRef?.blocked() ?? true) || moments.isBusy() || sheetOpen() || secretShowing() || encargoShowing() || (flowRef?.cardOpen ?? false) || welcomeOpen() || introOpen() || (uiRef?.drawerOpen ?? false),
     suppress: (id) => storySuppressed.has(id) || (bridge?.suppresses(id) ?? false),
-    ui: (name) => (name === 'tree' ? (flowRef?.treeOpen ?? false) : false),
+    // 'dishDark': the run's culture still incubates unlit (VELA's «¡Vive!» waits until it shows).
+    ui: (name) => (name === 'tree' ? (flowRef?.treeOpen ?? false) : name === 'dishDark' ? culture.incubating || !culture.lit : false),
   });
   bridge = linkStory(moments, story);
   story.on('journal', ({ id, text }) => bus.emit('journalNew', { id, text }));

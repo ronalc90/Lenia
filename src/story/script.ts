@@ -268,7 +268,9 @@ export const SCENES: SceneDef[] = [
     priority: 80,
     after: ['t_intro'],
     title: t('Algo se quedó', 'Something stayed'),
-    when: (c) => c.n('stables') >= 1 || c.stablesNow() >= 1,
+    // «¡Vive!» waits until the player can see it: the first creature incubates unlit (ADR-027) and the
+    // spotlight pointed at an empty dish (integration play-through of the clarity pass).
+    when: (c) => (c.n('stables') >= 1 || c.stablesNow() >= 1) && !c.ui('dishDark'),
     lines: (c) => (sessions(c) ? T_STABLE_SESSIONS : T_STABLE_LINES),
   },
   // ── Session 1 (ADR-030, docs/CLARIDAD2.md §2.4): the player sows first; the clock starts after VELA. ──
