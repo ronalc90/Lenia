@@ -416,11 +416,15 @@ export function boostTooLate(s: SessionState | null): boolean {
 
 /**
  * Freeze the Nutrientes price the first time it is on sale with something producing (call it every
- * economic tick; a no-op once frozen).
+ * economic tick; a no-op once frozen): BOOST_SECONDS of the dish's light/s at its best, the light of this
+ * moment or the best of earlier runs (`best`, ResearchRecords.eps), whichever is more. Bot B2: frozen at the
+ * light of the 8th second alone, a 2:30 run (×4 in-run climb) bought six where it bought three, and the late
+ * nights ran out of Tree and dipped (docs/RITMO.md §8).
  */
-export function freezeBoost(s: SessionState, eps: number): void {
+export function freezeBoost(s: SessionState, eps: number, best = 0): void {
   if (s.boostBase !== undefined || !boostOffered(s) || s.phase !== 'running' || boostWait(s) > 0 || !(eps > 0)) return;
-  s.boostBase = Math.max(C.BOOST_MIN_COST, C.BOOST_SECONDS * eps);
+  const ref = Math.max(eps, Number.isFinite(best) && best > 0 ? best : 0);
+  s.boostBase = Math.max(C.BOOST_MIN_COST, C.BOOST_SECONDS * ref);
 }
 
 function extend(s: SessionState, seconds: number, reason: 'species' | 'encargo' | 'golden'): SessionEvent[] {
