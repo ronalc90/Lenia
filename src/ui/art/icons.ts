@@ -396,6 +396,8 @@ export const ROUTE_ICON = {
   discovery: 'discovery',
   worlds: 'world',
   spark: 'sparkRoute',
+  /** ↓ Recoger (ADR-030): the drop of light until its pipette icon is drawn. */
+  collect: 'essence',
 } as const;
 
 /** World → icon (start card, node, Bestiary filters). */

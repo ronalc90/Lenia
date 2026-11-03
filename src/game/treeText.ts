@@ -9,7 +9,11 @@ import * as C from './cycleBalance';
 
 const t = (es: string, en: string): Text => ({ es, en });
 
-export type BranchId = 'time' | 'dropper' | 'dish' | 'life' | 'discovery' | 'worlds' | 'spark';
+/**
+ * The tree's straight routes. `collect` is ↓ Recoger (ADR-030), the 8th route in the free ↓ direction; it joins
+ * tree.ts BRANCHES (and gets its nodes) with the collection work, so the type is settled before the UI builds on it.
+ */
+export type BranchId = 'time' | 'dropper' | 'dish' | 'life' | 'discovery' | 'worlds' | 'spark' | 'collect';
 
 /** The permanent currency. One place to rename it ("Datos", "Ideas"…). */
 export const DATOS_NAME = t('Datos', 'Data');
@@ -25,6 +29,7 @@ export const BRANCH_TEXT: Record<BranchId | 'core', { name: Text; desc: Text }> 
   discovery: { name: t('Descubrir', 'Discover'), desc: t('Más Datos por cada cosa nueva que encuentras.', 'More Data for everything new you find.') },
   worlds: { name: t('Mundos', 'Worlds'), desc: t('Reglas nuevas en las que nacen otras especies.', 'New rules where other species are born.') },
   spark: { name: t('Destello', 'Spark'), desc: t('La chispa dorada viene más y regala más.', 'The golden spark comes more often and gives more.') },
+  collect: { name: t('Recoger', 'Collect'), desc: t('Pipetas que recogen la luz por ti.', 'Pipettes that collect the glow for you.') },
 };
 
 /** Node names and one-line descriptions, by node id (tree.ts TREE_NODES). */
@@ -93,6 +98,13 @@ export const NODE_TEXT: Record<string, { name: Text; desc: Text }> = {
   sparkGift: { name: t('Regalos mejores', 'Better gifts'), desc: t('La chispa te regala más segundos de tu Esencia.', 'The spark gives you more seconds of your Essence.') },
   sparkDatos: { name: t('Destello sabio', 'Wise spark'), desc: t('Cada chispa atrapada te da Datos.', 'Every spark you catch gives you Data.') },
   sparkMutagen: { name: t('Semillas mágicas', 'Magic seeds'), desc: t('Cada chispa deja más semillas que siempre viven.', 'Every spark leaves more seeds that always live.') },
+  // ↓ Recoger (ADR-030): lab pipettes, instruments and never living things (pillar 1)
+  pipette: { name: t('Pipeta', 'Pipette'), desc: t('Recoge la luz por ti.', 'Collects the glow for you.') },
+  pipetteFast: { name: t('Pipetas rápidas', 'Fast pipettes'), desc: t('Van y vuelven antes.', 'There and back sooner.') },
+  dropBig: { name: t('Gotas grandes', 'Big drops'), desc: t('Cada gota guarda más luz antes de llenarse.', 'Each drop holds more glow before it is full.') },
+  pipetteMore: { name: t('Más pipetas', 'More pipettes'), desc: t('Más manos en la placa.', 'More hands on the dish.') },
+  pipetteMagnet: { name: t('Pipetas con imán', 'Magnet pipettes'), desc: t('De paso, se llevan las gotas de al lado.', 'They pick up the nearby drops on the way.') },
+  pipetteMaster: { name: t('Pipeta maestra', 'Master pipette'), desc: t('Toda la luz llega sola.', 'All the glow arrives on its own.') },
 };
 
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
@@ -170,6 +182,19 @@ export const VALUE_TEXT = {
   gifts: (sec: number) => t(`Regalo: ${sec} s de Esencia`, `Gift: ${sec} s of Essence`),
   datosPerSpark: (n: number) => t(`+${n} ${n === 1 ? 'Dato' : 'Datos'} por chispa`, `+${n} Data per spark`),
   sureSeeds: (n: number) => t(n === 1 ? '1 semilla segura por chispa' : `${n} semillas seguras por chispa`, n === 1 ? '1 sure seed per spark' : `${n} sure seeds per spark`),
+  // ↓ Recoger (ADR-030): "Recoges tú → 1 pipeta", "Una gota cada 2,5 s → 2 s", "La gota guarda 4 s de luz → 6 s"…
+  pipettes: (n: number) => (n ? t(plural(n, 'pipeta', 'pipetas'), plural(n, 'pipette', 'pipettes')) : t('Recoges tú', 'You collect')),
+  /** One pipette's trip (go, take, come back), by Pipetas rápidas level. */
+  pipetteTrip: (s: Text) => t(`Una gota cada ${s.es} s`, `One drop every ${s.en} s`),
+  /** Gotas grandes: seconds of production a drop holds before it is full and waits. */
+  dropHolds: (s: number) => t(`La gota guarda ${s} s de luz`, `A drop holds ${s} s of glow`),
+  /** Pipetas con imán: how far around its target a trip also collects, in creature widths (0 = only the target). */
+  magnet: (n: number) =>
+    n ? t(`Y las gotas a ${plural(n, 'criatura', 'criaturas')} de distancia`, `And drops ${plural(n, 'creature', 'creatures')} away`) : t('Una gota por viaje', 'One drop per trip'),
+  /** Pipeta maestra, before: how long the pipettes take now. */
+  tripTakes: (s: Text) => t(`Las pipetas tardan ${s.es} s`, `Pipettes take ${s.en} s`),
+  /** Pipeta maestra, after. */
+  instant: t('La luz llega sola, al momento', 'The glow arrives on its own, at once'),
 };
 
 /** World cards (start card picker). Names live in NODE_TEXT for the tree; the first world here. */
@@ -253,6 +278,41 @@ export const TREE_UI = {
   ),
   nightFree: t('Gratis', 'Free'),
   affordable: (n: number) => (n === 1 ? t('1 mejora lista', '1 upgrade ready') : t(`${n} mejoras listas`, `${n} upgrades ready`)),
+  // ── ADR-030 (docs/CLARIDAD2.md §2.10, §8.2) ──
+  /** First visit: the buyable nodes pulse in their own colour (green is for gains, §2.11). */
+  tapGlowing: t('¡Toca el círculo que brilla! Lo puedes comprar.', 'Tap the glowing circle! You can buy it.'),
+  /** One count per sheet: "Ruta Placa · paso 1 de 7"; the levels are dots ●●○. */
+  routeStep: (route: Text, k: number, n: number) => t(`Ruta ${route.es} · paso ${k} de ${n}`, `${route.en} route · step ${k} of ${n}`),
+  /** A Placa level past this device's dish (state `deviceMax`): a badge and the line, no price, no "Comprar". */
+  deviceMax: t('✓ Máximo en este móvil', '✓ Max on this device'),
+  deviceMaxLine: t('En este móvil la placa ya no crece más. Gasta tus Datos en otra mejora.', 'On this device the dish can’t grow any more. Spend your Data on another upgrade.'),
+  /** The strip at the bottom of the Tree. */
+  canBuyStrip: (n: number) => t(`Puedes comprar (${n})`, `You can buy (${n})`),
+  /** The strip when nothing is affordable: the cheapest node, its price and how many sessions it is away. */
+  cheapestNow: (name: Text, cost: string, sessions: number) => {
+    const es = sessions <= 0 ? '' : sessions === 1 ? ' · una sesión más' : ` · unas ${sessions} sesiones`;
+    const en = sessions <= 0 ? '' : sessions === 1 ? ' · one more session' : ` · about ${sessions} sessions`;
+    return t(`Lo más barato: ${name.es} · ${cost} Datos${es}`, `Cheapest: ${name.en} · ${cost} Data${en}`);
+  },
+  /** The centre: the prize before the gate (QA-CLARIDAD #37). */
+  nightPrize: (n: number) => {
+    const p = Math.round(C.DATOS_NIGHT_BONUS * 100);
+    return t(
+      `Noche ${n} · capítulo ${n} de la historia. +${p} % de Datos y mejoras nuevas. Nada se borra.`,
+      `Night ${n} · chapter ${n} of the story. +${p}% Data and new upgrades. Nothing is lost.`,
+    );
+  },
+  /** Gate lines with have / need. */
+  gateSessions: (have: number, need: number) =>
+    have >= need
+      ? t(`Juega ${plural(need, 'sesión', 'sesiones')} · ✓ llevas ${have}`, `Play ${plural(need, 'session', 'sessions')} · ✓ ${have} so far`)
+      : t(`Juega ${plural(need, 'sesión', 'sesiones')} · llevas ${have}`, `Play ${plural(need, 'session', 'sessions')} · ${have} so far`),
+  gateSpecies: (have: number, need: number) =>
+    have >= need
+      ? t(`Especies en tu colección · ✓ tienes ${have} (hace falta ${need})`, `Species in your collection · ✓ you have ${have} (need ${need})`)
+      : t(`Especies en tu colección · tienes ${have} (hace falta ${need})`, `Species in your collection · you have ${have} (need ${need})`),
+  /** "Nueva sesión" after buying a World. */
+  playWorld: (name: Text) => t(`¡Juega en el ${name.es}!`, `Play in ${name.en}!`),
 };
 
 /** Session HUD, start and end cards. */
@@ -366,6 +426,89 @@ export const SESSION_UI = {
   sheetHintBought: t('¡Es tuya para siempre! La notarás en la próxima sesión.', 'It is yours forever! You will feel it next session.'),
   worldHint: t('Toca un mundo para jugar allí.', 'Tap a world to play there.'),
   newSpeciesTime: (s: number) => t(`¡Especie nueva: +${s} segundos!`, `New species: +${s} seconds!`),
+  // ── ADR-030 (docs/CLARIDAD2.md §8.2): Luz that is collected, Nutrientes, a report that tells a story ──
+  // Amounts arrive formatted for the player's language (strings); counts are numbers (plurals).
+  /** The in-run currency on screen (code ids stay `essence`). */
+  luz: t('Luz', 'Glow'),
+  /** The rate under the counter, whole numbers from 1 (format.ts rule): "+12 luz/s". */
+  luzPerSec: (v: string) => t(`+${v} luz/s`, `+${v} glow/s`),
+  /** Summary row: all the Luz collected this session (by hand, by pipette and the final sweep). */
+  collected: t('Luz recogida', 'Glow collected'),
+  /** Summary row: what VELA swept at "¡Tiempo!", already inside the Luz collected. */
+  sweptEnd: t('Recogida final (VELA)', 'Final sweep (VELA)'),
+  sweptNote: t('ya está en la luz de arriba', 'already in the glow above'),
+  /** The Datos chip from session 2: "38 Datos · próximo en 12 de luz". */
+  datosNext: (datos: string, left: string) =>
+    t(`${datos} ${datos === '1' ? 'Dato' : 'Datos'} · próximo en ${left} de luz`, `${datos} Data · next in ${left} glow`),
+  /** VELA on the session-2 start card, the first time the chip shows. */
+  datosRule: (div: number) => t(`Cada ${div} de luz que recoges es 1 Dato. Los Datos no se pierden.`, `Every ${div} glow you collect is 1 Data. Data is never lost.`),
+  /** Summary: "963 ÷ 25 = 38 Datos". */
+  lightToDatos: (light: string, div: number, datos: string) => t(`${light} ÷ ${div} = ${datos} Datos`, `${light} ÷ ${div} = ${datos} Data`),
+  /** Summary: "ayer 20" next to an arrow. */
+  yesterday: (n: string) => t(`ayer ${n}`, `yesterday ${n}`),
+  /** Summary: the Datos the Luz gave, apart from the discovery prizes. */
+  fromLight: t('Datos por tu luz', 'Data from your glow'),
+  discoveryOnce: t('Premios de descubrimiento (solo la primera vez)', 'Discovery prizes (first time only)'),
+  /** Summary, session 1: the first steps by name ("sembrar ✓ · primera criatura ✓ · recoger luz ✓"). */
+  firstStepNames: {
+    sow: t('sembrar', 'sow'),
+    creature: t('primera criatura', 'first creature'),
+    collect: t('recoger luz', 'collect glow'),
+  },
+  /** The visible goal: the Bestiary button, the summary ("Colección 3/7"). */
+  collection: (n: number, total: number) => t(`Colección ${n}/${total}`, `Collection ${n}/${total}`),
+  /** Summary: where the next species lives; `cost` = the World's price in the Tree (null when it is open). */
+  nextSpeciesIn: (world: Text, cost: string | null) =>
+    cost
+      ? t(`La siguiente vive en el ${world.es} (Árbol, ${cost} Datos)`, `The next one lives in ${world.en} (Tree, ${cost} Data)`)
+      : t(`La siguiente vive en el ${world.es}`, `The next one lives in ${world.en}`),
+  /** Summary with fewer Datos than the one before (neutral, never red): why, then what to do (lessAction). */
+  lessReason: (r: { prize: number; before: string; now: string; grew: boolean }) =>
+    t(
+      `${r.prize > 0 ? `Hoy no hubo especie nueva (ayer +${r.prize}).` : 'Hoy salieron menos Datos que ayer.'} ${
+        r.grew ? `Tu luz sí creció: ${r.before} → ${r.now} Datos.` : `Tu luz dio ${r.before} → ${r.now} Datos.`
+      }`,
+      `${r.prize > 0 ? `No new species today (yesterday +${r.prize}).` : 'Fewer Data than yesterday.'} ${
+        r.grew ? `Your glow grew: ${r.before} → ${r.now} Data.` : `Your glow gave ${r.before} → ${r.now} Data.`
+      }`,
+    ),
+  lessAction: (world: Text) => t(`Para descubrir otra: compra ${world.es} en el Árbol.`, `To discover another: buy ${world.en} in the Tree.`),
+  /** VELA's tip on the summary after fusions ("Hoy se juntaron 2"). */
+  mergedTip: (n: number) => t(`Hoy se juntaron ${n}. Siembra más lejos de las demás.`, `${n} merged today. Sow further from the others.`),
+  /** Start card: where every Luz of the wallet comes from (QA-CLARIDAD #26). */
+  startCarry: (base: string, extra: string, total: string) =>
+    t(`${base} luz + ${extra} de un encargo que cumpliste en el Árbol = ${total}`, `${base} glow + ${extra} from a request you finished in the Tree = ${total}`),
+  /** Start card (Semillas de regalo): "1 semilla gratis · las demás, 4 de luz". */
+  freeSeeds: (n: number, price: string) =>
+    t(`${plural(n, 'semilla gratis', 'semillas gratis')} · las demás, ${price} de luz`, `${plural(n, 'free seed', 'free seeds')} · others ${price} glow`),
+  /** The price sheet, one fixed line (SEED_PRICE_STEP = 1). */
+  seedAlways: (price: string) => t(`Una semilla cuesta ${price} de luz. Siempre.`, `A seed costs ${price} glow. Always.`),
+  /** Start card with the Nevera: "¡Empezar!" waits until the creature is lit on the dish. */
+  fridgeWaking: t('La criatura se está despertando…', 'The creature is waking up…'),
+  fridgeOut: (name: string) => t(`❄ Sale de la nevera: ${name}`, `❄ Out of the fridge: ${name}`),
+  fridgeTag: t('❄ de la nevera', '❄ from the fridge'),
+  /** World cards: species still to find there, or complete (QA-CLARIDAD #36). */
+  worldLeft: (n: number) => (n === 1 ? t('Te falta 1 por descubrir', '1 still to discover') : t(`Te faltan ${n} por descubrir`, `${n} still to discover`)),
+  worldDone: t('✓ Completo · aquí ganas menos Datos', '✓ Complete · fewer Data here'),
+  /** The clock pill while VELA talks or a sheet is open: the clock waits for the player. */
+  paused: t('⏸ Reloj en pausa', '⏸ Clock paused'),
+  /** Session 1 before the clock starts. */
+  clockNotYet: (clock: string) => t(`${clock} · aún no corre`, `${clock} · not running yet`),
+  /** The Nutrientes button (bottom bar, centre): waiting, on sale, no life, too late. */
+  nutrients: t('Nutrientes', 'Nutrients'),
+  boostReady: (s: number) => t(`Nutrientes · listo en ${s} s`, `Nutrients · ready in ${s} s`),
+  /** "Nutrientes · 16 luz" (plan §8.2 `boostPrice(n)`; that name is the price rule above). */
+  boostCost: (n: string) => t(`Nutrientes · ${n} luz`, `Nutrients · ${n} glow`),
+  boostNoLife: t('Nutrientes · falta vida', 'Nutrients · no life yet'),
+  boostNoTime: t('Ya no da tiempo', 'No time left'),
+  /** The first time it is on sale: what it does, now → after, and the frozen price rule. */
+  boostTip: (now: string, after: string) => {
+    const g = growthWord(String(C.BOOST_GROWTH));
+    return t(
+      `Ahora ${now} luz/s → con Nutrientes ${after} luz/s. Hasta el final de la sesión. El siguiente cuesta ${g.es}.`,
+      `Now ${now} glow/s → with Nutrients ${after} glow/s. Until the session ends. The next one costs ${g.en}.`,
+    );
+  },
 };
 
 /** VELA's line on the end card (≤ 14 words each). Picked by session.ts `velaLine`. */

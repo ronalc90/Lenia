@@ -20,6 +20,7 @@ const ROUTE_MATTERS: Record<BranchId, Text> = {
   discovery: t('Encontrar cosas nuevas es lo que más Datos da; esto hace que cada hallazgo cuente más.', 'Finding new things gives the most Data; this makes every find count for more.'),
   worlds: t('Cada Mundo tiene especies que no nacen en ningún otro: sin él, el Bestiario no se completa.', 'Each World has species born nowhere else: without it the Bestiary is never complete.'),
   spark: t('El Destello es un regalo que llega solo: tiempo, Esencia o Datos sin hacer nada.', 'The Spark is a gift that comes by itself: time, Essence or Data for free.'),
+  collect: t('Mientras siembras y guías, las pipetas recogen las gotas: ninguna se queda llena esperando.', 'While you sow and steer, the pipettes collect the drops: none sits full and waiting.'),
 };
 
 export const WHY_UI = {

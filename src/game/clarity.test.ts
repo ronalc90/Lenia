@@ -3,7 +3,8 @@
  * player-facing Text of the game and story modules and fails on words a child does not know or that
  * name a retired system: μ, σ, régimen/regime, Genoma/Genome, Muestra/Sample (the old currency),
  * Extinci/Extinct, Calibr, espécimen/specimen, "pasos" (simulation steps), Ø, and "/s" inside a
- * sentence (only the "+1/s" chip may say it).
+ * sentence (only the "+1/s" chip may say it, and the unit of the new currency after a number, "2 luz/s" /
+ * "2 glow/s": ADR-030, docs/CLARIDAD2.md §2.1 and §6 #3 name it so on the counter and the Nutrientes tip).
  *
  * Skipped on purpose (PHASE-2B-REMOVE, deleted with the classic loop): content.ts CLASSIC_ONLY_TEXT,
  * CLASSIC_ACHIEVEMENT_TEXT, UPGRADE_TEXT / GENOME_TEXT / OBJECTIVE_TEXT (classic panels), the
@@ -64,8 +65,8 @@ function problems(path: string, t: Text): string[] {
   for (const lang of ['es', 'en'] as const) {
     const s = t[lang];
     for (const re of [...BANNED_ANY, ...BANNED_CASE]) if (re.test(s)) out.push(`${path} ${lang}: «${s}» (${re})`);
-    // "/s" only as the bare "+1/s" chip, or that chip quoted to explain it («+1/s»).
-    const bare = s.replace(/[«"“]\+?[\d.,]+\/s[»"”]/g, '');
+    // "/s" only as the bare "+1/s" chip, or that chip quoted to explain it («+1/s»), or "N luz/s" (ADR-030).
+    const bare = s.replace(/[«"“]\+?[\d.,]+\/s[»"”]/g, '').replace(/\+?[\d.,]+ (luz|glow)\/s\b/g, '');
     if (/\/s\b/.test(bare) && !/^\+?[\d\s.,]*\/s$/.test(bare.trim())) out.push(`${path} ${lang}: «${s}» ("/s" inside a sentence)`);
   }
   return out;
@@ -127,6 +128,8 @@ describe('clarity: no jargon in what the player reads', () => {
     expect(problems('x', { es: '+3/s', en: '+3/s' })).toEqual([]);
     expect(problems('x', { es: 'Enviar la muestra', en: 'Send the sample' })).toEqual([]);
     expect(problems('x', { es: 'Arriba: «+1/s» es tu Esencia.', en: 'Up top: "+1/s" is your Essence.' })).toEqual([]);
+    expect(problems('x', { es: 'Ahora 2 luz/s → con Nutrientes 2,5 luz/s.', en: 'Now 2 glow/s → with Nutrients 2.5 glow/s.' })).toEqual([]);
+    expect(problems('x', { es: 'Tu luz/s sube.', en: 'Your glow/s rises.' }).length).toBe(2);
   });
 });
 
@@ -151,5 +154,37 @@ describe('the node sheet counts in words, never as fractions (QA4 F-15)', () => 
     expect(TREE_UI.haveCost('3', '2').en).not.toContain('/');
     expect(TREE_UI.levelOf(0, '6').es).toBe('Nivel 0 de 6');
     expect(TREE_UI.step(1, 7).es).toBe('mejora 1 de 7');
+  });
+});
+
+describe('the clarity-pass texts exist in both languages before anyone wires them (ADR-030, docs/CLARIDAD2.md §8.2)', () => {
+  it('every new key of SESSION_UI, TREE_UI, NODE_TEXT, VALUE_TEXT and TEXT gives Spanish and English', async () => {
+    const { SESSION_UI, TREE_UI, NODE_TEXT, VALUE_TEXT, BRANCH_TEXT } = await import('./treeText');
+    const { TEXT } = await import('./content');
+    const W = { es: 'Mundo 4', en: 'World 4' };
+    const got: Text[] = [
+      SESSION_UI.luz, SESSION_UI.luzPerSec('12'), SESSION_UI.collected, SESSION_UI.sweptEnd, SESSION_UI.datosNext('38', '12'),
+      SESSION_UI.lessReason({ prize: 10, before: '2', now: '6', grew: true }), SESSION_UI.lessAction(W), SESSION_UI.fromLight,
+      SESSION_UI.discoveryOnce, SESSION_UI.collection(3, 7), SESSION_UI.nextSpeciesIn(W, '400'), SESSION_UI.startCarry('20', '300', '320'),
+      SESSION_UI.freeSeeds(1, '4'), SESSION_UI.fridgeWaking, SESSION_UI.worldLeft(1), SESSION_UI.worldDone, SESSION_UI.paused,
+      SESSION_UI.boostReady(7), SESSION_UI.boostCost('16'), SESSION_UI.boostNoTime, SESSION_UI.boostTip('2', '2,5'),
+      TREE_UI.tapGlowing, TREE_UI.routeStep(W, 1, 7), TREE_UI.deviceMax, TREE_UI.deviceMaxLine, TREE_UI.canBuyStrip(3),
+      TREE_UI.cheapestNow(W, '30', 2), TREE_UI.nightPrize(2), TREE_UI.gateSessions(3, 4), TREE_UI.gateSpecies(3, 1), TREE_UI.playWorld(W),
+      ...['pipette', 'pipetteFast', 'dropBig', 'pipetteMore', 'pipetteMagnet', 'pipetteMaster'].flatMap((id) => [NODE_TEXT[id].name, NODE_TEXT[id].desc]),
+      BRANCH_TEXT.collect.name, VALUE_TEXT.pipettes(0), VALUE_TEXT.pipettes(3), VALUE_TEXT.dropHolds(4), VALUE_TEXT.magnet(2), VALUE_TEXT.instant,
+      TEXT.gift.spark, TEXT.giftLine(5, TEXT.gift.firstSeed), TEXT.deathGlass, TEXT.deathCrowd, TEXT.deathFaded, TEXT.merged,
+      TEXT.contactSoon, TEXT.contactSteer,
+    ];
+    for (const x of got) {
+      expect(x.es.length, JSON.stringify(x)).toBeGreaterThan(0);
+      expect(x.en.length, JSON.stringify(x)).toBeGreaterThan(0);
+      expect(x.es, 'new texts say Luz, never Esencia').not.toMatch(/esencia|essence/i);
+      expect(x.en).not.toMatch(/esencia|essence|undefined/i);
+    }
+    expect(SESSION_UI.datosNext('38', '12').es).toBe('38 Datos · próximo en 12 de luz');
+    expect(SESSION_UI.boostTip('2', '2,5').es).toBe('Ahora 2 luz/s → con Nutrientes 2,5 luz/s. Hasta el final de la sesión. El siguiente cuesta el doble.');
+    expect(TREE_UI.gateSessions(3, 4).es).toBe('Juega 4 sesiones · llevas 3');
+    expect(TREE_UI.gateSpecies(3, 1).es).toBe('Especies en tu colección · ✓ tienes 3 (hace falta 1)');
+    expect(TREE_UI.nightPrize(2).es).toBe('Noche 2 · capítulo 2 de la historia. +10 % de Datos y mejoras nuevas. Nada se borra.');
   });
 });

@@ -361,6 +361,9 @@ export const CLASSIC_ONLY_TEXT: readonly string[] = [
   'lumpReward',
 ];
 
+/** Why some Luz entered the wallet without a drop (bus 'luzGift', ADR-030). */
+export type LuzGiftReason = 'spark' | 'encargo' | 'firstSeed' | 'firstCreature' | 'goal';
+
 export const TEXT = {
   bloom: t('Floración', 'Bloom'),
   bloomReward: (mult: number, secs: number) => t(`¡Floración! ×${mult} producción durante ${secs} s`, `Bloom! ×${mult} production for ${secs} s`),
@@ -409,4 +412,25 @@ export const TEXT = {
   /** A copy of a species that does not live in this session's world would melt at once. */
   printOtherWorld: (n: number) => t(`Esta especie vive en el Mundo ${n}: cópiala allí.`, `This species lives in World ${n}: copy it there.`),
   nightReady: (night: number) => t(`¡La Noche ${night} está lista! Ábrela en el centro del Árbol.`, `Night ${night} is ready! Open it at the centre of the Tree.`),
+  // ── ADR-030 (docs/CLARIDAD2.md §2.5, §2.15, §8.2): every Luz with its reason, every accident with its cause ──
+  /** The reason next to the counter when Luz arrives without a drop: "+5 · primera semilla" (QA-CLARIDAD #5). */
+  gift: {
+    spark: t('Destello', 'Spark'),
+    encargo: t('encargo', 'request'),
+    firstSeed: t('primera semilla', 'first seed'),
+    firstCreature: t('primera criatura', 'first creature'),
+    goal: t('meta cumplida', 'goal done'),
+  } as Record<LuzGiftReason, Text>,
+  giftLine: (amount: number, reason: Text) => t(`+${f(amount)} · ${reason.es}`, `+${f(amount)} · ${reason.en}`),
+  /** A seed that never became stable went dark (game/contact.ts deathCause), a 2 s label in place, grey fade. */
+  deathGlass: t('Se apagó: muy pegada al cristal', 'Went dark: too close to the glass'),
+  deathCrowd: t('Se apagó: muy cerca de otra', 'Went dark: too close to another'),
+  deathFaded: t('Se apagó: no prendió. ¡Prueba otra!', 'Went dark: didn’t take. Try another!'),
+  /** A living creature hit the glass (a rare miss of the deflector): its drop stays on the dish. */
+  deathGlassAlive: t('Chocó con el cristal y se apagó. Su luz sigue ahí.', 'It hit the glass and went dark. Its glow is still there.'),
+  /** A fusion seen again (the first one gets its card): a 2 s label in place. */
+  merged: t('Se juntaron: sin forma no da luz', 'Merged: no shape, no glow'),
+  /** The warning before two creatures touch (GameView.dangers); `contactSteer` when one is a swimmer. */
+  contactSoon: t('¡Cuidado! Se van a tocar', 'Careful! They’re about to touch'),
+  contactSteer: t('¡Cuidado! Arrástrala para desviarla', 'Careful! Drag it to steer it away'),
 };
