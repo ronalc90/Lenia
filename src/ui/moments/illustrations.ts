@@ -10,7 +10,7 @@
 import { BEHAVIOR_COLOR, UI } from '../../core/palette';
 import type { Behavior, Lang, Pattern } from '../../core/types';
 import { BEHAVIOR_MULT } from '../../game/balance';
-import { DATOS_PER_NEW_SPECIES, SEED_PRICE_STEP, SEED_PRICE_STEP_MAX, SESSION_SEED_PRICE } from '../../game/cycleBalance';
+import { DATOS_PER_NEW_SPECIES, SESSION_SEED_PRICE } from '../../game/cycleBalance';
 import type { IllustrationKind, MomentData } from '../../moments/types';
 import { catalogPattern } from '../../sim/catalog';
 import { clip, countBlobs, pumpAll, rulesClip, type LeniaClip } from './clips';
@@ -1551,8 +1551,8 @@ function seedBead(ctx: CanvasRenderingContext2D, x: number, y: number, alpha: nu
 }
 
 /**
- * The sessions price rule (docs/CICLO.md, CLARIDAD J-121): each seed bought today makes the next one a
- * tiny bit dearer (×SEED_PRICE_STEP, whole Esencia), and a new session starts again at the usual price.
+ * Plate 19 · the seed price (docs/CLARIDAD2.md §2.11): ONE price. Seeds drop into the wells of the dish one by
+ * one, the tag never moves (living creatures never raise it); when the wells are full the dish says so.
  */
 const seedPrice: IllusDef = {
   loop: 8,
@@ -1560,34 +1560,33 @@ const seedPrice: IllusDef = {
   clips: () => [],
   draw(ctx, u, env) {
     const base = Math.max(1, Math.round(env.data.price?.base ?? SESSION_SEED_PRICE));
-    const priceAt = (k: number) => Math.max(1, Math.round(base * Math.min(SEED_PRICE_STEP_MAX, Math.pow(SEED_PRICE_STEP, k))));
-    const N = 6;
-    const dropAt = (k: number) => 0.5 + k * 0.8;
-    const reset = 5.9;
-    const fresh = seg(u, reset, reset + 0.5);
+    const WELLS = 4;
+    const dropAt = (k: number) => 0.6 + k * 1.1;
     let n = 0;
-    for (let k = 0; k < N; k++) if (u >= dropAt(k)) n = k + 1;
-    // Seeds bought this session.
+    for (let k = 0; k < WELLS; k++) if (u >= dropAt(k)) n = k + 1;
+    // The dish as a multiwell plate: one well per place (cyan when a creature is in it).
     panel(ctx, 10, 18, 132, 100, 14);
-    text(ctx, L(env, 'Semillas de hoy', 'Seeds today'), 76, 132, { size: 10, color: UI.textDim });
-    for (let k = 0; k < n; k++) {
-      const a = easeOut(seg(u, dropAt(k), dropAt(k) + 0.3)) * (1 - fresh);
-      seedBead(ctx, 36 + (k % 3) * 40, 46 + Math.floor(k / 3) * 44 - (1 - a) * 12, a);
+    for (let k = 0; k < WELLS; k++) {
+      const x = 44 + (k % 2) * 64;
+      const y = 46 + Math.floor(k / 2) * 44;
+      ctx.save();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = rgba(GREY, 0.7);
+      ctx.beginPath();
+      ctx.arc(x, y, 15, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+      if (k < n) {
+        const a = easeOut(seg(u, dropAt(k), dropAt(k) + 0.35));
+        seedBead(ctx, x, y - (1 - a) * 14, a);
+      }
     }
-    // The price tag: a tiny bit more now and then; back to the usual price in a new session.
-    const now = fresh >= 0.5 ? base : priceAt(n);
-    const prev = n > 0 ? priceAt(n - 1) : now;
-    const since = n > 0 ? u - dropAt(n - 1) : 9;
-    const changed = fresh <= 0 && n > 0 && now !== prev;
-    const bounce = changed ? Math.max(0, Math.sin(Math.min(1, since / 0.45) * Math.PI)) * 1.3 : fresh > 0 ? Math.sin(fresh * Math.PI) * 0.8 : 0;
-    const up = now > base;
+    const full = n >= WELLS;
+    text(ctx, full ? L(env, 'Placa llena', 'Dish full') : L(env, `Caben ${WELLS - n} más`, `Room for ${WELLS - n} more`), 76, 132, { size: 10, color: full ? UI.warn : UI.textDim });
+    // The price tag: the same number from the first seed to the last.
     text(ctx, L(env, 'Precio', 'Price'), 200, 18, { size: 10, color: UI.textDim });
-    priceTag(ctx, 200, 52, now, prev, bounce, up, env);
-    if (up && fresh <= 0) text(ctx, L(env, 'un poquito más', 'a tiny bit more'), 200, 92, { size: 12, color: UI.warn, weight: 800 });
-    if (fresh > 0) {
-      badge(ctx, L(env, 'Sesión nueva', 'New session'), 200, 92, UI.good, pop(fresh));
-      text(ctx, L(env, 'precio de siempre', 'usual price'), 200, 116, { size: 11, color: UI.good, alpha: fresh });
-    }
+    priceTag(ctx, 200, 52, base, base, 0, false, env);
+    text(ctx, L(env, 'Siempre igual', 'Always the same'), 200, 96, { size: 12, color: UI.text, weight: 800 });
     seam(ctx, u, 8);
   },
 };
