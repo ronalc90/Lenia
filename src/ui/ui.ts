@@ -1931,7 +1931,8 @@ class BiolumaUI implements UI {
   private collectedAt(x: number, y: number, hue: number, amount: number, by: 'hand' | 'pipette' | 'sweep'): void {
     if (!(amount > 0)) return;
     const lang = this.lang;
-    this.overlay.collected(x, y, amount, hue, (n) => fmt(n, lang));
+    // Whole numbers on the dish (docs/CLARIDAD2.md §2.13: no decimals); a sliver below 1 keeps one.
+    this.overlay.collected(x, y, amount, hue, (n) => fmt(n >= 1 ? Math.round(n) : n, lang));
     const d = this.dish.getBoundingClientRect();
     const cx = d.left + x;
     const cy = d.top + y;
@@ -2335,6 +2336,9 @@ class BiolumaUI implements UI {
     });
     bus.on('creatureDivided', (e) => ov.dividedPulse(e.x, e.y));
     bus.on('income', (e) => {
+      // With collection, the drop shows what a creature makes and the "+N" comes when it is collected
+      // (docs/CLARIDAD2.md §2.14): no periodic numbers on top.
+      if (this.overlay.tapScene().collecting) return;
       const gold = !!this.v?.buffs.some((b) => b.mult > 1);
       ov.income(e.id, e.x, e.y, e.amount, (n) => fmtRate(n, this.lang), gold);
     });

@@ -53,6 +53,8 @@ export class DishInput {
   private ptrs = new Map<number, Ptr>();
   private rect: DOMRect | null = null;
   private longTimer = 0;
+  /** The long press waits one more frame before it fires (see onDown). */
+  private longRaf = 0;
   private longFired = false;
   private dragging: 'none' | 'brush' | 'erase' | 'swipe' | 'steer' | 'sweep' = 'none';
   private pinched = false;
@@ -85,6 +87,11 @@ export class DishInput {
   }
 
   private clearLong(): void {
+    if (this.longRaf) {
+      cancelAnimationFrame(this.longRaf);
+      this.longRaf = 0;
+      this.hooks.pressEnd?.();
+    }
     if (this.longTimer) {
       clearTimeout(this.longTimer);
       this.longTimer = 0;
@@ -135,11 +142,18 @@ export class DishInput {
       if (!card) this.hooks.pressStart?.(p.x, p.y);
       this.longTimer = window.setTimeout(() => {
         this.longTimer = 0;
-        this.hooks.pressEnd?.();
-        const ptr = this.ptrs.get(e.pointerId);
-        if (!ptr || this.pinched || this.dragging !== 'none') return;
-        this.longFired = true;
-        this.hooks.bigTap(ptr.sx, ptr.sy);
+        // Pointer moves are delivered with the frame: on a slow frame the timer can run before the moves
+        // that already happened, and a drag from a creature (a guide, a sweep) would open its card. One
+        // more frame lets those moves land first.
+        this.longRaf = requestAnimationFrame(() => {
+          this.longRaf = 0;
+          this.hooks.pressEnd?.();
+          const ptr = this.ptrs.get(e.pointerId);
+          if (!ptr || this.pinched || this.dragging !== 'none') return;
+          if (Math.hypot(ptr.x - ptr.sx, ptr.y - ptr.sy) > this.slop(ptr.type)) return;
+          this.longFired = true;
+          this.hooks.bigTap(ptr.sx, ptr.sy);
+        });
       }, LONG_PRESS_MS);
     }
   };

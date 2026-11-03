@@ -17,9 +17,9 @@ import { SPR, type SpriteAtlas } from './sprites';
 
 export const PIPETTE_FX = {
   /** Length on screen: this share of the dish's radius, within [min, max] CSS px. */
-  lengthK: 0.3,
-  minPx: 40,
-  maxPx: 64,
+  lengthK: 0.36,
+  minPx: 50,
+  maxPx: 80,
   /** The resting tip sits this far inside the glass (CSS px). */
   restInset: 5,
   /** How far up a pipette is lifted half-way (its shadow's offset, CSS px) and how much nearer it looks. */
@@ -210,6 +210,11 @@ export class PipetteLayer {
   private readonly pose = { x: 0, y: 0, angle: 0, lift: 0 };
   private loadedIdx = -1;
   private shadowIdx = -1;
+  /** The cached layer's key, rebuilt only when the length changes (no string per frame). */
+  private keyL = -1;
+  private key = '';
+  private paintH = 0;
+  private readonly painter = (g: Ctx2D): void => paintPipette(g, this.paintH, this.keyL, 3);
 
   get count(): number {
     return this.states.size;
@@ -268,7 +273,12 @@ export class PipetteLayer {
     const pad = 3;
     const W = L + 2 * pad;
     const H = Math.ceil(0.3 * L);
-    const layer = this.cache.get(`pipette|${L}`, W, H, dpr, (g) => paintPipette(g, H, L, pad));
+    if (L !== this.keyL) {
+      this.keyL = L;
+      this.key = `pipette|${L}`;
+    }
+    this.paintH = H;
+    const layer = this.cache.get(this.key, W, H, dpr, this.painter);
     const o = this.pose;
     for (const s of this.states.values()) {
       // Between two views the trip goes on at the rate it was going (never past the next quarter).

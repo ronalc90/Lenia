@@ -31,9 +31,11 @@ export const DROP_FX = {
   tapPx: 32,
   /** The bead drawing in when collected, ms (Reduce motion: a fade of the same length). */
   popMs: 150,
-  /** Bead radius (CSS px): empty → full, by the square root of the fill (its area grows with the light). */
-  rMin: 3,
-  rMax: 8.5,
+  /** Bead radius (CSS px at zoom 1): empty → full, by the square root of the fill (its area grows with the light). */
+  rMin: 4,
+  rMax: 11,
+  /** Zoomed in, a bead grows with the dish (it is a thing on the agar), up to this factor. */
+  zoomMax: 2.6,
   /** The meter ring sits this far outside the bead (CSS px). */
   ringGap: 3,
   /** An owned drop sits on its creature's outline, up and to the right (radians from +x, y down). */
@@ -48,10 +50,11 @@ export const DROP_FX = {
   defaultHue: 197,
 } as const;
 
-/** Bead radius in CSS px for a fill 0..1. */
-export function beadRadius(fill: number): number {
+/** Bead radius in CSS px for a fill 0..1 at camera zoom `zoom` (1 = the whole dish). */
+export function beadRadius(fill: number, zoom = 1): number {
   const f = fill <= 0 ? 0 : fill >= 1 ? 1 : fill;
-  return DROP_FX.rMin + (DROP_FX.rMax - DROP_FX.rMin) * Math.sqrt(f);
+  const z = zoom <= 1 ? 1 : Math.min(DROP_FX.zoomMax, Math.pow(zoom, 0.8));
+  return (DROP_FX.rMin + (DROP_FX.rMax - DROP_FX.rMin) * Math.sqrt(f)) * z;
 }
 
 /**
@@ -102,9 +105,11 @@ function paintBead(hue: number): HTMLCanvasElement {
   const cx = SPRITE / 2;
   const cy = SPRITE / 2;
   const R = SPRITE_R;
-  const [mr, mg, mb] = hsl(hue, 0.72, 0.5);
-  const [hr, hg, hb] = hsl(hue, 0.85, 0.82);
-  const [dr, dg, db] = hsl(hue, 0.7, 0.2);
+  // A bead of liquid light: bright all through (it emits), hottest at the caustic, a little deeper at the rim.
+  const [wr, wg, wb] = hsl(hue, 0.9, 0.94);
+  const [hr, hg, hb] = hsl(hue, 0.88, 0.76);
+  const [mr, mg, mb] = hsl(hue, 0.8, 0.58);
+  const [dr, dg, db] = hsl(hue, 0.75, 0.4);
   // 1 · contact shadow: the bead sits on the agar (a soft ring under it, offset away from the window).
   const sh = g.createRadialGradient(cx + 2, cy + 3, R * 0.6, cx + 2, cy + 3, R * 1.25);
   sh.addColorStop(0, 'rgba(0,0,0,0.55)');
@@ -120,16 +125,17 @@ function paintBead(hue: number): HTMLCanvasElement {
   // 2 · body: the luminous liquid; the caustic (light focused through the lens of the drop) lies
   // opposite the window, low and to the right, so the liquid is hottest there.
   const body = g.createRadialGradient(cx + R * 0.28, cy + R * 0.32, 0, cx, cy, R);
-  body.addColorStop(0, rgba(hr, hg, hb, 1));
-  body.addColorStop(0.45, rgba(mr, mg, mb, 0.95));
-  body.addColorStop(1, rgba(dr, dg, db, 0.9));
+  body.addColorStop(0, rgba(wr, wg, wb, 1));
+  body.addColorStop(0.3, rgba(hr, hg, hb, 1));
+  body.addColorStop(0.72, rgba(mr, mg, mb, 0.97));
+  body.addColorStop(1, rgba(dr, dg, db, 0.95));
   g.fillStyle = body;
   g.fillRect(cx - R, cy - R, 2 * R, 2 * R);
   // 3 · meniscus edge: refraction darkens the rim of a drop all round, most on the window's side.
   g.globalCompositeOperation = 'multiply';
-  const edge = g.createRadialGradient(cx + R * 0.12, cy + R * 0.12, R * 0.55, cx, cy, R);
+  const edge = g.createRadialGradient(cx + R * 0.12, cy + R * 0.12, R * 0.62, cx, cy, R);
   edge.addColorStop(0, '#ffffff');
-  edge.addColorStop(1, '#5a646c');
+  edge.addColorStop(1, '#9aa3aa');
   g.fillStyle = edge;
   g.fillRect(cx - R, cy - R, 2 * R, 2 * R);
   // 4 · bounce: the dish's cyan, from below.
@@ -165,9 +171,9 @@ function paintBead(hue: number): HTMLCanvasElement {
   g.arc(cx, cy, R - 1.2, -Math.PI * 0.05, Math.PI * 0.62);
   g.stroke();
   // 7 · texture: a liquid has none (layer skipped on purpose: grain would read as a solid bead).
-  // 8 · contour: where the liquid meets the agar, fine and dark.
-  g.lineWidth = 1.5;
-  g.strokeStyle = 'rgba(4,8,12,0.75)';
+  // 8 · contour: where the liquid meets the agar, fine (a dark ring would make it a glass marble).
+  g.lineWidth = 1.2;
+  g.strokeStyle = 'rgba(4,10,16,0.5)';
   g.beginPath();
   g.arc(cx, cy, R, 0, Math.PI * 2);
   g.stroke();
@@ -192,8 +198,9 @@ interface DropState {
   y: number;
   r: number;
   drawn: boolean;
-  /** Collected by the player's own finger (the pop already started). */
+  /** Collected by the player's own finger (the pop already started), and when (overlay s). */
   taken: boolean;
+  takenAt: number;
   /** It has been ripe once (the "¡Lista!" label is told once per drop). */
   ripeSeen: boolean;
 }
@@ -243,11 +250,17 @@ export class DropLayer {
           s.x = s.y = s.r = 0;
           s.drawn = false;
           s.taken = false;
+          s.takenAt = 0;
           s.ripeSeen = d.fill >= DROP_FX.ripe;
           s.hue = DROP_FX.defaultHue;
           this.states.set(d.id, s);
         }
         s.live = true;
+        // A game that keeps the drop's id after a collection (it refills from empty) shows it again at once.
+        if (s.taken && (d.amount < s.amount * 0.5 || now - s.takenAt > 0.4)) {
+          s.taken = false;
+          s.shown = d.fill;
+        }
         s.owner = d.owner;
         s.gx = d.x;
         s.gy = d.y;
@@ -273,6 +286,7 @@ export class DropLayer {
     const s = this.states.get(id);
     if (!s || s.taken) return null;
     s.taken = true;
+    s.takenAt = now;
     if (s.drawn) this.pop(s.x, s.y, s.r, s.hue, now, false);
     return s.drawn ? { x: s.x, y: s.y, hue: s.hue } : null;
   }
@@ -361,6 +375,7 @@ export class DropLayer {
     px: (x: number) => number,
     py: (y: number) => number,
     creature: CreatureResolver,
+    zoom = 1,
   ): void {
     this.tapCount = 0;
     const k = 1 - Math.exp(-Math.min(dt, 0.1) * 8);
@@ -368,7 +383,7 @@ export class DropLayer {
       s.drawn = false;
       if (s.taken) continue;
       s.shown += (s.fill - s.shown) * (rm ? 1 : k);
-      const r = beadRadius(s.shown);
+      const r = beadRadius(s.shown, zoom);
       let x: number;
       let y: number;
       const sc = this.scratch;
@@ -442,7 +457,7 @@ export class DropLayer {
     // Bioluminescent glow under the glass of the drop (additive, a pre-rendered disc).
     const gl = dropGlow(fill, now, rm) * (loose ? 0.7 : 1);
     ctx.globalCompositeOperation = 'lighter';
-    atlas.draw(ctx, SPR.disc, this.glow(atlas, hue), x, y, r * 5.2, 0.34 * gl * alpha);
+    atlas.draw(ctx, SPR.disc, this.glow(atlas, hue), x, y, r * 6.5, 0.55 * gl * alpha);
     ctx.globalCompositeOperation = 'source-over';
     // The bead itself (cached 8-layer sprite).
     const img = this.sprite(hue);

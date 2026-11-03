@@ -196,6 +196,8 @@ interface Label {
   glyph: Behavior | null;
   /** Creature id the label sits on: it follows the creature (QA4 F-13). */
   follow?: number;
+  /** With `follow`: a second creature; the label sits half-way between the two (the contact warning). */
+  between?: number;
   /** Fitted text and widths, measured once (A-10: no measureText per frame). */
   fit?: { text: string; sub: string; w1: number; w2: number; maxW: number };
 }
@@ -648,7 +650,8 @@ export class Overlay {
       const b = this.creatures.get(d.b);
       if (!a || !b) continue;
       const text = this.dangerText?.(a.behavior === 'swimmer' || b.behavior === 'swimmer') ?? null;
-      if (text) this.pushLabel({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, t0: this.now, dur: 2.2, text, sub: '', color: C.danger, glyph: null, follow: d.a });
+      // On the link, between the two (it moves with them): a pill on either creature would be hidden by its own.
+      if (text) this.pushLabel({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, t0: this.now, dur: 2.2, text, sub: '', color: C.danger, glyph: null, follow: d.a, between: d.b });
     }
   }
 
@@ -1224,7 +1227,7 @@ export class Overlay {
     this.drawCreatures(rect, rm, dt);
     this.runLayers('creatures', this.now, dt, rect, scale);
     if (this.dangers.length) this.drawDangers(rm);
-    this.drops.draw(ctx, this.atlas, this.now, dt, rm, dishFx.matterFade, this.map.px, this.map.py, this.resolveCreature);
+    this.drops.draw(ctx, this.atlas, this.now, dt, rm, dishFx.matterFade, this.map.px, this.map.py, this.resolveCreature, cam.zoom);
     this.fillTapScene();
     this.drawFlashes();
     this.drawSows(rm);
@@ -1320,8 +1323,8 @@ export class Overlay {
       const y0 = ay + uy * ra;
       const x1 = bx - ux * rb;
       const y1 = by - uy * rb;
-      ctx.globalAlpha = (0.55 + 0.45 * urgent) * beat;
-      ctx.lineWidth = 1.5 + urgent;
+      ctx.globalAlpha = (0.75 + 0.25 * urgent) * beat;
+      ctx.lineWidth = 2 + urgent;
       ctx.beginPath();
       if (L > ra + rb) {
         ctx.moveTo(x0, y0);
@@ -1332,8 +1335,8 @@ export class Overlay {
         ctx.lineTo(x1 + uy * 5, y1 - ux * 5);
       }
       ctx.stroke();
-      ctx.lineWidth = 1;
-      ctx.globalAlpha = 0.45 * beat;
+      ctx.lineWidth = 1.25;
+      ctx.globalAlpha = 0.6 * beat;
       ctx.beginPath();
       ctx.arc(ax, ay, ra + 2, 0, TAU);
       ctx.moveTo(bx + rb + 2, by);
@@ -2347,7 +2350,11 @@ export class Overlay {
       }
       if (L.follow !== undefined) {
         const s = this.creatures.get(L.follow);
-        if (s) {
+        const o = L.between !== undefined ? this.creatures.get(L.between) : undefined;
+        if (s && o) {
+          L.x = (s.x + o.x) / 2;
+          L.y = (s.y + o.y) / 2;
+        } else if (s) {
           L.x = s.x;
           L.y = s.y;
         }

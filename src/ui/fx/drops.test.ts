@@ -41,3 +41,17 @@ describe('drops of light (fx/drops.ts, ADR-030)', () => {
     expect(popScale(1)).toBe(0);
   });
 });
+
+describe('a collected drop (DropLayer)', () => {
+  it('shows again when the game keeps its id and refills it from empty', async () => {
+    const { DropLayer } = await import('./drops');
+    const L = new DropLayer();
+    const none = () => false;
+    L.setView([{ id: 1, x: 10, y: 10, amount: 8, fill: 0.8, owner: null }], () => undefined, 0, none);
+    // Not drawn yet (no frame): taking it still marks it.
+    L.take(1, 0.1);
+    // The next view: same id, emptied by the collection.
+    L.setView([{ id: 1, x: 10, y: 10, amount: 0.1, fill: 0.01, owner: null }], () => undefined, 0.2, none);
+    expect((L as unknown as { states: Map<number, { taken: boolean }> }).states.get(1)?.taken).toBe(false);
+  });
+});
