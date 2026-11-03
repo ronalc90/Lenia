@@ -295,6 +295,11 @@ export interface SpeciesView {
   chips?: { id: string; label: Text }[];
   /** (species) Small notes of the look-alike forms seen as this species ("variante: pareja"). */
   variantNotes?: Text[];
+  /**
+   * (game, ADR-030) How much Luz it gives among the 7 species, as 1..5 beads ("Da luz: ●●●○○"), by what each
+   * species pays (docs/CICLO.md §4.3). Replaces the decimal multiplier chain in the main flow.
+   */
+  lightBeads?: number;
 }
 
 /** (game) The factors of one creature's production (product × global × buffs = Essence/s). */
@@ -358,6 +363,40 @@ export interface CreatureView {
   hue?: number;
   /** (game) Why it pays what it pays (null while it pays nothing). */
   yield?: YieldView | null;
+  /**
+   * (game, ADR-030) 0..1 fill of its drop of Luz (1 = full: it waits until collected). Absent or 0 while it is
+   * not stable: only stable creatures fill a drop.
+   */
+  light?: number;
+  /** (game, ADR-030) Luz waiting in its drop right now (what a tap on it collects). */
+  lightAmount?: number;
+}
+
+/**
+ * (game, ADR-030) A drop of Luz on the dish, in grid cells. A stable creature fills its own drop (`owner` = its
+ * id); when the creature goes dark the drop stays where it was, loose (`owner` null), until collected or swept.
+ */
+export interface DropView {
+  id: number;
+  x: number;
+  y: number;
+  /** Luz it holds. */
+  amount: number;
+  /** 0..1 of its cap (≥ LIGHT_RIPE_SHARE = ripe: it pulses). */
+  fill: number;
+  /** The creature filling it, or null for a loose drop. */
+  owner: number | null;
+}
+
+/** (game, ADR-030) A collecting pipette (↓ Recoger route). The game decides its trips; the UI animates the path. */
+export interface PipetteView {
+  id: number;
+  /** Its resting place, 0..1 around the dish rim (clockwise from the top). */
+  dock: number;
+  /** The drop it is going for, or null while it rests. */
+  target: number | null;
+  /** 0..1 of the current trip (0 = at the dock; the drop is taken half-way). */
+  trip: number;
 }
 
 export interface GoldenView {
@@ -499,6 +538,15 @@ export interface GameView {
   sessionPreview?: { datos: number; goal: { id: string; cost: number; missing: number } | null } | null;
   /** (game, sessions) Abono: an in-session production boost bought with Esencia (null when no session runs). */
   boost?: BoostView | null;
+  /** (game, ADR-030) Drops of Luz on the dish, owned and loose (empty or absent when there is none). */
+  drops?: DropView[];
+  /** (game, ADR-030) The pipettes the player owns (↓ Recoger route), resting or on a trip. */
+  pipettes?: PipetteView[];
+  /**
+   * (game, ADR-030, game/contact.ts) Two creatures (ids `a`, `b`) whose outlines will touch in `inS` seconds of
+   * dish time (≤ CONTACT_WARN_S) unless the glass deflector turns one: the red warning link.
+   */
+  dangers?: { a: number; b: number; inS: number }[];
 }
 
 /** (game, sessions) The lab session clock (docs/CICLO.md §2). */
@@ -532,6 +580,11 @@ export interface SessionClockView {
    * no Datos pill (sessionPreview is null), no Spark.
    */
   first?: boolean;
+  /**
+   * (game, ADR-030) Session 1 tutorial: the player's first creature is planted (or forming) while the phase is
+   * still 'ready', and the clock waits for actions.startClock() (after VELA's line), not for a seed.
+   */
+  tutorialHold?: boolean;
 }
 
 /** (game, sessions) What persists between sessions. */
@@ -584,6 +637,10 @@ export interface BoostView {
   wait?: number;
   /** No creature makes Essence yet: Abono would multiply nothing, so it is not on sale. */
   needsLife?: boolean;
+  /** (game, ADR-030) Off sale in the last BOOST_UNTIL_REMAINING seconds: "Ya no da tiempo" / "No time left". */
+  noTime?: boolean;
+  /** (game, ADR-030) What the one after the next costs (the price is frozen per session: "hoy 16, el siguiente 32"). */
+  nextCost?: number;
 }
 
 /** (game) Turno de laboratorio view. When `active` is false the lamp is off: dish and production stop. */
@@ -687,4 +744,15 @@ export interface GameActions {
   pickWorld?(world: string): boolean;
   /** (game, sessions) Buy an Abono (production ×BOOST_MULT for the rest of the session). */
   buyBoost?(): boolean;
+  /**
+   * (game, ADR-030) Collect one drop of Luz into the wallet, full or not (works while the dish is paused).
+   * Returns the Luz collected (0 if the drop is gone).
+   */
+  collect?(dropId: number): number;
+  /** (game, ADR-030) A tap: collect every drop within rCells of a grid point (and the drop of a creature there). */
+  collectAt?(x: number, y: number, rCells: number): number;
+  /** (game, ADR-030) A swipe: collect every drop within rCells of the path (grid points). */
+  collectPath?(pts: { x: number; y: number }[], rCells: number): number;
+  /** (game, ADR-030) Session 1 tutorial: start the clock of a 'ready' session (once; no-op otherwise). */
+  startClock?(): void;
 }

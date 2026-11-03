@@ -22,10 +22,15 @@ export interface GameEvents {
   seedDenied: { x: number; y: number; cost: number };
   creatureBorn: { id: number; x: number; y: number };
   creatureStable: { id: number; x: number; y: number };
-  creatureDied: { id: number; x: number; y: number };
+  /**
+   * `cause` (game, ADR-030, game/contact.ts deathCause): why it went dark — 'glass' = too close to the rim,
+   * 'crowd' = too close to another, 'faded' = it did not take. Absent = not known.
+   */
+  creatureDied: { id: number; x: number; y: number; cause?: 'faded' | 'glass' | 'crowd' };
   /** (game) Exploded matter vanished (lysis, clean-up): not a death of a creature. */
   creatureDissolved: { id: number; x: number; y: number };
-  creatureExploded: { id: number; x: number; y: number };
+  /** `cause` (game, ADR-030): 'touch' = two creatures touched and merged; 'crowd' = the dish overgrew. */
+  creatureExploded: { id: number; x: number; y: number; cause?: 'touch' | 'crowd' };
   creatureDivided: { parentId: number; x: number; y: number };
   /** Periodic income popped from a creature (for floating numbers). */
   income: { id: number; x: number; y: number; amount: number };
@@ -66,6 +71,11 @@ export interface GameEvents {
   worldPicked: { world: string };
   /** An Abono was bought. */
   boostBought: { count: number; mult: number; cost: number };
+  // ── (game, ADR-030: collected light) ──
+  /** Luz entered the wallet from a drop at (x, y): a tap or swipe, a pipette, or the sweep at "¡Tiempo!" / on load. */
+  lightCollected: { x: number; y: number; amount: number; by: 'hand' | 'pipette' | 'sweep' };
+  /** Luz entered the wallet without a drop (Spark, Encargo, a first step…): the counter shows "+N · reason". */
+  luzGift: { amount: number; reason: Text };
 }
 
 type Handler<T> = (payload: T) => void;
