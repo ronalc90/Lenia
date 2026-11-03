@@ -336,6 +336,11 @@ export interface Game {
    * Call it before the first tick. Off (default): session 1 keeps its starter and the first tap starts the clock.
    */
   setTutorial(on: boolean): void;
+  /**
+   * (ADR-030 §2.8) The dish is paused only for VELA's line (main.ts: the 'story' source alone): the Spark she
+   * points at can still be caught. Any other pause keeps QA1 #9 (no aiming at a frozen spark).
+   */
+  catchWhilePaused: boolean;
 }
 
 interface Golden {
@@ -378,6 +383,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
   let bootReplant: SeedSpec[] | null = null;
   /** (ADR-030) The story's session-1 tutorial runs (Game.setTutorial) and how long its clock has waited. */
   let tutorial = false;
+  /** Game.catchWhilePaused: the Spark can be caught while only VELA's line holds the dish. */
+  let catchWhilePaused = false;
   let holdFor = 0;
   /** Tree projections for the view (UpgradeView list, research view), rebuilt when the tree or Datos change. */
   let treeCache: { key: string; upgrades: UpgradeView[]; affordable: number } | null = null;
@@ -1844,7 +1851,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
   function collectGolden(): void {
     // QA1 #9: no aiming at a frozen spark while paused (and no seeding a paused dish).
-    if (!golden || paused) return;
+    if (!golden || (paused && !catchWhilePaused)) return;
     const g = golden;
     golden = null;
     if (sessions) {
@@ -3440,6 +3447,12 @@ export function createGame(deps: GameDeps, save?: string): Game {
     },
     get isPaused() {
       return paused;
+    },
+    get catchWhilePaused() {
+      return catchWhilePaused;
+    },
+    set catchWhilePaused(v: boolean) {
+      catchWhilePaused = !!v;
     },
     set isPaused(v: boolean) {
       paused = !!v;

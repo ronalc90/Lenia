@@ -9,6 +9,7 @@ import { matterLUT } from './core/palette';
 import { createSimulation } from './sim/webgl';
 import { QUALITY_DISH } from './sim/perf';
 import { Deflector } from './sim/deflect';
+import { Steering } from './sim/steer';
 import { BodyExtrapolator } from './sim/extrapolate';
 import { mustWaitForDetection, stepDish } from './sim/detectGate';
 import { DishAnimator, dishDiameterFor, dishForGrid, type DishShape } from './core/dish';
@@ -61,11 +62,10 @@ import { PREINCUBATE_STEPS, SESSION_PACE_RAMP_S, SIM_STEPS_PER_SEC } from './gam
 import { CultureReveal, REVEAL, type RevealContext } from './sim/reveal';
 import { IncubationPacer, type IncubationIO } from './sim/incubate';
 import { dishFx, PULSE } from './ui/fx/stage';
-import { FLY, FlyLayer } from './ui/fx/fly';
+import { FlyLayer } from './ui/fx/fly';
 import { LIFE } from './ui/fx/lifecycle';
 import { SHAKE } from './ui/fx/shake';
 import { lowerProfile, type FxAnchors } from './ui/fx/types';
-import { hueHex } from './ui/overlay';
 import { dishSeconds } from './game/dishClock';
 import { nodeText } from './game/tree';
 
@@ -246,6 +246,8 @@ function boot(): void {
     if (on) pauseSources.add(source);
     else pauseSources.delete(source);
     game.isPaused = isPaused();
+    // Only VELA's line holds the dish (the first Spark, §2.8): the Spark she points at can still be caught.
+    game.catchWhilePaused = pauseSources.size > 0 && [...pauseSources].every((p) => p === 'story');
     if (source === 'user') ui.setPaused(on);
   }
   let lastInteraction = performance.now();
@@ -364,6 +366,8 @@ function boot(): void {
   let storyBusy = (): boolean => false;
   /** Skipping VELA's tutorial also means "fewer pauses": the Momentos switch to brief labels (no pause). */
   const storyBoot = story.serialize();
+  // ADR-030 §2.4: with VELA's tutorial ahead, session 1 starts empty and its clock waits for her line.
+  game.setTutorial(story.holdsClock());
   let tutorialSkipped = storyBoot.tutorialSkipped;
   /** VELA's first scene is over (or skipped): before that, nothing else talks (a secret found at boot waits). */
   let introDone = storyBoot.done.includes('t_intro') || !storyBoot.enabled;
@@ -378,7 +382,8 @@ function boot(): void {
   /** Act I mirrors the game's OBJECTIVES one to one (same ids, same Essence): the game pays (and counts) those itself. */
   function grantEncargo(r: EncargoReward, enc: EncargoView): void {
     const g = gameGrantOf(enc.id, r, game.cycle);
-    if (g) game.grantEncargo(g);
+    // Its plain ask names its row in the report (ADR-030 §2.9: one row per Encargo, by name).
+    if (g) game.grantEncargo({ ...g, name: enc.plain });
   }
   const encargos = createEncargos({ bus, getView: () => game.view(), story, grant: grantEncargo });
   /** The Encargos replace the game's objective line and its "objective complete" toast (one thing per event). */
@@ -590,8 +595,9 @@ function boot(): void {
     },
     resetSave() {
       clearSave();
-      game.reset();
       story.reset();
+      game.setTutorial(story.holdsClock()); // before the new game sets up its first session
+      game.reset();
       moments.reset();
       encargos.reset();
       secrets.reset();
@@ -603,6 +609,10 @@ function boot(): void {
       lastInteraction = performance.now();
       audio.unlock();
     },
+    // ADR-030 §2.5: a drag from a swimmer guides it; the contact Momento says the warning in words.
+    onSteer: (id, heading) => steering.request(id, heading),
+    contactTold: () => moments.current()?.id === 'contact',
+    mergeTold: () => moments.seen('explode'),
   });
 
   uiRef = ui;
@@ -771,7 +781,8 @@ function boot(): void {
       priceCore.open(datosExplain(computeDatos(se, fx, 0), v.settings.lang, v.research?.night ?? 1, goal));
     },
     plates: () => moments.drainForSummary(),
-    cultureReady: () => culture.lit,
+    onPlate: (id) => void moments.replay(id),
+    cultureReady: () => culture.lit && !culture.incubating,
     clockHold: () => story.holdsClock(),
   });
   flowRef = flow;
@@ -860,26 +871,12 @@ function boot(): void {
     reduceMotion: () => reduceMotionNow,
     fallback: () => FLY_FALLBACK,
   });
-  let lastEssence = game.view().essence;
-  /** One flight per creature every FLY.perCreatureMs at most. */
-  const flewAt = new Map<number, number>();
   /** Screen point (viewport CSS px) of a grid point of the dish, with the camera's micro-motion. */
   const toClient = (x: number, y: number) => {
     const p = camera.gridToScreen(x, y);
     return { x: dishBox.left + p.x + dishFx.shake.x, y: dishBox.top + p.y + dishFx.shake.y };
   };
-  bus.on('income', (e) => {
-    if (dishFx.matterFade < 0.5 || dishBox.at < 0) return;
-    if (!(e.amount >= FLY.minShare * lastEssence)) return;
-    const t = performance.now();
-    if (t - (flewAt.get(e.id) ?? -Infinity) < FLY.perCreatureMs) return;
-    flewAt.set(e.id, t);
-    if (flewAt.size > 64) flewAt.clear();
-    const hue = hueById.get(e.id);
-    const n = 1 + (e.amount >= 0.05 * lastEssence ? 1 : 0) + (e.amount >= 0.15 * lastEssence ? 1 : 0);
-    const p = toClient(e.x, e.y);
-    fly.launch(p.x, p.y, 'essence', hue !== undefined ? hueHex(hue, 70) : '#5bc0eb', n, t);
-  });
+  // (ADR-030) No 'income' flights: sessions no longer emit it; the UI flies the light the player collects.
   /** A Spark that added seconds to the clock (sessionExtended 'golden' comes just before goldenCollected). */
   let sparkClockAt = -Infinity;
   bus.on('sessionExtended', (e) => {
@@ -906,6 +903,8 @@ function boot(): void {
   audio.setDishSize?.(gridW, gridH);
   /** Glass deflection: swimmers turn away from the rim and from each other (src/sim/deflect.ts). */
   const deflector = new Deflector();
+  /** The finger guides a swimmer (ADR-030 §2.5): rigid turns like the glass's, which always win (src/sim/steer.ts). */
+  const steering = new Steering();
   /** Bodies moved on to the dish's current step for the deflector (async readback lag). */
   const extrapolator = new BodyExtrapolator();
   /** Push the rim to everything that uses it (sim mask, camera fit, detector fill, game spots, sound). */
@@ -970,6 +969,7 @@ function boot(): void {
     sim!.clear();
     detector.reset();
     deflector.reset();
+    steering.reset();
     extrapolator.reset();
     epoch++; // drop snapshots requested before the clear
     reports.length = 0;
@@ -1302,6 +1302,9 @@ function boot(): void {
     // (QA4 F-07: a stale heading put the pivot off the centroid and tore the starter apart).
     const bodies = extrapolator.bodies(live, report.step, s.stepCount);
     const turns = deflector.update(bodies, dish, s.stepCount, DETECT_EVERY);
+    // The player's guide turns join the glass's (never the same body twice: the glass wins).
+    const guide = steering.update(bodies, dish, s.stepCount, turns, DETECT_EVERY);
+    if (guide.length) turns.push(...guide);
     extrapolator.noteTurns(turns);
     if (turns.length) {
       s.applyTurns(turns);
@@ -1559,7 +1562,6 @@ function boot(): void {
       // or its brief label: one label at a time on the dish, docs/ARTE.md §10).
       ui.setCreatureLabels(moments.labelsOnAll(view.era), momentsUI.busy && moments.current() !== null);
       reduceMotionNow = view.settings.reduceMotion;
-      lastEssence = view.essence;
       ui.update(view);
       refreshTints(view);
       flow.update(view);

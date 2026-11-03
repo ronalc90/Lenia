@@ -169,6 +169,28 @@ describe('sessions cycle: gifts and boosts are proportional', () => {
     expect(g.session!.goldens).toBe(1);
   });
 
+  it('the Spark VELA points at can be caught while only her line holds the dish, never in another pause', () => {
+    const { g } = sessionsGame(3);
+    const rep = report(stable(3));
+    for (let n = 1; n < C.SPARK_FROM_SESSION; n++) {
+      g.actions.seedAt(150, 200);
+      g.actions.endSessionNow!();
+      g.actions.startSession!();
+    }
+    g.actions.seedAt(150, 200);
+    for (let i = 0; i < 400 && !g.view().golden; i++) g.tick(0.25, rep);
+    expect(g.view().golden).not.toBeNull();
+    // Any pause (the user's, a card): QA1 #9, no aiming at a frozen spark.
+    g.isPaused = true;
+    g.actions.collectGolden();
+    expect(g.view().golden).not.toBeNull();
+    // VELA's «¡Ahí! ¡Un Destello! ¡Tócalo!» holds the dish (main.ts: the 'story' source alone).
+    g.catchWhilePaused = true;
+    g.actions.collectGolden();
+    expect(g.view().golden).toBeNull();
+    expect(g.session!.goldens).toBe(1);
+  });
+
   it('Abono costs 20 s of production, doubles each time, and raises production ×1,25', () => {
     const { g, count } = sessionsGame();
     const rep = report(stable(3));
