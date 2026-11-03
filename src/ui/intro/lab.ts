@@ -372,6 +372,9 @@ const LAMP_STATE: Record<ArtMood, { K: number; b: number }> = {
   awed: { K: 3600, b: 1 },
   sleepy: { K: 2400, b: 0.25 },
   proud: { K: 3200, b: 0.85 },
+  // The two states P1 added (src/ui/art/vela.ts, same K and lamp share).
+  alarm: { K: 2200, b: 0.15 },
+  thinking: { K: 2700, b: 0.62 },
 };
 
 export function lampState(mood: ArtMood, t: number, rm: boolean): { K: number; b: number } {
