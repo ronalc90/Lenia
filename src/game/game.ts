@@ -2538,6 +2538,14 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
   /** Upgrades that raise a species' yield: its behaviour's Afinidad, then Catalogación and Nutriente. */
   function boostersOf(b: Behavior | null): { id: string; name: Text }[] {
+    if (sessions) {
+      // The Tree nodes by their own names («Le ayuda en el Árbol: Tranquilas», QA-CLARIDAD #18): its family's
+      // node always, the whole-dish ones once owned.
+      const aff = b === 'swimmer' || b === 'spinner' ? 'swimAffinity' : b === 'divider' || b === 'colony' ? 'colonyAffinity' : 'stillAffinity';
+      return [aff, 'cataloguing', 'nutrient']
+        .filter((id) => id === aff || nodeLevel(s.research?.levels ?? {}, id) > 0)
+        .map((id) => ({ id, name: NODE_TEXT[id].name }));
+    }
     const affinity = b === 'swimmer' || b === 'spinner' ? 'swimAffinity' : b === 'divider' || b === 'colony' ? 'colonyAffinity' : 'sessileAffinity';
     return [affinity, 'cataloguing', 'nutrient']
       .filter((id) => id === affinity || s.unlocked.includes(id))
@@ -2573,9 +2581,19 @@ export function createGame(deps: GameDeps, save?: string): Game {
       sigmaRange: [...sp.sigmaRange] as [number, number],
       printCost: B.PRINT_COST[sp.rarity],
       isNew: sp.isNew,
-      ...(sessions ? { world: speciesWorld(sp), ...copyOf(sp) } : {}),
+      ...(sessions ? { world: speciesWorld(sp), ...copyOf(sp), lightBeads: lightBeads(sp) } : {}),
       ...lookOf(sp),
     }));
+  }
+
+  /**
+   * «Da luz: ●●●○○» (ADR-030, QA-CLARIDAD #18): 1–5 beads by its world's place among the seven, the worlds
+   * being in the order of what a full dish of each pays (worlds.ts, docs/CICLO.md §4.3).
+   */
+  function lightBeads(sp: SpeciesState): number {
+    const w = speciesWorld(sp);
+    const n = w ? WORLD_BY_ID[w].n : 1;
+    return 1 + Math.round(((Math.max(1, Math.min(WORLDS.length, n)) - 1) * 4) / Math.max(1, WORLDS.length - 1));
   }
 
   /** What the species looks like as a Bestiary entry (docs/ESPECIES.md): chips, body, variants seen. */

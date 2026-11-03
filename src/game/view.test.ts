@@ -90,3 +90,20 @@ describe('explaining production (owner: "explain why they are different"; QA3 #1
     expect(g.view().seedsGrowing).toBe(true);
   });
 });
+
+describe('species cards in plain words (ADR-030, QA-CLARIDAD #18, #27)', () => {
+  it('a species names the Tree nodes that help it and shows its light as 1–5 beads', () => {
+    const { bus } = recordingBus();
+    const g = createGame({ cycle: 'sessions', bus, rng: seededRng(31) });
+    g.actions.seedAt(150, 200);
+    const rep = report([creature({ id: 1, x: 20, signature: ORBIUM_SIG, behavior: 'swimmer', complexity: 1 })]);
+    for (let i = 0; i < 12; i++) g.tick(0.5, rep);
+    const orb = g.view().species.find((s) => s.catalogName === 'Orbium unicaudatus')!;
+    expect(orb).toBeDefined();
+    // «Le ayuda en el Árbol: Nadadoras» — the node's own name, never the classic «Afinidad nadadora».
+    expect(orb.boostedBy![0]).toMatchObject({ id: 'swimAffinity', name: { es: 'Nadadoras' } });
+    expect(orb.boostedBy!.map((b) => b.name.es).join(' ')).not.toMatch(/Afinidad/);
+    // The first world's species glows least of the seven: one bead.
+    expect(orb.lightBeads).toBe(1);
+  });
+});
