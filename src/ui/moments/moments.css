@@ -1085,8 +1085,16 @@ html[data-theme='light'] .mo-seg-o button.on {
 }
 .mo-spc-n b.latin,
 .mo-spc-n small.latin {
+  font-style: normal;
+}
+/* The Latin in Fraunces italics, with its label (docs/CLARIDAD2.md §2.13: no unlabeled Latin). */
+.mo-spc-n small.latin i {
   font-family: var(--mo-display);
   font-style: italic;
+  color: var(--mo-text);
+}
+.mo-spc-n small.latin span {
+  color: var(--mo-dim);
 }
 .mo-spc-n small {
   font-size: var(--bl-fs-caption);
@@ -2017,4 +2025,58 @@ html[data-theme='light'] .mo-bh-glyph {
 }
 .mo-card.plate .mo-chip.t-grey .mo-ic {
   color: var(--mo-grey);
+}
+
+/* ───── Species card in the main flow: beads and a friendly multiplier; the exact chain behind «Ver cuentas» ───── */
+.mo-spc-glance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+}
+.mo-spc-glance .beads {
+  font: 700 var(--bl-fs-small)/1.2 var(--mo-font);
+  color: var(--mo-dim);
+}
+.mo-spc-glance .beads b {
+  margin-left: 4px;
+  font-size: var(--bl-fs-lead);
+  letter-spacing: 0.08em;
+  color: var(--sp-c);
+}
+.mo-spc-glance .mult {
+  font: 700 var(--bl-fs-body)/1.25 var(--mo-font);
+  color: var(--bl-gain, var(--mo-good));
+}
+.mo-spc-maths summary {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  font: 700 var(--bl-fs-small)/1.2 var(--mo-font);
+  color: var(--mo-dim);
+  cursor: pointer;
+}
+.mo-spc-maths summary:focus-visible {
+  outline: 3px solid var(--bl-gold);
+  outline-offset: 2px;
+}
+.mo-spc.compact .mo-spc-glance {
+  justify-content: center;
+  text-align: center;
+}
+.mo-spc-maths summary::-webkit-details-marker {
+  display: none;
+}
+.mo-spc-maths summary::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  margin: -4px 0 0 10px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+.mo-spc-maths[open] summary::after {
+  margin-top: 4px;
+  transform: rotate(-135deg);
 }

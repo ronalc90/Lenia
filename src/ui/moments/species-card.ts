@@ -20,7 +20,8 @@ import { BEHAVIOR_COLOR } from '../../core/palette';
 import type { Behavior, GameView, Lang, Pattern, Rarity, Text, UpgradeView } from '../../core/types';
 import { AFFINITY_BONUS, BEHAVIOR_MULT, UNCLASSIFIED_MULT } from '../../game/balance';
 import { AFFINITY_TREE_BONUS } from '../../game/cycleBalance';
-import { fmtFixed, fmtRate } from '../format';
+import { fmtFactor, fmtMult, fmtRate } from '../format';
+import { TREE_BY_ID, nodeText } from '../../game/tree';
 import { AFFINITY_OF, LEGACY_AFFINITY } from '../../moments/behaviors';
 import { moIcon } from './icons';
 import { Illustration } from './illustrations';
@@ -76,6 +77,41 @@ export interface SpeciesCardInput {
   variantNotes?: Text[];
   /** Marks drawn on the portrait (set by the comparison): where the differing feature is. */
   marks?: LookMark[];
+  /** (game, ADR-030: SpeciesView.lightBeads) How much Luz it gives among the 7 species, 1..5. */
+  lightBeads?: number;
+}
+
+/** Beads of a species without the game's figure: its rarity places it (docs/CICLO.md §4.3 orders by what it pays). */
+const RARITY_BEADS: Record<Rarity, number> = { common: 2, uncommon: 3, rare: 4, veryRare: 5 };
+const BEADS = 5;
+
+/**
+ * The main flow's reading of a species (docs/CLARIDAD2.md §2.13, QA-CLARIDAD #18): «Da luz: ●●●○○» and «Viva, casi ×3
+ * con tus mejoras», never a chain of two-decimal factors (that stays behind «Ver cuentas»).
+ */
+export function speciesGlance(s: SpeciesCardInput, lang: Lang): { beads: number; beadsText: string; label: string; words: string } {
+  const beads = Math.min(BEADS, Math.max(1, Math.round(s.lightBeads ?? RARITY_BEADS[s.rarity] ?? 2)));
+  const m = fmtMult((s.form ?? 1) * s.behaviorMult * s.speciesMult * s.global, lang);
+  const alive = s.eps !== null;
+  return {
+    beads,
+    beadsText: '●'.repeat(beads) + '○'.repeat(BEADS - beads),
+    label: lang === 'es' ? `Da luz: ${beads} de ${BEADS}` : `Glow: ${beads} of ${BEADS}`,
+    words: alive ? (lang === 'es' ? `Viva, ${m} con tus mejoras` : `Alive, ${m} with your upgrades`) : lang === 'es' ? `Si vive: ${m} con tus mejoras` : `If alive: ${m} with your upgrades`,
+  };
+}
+
+/** The Latin line under the common name, labelled (docs/CLARIDAD2.md §2.13: no unlabeled Latin), or null. */
+export function scientificLine(s: SpeciesCardInput, lang: Lang): { latin: string; label: string } | null {
+  const latin = s.scientificName === undefined ? s.catalogName : s.scientificName;
+  if (!latin || latin === s.name) return null;
+  return { latin, label: lang === 'es' ? 'nombre científico' : 'scientific name' };
+}
+
+/** «Le ayuda en el Árbol» when its helpers are Tree nodes (the sessions loop); the classic Lab keeps «Cómo mejorarla». */
+export function boosterHeading(boosters: readonly Booster[], lang: Lang): string {
+  const tree = boosters.length > 0 && boosters.every((b) => !!TREE_BY_ID[b.id]);
+  return tree ? (lang === 'es' ? 'Le ayuda en el Árbol' : 'Helped in the Tree by') : lang === 'es' ? 'Cómo mejorarla' : 'How to boost it';
 }
 
 /** A mark on a portrait: normalised position (0..1 of the portrait picture) and what it points at. */
@@ -130,7 +166,8 @@ export function boostersFor(behavior: Behavior | null, upgrades: readonly Upgrad
   for (const w of want) {
     const u = upgrades.find((x) => x.id === w.id);
     if (!u) continue;
-    out.push({ id: u.id, name: u.name, why: w.why, level: u.level, unlocked: u.unlocked, maxed: u.maxed });
+    // A Tree node goes by its real name («Nadadoras»), never the classic Lab's «Afinidad nadadora».
+    out.push({ id: u.id, name: TREE_BY_ID[u.id] ? nodeText(u.id).name : u.name, why: w.why, level: u.level, unlocked: u.unlocked, maxed: u.maxed });
   }
   return out;
 }
@@ -169,6 +206,7 @@ export function speciesInputFromView(v: GameView, speciesId: string): SpeciesCar
     behavior,
     portrait: sp.portrait,
     speciesMult: sp.mult,
+    lightBeads: sp.lightBeads,
     behaviorMult: bm,
     form,
     global,
@@ -287,7 +325,8 @@ export interface BreakdownTerm {
 
 /** The yield as a visual equation: forma × comportamiento × rareza (× mejoras) = +N/s. */
 export function speciesBreakdown(s: SpeciesCardInput, lang: Lang): { terms: BreakdownTerm[]; total: string; perSec: boolean } {
-  const x = (m: number) => `×${fmtFixed(m, 2, lang).replace(/[.,]?0+$/, '')}`;
+  // The exact chain, shown only behind «Ver cuentas» (docs/CLARIDAD2.md §2.13).
+  const x = (m: number) => fmtFactor(m, lang);
   const terms: BreakdownTerm[] = [];
   if (s.form !== null) terms.push({ kind: 'form', mult: s.form, value: x(s.form), label: lang === 'es' ? 'forma' : 'shape' });
   terms.push({ kind: 'behavior', mult: s.behaviorMult, value: x(s.behaviorMult), label: behaviorName(s.behavior, lang) });
@@ -329,7 +368,8 @@ function compareYield(a: SpeciesCardInput, b: SpeciesCardInput, lang: Lang): { w
   // One name per species everywhere: the common one (docs/CLARIDAD.md J-148).
   const na = a.name;
   const nb = b.name;
-  const x = (m: number) => `×${fmtFixed(m, 2, lang).replace(/[.,]?0+$/, '')}`;
+  // Friendly factors in the main flow (§2.13): "+60 %", "normal" for ×1; never "×1,65".
+  const x = (m: number) => (Math.abs(m - 1) < 0.005 ? (lang === 'es' ? 'normal' : 'normal') : fmtMult(m, lang));
   const factors = [
     { kind: 'behavior', ra: a.behaviorMult, rb: b.behaviorMult },
     { kind: 'rarity', ra: a.speciesMult, rb: b.speciesMult },
@@ -359,8 +399,8 @@ function compareYield(a: SpeciesCardInput, b: SpeciesCardInput, lang: Lang): { w
     winner,
     reason:
       lang === 'es'
-        ? `${hi} tiene más forma: más borde, más Esencia (${x(rh)} frente a ${x(rl)}).`
-        : `${hi} has more shape: more edge, more Essence (${x(rh)} vs ${x(rl)}).`,
+        ? `${hi} tiene más forma: más borde, más luz (${x(rh)} frente a ${x(rl)}).`
+        : `${hi} has more shape: more edge, more glow (${x(rh)} vs ${x(rl)}).`,
   };
 }
 
@@ -497,8 +537,8 @@ export function createSpeciesCard(container: HTMLElement, input: SpeciesCardInpu
     const bcol = BEHAVIOR_COLOR[s.behavior ?? 'still'] ?? col;
     const boosters = s.boosters.filter((x) => x.unlocked && !x.maxed);
     // Its one name is the title; the Latin goes small underneath (when it says something new).
-    const latin = s.scientificName === undefined ? s.catalogName : s.scientificName;
-    const sci = latin && latin !== s.name ? latin : '';
+    const sciLine = scientificLine(s, L);
+    const glance = speciesGlance(s, L);
     el.innerHTML = `
       <header class="mo-spc-h">
         <span class="mo-spc-pt"><canvas width="128" height="128"></canvas>${(s.marks ?? [])
@@ -506,7 +546,7 @@ export function createSpeciesCard(container: HTMLElement, input: SpeciesCardInpu
           .join('')}</span>
         <div class="mo-spc-n">
           <b>${esc(s.name)}</b>
-          ${sci ? `<small class="latin">${esc(sci)}</small>` : s.subtitle ? `<small>${esc(s.subtitle)}</small>` : ''}
+          ${sciLine ? `<small class="latin"><i>${esc(sciLine.latin)}</i> <span>${esc(sciLine.label)}</span></small>` : s.subtitle ? `<small>${esc(s.subtitle)}</small>` : ''}
           <span class="mo-spc-tags">
             ${
               s.chips?.length
@@ -527,6 +567,8 @@ export function createSpeciesCard(container: HTMLElement, input: SpeciesCardInpu
         </div>
       </header>
       <div class="mo-spc-anim" aria-hidden="true"><canvas></canvas></div>
+      <div class="mo-spc-glance"><span class="beads" role="img" aria-label="${esc(glance.label)}">${L === 'es' ? 'Da luz' : 'Glow'} <b aria-hidden="true">${glance.beadsText}</b></span><span class="mult">${esc(glance.words)}</span></div>
+      <details class="mo-spc-maths"><summary>${L === 'es' ? 'Ver cuentas' : 'Show the maths'}</summary>
       <div class="mo-spc-eq" role="group" aria-label="${L === 'es' ? 'Cuánto rinde' : 'What it earns'}">
         ${b.terms
           .map(
@@ -535,12 +577,12 @@ export function createSpeciesCard(container: HTMLElement, input: SpeciesCardInpu
           )
           .join('<i aria-hidden="true">·</i>')}
         <i aria-hidden="true">=</i><span class="mo-spc-t total"><b>${b.total}</b><small>${
-          b.perSec ? (L === 'es' ? 'Esencia' : 'Essence') : s.waiting ? (L === 'es' ? 'al sembrar' : 'once you sow') : L === 'es' ? 'si estuviera viva' : 'if alive'
+          b.perSec ? (L === 'es' ? 'luz' : 'glow') : s.waiting ? (L === 'es' ? 'al sembrar' : 'once you sow') : L === 'es' ? 'si estuviera viva' : 'if alive'
         }</small></span>
-      </div>
+      </div></details>
       ${
         boosters.length
-          ? `<div class="mo-spc-up"><span class="mo-spc-up-l">${moIcon('up', 14)}${L === 'es' ? 'Cómo mejorarla' : 'How to boost it'}</span>
+          ? `<div class="mo-spc-up"><span class="mo-spc-up-l">${moIcon('up', 14)}${esc(boosterHeading(boosters, L))}</span>
         ${boosters
           .map(
             (u) => `<div class="mo-spc-u"><span><b>${esc(u.name[L])}${u.level ? ` ${u.level}` : ''}</b><small>${esc(u.why[L])}</small></span>${

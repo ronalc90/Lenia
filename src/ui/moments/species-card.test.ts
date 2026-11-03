@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Pattern, SpeciesView, UpgradeView } from '../../core/types';
 import { creature, makeView } from '../../moments/testUtil';
-import { behaviorMultFor, boostersFor, compareSpecies, lookMarks, shapeLabel, speciesBreakdown, speciesInputFromView, type SpeciesCardInput } from './species-card';
+import { behaviorMultFor, boosterHeading, boostersFor, compareSpecies, lookMarks, scientificLine, shapeLabel, speciesBreakdown, speciesGlance, speciesInputFromView, type SpeciesCardInput } from './species-card';
 
 function sp(id: string, over: Partial<SpeciesView> = {}): SpeciesView {
   return {
@@ -163,17 +163,18 @@ describe('species card: telling species apart', () => {
     const b = input({ id: 'b', name: 'Escudo jade', catalogName: 'Scutium solidus', behavior: 'still', behaviorMult: 1.0, eps: 1.5 });
     const es = compareSpecies(a, b, 'es');
     expect(es.winner).toBe('a');
-    expect(es.reason).toBe('Nadadora celeste nada (×1,6) y Escudo jade se queda quieta (×1).');
+    // Friendly factors, never two decimals (docs/CLARIDAD2.md §2.13).
+    expect(es.reason).toBe('Nadadora celeste nada (+60 %) y Escudo jade se queda quieta (normal).');
     const en = compareSpecies(a, b, 'en');
-    expect(en.reason).toBe('Nadadora celeste swims (×1.6) and Escudo jade stays still (×1).');
+    expect(en.reason).toBe('Nadadora celeste swims (+60%) and Escudo jade stays still (normal).');
   });
 
   it('rarity or shape when they move alike; a tie when they are alike', () => {
     const a = input({ name: 'A', speciesMult: 1.6, eps: 3 });
     const b = input({ id: 'b', name: 'B', speciesMult: 1.1, eps: 2 });
-    expect(compareSpecies(a, b, 'es').reason).toBe('A es más rara (×1,6) que B (×1,1).');
+    expect(compareSpecies(a, b, 'es').reason).toBe('A es más rara (+60 %) que B (+10 %).');
     const c = input({ name: 'C', form: 1.5, speciesMult: 1.1, eps: 3 });
-    expect(compareSpecies(b, c, 'en')).toEqual({ winner: 'b', reason: 'C has more shape: more edge, more Essence (×1.5 vs ×1.2).' });
+    expect(compareSpecies(b, c, 'en')).toEqual({ winner: 'b', reason: 'C has more shape: more edge, more glow (+50% vs +20%).' });
     expect(compareSpecies(a, { ...a, id: 'z' }, 'es').winner).toBe('tie');
   });
 });
@@ -191,5 +192,35 @@ describe('species card before the first seed (RF-10)', () => {
     const running = speciesInputFromView({ ...v, session: { phase: 'running' } as never }, 'a')!;
     expect(running.eps).toBe(2.6);
     expect(running.waiting).toBe(false);
+  });
+});
+
+describe('species card in the main flow: beads, a friendly multiplier, labelled Latin (docs/CLARIDAD2.md §2.13)', () => {
+  it('QA#18: beads and a labelled scientific name; no "Afinidad"', () => {
+    // ×1,2 · ×1,6 · ×1,3 · ×1,17 = ×2,91 read "casi ×3", and the bead count comes from the game (lightBeads).
+    const g = speciesGlance(input({ global: 1.17, lightBeads: 3 }), 'es');
+    expect(g.beads).toBe(3);
+    expect(g.beadsText).toBe('●●●○○');
+    expect(g.label).toBe('Da luz: 3 de 5');
+    expect(g.words).toBe('Viva, casi ×3 con tus mejoras');
+    expect(speciesGlance(input({ global: 1.17, lightBeads: 3 }), 'en').words).toBe('Alive, almost ×3 with your upgrades');
+    expect(speciesGlance(input({ eps: null, form: null }), 'es').words).toMatch(/^Si vive: /);
+    expect(`${g.words} ${g.label}`).not.toMatch(/\d[.,]\d/);
+    // The Latin is labelled, in italics, under the common name.
+    expect(scientificLine(input({ scientificName: 'Orbium unicaudatus' }), 'es')).toEqual({ latin: 'Orbium unicaudatus', label: 'nombre científico' });
+    expect(scientificLine(input({ scientificName: 'Orbium unicaudatus' }), 'en')?.label).toBe('scientific name');
+    expect(scientificLine(input({ scientificName: null, catalogName: null }), 'es')).toBeNull();
+    // Its helpers are the Tree's nodes, by their real names: never «Afinidad».
+    const ups = [up('swimAffinity', 1, { name: { es: 'Afinidad nadadora', en: 'Swimmer affinity' } })];
+    const b = boostersFor('swimmer', ups);
+    expect(b[0].name.es).toBe('Nadadoras');
+    expect(boosterHeading(b, 'es')).toBe('Le ayuda en el Árbol');
+    expect(boosterHeading(b, 'en')).toBe('Helped in the Tree by');
+    expect(JSON.stringify(b)).not.toMatch(/Afinidad|affinity/);
+  });
+
+  it('without the game\'s beads, the rarity places it (1–5)', () => {
+    expect(speciesGlance(input({ rarity: 'common' }), 'es').beads).toBe(2);
+    expect(speciesGlance(input({ rarity: 'veryRare' }), 'es').beads).toBe(5);
   });
 });
