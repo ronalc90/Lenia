@@ -22,7 +22,7 @@ const T = {
   kicker: { es: 'Secreto descubierto', en: 'Secret discovered' },
   kickerSpecies: { es: 'Especie oculta', en: 'Hidden species' },
   kickerAll: { es: 'Todos los secretos', en: 'Every secret' },
-  bonus: { es: '+1 % Esencia', en: '+1% Essence' },
+  bonus: { es: '+1 % de luz', en: '+1% glow' },
   bonusMax: { es: 'Bonus máximo alcanzado', en: 'Bonus maxed' },
   palette: { es: 'Paleta', en: 'Palette' },
   allName: { es: 'Nada más que encontrar', en: 'Nothing left to find' },

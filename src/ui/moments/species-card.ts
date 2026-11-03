@@ -160,7 +160,7 @@ export function boostersFor(behavior: Behavior | null, upgrades: readonly Upgrad
       },
     },
     { id: 'cataloguing', why: { es: 'Sube a todas las especies descubiertas', en: 'Raises every species you found' } },
-    { id: 'nutrient', why: { es: 'Criaturas con más forma dan más Esencia.', en: 'Creatures with more shape give more Essence.' } },
+    { id: 'nutrient', why: { es: 'Criaturas con más forma dan más luz.', en: 'Creatures with more shape give more glow.' } },
   ];
   const out: Booster[] = [];
   for (const w of want) {

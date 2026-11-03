@@ -139,7 +139,7 @@ describe('clarity: no jargon in what the player reads', () => {
  * The game's own texts are checked now; the story's, the Encargos' and the UI's (other packages) when the
  * integrator turns LUZ_RENAME on, after every package has landed.
  */
-const LUZ_RENAME = false;
+const LUZ_RENAME = true;
 const OLD_NAMES = [/esencia/i, /essence/i, /\babono\b/i, /fertili[sz]er/i];
 const oldNames = (all: [string, Text][]) =>
   all.flatMap(([p, t]) => (['es', 'en'] as const).filter((l) => OLD_NAMES.some((re) => re.test(t[l]))).map((l) => `${p} ${l}: «${t[l]}»`));

@@ -641,7 +641,7 @@ const essence: IllusDef = {
     ctx.restore();
     essenceDrop(ctx, bx + 14, by + 19, 5);
     text(ctx, String(20 + arrived), bx + 46, by + 19, { size: 16, mono: true, color: UI.accent, weight: 800 });
-    text(ctx, L(env, 'Esencia', 'Essence'), bx + 38, by - 8, { size: 10, color: UI.textDim });
+    text(ctx, L(env, 'Luz', 'Glow'), bx + 38, by - 8, { size: 10, color: UI.textDim });
     badge(ctx, '+1', bx + 38, by + 52, UI.good, bump > 0 ? 1 + bump * 0.2 : 0.9, arrived ? 1 : 0.5);
     seam(ctx, u, 5);
   },
@@ -1716,7 +1716,7 @@ const keepReset: IllusDef = {
       { label: L(env, 'Muestras', 'Samples'), icon: 'sample' as const },
     ];
     const reset = [
-      { label: L(env, 'Esencia', 'Essence'), icon: 'essence' as const },
+      { label: L(env, 'Luz', 'Glow'), icon: 'essence' as const },
       { label: L(env, 'Mejoras', 'Upgrades'), icon: 'flask' as const },
       { label: L(env, 'Placa', 'Dish'), icon: 'dish' as const },
     ];

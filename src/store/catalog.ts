@@ -858,8 +858,8 @@ export const SUPPORTER_JOURNAL = {
 
 /** The promise printed on every purchase surface. */
 export const FAIR_PLAY_NOTE: Text = t(
-  'Solo cosmético. Nada de esta tienda da Esencia, Datos, semillas ni tiempo extra. Quien no paga juega exactamente el mismo juego.',
-  'Cosmetic only. Nothing here gives Essence, Data, seeds or extra time. Players who never pay play exactly the same game.',
+  'Solo cosmético. Nada de esta tienda da luz, Datos, semillas ni tiempo extra. Quien no paga juega exactamente el mismo juego.',
+  'Cosmetic only. Nothing here gives glow, Data, seeds or extra time. Players who never pay play exactly the same game.',
 );
 
 // ───────────────────────────── Index & helpers ─────────────────────────────

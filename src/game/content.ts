@@ -44,8 +44,8 @@ export const UPGRADE_TEXT: Record<string, UpgradeText> = {
   },
   culture: {
     name: t('Cultivo', 'Culture'),
-    desc: t('Mejor medio de cultivo: más Esencia de todo lo que vive.', 'A richer medium: more Essence from everything alive.'),
-    hint: t('Alcanza 10 Esencia/s', 'Reach 10 Essence/s'),
+    desc: t('Mejor medio de cultivo: más luz de todo lo que vive.', 'A richer medium: more glow from everything alive.'),
+    hint: t('Alcanza 10 luz/s', 'Reach 10 glow/s'),
   },
   calibrator: {
     name: t('Calibrador', 'Calibrator'),
@@ -193,8 +193,8 @@ export const GENOME_TEXT: Record<string, { name: Text; desc: Text }> = {
     desc: t('Las criaturas compiten por la comida. Próximamente.', 'Creatures compete for food. Coming soon.'),
   },
   essenceStart: {
-    name: t('Arranque con Esencia', 'Essence head start'),
-    desc: t('Cada noche nueva empieza con Esencia guardada: 500 por cada Era.', 'Every new night starts with saved Essence: 500 per Era.'),
+    name: t('Arranque con luz', 'Glow head start'),
+    desc: t('Cada noche nueva empieza con luz guardada: 500 por cada Era.', 'Every new night starts with saved glow: 500 per Era.'),
   },
   dropperMemory: {
     name: t('Memoria del Gotero', 'Dropper memory'),
@@ -367,7 +367,7 @@ export type LuzGiftReason = 'spark' | 'encargo' | 'firstSeed' | 'firstCreature' 
 export const TEXT = {
   bloom: t('Floración', 'Bloom'),
   bloomReward: (mult: number, secs: number) => t(`¡Floración! ×${mult} producción durante ${secs} s`, `Bloom! ×${mult} production for ${secs} s`),
-  lumpReward: (amount: number) => t(`¡+${f(amount)} Esencia!`, `+${f(amount)} Essence!`),
+  lumpReward: (amount: number) => t(`¡+${f(amount)} de luz!`, `+${f(amount)} glow!`),
   sporeReward: (n: number) => t(`¡Lluvia de semillas! ${n} gratis`, `Seed shower! ${n} free`),
   mutagenReward: (n: number) => t(`¡Semillas mágicas! Las próximas ${n} siempre viven`, `Magic seeds! Your next ${n} always live`),
   objectiveDone: (reward: number) =>

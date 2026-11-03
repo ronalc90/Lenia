@@ -13,13 +13,13 @@ const t = (es: string, en: string): Text => ({ es, en });
 
 /** Why a route matters to the player (one line each; the route's own blurb says what it does). */
 const ROUTE_MATTERS: Record<BranchId, Text> = {
-  time: t('Más tiempo es más Esencia en cada sesión, y la Esencia se vuelve Datos al terminar.', 'More time is more Essence every session, and Essence becomes Data at the end.'),
-  dropper: t('Cada semilla que vive es una criatura más que da Esencia desde el primer segundo.', 'Every seed that lives is one more creature earning Essence from its first second.'),
-  dish: t('En una placa más grande caben más criaturas a la vez: más Esencia por segundo.', 'A bigger dish holds more creatures at once: more Essence per second.'),
+  time: t('Más tiempo es más luz en cada sesión, y la luz se vuelve Datos al terminar.', 'More time is more glow every session, and glow becomes Data at the end.'),
+  dropper: t('Cada semilla que vive es una criatura más que da luz desde el primer segundo.', 'Every seed that lives is one more creature making glow from its first second.'),
+  dish: t('En una placa más grande caben más criaturas a la vez: más luz por segundo.', 'A bigger dish holds more creatures at once: more glow per second.'),
   life: t('Multiplica lo que ya tienes: todas tus criaturas cobran más, también las que vengan.', 'It multiplies what you already have: all your creatures earn more, the next ones too.'),
   discovery: t('Encontrar cosas nuevas es lo que más Datos da; esto hace que cada hallazgo cuente más.', 'Finding new things gives the most Data; this makes every find count for more.'),
   worlds: t('Cada Mundo tiene especies que no nacen en ningún otro: sin él, el Bestiario no se completa.', 'Each World has species born nowhere else: without it the Bestiary is never complete.'),
-  spark: t('El Destello es un regalo que llega solo: tiempo, Esencia o Datos sin hacer nada.', 'The Spark is a gift that comes by itself: time, Essence or Data for free.'),
+  spark: t('El Destello es un regalo que llega solo: tiempo, luz o Datos sin hacer nada.', 'The Spark is a gift that comes by itself: time, glow or Data for free.'),
   collect: t('Mientras siembras y guías, las pipetas recogen las gotas: ninguna se queda llena esperando.', 'While you sow and steer, the pipettes collect the drops: none sits full and waiting.'),
 };
 

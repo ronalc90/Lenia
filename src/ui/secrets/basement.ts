@@ -16,7 +16,7 @@ import { injectSecretsStyles } from './styles';
 const T = {
   title: { es: 'Laboratorio del sótano', en: 'Basement lab' },
   sub: { es: 'Notas con mi letra que no recuerdo haber escrito.', en: 'Notes in my handwriting that I don’t remember writing.' },
-  bonus: { es: 'Bonus de Esencia', en: 'Essence bonus' },
+  bonus: { es: 'Bonus de luz', en: 'Glow bonus' },
   max: { es: 'máx.', en: 'max' },
   palettes: { es: 'Paletas de la placa', en: 'Dish palettes' },
   default: { es: 'Original', en: 'Original' },

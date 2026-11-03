@@ -1107,7 +1107,7 @@ function panelMeter(ctx: CanvasRenderingContext2D, cx: number, cy: number, R: nu
 const essence: Painter = (ctx, e) => {
   const { t, rm } = e;
   const wd = wide(e);
-  const P = plate(ctx, e, 2, tr(e, 'Esencia', 'Essence'));
+  const P = plate(ctx, e, 2, tr(e, 'Luz', 'Glow'));
   const gap = 12;
   const A: Rect = wd ? { x: P.x, y: P.y, w: P.w * 0.58, h: P.h } : { x: P.x, y: P.y, w: P.w, h: P.h * 0.58 };
   const B: Rect = wd ? { x: P.x + A.w + gap, y: P.y, w: P.w - A.w - gap, h: P.h } : { x: P.x, y: P.y + A.h + gap, w: P.w, h: P.h - A.h - gap };
@@ -1146,7 +1146,7 @@ const essence: Painter = (ctx, e) => {
   const my = B.y + B.h * 0.5 + R * 0.45;
   const target = 12;
   const value = rm ? target : target * clamp01(at8Hz(t) / 1.6) * needleStep(Math.max(0, t - 0.2));
-  panelMeter(ctx, mx, my, R, value, 20, tr(e, 'ESENCIA /s', 'ESSENCE /s'));
+  panelMeter(ctx, mx, my, R, value, 20, tr(e, 'LUZ /s', 'GLOW /s'));
   plateText(ctx, `+${Math.round(value)}`, B.x + B.w - 14, B.y + 30, 16, { weight: 700, align: 'right', color: TEAL });
   panelFrame(ctx, B, 'b');
 };
@@ -1241,7 +1241,7 @@ const clock: Painter = (ctx, e) => {
   const rowY = B.y + B.h * 0.36;
   const left0 = B.x + 18;
   const right0 = B.x + B.w - 18;
-  plateText(ctx, tr(e, 'ESENCIA', 'ESSENCE'), left0, rowY, 13, { mono: true, track: 0.1, color: PLATE.dark.ink2 });
+  plateText(ctx, tr(e, 'LUZ', 'GLOW'), left0, rowY, 13, { mono: true, track: 0.1, color: PLATE.dark.ink2 });
   plateText(ctx, String(ess), left0, rowY + 34, 28, { mono: true, weight: 700 });
   plateText(ctx, tr(e, 'DATOS', 'DATA'), right0, rowY, 13, { mono: true, track: 0.1, color: PLATE.dark.ink2, align: 'right' });
   plateText(ctx, `+${dat}`, right0, rowY + 34, 28, { mono: true, weight: 700, color: TEAL, align: 'right' });
