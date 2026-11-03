@@ -933,14 +933,15 @@ export class Cinematic {
         ctx.fillStyle = `rgba(2,3,6,${lens})`;
         ctx.fill('evenodd');
         ctx.restore();
-        ctx.strokeStyle = `rgba(200,215,255,${0.8 * lens})`;
-        ctx.lineWidth = 2;
-        ctx.shadowColor = '#B892FF';
-        ctx.shadowBlur = 10;
+        // The eyepiece's rim: a soft violet halo under a sharp line (two strokes, no shadowBlur in the loop).
+        ctx.strokeStyle = `rgba(184,146,255,${0.22 * lens})`;
+        ctx.lineWidth = 9;
         ctx.beginPath();
         ctx.arc(ox, oy, LR, 0, TAU);
         ctx.stroke();
-        ctx.shadowBlur = 0;
+        ctx.strokeStyle = `rgba(200,215,255,${0.8 * lens})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
         ctx.lineWidth = 1;
         for (let i = 0; i < 72; i++) {
           const a = (i / 72) * TAU + t * 0.03;
