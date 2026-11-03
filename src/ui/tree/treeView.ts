@@ -56,7 +56,7 @@ import { mountPortrait } from '../portrait';
 import { ROUTE_ICON } from '../art/icons';
 import { DURATION, EASING, pop, staggerIn } from '../art/motion';
 import { nodeWhy, WHY_UI } from './why';
-import { D, FAR_Z, Z_MAX, Z_MIN, openingCam, revealCam, tapAllowed, type Area, type Cam } from './camera';
+import { D, FAR_Z, Z_MAX, Z_MIN, freeTop, openingCam, revealCam, tapAllowed, type Area, type Cam } from './camera';
 import { treeIcon } from './icons';
 import { DISH_DIAMETERS } from '../../core/dish';
 import '../art/art.css';
@@ -379,10 +379,9 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     const { w, h } = vpSize();
     const bar = topBar.getBoundingClientRect();
     const vpTop = vp.getBoundingClientRect().top;
-    let top = Math.max(78, bar.height > 0 ? bar.bottom - vpTop + 10 : 0);
-    // VELA docked at the top of the Tree (QA4 F-01) is part of the bar: no node under her bubble.
+    // VELA docked at the top of the Tree (QA4 F-01) is part of the bar: no node under her bubble (./camera freeTop).
     const dock = document.querySelector('.sty.sty-docked .sty-box:not([hidden])')?.getBoundingClientRect();
-    if (dock && dock.height > 0) top = Math.max(top, dock.bottom - vpTop + 10);
+    const top = freeTop(bar.height > 0 ? bar.bottom - vpTop : 0, dock && dock.height > 0 ? { top: dock.top - vpTop, bottom: dock.bottom - vpTop } : null, h);
     // Room for the strip and the first visit's hint at the bottom: no node under them.
     const low = Math.max(strip.offsetHeight, hint.offsetHeight + (strip.offsetHeight ? strip.offsetHeight + 8 : 0));
     let bottom = low > 0 ? low + 24 : 18;

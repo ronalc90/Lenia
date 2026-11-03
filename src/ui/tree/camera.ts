@@ -126,6 +126,23 @@ function worldOf(id: string): { x: number; y: number } {
   return { x: p.x * D, y: p.y * D };
 }
 
+/** The free area never starts above this (px under the viewport's top): the bar's own height. */
+export const MIN_TOP = 78;
+/** VELA's bubble counts as part of the top bar only when it ends in the top half of the viewport. */
+export const DOCK_MAX_SHARE = 0.5;
+
+/**
+ * Top of the Tree's free area (px from the viewport's top): under the bar and under VELA's docked bubble.
+ * A bubble that is not up there yet (still at the bottom, sliding to the dock) is not a bar: measured as
+ * one, the free area collapsed to a 60-px band and the opening frame parked tiny nodes under the strip
+ * (integration play-through of the clarity pass; PC's "the Tree showed no nodes").
+ */
+export function freeTop(barBottom: number, dock: { top: number; bottom: number } | null, h: number): number {
+  let top = Math.max(MIN_TOP, barBottom > 0 ? barBottom + 10 : 0);
+  if (dock && dock.bottom > dock.top && dock.bottom <= h * DOCK_MAX_SHARE) top = Math.max(top, dock.bottom + 10);
+  return top;
+}
+
 /** A tap counts only when the camera has been still for TAP_QUIET_MS. */
 export function tapAllowed(now: number, lastMoveAt: number): boolean {
   return now - lastMoveAt >= TAP_QUIET_MS;

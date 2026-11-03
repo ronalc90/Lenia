@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TREE_LAYOUT, TREE_NODES, treeStates, type TreeCtx } from '../../game/tree';
-import { D, NODE_EXTENT, TAP_QUIET_MS, buyableIds, nodeRect, openingCam, revealCam, tapAllowed, type Area, type Cam } from './camera';
+import { D, NODE_EXTENT, TAP_QUIET_MS, buyableIds, nodeRect, openingCam, revealCam, tapAllowed, type Area, type Cam, freeTop } from './camera';
 
 /** A 390 × 844 phone: the top bar and VELA take 150 px, the "Puedes comprar" strip 96 px. */
 const PHONE: Area = { left: 0, top: 150, right: 390, bottom: 844 - 96 };
@@ -86,5 +86,21 @@ describe('the Tree camera (docs/CLARIDAD2.md §2.10)', () => {
     expect(r.t).toBe(100 - NODE_EXTENT.above);
     expect(r.b).toBe(100 + NODE_EXTENT.below);
     expect(r.r - r.l).toBe(2 * NODE_EXTENT.half);
+  });
+});
+
+// Integration play-through of the clarity pass: right after «Ir al Árbol» the Tree showed tiny nodes parked
+// under the «Puedes comprar» strip (PC's run: "no nodes"). VELA's bubble was measured as the top bar while it
+// still sat at the bottom of the screen on its way to the dock: the free area collapsed to a 60-px band.
+describe('the free area of the Tree under VELA\'s docked bubble', () => {
+  it('a bubble docked at the top pushes the frame down', () => {
+    expect(freeTop(100, { top: 110, bottom: 190 }, 844)).toBe(200);
+  });
+  it('a bubble still at the bottom of the screen never squeezes the frame', () => {
+    expect(freeTop(100, { top: 700, bottom: 830 }, 844)).toBe(110);
+    expect(freeTop(100, { top: 300, bottom: 520 }, 844)).toBe(110);
+  });
+  it('without a bar the frame starts below the minimum inset', () => {
+    expect(freeTop(0, null, 844)).toBe(78);
   });
 });
