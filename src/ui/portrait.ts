@@ -175,9 +175,14 @@ const PORTRAIT_BLOOM = 0.55;
 /** New renders allowed per frame (they run in idle time; cached ones are instant). */
 const PORTRAITS_PER_FRAME = 2;
 
-/** Device pixels for a portrait of `cssPx`: × min(dpr, 3), rounded up to a multiple of 8, capped. */
+/**
+ * Device pixels for a portrait of `cssPx`: × the DPR between 2 and 3, rounded up to a multiple of 8, capped.
+ * Never under 2× (docs/CLARIDAD2.md §2.13: the thumbnails read blurry, QA-CLARIDAD 027/167): a specimen photo
+ * stays sharp on a DPR-1 screen, in a zoomed screenshot and when the card scales it up a little.
+ */
+export const PORTRAIT_MIN_DPR = 2;
 export function portraitPx(cssPx: number, dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1, max = PORTRAIT_MAX_PX): number {
-  const k = Math.min(3, Math.max(1, dpr || 1));
+  const k = Math.min(3, Math.max(PORTRAIT_MIN_DPR, dpr || 1));
   return Math.min(max, Math.max(8, Math.ceil((cssPx * k) / 8) * 8));
 }
 

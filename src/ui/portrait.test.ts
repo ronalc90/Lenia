@@ -3,7 +3,7 @@ import type { Pattern } from '../core/types';
 import { portraitCanvas, portraitPx, PORTRAIT_HERO_MAX_PX } from './portrait';
 
 describe('sharp portraits (B-1)', () => {
-  it('draw at CSS size × min(DPR, 3), on the 8-px grid, capped at 384 (768 for the title)', () => {
+  it('draw at CSS size × min(DPR, 3) and never under 2× (sharp thumbnails, docs/CLARIDAD2.md §2.13), on the 8-px grid, capped at 384 (768 for the title)', () => {
     expect(portraitPx(72, 3)).toBe(216); // Bestiary
     expect(portraitPx(130, 3)).toBe(384); // species sheet (cap)
     expect(portraitPx(60, 3)).toBe(184); // summary
@@ -11,7 +11,8 @@ describe('sharp portraits (B-1)', () => {
     expect(portraitPx(44, 3)).toBe(136); // Tree
     expect(portraitPx(300, 3, PORTRAIT_HERO_MAX_PX)).toBe(768); // title
     expect(portraitPx(72, 4)).toBe(216); // DPR above 3 adds nothing
-    expect(portraitPx(72, 1)).toBe(72);
+    expect(portraitPx(72, 1)).toBe(144); // a DPR-1 screen still gets a 2× specimen photo
+    expect(portraitPx(60, 1.5)).toBe(120);
   });
 
   describe('cache', () => {
