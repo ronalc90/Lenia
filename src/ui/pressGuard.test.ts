@@ -21,13 +21,25 @@ describe('the dock ignores a tap meant for what covered it', () => {
     expect(g.click(1000 + DOCK_UNCOVER_GUARD_MS)).toBe(false);
   });
 
-  it('a layer that went away by itself also guards the button for a moment', () => {
+  it('a layer that went away by itself also guards the button for a moment after it went', () => {
     const g = new PressGuard(DOCK_UNCOVER_GUARD_MS);
-    g.covered(2000); // seen covered (VELA's line closed on its own)
-    g.press(true, 2100);
-    expect(g.click(2150)).toBe(false);
-    g.press(true, 2000 + DOCK_UNCOVER_GUARD_MS + 10);
-    expect(g.click(2000 + DOCK_UNCOVER_GUARD_MS + 60)).toBe(true);
+    g.covered(2000); // seen covered (VELA's line closed on its own)…
+    g.clear(2600); // …and seen gone 600 ms later (her box fades out)
+    g.press(true, 2700);
+    expect(g.click(2710)).toBe(false);
+    g.press(true, 2600 + DOCK_UNCOVER_GUARD_MS + 10);
+    expect(g.click(2600 + DOCK_UNCOVER_GUARD_MS + 20)).toBe(true);
+  });
+
+  it('a press that reaches the button before anyone saw the cover go is the rest of a double tap', () => {
+    // A slow phone samples the screen rarely: the last look saw VELA's box, the next press already hits the
+    // button. However long ago that look was, the cover went just now.
+    const g = new PressGuard(DOCK_UNCOVER_GUARD_MS);
+    g.press(false, 1000); // the tap on VELA's box
+    g.press(true, 1700);
+    expect(g.click(1710)).toBe(false);
+    g.press(true, 1700 + DOCK_UNCOVER_GUARD_MS + 10);
+    expect(g.click(1700 + DOCK_UNCOVER_GUARD_MS + 20)).toBe(true);
   });
 
   it('a plain tap on the uncovered button works, and a keyboard press (no pointer) too', () => {

@@ -1614,15 +1614,18 @@ class BiolumaUI implements UI {
     }
   }
 
-  /** Something covers a visible dock button right now (sampled with each view, ~10×/s). */
+  /** Whether something covers each visible dock button right now (sampled with each view, ~10×/s). */
   private sampleCovers(): void {
     const now = performance.now();
     for (const [b, g] of this.pressGuards) {
-      if (b.hidden) continue;
-      const r = b.getBoundingClientRect();
-      if (r.width <= 0) continue;
+      const r = b.hidden ? null : b.getBoundingClientRect();
+      if (!r || r.width <= 0) {
+        g.clear(now);
+        continue;
+      }
       const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
       if (hit && !b.contains(hit)) g.covered(now);
+      else g.clear(now);
     }
   }
 
