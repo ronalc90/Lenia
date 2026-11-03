@@ -1,4 +1,6 @@
-/* The opening intro (src/ui/intro/intro.ts). Tokens from src/ui/art/art.css, with fallbacks. */
+/* The opening intro (src/ui/intro/intro.ts). Tokens from src/ui/art/art.css, with fallbacks. The picture is
+   a night lab and its plates (docs/ARTE-REALISTA.md §6.6): framed like a print, a 1-px rule and no big
+   shadow (§6.3). */
 
 .bl-intro {
   position: fixed;
@@ -294,8 +296,9 @@
   }
   .bl-intro-art {
     margin: 20px 0 20px 20px;
-    border-radius: var(--bl-r-xl);
-    box-shadow: var(--bl-elev-3);
+    border-radius: var(--bl-r-sm);
+    border: 1px solid var(--bl-plate-rule, #2a3540);
+    box-shadow: none;
   }
   .bl-intro-art::after {
     display: none;
