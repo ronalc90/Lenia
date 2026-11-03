@@ -1,8 +1,8 @@
 /**
  * The night moves on (QA4 F-12): the "prestige" of the sessions cycle used to pass as a changed label.
  * A short celebration over the Tree: the sky darkens, a new moon rises with its number, stars light up
- * one by one and VELA (with her candle) says what it means. ~3 s, or one tap. Reduce motion: the same
- * picture, still, with a fade.
+ * one by one and VELA, the MC-7 culture monitor, glows proud under it (lamp warm, «★ RÉCORD» on her screen)
+ * while the line says what it means. ~3 s, or one tap. Reduce motion: the same picture, still, with a fade.
  */
 import type { Lang, Text } from '../../core/types';
 import { NIGHT_CELEBRATION_MS } from '../../game/cycleBalance';
@@ -102,12 +102,12 @@ export function celebrateNight(root: HTMLElement, night: number, o: NightCelebra
     ctx.beginPath();
     ctx.arc(mx + mr * 0.42, my - mr * 0.18, mr * 0.92, 0, Math.PI * 2);
     ctx.fill();
-    // VELA, proud, under the moon.
+    // VELA, proud, under the moon: the instrument on the bench, her lamp the warm light of the scene.
     const vs = Math.min(W, H) / 260;
     ctx.save();
     ctx.translate(W * 0.5 - 50 * vs, H * 0.68 - 60 * vs);
     ctx.scale(vs, vs);
-    drawVelaArt(ctx, { mood: 'proud', moodAge: t, talk: 0, talking: false, blink: 0, reduceMotion: rm }, t);
+    drawVelaArt(ctx, { mood: 'proud', moodAge: t, talk: 0, talking: false, blink: 0, reduceMotion: rm }, t, { size: 100 * vs, dpr, lang: l });
     ctx.restore();
     if (!rm) raf = requestAnimationFrame(draw);
   };
