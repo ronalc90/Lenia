@@ -14,6 +14,11 @@
  * Mobile first (390×844), also 1366×768 (card beside the event). es/en, light
  * and dark themes, honours reduce motion (no camera move, fades, still
  * diagrams). Runs one rAF loop only while something is on screen.
+ *
+ * The card is a scientific PLATE (docs/ARTE-REALISTA.md §6.5, ./plates.ts): «LÁMINA 07» in Mono, the diagram
+ * with registration marks and a 1-px leader line, panels a / b / c in time order (stills of the same real
+ * simulation; the one playing now is outlined), a scale bar (1 cell = 0,7 mm), the Latin name in italics, a
+ * colour key where every colour has a shape, and VELA's line as the caption «Fig. 7 · …» with her mini avatar.
  */
 import './moments.css';
 import type { Camera } from '../../core/camera';
@@ -26,7 +31,8 @@ import { Portrait } from '../story/portraits';
 import { behaviorRowsHtml, createBehaviorGuideSheet, type BehaviorGuideSheet, type ExtraBooster } from './behavior-guide';
 import { createHelp, type HelpSheet } from './help';
 import { moIcon } from './icons';
-import { Illustration, type CompareSide } from './illustrations';
+import { Illustration, ILLUS_H, ILLUS_W, type CompareSide } from './illustrations';
+import { KEY_TEXT, figPrefix, plateLabel, plateOf, scaleBar, scaleText, type PlateDef, type PlateKey } from './plates';
 import { compareSpecies, createSpeciesCompare, speciesBreakdown, type SpeciesCardInput, type SpeciesCompare } from './species-card';
 import { MS, tr } from './strings';
 
@@ -142,6 +148,32 @@ interface Active {
   typed: number;
   full: string;
   lastBlip: number;
+  /** The plate of this card (null: a kind without one yet). */
+  plate: PlateDef | null;
+  /** When its a / b / c stills were last drawn, and whether they can still change (clips not done). */
+  stillsAt: number;
+  stillsDone: boolean;
+  /** The panel shown as "now" (outlined). */
+  activePanel: number;
+}
+
+/** Tallest plate panel a / b / c, CSS px (the card must still leave the event in sight on a phone). */
+const PANEL_H = 56;
+
+/** A tiny swatch in the key's shape (12 px, currentColor): meaning never hangs on colour alone (F3). */
+function keySwatch(shape: (typeof KEY_TEXT)[PlateKey]['shape']): string {
+  const P: Record<typeof shape, string> = {
+    dot: '<circle cx="6" cy="6" r="4.5" fill="currentColor"/>',
+    ring: '<circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+    square: '<rect x="1.75" y="1.75" width="8.5" height="8.5" fill="currentColor"/>',
+    triangle: '<path d="M6 1.5 10.75 10H1.25Z" fill="currentColor"/>',
+    drop: '<path d="M6 1.25C7.6 3.6 9.5 5.4 9.5 7.4A3.5 3.5 0 0 1 2.5 7.4C2.5 5.4 4.4 3.6 6 1.25Z" fill="currentColor"/>',
+    arrowUp: '<path d="M6 10.5V2M2.75 5.25 6 2l3.25 3.25" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+    plus: '<path d="M6 2v8M2 6h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+    star: '<path d="M6 .75 7.3 4.7 11.25 6 7.3 7.3 6 11.25 4.7 7.3.75 6 4.7 4.7Z" fill="currentColor"/>',
+    dash: '<path d="M1.5 6h9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2 1.6"/>',
+  };
+  return `<svg class="mo-sw" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" focusable="false">${P[shape]}</svg>`;
 }
 
 function chipHtml(c: Chip, L: Lang): string {
@@ -194,14 +226,34 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
   title.id = 'mo-title';
   const pausedTag = document.createElement('span');
   pausedTag.className = 'mo-paused';
+  // «LÁMINA 07» before the pause line: the plate's number, so the player collects them (§6.5 rule 1).
+  const plateTag = document.createElement('span');
+  plateTag.className = 'mo-plate-no';
+  const eyebrow = document.createElement('div');
+  eyebrow.className = 'mo-eyebrow';
+  eyebrow.append(plateTag, pausedTag);
   const titles = document.createElement('div');
   titles.className = 'mo-titles';
-  titles.append(pausedTag, title);
+  titles.append(eyebrow, title);
   head.append(headIcon, titles);
   const illusBox = document.createElement('div');
   illusBox.className = 'mo-illus';
   const illusCanvas = document.createElement('canvas');
-  illusBox.appendChild(illusCanvas);
+  // Registration marks at the corners and the leader line (1 px, a 2.5-px dot on the feature) over the diagram.
+  const leader = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  leader.setAttribute('class', 'mo-leader');
+  leader.setAttribute('viewBox', `0 0 ${ILLUS_W} ${ILLUS_H}`);
+  leader.setAttribute('preserveAspectRatio', 'none');
+  leader.setAttribute('aria-hidden', 'true');
+  const leaderLabel = document.createElement('span');
+  leaderLabel.className = 'mo-leader-l';
+  illusBox.append(illusCanvas, leader, leaderLabel);
+  illusBox.insertAdjacentHTML('beforeend', '<i class="mo-reg tl"></i><i class="mo-reg tr"></i><i class="mo-reg bl"></i><i class="mo-reg br"></i>');
+  // Panels a / b / c in time order, then the scale bar, the Latin name and the colour key.
+  const panelsEl = document.createElement('div');
+  panelsEl.className = 'mo-panels';
+  const plateFoot = document.createElement('div');
+  plateFoot.className = 'mo-plate-foot';
   const cmpBox = document.createElement('div');
   cmpBox.className = 'mo-cmpbox';
   cmpBox.hidden = true;
@@ -216,10 +268,13 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
   linesEl.className = 'mo-lines';
   linesEl.setAttribute('aria-live', 'polite');
   const talkCol = document.createElement('div');
+  // VELA's line is the plate's caption: «Fig. 7 · …» (§6.5 rule 7).
+  const figEl = document.createElement('span');
+  figEl.className = 'mo-fig';
   const talkLabel = document.createElement('small');
   talkLabel.className = 'mo-talk-label';
   talkLabel.hidden = true;
-  talkCol.append(talkLabel, linesEl);
+  talkCol.append(talkLabel, figEl, linesEl);
   talk.append(velaWrap, talkCol);
   // Behaviour Momentos: what changes, how to get more, how to boost it (+ the guide).
   const bhBox = document.createElement('div');
@@ -239,7 +294,7 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
   neverBtn.type = 'button';
   neverBtn.className = 'mo-never';
   actions.append(primary, okBtn, neverBtn);
-  card.append(head, illusBox, cmpBox, talk, bhBox, chipsEl, actions);
+  card.append(head, illusBox, panelsEl, plateFoot, cmpBox, talk, bhBox, chipsEl, actions);
   const briefEl = document.createElement('div');
   briefEl.className = 'mo-brief';
   briefEl.hidden = true;
@@ -456,6 +511,13 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
     card.classList.toggle('replay', m.replay);
     headIcon.innerHTML = moIcon(m.icon, 26);
     title.textContent = m.title[lang];
+    const plate = a.plate;
+    plateTag.textContent = plate ? plateLabel(plate.no, lang) : '';
+    plateTag.hidden = !plate;
+    figEl.textContent = plate ? figPrefix(plate.no).trim() : '';
+    figEl.hidden = !plate;
+    card.classList.toggle('plate', !!plate);
+    renderPlate(a, lang);
     pausedTag.innerHTML = m.replay ? '' : `${moIcon('pause', 12)}<span>${escapeHtml(tr(MS.paused, lang))}</span>`;
     pausedTag.hidden = m.replay;
     const b = behaviorOf(m);
@@ -495,6 +557,99 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
     renderLines(a);
     portrait.set('vela', m.mood);
     portrait.state.reduceMotion = rm();
+  }
+
+  /** The plate's leader line, panels a / b / c, scale bar, Latin name and key (static parts; stills drawn later). */
+  function renderPlate(a: Active, lang: Lang): void {
+    const plate = a.plate;
+    const m = a.m;
+    leader.innerHTML = '';
+    leaderLabel.textContent = '';
+    leaderLabel.hidden = true;
+    panelsEl.innerHTML = '';
+    plateFoot.innerHTML = '';
+    panelsEl.hidden = !plate;
+    plateFoot.hidden = !plate;
+    if (!plate) return;
+    const L = plate.leader;
+    if (L) {
+      // From the label's top edge to the feature: a 1-px line (non-scaling) and a 2.5-px dot.
+      leader.innerHTML = `<line x1="${L.lx + 6}" y1="${L.ly - 13}" x2="${L.x}" y2="${L.y}" vector-effect="non-scaling-stroke"/><circle cx="${L.x}" cy="${L.y}" r="1.4"/>`;
+      leaderLabel.textContent = L.text[lang];
+      leaderLabel.style.left = `${(L.lx / ILLUS_W) * 100}%`;
+      leaderLabel.style.top = `${(L.ly / ILLUS_H) * 100}%`;
+      leaderLabel.hidden = false;
+    }
+    const loop = a.illus?.loop ?? 0;
+    const tags = ['a', 'b', 'c'];
+    const [, , cw, ch] = plate.crop;
+    panelsEl.style.setProperty('--mo-pan-ar', `${cw} / ${ch}`);
+    panelsEl.innerHTML = plate.panels
+      .map(
+        (at, i) =>
+          `<figure class="mo-pan" data-i="${i}"><canvas></canvas><figcaption><b>${tags[i]}</b><span>t = ${Math.round(at * loop)} s</span></figcaption></figure>`,
+      )
+      .join('');
+    const bar = scaleBar(plate);
+    const latin = m.data.speciesId ? (opts.speciesInfo?.(m.data.speciesId)?.scientificName ?? opts.speciesInfo?.(m.data.speciesId)?.catalogName ?? null) : null;
+    const key = plate.key
+      .map((k) => `<span class="mo-key k-${k}">${keySwatch(KEY_TEXT[k].shape)}<span>${escapeHtml(KEY_TEXT[k].label[lang])}</span></span>`)
+      .join('');
+    plateFoot.innerHTML = `<span class="mo-scale"><i style="width:${Math.round(bar.box)}px"></i><b>${scaleText(bar.mm)}</b></span>${
+      latin ? `<i class="mo-latin">${escapeHtml(latin)}</i>` : ''
+    }<span class="mo-keys">${key}</span>`;
+    a.stillsAt = -Infinity;
+    a.stillsDone = false;
+    a.activePanel = -1;
+  }
+
+  /**
+   * CSS sizes of the stills (their crop's aspect, at most PANEL_H tall, a third of the row wide) and of the scale
+   * bar (its share of the diagram's width): measured once per card, from the laid-out frame.
+   */
+  function sizePlate(plate: PlateDef, figs: NodeListOf<HTMLElement>): void {
+    const [, , cw, ch] = plate.crop;
+    const n = Math.max(1, figs.length);
+    const cell = Math.max(40, (panelsEl.clientWidth - (n - 1) * 8) / n);
+    const h = Math.min(PANEL_H, (cell * ch) / cw);
+    for (const f of figs) {
+      const c = f.querySelector('canvas')!;
+      c.style.height = `${h.toFixed(1)}px`;
+      c.style.width = `${((h * cw) / ch).toFixed(1)}px`;
+    }
+    const bar = plateFoot.querySelector('.mo-scale i') as HTMLElement | null;
+    if (bar) bar.style.width = `${Math.max(8, (illusBox.clientWidth * scaleBar(plate).box) / ILLUS_W).toFixed(1)}px`;
+  }
+
+  /** Draw the plate's stills (until the clips are all simulated) and outline the panel playing now. */
+  function plateFrame(a: Active, t: number): void {
+    const plate = a.plate;
+    if (!plate || !a.illus || panelsEl.hidden) return;
+    const figs = panelsEl.querySelectorAll<HTMLElement>('.mo-pan');
+    if (!a.stillsDone && t - a.stillsAt > 0.4) {
+      if (a.stillsAt === -Infinity) sizePlate(plate, figs);
+      a.stillsAt = t;
+      const done = a.illus.ready;
+      figs.forEach((f, i) => a.illus!.still(f.querySelector('canvas')!, plate.panels[i], plate.crop));
+      a.stillsDone = done;
+    }
+    // The panel nearest to where the loop is now (reduce motion: none, the diagram cross-fades its stills).
+    let active = -1;
+    if (!rm()) {
+      const ph = a.illus.phase(t);
+      let best = Infinity;
+      plate.panels.forEach((at, i) => {
+        const d = Math.abs(at - ph);
+        if (d < best) {
+          best = d;
+          active = i;
+        }
+      });
+    }
+    if (active !== a.activePanel) {
+      a.activePanel = active;
+      figs.forEach((f, i) => f.classList.toggle('on', i === active));
+    }
   }
 
   /** The behaviour a card is about (behaviour Momentos only). */
@@ -577,6 +732,10 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
       typed: 0,
       full: '',
       lastBlip: 0,
+      plate: plateOf(m.illustration),
+      stillsAt: -Infinity,
+      stillsDone: false,
+      activePanel: -1,
     };
     act = a;
     fillCard(a);
@@ -600,6 +759,9 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
         compare: m.illustration === 'compare' ? compareSides(m) : undefined,
       });
     }
+    // The plate's panels need the diagram (its loop, its stills): drawn once it exists.
+    renderPlate(a, L());
+    if (!a.illus) panelsEl.hidden = true;
     card.hidden = false;
     card.classList.remove('show');
     layer.classList.add('on');
@@ -1057,6 +1219,7 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
         if (a.illus) {
           a.illus.frame(t, frozen);
           illusBox.classList.add('ready');
+          plateFrame(a, t);
         }
         drawSpot(a, t);
       }

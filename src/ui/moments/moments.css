@@ -1775,3 +1775,246 @@ html[data-theme='light'] .mo-bh-glyph {
   font-variation-settings: 'SOFT' 100;
   font-weight: 700;
 }
+
+/* ═════════════ Momentos as scientific plates (docs/ARTE-REALISTA.md §6.5) ═════════════ */
+
+/* The plate's paper and its 1-px rule (§6.3); the diagram stays a dark microscope view in both themes. */
+.mo-card.plate {
+  color: var(--bl-plate-ink, var(--mo-text));
+  background: var(--bl-plate-paper, var(--mo-bg));
+  border: 1px solid var(--bl-plate-rule, var(--mo-line));
+}
+.mo-eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+}
+.mo-plate-no {
+  font: 600 var(--bl-fs-caption)/1.2 var(--bl-font-mono, monospace);
+  letter-spacing: 0.12em;
+  color: var(--bl-plate-ink2, var(--mo-dim));
+}
+.mo-plate-no[hidden],
+.mo-fig[hidden],
+.mo-panels[hidden],
+.mo-plate-foot[hidden],
+.mo-leader-l[hidden] {
+  display: none;
+}
+.mo-card.plate .mo-paused {
+  font-family: var(--bl-font-mono, monospace);
+  letter-spacing: 0.08em;
+  color: var(--bl-plate-ink2, var(--mo-dim));
+}
+.mo-card.plate .mo-title {
+  font: 650 var(--bl-fs-headline)/1.1 var(--mo-display);
+  color: var(--bl-plate-ink, var(--mo-text));
+}
+/* Registration marks (hair, 6 px) at the corners of the figure. */
+.mo-reg {
+  position: absolute;
+  z-index: 2;
+  width: 6px;
+  height: 6px;
+  border: 0 solid rgba(223, 231, 238, 0.55);
+  pointer-events: none;
+}
+.mo-reg.tl {
+  left: 5px;
+  top: 5px;
+  border-left-width: 1px;
+  border-top-width: 1px;
+}
+.mo-reg.tr {
+  right: 5px;
+  top: 5px;
+  border-right-width: 1px;
+  border-top-width: 1px;
+}
+.mo-reg.bl {
+  left: 5px;
+  bottom: 5px;
+  border-left-width: 1px;
+  border-bottom-width: 1px;
+}
+.mo-reg.br {
+  right: 5px;
+  bottom: 5px;
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+}
+/* The leader line: 1 px, a 2.5-px dot on the feature, the words at its other end (on the dark diagram). */
+.mo-leader {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.mo-leader line {
+  stroke: #dfe7ee;
+  stroke-width: 1;
+  opacity: 0.85;
+}
+.mo-leader circle {
+  fill: #dfe7ee;
+}
+.mo-leader-l {
+  position: absolute;
+  transform: translateY(-100%);
+  padding: 1px 4px;
+  font: 600 var(--bl-fs-caption)/1.2 var(--mo-font);
+  color: #dfe7ee;
+  background: rgba(6, 9, 13, 0.72);
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* Panels a / b / c in time order: stills of the same real simulation; the one playing now is outlined. */
+.mo-panels {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 8px;
+  margin-top: -2px;
+}
+.mo-pan {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.mo-pan canvas {
+  display: block;
+  border-radius: var(--bl-r-sm);
+  background: #06080b;
+  border: 1px solid var(--bl-plate-rule, var(--mo-line));
+  transition: border-color var(--bl-t-base) var(--bl-ease-standard);
+}
+.mo-pan.on canvas {
+  border-color: var(--bl-plate-ink, var(--mo-text));
+}
+.mo-pan figcaption {
+  display: flex;
+  gap: 5px;
+  align-items: baseline;
+  font: 600 var(--bl-fs-caption)/1.2 var(--mo-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--bl-plate-ink2, var(--mo-dim));
+}
+.mo-pan figcaption b {
+  font-size: var(--bl-fs-small);
+  font-weight: 700;
+  color: var(--bl-plate-ink, var(--mo-text));
+}
+/* The scale bar (1 cell = 0,7 mm), the Latin name in italics, the colour key with shapes. */
+.mo-plate-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+}
+.mo-scale {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 var(--bl-fs-caption)/1 var(--mo-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--bl-plate-ink, var(--mo-text));
+}
+.mo-scale i {
+  display: block;
+  height: 4px;
+  border: 1px solid currentColor;
+  border-top: 0;
+}
+.mo-latin {
+  font: italic 400 var(--bl-fs-small)/1.2 var(--mo-display);
+  color: var(--bl-plate-ink, var(--mo-text));
+}
+.mo-keys {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.mo-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: 600 var(--bl-fs-caption)/1.2 var(--mo-font);
+  color: var(--bl-plate-ink2, var(--mo-dim));
+}
+.mo-key.k-alive .mo-sw {
+  color: var(--mo-info);
+}
+.mo-key.k-forming .mo-sw {
+  color: var(--mo-dim);
+}
+.mo-key.k-shapeless .mo-sw {
+  color: var(--mo-warn);
+}
+.mo-key.k-fading .mo-sw {
+  color: var(--mo-grey);
+}
+.mo-key.k-light .mo-sw {
+  color: var(--mo-candle);
+}
+.mo-key.k-danger .mo-sw {
+  color: var(--mo-bad);
+}
+.mo-key.k-cost .mo-sw {
+  color: var(--bl-cost, var(--mo-warn));
+}
+.mo-key.k-gain .mo-sw {
+  color: var(--bl-gain, var(--mo-good));
+}
+.mo-key.k-spark .mo-sw {
+  color: var(--mo-gold);
+}
+/* VELA's line is the caption «Fig. 7 · …», with her mini avatar on the right (§6.5 rule 7). */
+.mo-card.plate .mo-talk {
+  grid-template-columns: 1fr 44px;
+}
+.mo-card.plate .mo-vela {
+  order: 2;
+  width: 44px;
+  height: 44px;
+}
+.mo-card.plate .mo-lines {
+  color: var(--bl-plate-ink, var(--mo-text));
+}
+.mo-fig {
+  float: left;
+  margin-right: 6px;
+  font: 700 var(--bl-fs-body)/1.35 var(--mo-font);
+  color: var(--bl-plate-ink2, var(--mo-dim));
+}
+/* Consequence chips read as entries of the key: ink text, the colour only on the icon (F3). */
+.mo-card.plate .mo-chip {
+  border-radius: var(--bl-r-sm);
+  border: 1px solid var(--bl-plate-rule, var(--mo-line));
+  background: none;
+  color: var(--bl-plate-ink, var(--mo-text));
+}
+.mo-card.plate .mo-chip.t-good .mo-ic {
+  color: var(--mo-good);
+}
+.mo-card.plate .mo-chip.t-bad .mo-ic {
+  color: var(--mo-bad);
+}
+.mo-card.plate .mo-chip.t-warn .mo-ic {
+  color: var(--mo-warn);
+}
+.mo-card.plate .mo-chip.t-info .mo-ic {
+  color: var(--mo-info);
+}
+.mo-card.plate .mo-chip.t-gold .mo-ic {
+  color: var(--mo-gold);
+}
+.mo-card.plate .mo-chip.t-violet .mo-ic {
+  color: var(--mo-violet);
+}
+.mo-card.plate .mo-chip.t-grey .mo-ic {
+  color: var(--mo-grey);
+}

@@ -2036,4 +2036,48 @@ export class Illustration {
   restart(): void {
     this.t0 = null;
   }
+
+  /** Seconds of the diagram's loop. */
+  get loop(): number {
+    return this.def.loop;
+  }
+
+  /** Every real-Lenia clip of the diagram is simulated (its stills will not change any more). */
+  get ready(): boolean {
+    return this.def.clips(this.env).every((c) => c.done);
+  }
+
+  /** Where the loop is at absolute time t, 0..1 (which plate panel is "now"). */
+  phase(t: number): number {
+    const local = t - (this.t0 ?? t);
+    return (((local % this.def.loop) + this.def.loop) % this.def.loop) / this.def.loop;
+  }
+
+  /**
+   * A still of the diagram at `at` (0..1 of its loop), cropped to `crop` (box units) and drawn into `canvas`: a
+   * plate's panel a / b / c (docs/ARTE-REALISTA.md §6.5), the same real simulation the card animates. No labels
+   * or badges at that size (MINI).
+   */
+  still(canvas: HTMLCanvasElement, at: number, crop: readonly [number, number, number, number]): void {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const css = canvas.clientWidth || crop[2];
+    const dpr = Math.min(3, Math.max(2, (globalThis.devicePixelRatio as number | undefined) ?? 1));
+    const w = Math.max(1, Math.round(css * dpr));
+    const h = Math.max(1, Math.round((w * crop[3]) / crop[2]));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    const k = w / crop[2];
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.setTransform(k, 0, 0, k, -crop[0] * k, -crop[1] * k);
+    MINI = true;
+    try {
+      this.def.draw(ctx, Math.min(this.def.loop - 0.05, Math.max(0, at) * this.def.loop), this.env);
+    } finally {
+      MINI = false;
+    }
+  }
 }
