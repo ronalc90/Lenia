@@ -22,7 +22,7 @@ import { Cinematic } from './cinematic';
 import { HintLayer } from './hints';
 import { Portrait } from './portraits';
 import { Spotlight, type Rect } from './spotlight';
-import { storyLook } from './dock';
+import { sceneShowing, storyLook } from './dock';
 import { visibleShare, VISIBLE_SHARE } from './occlusion';
 import { DURATION, EASING, SPRING, springEasing } from '../art/motion';
 import { S, tr } from './strings';
@@ -387,7 +387,7 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
   let held: 'hide' | 'dock' | null = null;
   /** Apply the host's hold (QA4 F-01); true while the scene is hidden. */
   function applyHold(): boolean {
-    const want = !box.hidden || !task.hidden || !choice.hidden ? (opts.hold?.(scene?.id ?? null) ?? null) : null;
+    const want = showing() ? (opts.hold?.(scene?.id ?? null) ?? null) : null;
     if (want !== held) {
       held = want;
       layer.classList.toggle('sty-held', held === 'hide');
@@ -495,8 +495,12 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
 
   // ───────────── loop ─────────────
 
+  function showing(): boolean {
+    return sceneShowing({ box: !box.hidden, reenter, task: !task.hidden, choice: !choice.hidden });
+  }
+
   function needsLoop(): boolean {
-    return !box.hidden || !task.hidden || !choice.hidden || spot.active || hints.active || !!cine;
+    return showing() || spot.active || hints.active || !!cine;
   }
 
   function kick(): void {
