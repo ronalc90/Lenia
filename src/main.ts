@@ -25,7 +25,7 @@ import { LOOK_STORAGE_KEY } from './ui/art/characters/people';
 import { createAudio } from './audio/audio';
 import { detectPlatform, endingAchievementId, initPlatform, secretAchievementId, type Platform } from './platform/platform';
 import { TEXT as GAME_TEXT } from './game/content';
-import { REACHABLE_BEHAVIORS } from './game/worlds';
+import { REACHABLE_BEHAVIORS, WORLD_BY_ID } from './game/worlds';
 import { hexToRgb } from './ui/art/color';
 import { PALETTE } from './ui/art/tokens';
 import { createIntegrity } from './net/integrity';
@@ -55,7 +55,7 @@ import { COLORMAPS, colormapLUT, createSecretJournal, createSecrets, SECRET_JOUR
 import { bigSeedChip, createSeedMeter, seedPriceSheetExplain, type SeedMeter } from './ui/seed-price';
 import { attachSecretInputs, createSecretsUI, createStrokeRecorder, mountBasementEntry, type BasementEntry } from './ui/secrets';
 import { createSessionFlow, createWelcomeCard, datosExplain, type SessionFlow, type SessionFlowSound } from './ui/session';
-import { computeDatos } from './game/session';
+import { computeDatos, unlockedWorlds } from './game/session';
 import { PREINCUBATE_STEPS, SESSION_PACE_RAMP_S, SIM_STEPS_PER_SEC } from './game/cycleBalance';
 import { CultureReveal, REVEAL, type RevealContext } from './sim/reveal';
 import { IncubationPacer, type IncubationIO } from './sim/incubate';
@@ -1165,6 +1165,14 @@ function boot(): void {
     },
     now: () => performance.now(),
   };
+  // A step shader bakes its kernel in (~0.1–0.7 s to compile on a desktop, more on a phone): the kernels
+  // of the Worlds this save has open are compiled behind the title screen, not in the frame a run in a
+  // World with another kernel (Gigantes, R = 18) starts.
+  whenIdle(() => {
+    const r = game.research;
+    if (!r || !sim || sim.contextLost) return;
+    for (const w of unlockedWorlds(r)) sim.prewarmKernel(WORLD_BY_ID[w].params.R, WORLD_BY_ID[w].params.rings);
+  });
   let last = performance.now();
   let acc = 0;
   /** Detector reports produced since the last game tick (async readbacks). */
