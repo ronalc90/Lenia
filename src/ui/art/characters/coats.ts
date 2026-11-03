@@ -261,8 +261,8 @@ function fabricLight(c: Ctx2D, s: Shape, css: number, parka: boolean): void {
 function drawFolds(c: Ctx2D, folds: CoatShapes['folds'], deep: string): void {
   for (const [x, y, l, lean] of folds) {
     // A fold is a soft valley (dark, multiply) with a lit ridge toward the window just left of it.
-    spot(c, x + 1.4, y, 2.2, l, lean, deep, 0.2, 'multiply');
-    spot(c, x - 1.6, y - 2, 1.6, l * 0.86, lean, '255,255,255', 0.22);
+    spot(c, x + 1.4, y, 2.4, l, lean, deep, 0.27, 'multiply');
+    spot(c, x - 1.7, y - 2, 1.7, l * 0.86, lean, '255,255,255', 0.26);
   }
 }
 
@@ -353,24 +353,25 @@ function drawFurRuff(c: Ctx2D, css: number): void {
   c.clip();
   spot(c, 46, 14, 14, 5, 0, '255,255,255', 0.18);
   c.restore();
-  // The ruff: an elliptical ring of strands.
+  // The ruff: an elliptical ring of fine strands, soft and dense (synthetic fur), lit from the window.
   c.lineCap = 'round';
-  const n = 260;
+  const n = 420;
   for (let i = 0; i < n; i++) {
     const a = Math.PI * (0.94 + 1.12 * (i / n));
-    const rr = 1 + (hash(i, 31) - 0.5) * 0.08;
+    const rr = 1 + (hash(i, 31) - 0.5) * 0.1;
     const cx = 50 + Math.cos(a) * 16.4 * rr;
     const cy = 24 + Math.sin(a) * 12.4 * rr;
-    const out = 2.4 + hash(i, 32) * 2.6;
-    const ex = cx + Math.cos(a + (hash(i, 33) - 0.5) * 0.6) * out;
-    const ey = cy + Math.sin(a + (hash(i, 33) - 0.5) * 0.6) * out;
-    const lit = Math.max(0, -(Math.cos(a) * KX + Math.sin(a) * KY) * -1);
-    const v = Math.round(150 + 80 * lit + 30 * hash(i, 34));
-    c.strokeStyle = `rgba(${v},${v - 8},${v - 22},${0.55 + 0.4 * hash(i, 35)})`;
-    c.lineWidth = (0.35 + 0.5 * hash(i, 36)) / Math.max(0.6, css * 0.5);
+    const out = 1.6 + hash(i, 32) * 1.8;
+    const da = (hash(i, 33) - 0.5) * 0.9;
+    const ex = cx + Math.cos(a + da) * out;
+    const ey = cy + Math.sin(a + da) * out;
+    const lit = Math.max(0, Math.cos(a) * KX + Math.sin(a) * KY);
+    const v = Math.round(150 + 70 * lit + 24 * hash(i, 34));
+    c.strokeStyle = `rgba(${v},${v - 10},${v - 26},${0.35 + 0.35 * hash(i, 35)})`;
+    c.lineWidth = (0.25 + 0.3 * hash(i, 36)) / Math.max(0.6, css * 0.5);
     c.beginPath();
     c.moveTo(cx, cy);
-    c.quadraticCurveTo((cx + ex) / 2 + (hash(i, 37) - 0.5) * 1.2, (cy + ey) / 2, ex, ey);
+    c.quadraticCurveTo((cx + ex) / 2 + (hash(i, 37) - 0.5) * 0.8, (cy + ey) / 2, ex, ey);
     c.stroke();
   }
   // Dark roots where the ruff meets the hood opening.
@@ -774,8 +775,9 @@ function paintCard(c: Ctx2D, id: CoatId, css: number, lang: Lang): void {
 function drawLanyard(ctx: Ctx2D, hx: number, hy: number, cx: number, cy: number, css: number): void {
   ctx.lineCap = 'round';
   for (const side of [-1, 1]) {
-    const mx = (hx + cx) / 2 + side * 6.4;
-    const my = (hy + cy) / 2 + 2;
+    // A loop over the hook: the two strands fall almost parallel, sagging a little apart.
+    const mx = (hx + cx) / 2 + side * 1.3;
+    const my = (hy + cy) / 2;
     ctx.strokeStyle = '#1c2a44';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -840,14 +842,14 @@ export function drawBataCard(ctx: Ctx2D, id: CoatId, w: number, h: number, t: nu
     });
   }
   // The coat's shadow on the wall: a soft offset copy of its mass, further when it comes forward.
-  const sh = 1 + lift * 0.6;
-  spot(ctx, ox + 54 * k + 3 * sh, oy + 80 * k + 4 * sh, 40 * k, 66 * k, 0, '0,0,0', theme === 'light' ? 0.18 : 0.32);
+  const sh = 1 + lift * 0.8;
+  spot(ctx, ox + 54 * k + 3 * sh, oy + 80 * k + 4 * sh, 40 * k * (1 + lift * 0.05), 66 * k * (1 + lift * 0.04), 0, '0,0,0', (theme === 'light' ? 0.18 : 0.32) * (1 - lift * 0.15));
   ctx.save();
-  // Lifted off the hook: up 6 px and forward (scaled about the hook) — no bounce.
+  // Lifted off the hook: up 6 px, and forward (its shadow on the wall spreads) — no bounce. Only a
+  // translation, so the cached coat is blitted, never repainted, while it moves.
   const ease = 1 - (1 - lift) * (1 - lift) * (1 - lift);
-  const s = 1 + 0.03 * ease;
   ctx.translate(ox + 50 * k, oy + 6 * k - 6 * ease);
-  ctx.scale(k * s, k * s);
+  ctx.scale(k, k);
   ctx.translate(-50, -6);
   drawCoat(ctx, id, theme);
   // Lanyard and card (dynamic: the card swings after a pick).
