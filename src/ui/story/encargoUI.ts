@@ -17,6 +17,7 @@ import type { Lang, Text } from '../../core/types';
 import { COSMETIC_NAMES } from '../../story/encargoScript';
 import type { EncargoDone, EncargoView, Encargos } from '../../story/encargos';
 import type { Speaker } from '../../story/types';
+import { restartClass } from '../art/motion';
 import { icon } from '../icons';
 import { Portrait, setVelaWear } from './portraits';
 import { tr } from './strings';
@@ -138,6 +139,7 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
 
   function fillOffer(v: EncargoView): void {
     bubble.className = `enc-bubble who-${v.who} offer`;
+    delete bubble.dataset.theme;
     bubble.style.setProperty('--c', ACCENT[v.who]);
     body.innerHTML = '';
     const head = document.createElement('div');
@@ -168,6 +170,9 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
 
   function fillCheer(d: EncargoDone): void {
     bubble.className = `enc-bubble who-${d.thanks.who} cheer`;
+    // In the light theme a request done is a paper card (B-14), not a night card floating on paper.
+    if (typeof document !== 'undefined' && document.documentElement.dataset.theme === 'light') bubble.dataset.theme = 'light';
+    else delete bubble.dataset.theme;
     bubble.style.setProperty('--c', ACCENT[d.thanks.who]);
     body.innerHTML = '';
     const head = document.createElement('div');
@@ -225,7 +230,9 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
     const cx = fr.left - r0.left + fr.width / 2;
     const cy = fr.top - r0.top + fr.height / 2;
     const accent = (showing?.kind === 'cheer' && ACCENT[showing.done.thanks.who]) || '#5BC0EB';
-    const colors = [accent, '#FFD166', '#9EF0FF', '#FFFFFF', '#8AE234'];
+    // On paper the confetti is ink: deep colours that read on white (AA), no white or pale cyan (B-14).
+    const light = typeof document !== 'undefined' && document.documentElement.dataset.theme === 'light';
+    const colors = light ? ['#a54f08', '#855600', '#0a72a6', '#2b7210', '#7131c0'] : [accent, '#FFD166', '#9EF0FF', '#FFFFFF', '#8AE234'];
     for (let i = 0; i < 46; i++) {
       const a = Math.random() * Math.PI * 2;
       const sp = 90 + Math.random() * 230;
@@ -275,8 +282,6 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
       const a = Math.max(0, 1 - p.life / p.max);
       ctx.globalAlpha = a;
       ctx.fillStyle = p.color;
-      ctx.shadowColor = p.color;
-      ctx.shadowBlur = 6;
       ctx.beginPath();
       if (p.star) {
         const r = p.r * 1.6;
@@ -290,7 +295,6 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
     }
     ctx.restore();
     ctx.globalAlpha = 1;
-    ctx.shadowBlur = 0;
     particles = particles.filter((p) => p.life < p.max);
   }
 
@@ -325,8 +329,7 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
     bubble.hidden = false;
     bubble.classList.remove('out', 'tuck');
     place();
-    void bubble.offsetWidth;
-    bubble.classList.add('in');
+    restartClass(bubble, 'in');
     if (it.kind === 'cheer') requestAnimationFrame(burst);
     kick();
   }
@@ -443,7 +446,7 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
       el.style.setProperty('--c', ACCENT[cur.who]);
       el.classList.toggle('side', cur.kind === 'side');
       text.textContent = tr(cur.ask, L());
-      fill.style.width = `${Math.round(cur.progress.frac * 100)}%`;
+      fill.style.transform = `scaleX(${Math.min(1, Math.max(0, cur.progress.frac)).toFixed(3)})`;
       num.textContent = tr(cur.count, L());
       row.hidden = cur.progress.unit === 'flag';
       el.setAttribute('aria-label', `${tr(cur.label, L())}. ${tr(L10N.why, L())}`);
@@ -473,9 +476,7 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
       enc.on('progress', render),
       enc.on('change', render),
       enc.on('done', () => {
-        el.classList.remove('cheer');
-        void el.offsetWidth;
-        el.classList.add('cheer');
+        restartClass(el, 'cheer');
         render();
       }),
     ];

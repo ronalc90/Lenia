@@ -22,6 +22,9 @@ import { Cinematic } from './cinematic';
 import { HintLayer } from './hints';
 import { Portrait } from './portraits';
 import { Spotlight, type Rect } from './spotlight';
+import { storyLook } from './dock';
+import { visibleShare, VISIBLE_SHARE } from './occlusion';
+import { DURATION, EASING, SPRING, springEasing } from '../art/motion';
 import { S, tr } from './strings';
 
 export type StorySound = 'open' | 'blip' | 'choice' | 'chosen' | 'task' | 'done' | 'ending';
@@ -62,6 +65,7 @@ export interface StoryUI {
   readonly busy: boolean;
   /** For dev pages and screenshot scripts. */
   readonly debug: {
+    spotRect(): Rect | null;
     completeTyping(): void;
     seekEnding(t: number): void;
     /** Freeze the animation clock at t seconds (null = run). */
@@ -140,7 +144,7 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
   const scrim = document.createElement('div');
   scrim.className = 'sty-scrim';
 
-  layer.append(hints.canvas, spot.canvas, scrim, choice, box, task);
+  layer.append(hints.canvas, spot.el, scrim, choice, box, task);
   root.appendChild(layer);
 
   // ───────────── state ─────────────
@@ -177,10 +181,9 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
     for (const c of [...box.classList]) if (c.startsWith('who-')) box.classList.remove(c);
     box.classList.add(`who-${l.who}`);
     if (changed) {
-      // Restart the portrait pop when a new speaker takes the stage.
+      // Restart the portrait pop when a new speaker takes the stage (no forced reflow: next frame).
       box.classList.remove('pop');
-      void box.offsetWidth;
-      box.classList.add('pop');
+      requestAnimationFrame(() => box.classList.add('pop'));
     }
     nameText.textContent = tr(l.name, L());
     if (l.who === 'albor' && !l.live) nameEl.prepend(recDot);
@@ -215,17 +218,69 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
     opts.revealTarget(ids[0]);
   }
 
+  /**
+   * VELA comes in (docs/ARTE-PULIDO.md B-12): anticipation — she dips 4 px in 80 ms, then rises into place
+   * with the fast spring; the bubble grows from its tail (0.9 → 1, default spring) and fades in over 140 ms.
+   * Reduce motion: an 80-ms fade.
+   */
   function showBox(): void {
     if (!box.hidden) return;
     box.hidden = false;
-    box.classList.add('enter');
-    void box.offsetWidth;
-    requestAnimationFrame(() => box.classList.remove('enter'));
+    boxAnim?.cancel();
+    if (typeof box.animate !== 'function') return;
+    if (rm()) {
+      boxAnim = box.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 80, easing: 'linear' });
+      return;
+    }
+    box.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: EASING.standard });
+    boxAnim = box.animate(
+      [
+        { transform: 'translate(-50%, 0) scale(.9)' },
+        { transform: 'translate(-50%, 0) scale(1)' },
+      ],
+      { duration: SPRING.default.ms, easing: springEasing('default') },
+    );
+    if (typeof portraitWrap.animate === 'function')
+      portraitWrap.animate(
+        [
+          { transform: 'translateY(0)' },
+          { transform: 'translateY(4px)', offset: 80 / (80 + SPRING.fast.ms) },
+          { transform: 'translateY(0)' },
+        ],
+        { duration: 80 + SPRING.fast.ms, easing: 'linear' },
+      );
+  }
+  let boxAnim: Animation | null = null;
+  /** The box left to change side and comes back on the next frame (see place()). */
+  let reenter = false;
+
+  /** VELA leaves: 160 ms `exit`, 8 px down (B-12). */
+  function hideBox(): void {
+    if (box.hidden) return;
+    if (rm() || typeof box.animate !== 'function') {
+      box.hidden = true;
+      return;
+    }
+    const ghost = box.cloneNode(true) as HTMLElement;
+    ghost.removeAttribute('data-testid');
+    ghost.setAttribute('aria-hidden', 'true');
+    ghost.style.pointerEvents = 'none';
+    box.after(ghost);
+    box.hidden = true;
+    const a = ghost.animate(
+      [
+        { opacity: 1, transform: 'translate(-50%, 0)' },
+        { opacity: 0, transform: 'translate(-50%, 8px)' },
+      ],
+      { duration: DURATION.exit, easing: EASING.exit, fill: 'forwards' },
+    );
+    a.onfinish = () => ghost.remove();
   }
 
   function hideAll(): void {
+    reenter = false;
     scrim.classList.remove('show');
-    box.hidden = true;
+    hideBox();
     task.hidden = true;
     choice.hidden = true;
     choice.innerHTML = '';
@@ -238,7 +293,7 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
 
   function renderChoice(): void {
     choice.innerHTML = '';
-    scrim.classList.toggle('show', !!options);
+    scrim.classList.toggle('show', !!options && held !== 'dock');
     if (!options) {
       choice.hidden = true;
       return;
@@ -281,6 +336,35 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
     return layer.getBoundingClientRect();
   }
 
+  /**
+   * Is the target really seen (owner bug B-10.1)? A rect says nothing about what covers it: the
+   * Bestiary's dock button keeps its rect under the open drawer. The centre and the four corners are
+   * hit-tested (top-most element, VELA's own layer excluded); a target seen at fewer than 3 of 5 points
+   * is skipped (the next id, else no ring). Measured at most every 200 ms per target.
+   */
+  const occ = new Map<string, { key: string; t: number; ok: boolean }>();
+  function seen(id: string, r: DOMRect): boolean {
+    if (id === 'dish' || typeof document.elementsFromPoint !== 'function') return true;
+    const key = `${Math.round(r.left)}|${Math.round(r.top)}|${Math.round(r.width)}|${Math.round(r.height)}`;
+    const c = occ.get(id);
+    if (c && c.key === key && clock - c.t < 0.2) return c.ok;
+    let ok = true;
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    if (cx < 0 || cy < 0 || cx > window.innerWidth || cy > window.innerHeight) ok = false;
+    else {
+      const near = (a: DOMRect) => Math.abs(a.left - r.left) < 1 && Math.abs(a.top - r.top) < 1 && Math.abs(a.width - r.width) < 1 && Math.abs(a.height - r.height) < 1;
+      const target = document.elementsFromPoint(cx, cy).find((e) => near(e.getBoundingClientRect())) ?? null;
+      // A rect made up by the host (a creature, the Spark): nothing to compare with, trust it.
+      if (target) {
+        const topAt = (x: number, y: number) => document.elementsFromPoint(x, y).find((e) => !layer.contains(e) && !e.classList.contains('bl-press-veil')) ?? null;
+        ok = visibleShare({ x: r.left, y: r.top, w: r.width, h: r.height }, topAt, (e) => e === target || target.contains(e)) >= VISIBLE_SHARE;
+      }
+    }
+    occ.set(id, { key, t: clock, ok });
+    return ok;
+  }
+
   function targetRect(ids: TargetId[] | null, r0: DOMRect): { rect: Rect; id: TargetId } | null {
     if (!ids) return null;
     for (const id of ids) {
@@ -290,7 +374,7 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
       } catch {
         r = null;
       }
-      if (r && r.width > 0 && r.height > 0) {
+      if (r && r.width > 0 && r.height > 0 && seen(id, r)) {
         const big = id === 'dish';
         const pad = big ? -2 : 8;
         return { id, rect: { x: r.left - r0.left - pad, y: r.top - r0.top - pad, w: r.width + pad * 2, h: r.height + pad * 2 } };
@@ -329,11 +413,21 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
     const tg = targetRect(curTarget, r0);
     const big = !!tg && (tg.id === 'dish' || tg.rect.w * tg.rect.h > W * H * 0.3);
 
-    // Dialogue box: bottom, unless the target sits low on the screen.
-    if (!box.hidden) {
+    // Dialogue box: bottom, unless the target sits low on the screen. Changing side while it shows is a
+    // short exit and a new entrance on the other side, never a jump across the screen (a layout shift,
+    // tests/e2e/layout-shift.mjs): the ghost leaves this frame, the box comes back on the next one.
+    if (reenter && box.hidden && line) {
+      reenter = false;
+      showBox();
+    }
+    if (!box.hidden || reenter) {
       const wantTop = held === 'dock' || (!!tg && !big && tg.rect.y + tg.rect.h / 2 > H * 0.55);
       if (wantTop !== boxTop) {
         boxTop = wantTop;
+        if (!box.hidden && !rm()) {
+          hideBox();
+          reenter = true;
+        }
         box.classList.toggle('at-top', boxTop);
       }
       if (boxTop) {
@@ -366,12 +460,15 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
       task.style.visibility = tuck ? 'hidden' : '';
     }
 
-    // Spotlight.
-    if (options || tuck) spot.set(null);
+    // Spotlight. Docked over a screen of its own (the Tree and its sheets), VELA dims, covers and points
+    // at nothing (owner bug B-10.2): the sheet's button keeps its colour.
+    const look = storyLook(held, !!taskInfo && !line, !!options);
+    scrim.classList.toggle('show', look.scrim);
+    if (options || tuck || !look.spotlight) spot.set(null);
     else if (tg && (line || taskInfo)) {
       const arrow = big ? null : boxTop ? 'above' : 'below';
       const ripple = !!taskInfo && tg.id === 'dish';
-      spot.set(tg.rect, { dim: taskInfo ? 0.42 : 0.6, arrow: arrow === 'below' && tg.rect.y + tg.rect.h > H - 60 ? 'above' : arrow, tap: ripple }, clock);
+      spot.set(tg.rect, { dim: look.dim, arrow: arrow === 'below' && tg.rect.y + tg.rect.h > H - 60 ? 'above' : arrow, tap: ripple }, clock);
     } else spot.set(null);
 
     // Task pill near its target.
@@ -594,6 +691,8 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
       taskInfo = { text, target };
       taskText.textContent = tr(text, L());
       task.hidden = false;
+      // The task asks again even if a line already pointed there: an open Bestiary counts as done.
+      revealed = '';
       revealFor(target);
       opts.onSound?.('task');
       kick();
@@ -659,6 +758,10 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
       return !box.hidden || !task.hidden || !choice.hidden || !!cine;
     },
     debug: {
+      /** The spotlight's hole (layer-relative CSS px) or null: tests check where VELA points. */
+      spotRect() {
+        return spot.hole;
+      },
       completeTyping() {
         typed = fullText.length;
         renderText();

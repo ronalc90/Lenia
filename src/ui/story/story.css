@@ -49,7 +49,7 @@
   inset: 0;
   background: radial-gradient(120% 90% at 50% 100%, rgba(3, 5, 9, 0.82), rgba(3, 5, 9, 0.55));
   opacity: 0;
-  transition: opacity 320ms ease;
+  transition: opacity var(--bl-t-card) var(--bl-ease-standard);
   pointer-events: none;
 }
 .sty-scrim.show {
@@ -64,26 +64,21 @@
   width: min(560px, calc(100% - 20px));
   min-height: 92px;
   padding: 12px 14px 14px 112px;
-  border-radius: 18px;
+  border-radius: var(--bl-r-lg);
   /* surface2 with a warm candle edge (docs/ARTE.md §12): VELA's light, not a cold cyan glow. */
   background:
     radial-gradient(120% 140% at 0% 100%, rgba(255, 184, 107, 0.08), transparent 60%),
     linear-gradient(180deg, var(--bl-surface2, #1b232c), var(--bl-surface, #141a21));
   border: 1px solid var(--sty-line);
   box-shadow:
-    0 0 0 1px rgba(255, 184, 107, 0.12),
-    0 10px 40px rgba(0, 0, 0, 0.55),
-    0 0 26px rgba(255, 184, 107, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    var(--bl-elev-3), var(--bl-glow-candle);
   pointer-events: auto;
   cursor: pointer;
   transform: translate(-50%, 0);
   transition:
-    opacity 220ms var(--sty-ease),
-    transform 260ms var(--sty-ease),
-    top 260ms var(--sty-ease),
-    bottom 260ms var(--sty-ease),
-    border-color 300ms;
+    opacity var(--bl-t-base) var(--sty-ease),
+    transform var(--bl-t-sheet) var(--sty-ease),
+    border-color var(--bl-t-sheet);
   touch-action: manipulation;
 }
 /* One layer at a time (QA4 F-01): a scene waiting behind the summary, the start card or the Tree. */
@@ -91,6 +86,7 @@
 .sty.sty-held .sty-task,
 .sty.sty-held .sty-choice,
 .sty.sty-held .sty-scrim,
+.sty.sty-held .sty-spotwrap,
 .sty.sty-held canvas {
   visibility: hidden !important;
   pointer-events: none !important;
@@ -132,7 +128,7 @@
   display: block;
 }
 .sty-box.pop .sty-portrait-wrap {
-  animation: sty-pop 420ms var(--sty-ease);
+  animation: sty-pop var(--bl-t-story) var(--sty-ease);
 }
 @keyframes sty-pop {
   0% {
@@ -153,7 +149,7 @@
   gap: 8px;
   min-height: 22px;
   margin-right: 70px;
-  font-size: 11px;
+  font-size: var(--bl-fs-caption);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -166,8 +162,8 @@
   height: 7px;
   border-radius: 50%;
   background: #ffb45e;
-  box-shadow: 0 0 8px #ffb45e;
-  animation: sty-blink 1.1s steps(2, start) infinite;
+  box-shadow: var(--bl-glow-candle);
+  animation: sty-blink 1.1s steps(2, start) infinite; /* css-lint-ok: the tape's REC light blinks */
 }
 @keyframes sty-blink {
   to {
@@ -188,7 +184,7 @@
 }
 .sty-text {
   margin: 4px 0 0;
-  font-size: 17px;
+  font-size: var(--bl-fs-lead);
   line-height: 1.42;
   font-weight: 500;
   letter-spacing: 0.005em;
@@ -203,17 +199,17 @@
   color: #ffe2b8;
   font-family: var(--sty-serif);
   font-style: italic;
-  font-size: 17.5px;
+  font-size: var(--bl-fs-lead);
 }
 .sty-box.who-committee .sty-text {
   font-family: var(--sty-mono);
-  font-size: 13.5px;
+  font-size: var(--bl-fs-small);
   line-height: 1.5;
   letter-spacing: 0.02em;
   color: #e6e0d2;
 }
 .sty-box.who-coro .sty-text {
-  font-size: 21px;
+  font-size: var(--bl-fs-title);
   letter-spacing: 0.04em;
   white-space: pre-wrap;
   color: #e9dcff;
@@ -235,11 +231,11 @@
   border-top: 9px solid var(--sty-accent);
   filter: drop-shadow(0 0 6px var(--sty-accent));
   opacity: 0;
-  transition: opacity 160ms;
+  transition: opacity var(--bl-t-quick);
 }
 .sty-box.done .sty-next {
   opacity: 1;
-  animation: sty-bob 0.9s ease-in-out infinite;
+  animation: sty-bob var(--bl-t-celebrate) ease-in-out infinite;
 }
 @keyframes sty-bob {
   50% {
@@ -254,10 +250,10 @@
   height: 44px;
   padding: 0 12px;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--bl-r-md);
   background: transparent;
   color: var(--sty-dim);
-  font: 600 14px/1 var(--sty-font);
+  font: 600 var(--bl-fs-small)/1 var(--sty-font);
   letter-spacing: 0.04em;
   cursor: pointer;
   pointer-events: auto;
@@ -281,24 +277,14 @@
   max-width: min(340px, calc(100% - 24px));
   padding: 6px 6px 6px 4px;
   border-radius: 999px;
-  background: #121821;
-  border: 1px solid rgba(91, 192, 235, 0.5);
+  background: var(--bl-surface2, #1b232c);
+  border: 0;
   box-shadow:
-    0 6px 24px rgba(0, 0, 0, 0.5),
-    0 0 18px rgba(91, 192, 235, 0.25);
+    var(--bl-elev-2), var(--bl-glow-candle);
   pointer-events: auto;
-  will-change: transform;
-  animation: sty-glow 1.8s ease-in-out infinite;
 }
 .sty-task[hidden] {
   display: none;
-}
-@keyframes sty-glow {
-  50% {
-    box-shadow:
-      0 6px 24px rgba(0, 0, 0, 0.5),
-      0 0 28px rgba(91, 192, 235, 0.5);
-  }
 }
 .sty-task canvas {
   width: 40px;
@@ -306,7 +292,7 @@
   flex: none;
 }
 .sty-task-text {
-  font-size: 15px;
+  font-size: var(--bl-fs-body);
   font-weight: 600;
   line-height: 1.25;
   padding-right: 2px;
@@ -319,7 +305,7 @@
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.06);
   color: var(--sty-dim);
-  font: 600 16px/1 var(--sty-font);
+  font: 600 var(--bl-fs-body)/1 var(--sty-font);
   cursor: pointer;
 }
 
@@ -346,37 +332,32 @@
   gap: 14px;
   min-height: 60px;
   padding: 12px 18px 12px 14px;
-  border-radius: 16px;
+  border-radius: var(--bl-r-lg);
   border: 1px solid color-mix(in srgb, var(--c) 55%, transparent);
   background:
     radial-gradient(120% 160% at 0% 50%, color-mix(in srgb, var(--c) 22%, transparent), transparent 60%),
     #10161d;
   color: var(--sty-text);
-  font: 600 16.5px/1.3 var(--sty-font);
+  font: 600 var(--bl-fs-body)/1.3 var(--sty-font);
   text-align: left;
   cursor: pointer;
   box-shadow:
-    0 8px 28px rgba(0, 0, 0, 0.5),
-    0 0 18px color-mix(in srgb, var(--c) 18%, transparent);
+    var(--bl-elev-3);
   opacity: 0;
   transform: translateY(10px);
-  animation: sty-opt-in 360ms var(--sty-ease) forwards;
+  animation: sty-opt-in var(--bl-t-card) var(--sty-ease) forwards;
   transition:
-    transform 140ms,
-    box-shadow 200ms;
+    transform var(--bl-t-quick),
+    box-shadow var(--bl-t-base);
 }
 .sty-opt:nth-child(2) {
-  animation-delay: 90ms;
-}
-.sty-opt:active {
-  transform: scale(0.98);
+  animation-delay: var(--bl-t-tap);
 }
 .sty-opt:hover,
 .sty-opt:focus-visible {
   outline: none;
   box-shadow:
-    0 8px 28px rgba(0, 0, 0, 0.5),
-    0 0 26px color-mix(in srgb, var(--c) 45%, transparent);
+    var(--bl-elev-3);
 }
 @keyframes sty-opt-in {
   to {
@@ -390,7 +371,7 @@
   height: 22px;
   border-radius: 50%;
   background: radial-gradient(circle at 35% 35%, #fff, var(--c) 55%, transparent 72%);
-  box-shadow: 0 0 14px var(--c);
+  box-shadow: none;
 }
 .sty-later {
   align-self: center;
@@ -399,10 +380,10 @@
   border: 0;
   background: transparent;
   color: var(--sty-dim);
-  font: 500 13px/1 var(--sty-font);
+  font: 500 var(--bl-fs-small)/1 var(--sty-font);
   cursor: pointer;
   opacity: 0;
-  animation: sty-opt-in 360ms var(--sty-ease) 220ms forwards;
+  animation: sty-opt-in var(--bl-t-card) var(--sty-ease) var(--bl-t-base) forwards;
 }
 
 /* ───────────── ending cinematic ───────────── */
@@ -415,7 +396,7 @@
   pointer-events: auto;
   overflow: hidden;
   opacity: 0;
-  transition: opacity 900ms ease;
+  transition: opacity var(--bl-t-celebrate) var(--bl-ease-standard);
 }
 .sty-end.show {
   opacity: 1;
@@ -432,7 +413,7 @@
   right: 0;
   top: max(64px, 9%);
   text-align: center;
-  font: 600 12px/1 var(--sty-font);
+  font: 600 var(--bl-fs-caption)/1 var(--sty-font);
   letter-spacing: 0.32em;
   text-transform: uppercase;
   color: rgba(230, 237, 243, 0.75);
@@ -447,7 +428,7 @@
   text-align: center;
   font-family: var(--sty-serif);
   font-style: italic;
-  font-size: clamp(19px, 5.2vw, 25px);
+  font-size: var(--bl-fs-title);
   line-height: 1.45;
   color: #f1ede6;
   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.9);
@@ -455,7 +436,7 @@
 }
 .sty-end-card.closing {
   bottom: 22%;
-  font-size: clamp(23px, 6.6vw, 34px);
+  font-size: var(--bl-fs-display);
   color: #fff8ec;
 }
 /* Credits roll inside a masked window that ends above the button. */
@@ -476,13 +457,13 @@
   top: 0;
   width: min(460px, calc(100% - 48px));
   text-align: center;
-  font: 400 14.5px/1.7 var(--sty-font);
+  font: 400 var(--bl-fs-small)/1.7 var(--sty-font);
   color: rgba(230, 237, 243, 0.78);
 }
 .sty-end-credits b {
   display: block;
   margin-bottom: 18px;
-  font: 600 13px/1 var(--sty-font);
+  font: 600 var(--bl-fs-small)/1 var(--sty-font);
   letter-spacing: 0.4em;
   text-transform: uppercase;
   color: #fff;
@@ -501,7 +482,7 @@
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.35);
   color: rgba(230, 237, 243, 0.8);
-  font: 600 12px/1 var(--sty-font);
+  font: 600 var(--bl-fs-caption)/1 var(--sty-font);
   letter-spacing: 0.06em;
   cursor: pointer;
 }
@@ -516,13 +497,13 @@
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(255, 233, 199, 0.18), rgba(255, 190, 110, 0.08));
   color: #fff4e2;
-  font: 600 16px/1 var(--sty-font);
+  font: 600 var(--bl-fs-body)/1 var(--sty-font);
   letter-spacing: 0.02em;
   cursor: pointer;
-  box-shadow: 0 0 30px rgba(255, 200, 120, 0.25);
+  box-shadow: var(--bl-glow-candle);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 900ms ease;
+  transition: opacity var(--bl-t-celebrate) var(--bl-ease-standard);
   white-space: nowrap;
 }
 .sty-end-go.show {
@@ -544,7 +525,7 @@
 }
 .sty-archive h3 {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--bl-fs-caption);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -561,11 +542,11 @@
   flex: none;
 }
 .sty-archive .sa-title {
-  font-size: 18px;
+  font-size: var(--bl-fs-lead);
   font-weight: 700;
 }
 .sty-archive .sa-sub {
-  font-size: 13px;
+  font-size: var(--bl-fs-small);
   color: var(--c-dim);
 }
 .sty-archive .sa-endings {
@@ -582,10 +563,10 @@
   gap: 8px;
   min-height: 112px;
   padding: 14px 10px 12px;
-  border-radius: 14px;
+  border-radius: var(--bl-r-md);
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: #141a21;
-  font: 600 13px/1.25 Inter, system-ui, sans-serif;
+  font: 600 var(--bl-fs-small)/1.25 Inter, system-ui, sans-serif;
   color: var(--c-text);
   text-align: center;
   cursor: default;
@@ -605,19 +586,19 @@
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font: 700 18px/1 Inter, system-ui, sans-serif;
+  font: 700 var(--bl-fs-lead)/1 Inter, system-ui, sans-serif;
   color: #3a4552;
   background: radial-gradient(circle at 40% 35%, #222c37, #0e1318 70%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  box-shadow: none;
 }
 .sty-archive .sa-end.found .sa-glyph {
   color: transparent;
   background: radial-gradient(circle at 38% 34%, #fff, var(--c) 45%, transparent 72%);
-  box-shadow: 0 0 22px var(--c);
+  box-shadow: none;
 }
 .sty-archive .sa-end small {
   font-weight: 500;
-  font-size: 11.5px;
+  font-size: var(--bl-fs-caption);
   color: var(--c-dim);
 }
 .sty-archive .sa-lean {
@@ -625,24 +606,24 @@
   grid-template-columns: 16px 76px 1fr;
   align-items: center;
   gap: 8px 10px;
-  font-size: 13px;
+  font-size: var(--bl-fs-small);
 }
 .sty-archive .sa-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  box-shadow: 0 0 8px currentColor;
+  box-shadow: none;
 }
 .sty-archive .sa-bar {
   height: 6px;
-  border-radius: 3px;
+  border-radius: var(--bl-r-sm);
   background: #222c37;
   overflow: hidden;
 }
 .sty-archive .sa-bar i {
   display: block;
   height: 100%;
-  border-radius: 3px;
+  border-radius: var(--bl-r-sm);
 }
 .sty-archive .sa-act {
   display: flex;
@@ -651,7 +632,7 @@
 }
 .sty-archive .sa-act h4 {
   margin: 6px 0 2px;
-  font-size: 13px;
+  font-size: var(--bl-fs-small);
   font-weight: 600;
   color: var(--c-dim);
 }
@@ -663,11 +644,11 @@
 .sty-archive .sa-scene {
   min-height: 40px;
   padding: 0 12px;
-  border-radius: 10px;
+  border-radius: var(--bl-r-md);
   border: 1px solid rgba(91, 192, 235, 0.3);
   background: rgba(91, 192, 235, 0.08);
   color: var(--c-text);
-  font: 500 13px/1 Inter, system-ui, sans-serif;
+  font: 500 var(--bl-fs-small)/1 Inter, system-ui, sans-serif;
   cursor: pointer;
 }
 .sty-archive .sa-scene[disabled] {
@@ -688,7 +669,7 @@
     height: 140px;
   }
   .sty-text {
-    font-size: 18px;
+    font-size: var(--bl-fs-lead);
   }
 }
 
@@ -698,7 +679,7 @@
   .sty-later,
   .sty-task {
     animation: none !important;
-    transition: opacity 200ms !important;
+    transition: opacity var(--bl-t-base) !important;
   }
   .sty-opt,
   .sty-later {
@@ -709,7 +690,7 @@
 .sty.rm .sty-box,
 .sty.rm .sty-task {
   animation: none !important;
-  transition: opacity 200ms !important;
+  transition: opacity var(--bl-t-base) !important;
 }
 .sty.rm .sty-box.pop .sty-portrait-wrap,
 .sty.rm .sty-box.done .sty-next {
@@ -765,22 +746,21 @@
   gap: 10px;
   width: min(380px, calc(100% - 20px));
   padding: 10px 14px 12px 8px;
-  border-radius: 18px;
+  border-radius: var(--bl-r-lg);
   background:
     radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--c) 16%, transparent), transparent 62%),
     linear-gradient(180deg, #19212a, #0e131a);
   border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
   box-shadow:
-    0 12px 36px rgba(0, 0, 0, 0.55),
-    0 0 22px color-mix(in srgb, var(--c) 20%, transparent);
+    var(--bl-elev-3);
   pointer-events: auto;
   cursor: pointer;
   transform-origin: var(--ax, 50%) 0;
   opacity: 0;
   transform: translateY(-12px) scale(0.86);
   transition:
-    opacity 260ms ease,
-    transform 380ms cubic-bezier(0.2, 1.4, 0.4, 1);
+    opacity var(--bl-t-sheet) var(--bl-ease-standard),
+    transform var(--bl-t-card) cubic-bezier(0.2, 1.4, 0.4, 1);
 }
 .enc-bubble[hidden] {
   display: none;
@@ -797,7 +777,7 @@
   border-left: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
   border-top: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
   transform: rotate(45deg);
-  border-top-left-radius: 3px;
+  border-top-left-radius: var(--bl-r-sm);
 }
 .enc-bubble.in {
   opacity: 1;
@@ -806,20 +786,19 @@
 .enc-bubble.out {
   opacity: 0;
   transform: translateY(-6px) scale(0.96);
-  transition-duration: 300ms;
+  transition-duration: var(--bl-t-sheet);
 }
 .enc-bubble.tuck {
   opacity: 0;
   transform: translateY(-26px) scale(0.3);
   transition:
-    opacity 340ms ease,
-    transform 360ms cubic-bezier(0.5, 0, 0.8, 0.4);
+    opacity var(--bl-t-card) var(--bl-ease-standard),
+    transform var(--bl-t-card) cubic-bezier(0.5, 0, 0.8, 0.4);
 }
 .enc-bubble.cheer {
   border-color: color-mix(in srgb, #ffd166 55%, transparent);
   box-shadow:
-    0 12px 36px rgba(0, 0, 0, 0.55),
-    0 0 30px rgba(255, 209, 102, 0.28);
+    var(--bl-elev-3), var(--bl-glow-gold);
 }
 .enc-bubble .enc-face {
   flex: none;
@@ -841,7 +820,7 @@
   min-height: 18px;
 }
 .enc-tag {
-  font-size: 10.5px;
+  font-size: var(--bl-fs-caption);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -852,18 +831,18 @@
   color: #ffd166;
 }
 .enc-name {
-  font-size: 11px;
+  font-size: var(--bl-fs-caption);
   font-weight: 600;
   color: #8b98a5;
 }
 .enc-ask {
-  font-size: 16px;
+  font-size: var(--bl-fs-body);
   line-height: 1.3;
   font-weight: 700;
   text-wrap: pretty;
 }
 .enc-why {
-  font-size: 14px;
+  font-size: var(--bl-fs-small);
   line-height: 1.35;
   color: #b7c2cc;
   text-wrap: pretty;
@@ -871,7 +850,7 @@
 .enc-bubble.who-committee .enc-ask,
 .enc-bubble.who-committee .enc-why {
   font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
-  font-size: 13px;
+  font-size: var(--bl-fs-small);
   letter-spacing: 0.02em;
 }
 .enc-bubble.who-committee .enc-ask {
@@ -881,7 +860,7 @@
   font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
   font-style: italic;
   color: #ffe2b8;
-  font-size: 15px;
+  font-size: var(--bl-fs-body);
 }
 .enc-foot {
   display: flex;
@@ -901,7 +880,7 @@
   padding: 5px 10px;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
-  font-size: 12px;
+  font-size: var(--bl-fs-caption);
   font-weight: 600;
   color: var(--c);
 }
@@ -919,7 +898,7 @@
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.06);
   /* Numbers in Inter with tabular figures, not the instrument mono (docs/ARTE.md §4). */
-  font: 600 12.5px/1 var(--bl-font-ui, Inter, system-ui, sans-serif);
+  font: 600 var(--bl-fs-caption)/1 var(--bl-font-ui, Inter, system-ui, sans-serif);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -946,32 +925,32 @@
 .enc-gift {
   width: 10px;
   height: 10px;
-  border-radius: 3px;
+  border-radius: var(--bl-r-sm);
   background: linear-gradient(90deg, transparent 40%, #ffd166 40% 60%, transparent 60%), #e4572e;
-  box-shadow: 0 0 8px rgba(228, 87, 46, 0.7);
+  box-shadow: none;
 }
 .enc-rewards.big {
   margin-top: 6px;
 }
 .enc-rewards.big .enc-chip {
   height: 28px;
-  font-size: 14px;
+  font-size: var(--bl-fs-small);
   padding: 0 10px 0 8px;
   opacity: 0;
   transform: scale(0.4);
-  animation: enc-chip-in 420ms cubic-bezier(0.2, 1.6, 0.4, 1) forwards;
+  animation: enc-chip-in var(--bl-t-story) cubic-bezier(0.2, 1.6, 0.4, 1) forwards;
 }
 .enc-rewards.big .enc-chip:nth-child(1) {
-  animation-delay: 380ms;
+  animation-delay: var(--bl-t-card);
 }
 .enc-rewards.big .enc-chip:nth-child(2) {
-  animation-delay: 560ms;
+  animation-delay: var(--bl-t-story);
 }
 .enc-rewards.big .enc-chip:nth-child(3) {
-  animation-delay: 740ms;
+  animation-delay: var(--bl-t-celebrate);
 }
 .enc-rewards.big .enc-chip:nth-child(4) {
-  animation-delay: 920ms;
+  animation-delay: var(--bl-t-celebrate);
 }
 @keyframes enc-chip-in {
   to {
@@ -990,10 +969,10 @@
   min-height: 44px;
   padding: 2px 4px 2px 2px;
   border: 1px solid color-mix(in srgb, var(--c) 30%, transparent);
-  border-radius: 14px;
+  border-radius: var(--bl-r-md);
   background: linear-gradient(90deg, color-mix(in srgb, var(--c) 12%, transparent), rgba(255, 255, 255, 0.02) 70%), #10161d;
   color: #e6edf3;
-  font: 600 13.5px/1.25 Inter, system-ui, sans-serif;
+  font: 600 var(--bl-fs-small)/1.25 Inter, system-ui, sans-serif;
   text-align: left;
   cursor: pointer;
 }
@@ -1029,14 +1008,14 @@
 }
 .enc-badge-num {
   flex: none;
-  font: 600 12px/1 var(--bl-font-ui, Inter, system-ui, sans-serif);
+  font: 600 var(--bl-fs-caption)/1 var(--bl-font-ui, Inter, system-ui, sans-serif);
   font-variant-numeric: tabular-nums;
   color: var(--c);
 }
 .enc-badge-bar {
   flex: 1;
   height: 4px;
-  border-radius: 2px;
+  border-radius: var(--bl-r-sm);
   background: rgba(255, 255, 255, 0.08);
   overflow: hidden;
 }
@@ -1045,11 +1024,14 @@
 }
 .enc-badge-bar i {
   display: block;
+  width: 100%;
   height: 100%;
-  border-radius: 2px;
+  border-radius: var(--bl-r-sm);
   background: var(--c);
-  box-shadow: 0 0 8px var(--c);
-  transition: width 400ms ease;
+  box-shadow: none;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform var(--bl-t-card) var(--bl-ease-standard);
 }
 .enc-badge-q {
   flex: none;
@@ -1066,7 +1048,7 @@
   border-style: dashed;
 }
 .enc-badge.cheer {
-  animation: enc-badge-cheer 900ms ease;
+  animation: enc-badge-cheer var(--bl-t-celebrate) var(--bl-ease-standard);
 }
 @keyframes enc-badge-cheer {
   30% {
@@ -1078,7 +1060,7 @@
 @media (prefers-reduced-motion: reduce) {
   .enc-bubble,
   .enc-bubble.tuck {
-    transition: opacity 200ms !important;
+    transition: opacity var(--bl-t-base) !important;
     transform: none !important;
   }
   .enc-rewards.big .enc-chip {
@@ -1092,7 +1074,7 @@
 }
 .enc.rm .enc-bubble,
 .enc.rm .enc-bubble.tuck {
-  transition: opacity 200ms !important;
+  transition: opacity var(--bl-t-base) !important;
   transform: none !important;
 }
 .enc.rm .enc-rewards.big .enc-chip {
@@ -1117,4 +1099,152 @@
 }
 .sty-end-skip {
   height: 48px;
+}
+
+/* ───────────── spotlight pieces (docs/ARTE-PULIDO.md B-17) ───────────── */
+.sty-spotwrap {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--bl-t-base) var(--bl-ease-standard);
+}
+.sty-spotwrap.on {
+  opacity: 1;
+}
+.sty-spotwrap canvas.sty-spot {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.sty-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border: 1.5px solid rgba(91, 192, 235, 0.7);
+  box-shadow: var(--bl-glow-accent);
+  pointer-events: none;
+}
+/* Two rings that grow out of the hole and fade (transform/opacity). */
+.sty-ring::before,
+.sty-ring::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 2px solid rgba(91, 192, 235, 0.8);
+  opacity: 0;
+  animation: sty-ring 1.6s var(--bl-ease-standard) infinite; /* css-lint-ok: the spotlight's pulse while VELA points */
+}
+.sty-ring::after {
+  animation-delay: calc(var(--bl-t-celebrate) + var(--bl-t-tap));
+}
+@keyframes sty-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.75;
+  }
+  100% {
+    transform: scale(1.18);
+    opacity: 0;
+  }
+}
+.sty-arrow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 24px;
+  height: 30px;
+  pointer-events: none;
+}
+.sty-arrow svg {
+  display: block;
+  animation: sty-arrow 0.8s var(--bl-ease-standard) infinite alternate; /* css-lint-ok: the spotlight's arrow nods */
+}
+@keyframes sty-arrow {
+  from {
+    transform: translateY(-6px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.sty-tapdot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.sty-tapdot b {
+  position: absolute;
+  left: -20px;
+  top: -20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0%, rgba(158, 240, 255, 0.55) 45%, rgba(91, 192, 235, 0) 70%);
+  animation: sty-press 1.5s var(--bl-ease-standard) infinite; /* css-lint-ok: the «tap here» finger */
+}
+.sty-tapdot i {
+  position: absolute;
+  left: -14px;
+  top: -14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(158, 240, 255, 0.8);
+  opacity: 0;
+  animation: sty-tapring 1.5s var(--bl-ease-standard) infinite; /* css-lint-ok: the «tap here» ripples */
+}
+.sty-tapdot i + i {
+  animation-delay: calc(var(--bl-t-story) + var(--bl-t-tap));
+}
+@keyframes sty-press {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(0.82);
+  }
+}
+@keyframes sty-tapring {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(3.6);
+    opacity: 0;
+  }
+}
+.sty-spotwrap.rm .sty-ring::before,
+.sty-spotwrap.rm .sty-ring::after,
+.sty-spotwrap.rm .sty-arrow svg,
+.sty-spotwrap.rm .sty-tapdot b,
+.sty-spotwrap.rm .sty-tapdot i {
+  animation: none;
+}
+/* The bubble grows from its tail, by VELA's portrait (B-12). */
+.sty-box {
+  transform-origin: 56px 100%;
+}
+.sty-box.at-top {
+  transform-origin: 56px 0;
+}
+
+/* B-14: a request done in the light theme is a paper card: white, a candle edge, the light elevation. */
+.enc-bubble.cheer[data-theme='light'] {
+  background: var(--bl-surface);
+  border: 1.5px solid var(--bl-candle);
+  box-shadow: var(--bl-elev-2);
+  color: var(--bl-text);
+}
+.enc-bubble.cheer[data-theme='light']::before {
+  background: var(--bl-surface);
+  border-left: 1.5px solid var(--bl-candle);
+  border-top: 1.5px solid var(--bl-candle);
 }
