@@ -14,6 +14,7 @@
 import type { Bus, GameEvents } from '../../core/bus';
 import type { GameView, Lang, Pattern, Text } from '../../core/types';
 import type { Game } from '../../game/game';
+import type { MomentPlate } from '../../moments/types';
 import { treeCtxOf } from '../../game/session';
 import { nextGoal, nodeText, sessionsToAfford } from '../../game/tree';
 import { WORLD_BY_ID, worldOfSpecies, type WorldId } from '../../game/worlds';
@@ -21,11 +22,15 @@ import { catalogGroup, catalogPortrait } from '../../species';
 import { createTreeView, type TreeSound, type TreeView } from '../tree';
 import { createSessionHud, hudViewOf, type SessionHud, type SessionHudSound } from './hud';
 import { createSessionStart, type SessionStartView } from './start';
+import { shouldStartClock } from './clockGate';
 import { celebrateNight } from './night';
 import { createSessionSummary, type SessionSummaryView, type SummarySound } from './summary';
 
 /** The Tree's button when it was opened from the dock before the first seed. */
 const TREE_BACK: Text = { es: 'A la placa', en: 'To the dish' };
+
+/** The clock pill's pause chip (PD's SessionHud.setPaused, docs/CLARIDAD2.md §8.1), when it exists. */
+type PausableHud = SessionHud & { setPaused?(on: boolean): void };
 
 /** Every sound the session screens ask for (the host maps them to src/audio). */
 export type SessionFlowSound = SessionHudSound | SummarySound | TreeSound;
@@ -52,6 +57,18 @@ export interface SessionFlowOptions {
   onPreview?(): void;
   /** The start card waits while this is true (the one-time welcome card of an old save): never two cards. */
   holdStart?(): boolean;
+  /**
+   * (ADR-030 §2.8) What the run had no card for, as plates for the report: main.ts passes
+   * moments.drainForSummary (it empties the Momentos' queue: nothing carries into the next run).
+   */
+  plates?(): MomentPlate[];
+  /** (§2.12, QA#14) The dish is lit (the Nevera's creatures are visible): «¡Empezar!» waits for it. */
+  cultureReady?(): boolean;
+  /**
+   * (§2.4) The session-1 tutorial still holds the clock (story.holdsClock): while the game's session says
+   * `tutorialHold`, the flow starts the clock as soon as this is false (story off or skipped: at once).
+   */
+  clockHold?(): boolean;
 }
 
 export interface SessionFlow {
@@ -81,6 +98,10 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
   let celebrating = false;
   const sound = (k: SessionFlowSound) => o.onSound?.(k);
   let stamping = false;
+  /** Wall time the session-1 clock started waiting for the tutorial (-1 = not waiting). */
+  let holdSince = -1;
+  /** Last state pushed to the clock pill's pause chip. */
+  let pausedShown = false;
 
   function speciesInfo(id: string): { name: string; portrait: Pattern | null; hue?: number } | null {
     const sp = game.view().species.find((x) => x.id === id);
@@ -100,7 +121,7 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
       });
   }
 
-  const hud: SessionHud = createSessionHud(o.hudHost, {
+  const hud: PausableHud = createSessionHud(o.hudHost, {
     lang: o.lang,
     reduceMotion: o.reduceMotion,
     onSound: (k) => sound(k),
@@ -178,7 +199,7 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
       startPending = true;
       return;
     }
-    start.show(st, { encargo: o.encargo?.() ?? null });
+    start.show(st, { encargo: o.encargo?.() ?? null, seedPrice: game.view().seedCost, ready: o.cultureReady?.() ?? true });
   }
 
   function showSummary(): void {
@@ -188,13 +209,16 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
     const ctx = treeCtxOf(r, game.state.species.length);
     const goal = nextGoal(ctx);
     const v = game.view();
-    summary.show(sum, {
+    // `plates`: PD's SummaryExtras.plates (§8.1); a summary that does not know it yet ignores it.
+    const extras = {
       affordable: Math.max(0, (v.research?.affordable ?? 0) - (v.research?.nightReady ? 1 : 0)),
       nextGoal:
         goal && goal.missingDatos > 0
           ? { name: nodeText(goal.id).name, missing: goal.missingDatos, sessions: sessionsToAfford(goal.missingDatos, r.history.map((h) => h.datos)) }
           : null,
-    });
+      plates: o.plates?.() ?? [],
+    };
+    summary.show(sum, extras);
   }
 
   const offs = [
@@ -241,6 +265,20 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
       if (startPending && !o.holdStart?.()) showStart();
       const s = game.session;
       if (!s) return;
+      // «¡Empezar!» waits until the Nevera's creatures are lit on the dish (QA#14).
+      if (start.isOpen) start.setReady(o.cultureReady?.() ?? true);
+      // Session 1: the first creature is the player's; the clock starts when VELA lets it (§2.4).
+      if (s.phase === 'ready' && v.session?.tutorialHold) {
+        const now = performance.now();
+        if (holdSince < 0) holdSince = now;
+        if (shouldStartClock(v.session, o.clockHold?.() ?? false, now - holdSince)) game.actions.startClock?.();
+      } else holdSince = -1;
+      // The clock pill says when it waits for the player (VELA talking, a sheet, a card: §2.3).
+      const paused = s.phase === 'running' && game.isPaused;
+      if (paused !== pausedShown) {
+        pausedShown = paused;
+        hud.setPaused?.(paused);
+      }
       hud.update(hudViewOf(s, v.session?.sprint ?? 1));
       const p = v.sessionPreview;
       hud.preview(p ? { datos: p.datos, goal: p.goal ? { name: nodeText(p.goal.id).name, missing: p.goal.missing } : null } : null);

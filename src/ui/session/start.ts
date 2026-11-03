@@ -6,6 +6,7 @@
  */
 import type { Lang, Pattern, Text } from '../../core/types';
 import type { SessionStart } from '../../game/session';
+import { DATOS_ESSENCE_DIV } from '../../game/cycleBalance';
 import { TREE_BY_ID, nodeText } from '../../game/tree';
 import { SESSION_UI, WORLD_TEXT } from '../../game/treeText';
 import { WORLD_BY_ID, bestWorld, type WorldId } from '../../game/worlds';
@@ -35,12 +36,18 @@ export interface SessionStartOptions {
 export interface SessionStartExtras {
   /** The current Encargo, if any ("Ten 3 criaturas a la vez"). */
   encargo?: Text | null;
+  /** What a seed costs today ("1 semilla gratis · las demás, 4 de luz", docs/CLARIDAD2.md §2.12). */
+  seedPrice?: number;
+  /** The dish is lit (its Nevera creatures are visible): «¡Empezar!» waits for it (QA#14). Default true. */
+  ready?: boolean;
 }
 
 export interface SessionStartView {
   readonly el: HTMLElement;
   readonly isOpen: boolean;
   show(start: SessionStart, extras?: SessionStartExtras): void;
+  /** The dish lit up (or went dark again): «¡Empezar!» is enabled only when it is (QA#14). */
+  setReady(ready: boolean): void;
   hide(): void;
   dispose(): void;
 }
@@ -100,7 +107,8 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
       const found = sp.filter((x) => x.found).length;
       const isNew = !!def.node && start.fresh.includes(def.node);
       const picked = w === start.world;
-      const foot = found === 0 ? SESSION_UI.worldSpecies(sp.length)[l] : found === sp.length ? SESSION_UI.worldAllFound[l] : SESSION_UI.worldFound(found, sp.length)[l];
+      // What is left to find there, or that it is complete and pays fewer Datos (QA-CLARIDAD #36).
+      const foot = found === sp.length ? SESSION_UI.worldDone[l] : SESSION_UI.worldLeft(sp.length - found)[l];
       const cells = sp.map((x) => `<span class="sp${x.found ? ' found' : ''}" data-w="${w}" data-code="${esc(x.code)}"></span>`).join('');
       // The world's painted card (src/ui/art/worlds.ts) behind the text; always a night surface.
       return `<button type="button" class="ss-world art-force-dark${picked ? ' on' : ''}" data-world="${w}" style="--wc:${worldColors(w).ring}" aria-pressed="${picked}">${worldArt(w)}
@@ -129,6 +137,19 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
     }
   }
 
+  /** «¡Empezar!» while the dish is still dark: «La criatura se está despertando…», not tappable. */
+  function paintGo(): void {
+    const btn = card.querySelector('[data-act="go"]') as HTMLButtonElement | null;
+    if (!btn || !current) return;
+    const l = opts.lang();
+    const ready = current.extras.ready ?? true;
+    btn.disabled = !ready;
+    btn.setAttribute('aria-disabled', String(!ready));
+    btn.style.opacity = ready ? '' : '0.62';
+    const tx = btn.querySelector('.tx');
+    if (tx) tx.textContent = ready ? SESSION_UI.startGo[l] : SESSION_UI.fridgeWaking[l];
+  }
+
   const api: SessionStartView = {
     el: layer,
     get isOpen() {
@@ -139,31 +160,41 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
       current = { start, extras };
       const l = opts.lang();
       const gifts: string[] = [];
+      // Esencia is Luz on screen (ADR-030 §2.1).
       if (start.startEssence > 0)
-        gifts.push(`<span class="ss-gift" style="--c:var(--bl-accent)">${treeIcon('drop', 20)}${esc(l === 'es' ? `${fmt(start.startEssence, l)} Esencia` : `${fmt(start.startEssence, l)} Essence`)}</span>`);
+        gifts.push(`<span class="ss-gift" style="--c:var(--bl-accent)">${treeIcon('drop', 20)}${esc(l === 'es' ? `${fmt(start.startEssence, l)} de luz` : `${fmt(start.startEssence, l)} glow`)}</span>`);
+      // «1 semilla gratis · las demás, 4 de luz»: does sowing cost? Said with the price (QA-CLARIDAD #14b).
       if (start.freeSeeds > 0)
         gifts.push(
           `<span class="ss-gift" style="--c:var(--bl-good)">${treeIcon('gift', 20)}${esc(
-            l === 'es' ? `${start.freeSeeds} ${start.freeSeeds === 1 ? 'siembra gratis' : 'siembras gratis'}` : `${start.freeSeeds} free ${start.freeSeeds === 1 ? 'seed' : 'seeds'}`,
+            extras.seedPrice !== undefined
+              ? SESSION_UI.freeSeeds(start.freeSeeds, fmt(extras.seedPrice, l))[l]
+              : l === 'es'
+                ? `${start.freeSeeds} ${start.freeSeeds === 1 ? 'semilla gratis' : 'semillas gratis'}`
+                : `${start.freeSeeds} free ${start.freeSeeds === 1 ? 'seed' : 'seeds'}`,
           )}</span>`,
         );
       if (start.fridgeSlots > 0 || start.fridge.length) {
-        const minis = start.fridge
-          .filter((id) => opts.livesIn?.(id, start.world) ?? true)
+        const kept = start.fridge.filter((id) => opts.livesIn?.(id, start.world) ?? true);
+        const minis = kept
           .map((id) => {
             const info = opts.speciesInfo?.(id);
             return `<span class="mini" style="--hue:${info?.hue ?? 195}" data-sp="${esc(id)}"></span>`;
           })
           .join('');
-        gifts.push(`<span class="ss-gift" style="--c:var(--bl-frost)">${treeIcon('snow', 20)}${minis}${esc(SESSION_UI.startKeep(Math.max(start.fridge.length, start.fridgeSlots))[l])}</span>`);
+        // «❄ Sale de la nevera: Nadadora celeste», by name and portrait (QA-CLARIDAD #14).
+        const first = kept.length ? opts.speciesInfo?.(kept[0])?.name : undefined;
+        const label = first ? SESSION_UI.fridgeOut(first)[l] : SESSION_UI.startKeep(Math.max(start.fridge.length, start.fridgeSlots))[l];
+        gifts.push(`<span class="ss-gift" style="--c:var(--bl-frost)">${treeIcon('snow', 20)}${minis}${esc(label)}</span>`);
       }
       const fresh = start.fresh
         .filter((id) => TREE_BY_ID[id])
         .slice(0, 8)
         .map((id) => `<span class="n b-${TREE_BY_ID[id].branch}">${treeIcon(TREE_BY_ID[id].icon, 22)}${esc(nodeText(id).name[l])}</span>`)
         .join('');
-      // The first start card (session 2): VELA says what this card is (CLARIDAD J-167).
-      const velaLine = start.n === 2 ? (extras.encargo ? SESSION_UI.startVela[l] : SESSION_UI.startVelaNoRequest[l]) : '';
+      // The first start card (session 2), the first time the Datos chip shows: VELA says what Luz becomes
+      // (ADR-030 §2.1: «Cada 25 de luz que recoges es 1 Dato. Los Datos no se pierden.»).
+      const velaLine = start.n === 2 ? SESSION_UI.datosRule(DATOS_ESSENCE_DIV)[l] : '';
       card.innerHTML = `
         <div class="ss-head"><h2>${esc(SESSION_UI.startTitle(start.n)[l])}</h2></div>
         ${velaLine ? `<div class="ss-vela"><div class="ss-bubble">${esc(velaLine)}</div></div>` : ''}
@@ -181,6 +212,7 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
         if (info?.portrait) mountPortrait(m, info.portrait, m.classList.contains('mini') ? 26 : 52, { hue: info.hue, fill: 0.8 });
       }
       paintWorldPortraits();
+      paintGo();
       card.setAttribute('aria-label', SESSION_UI.startTitle(start.n)[l]);
       layer.hidden = false;
       layer.classList.toggle('rm', rm());
@@ -208,6 +240,11 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
           });
       }
     },
+    setReady(ready) {
+      if (!current || (current.extras.ready ?? true) === ready) return;
+      current = { start: current.start, extras: { ...current.extras, ready } };
+      paintGo();
+    },
     hide() {
       if (!open) return;
       open = false;
@@ -228,7 +265,7 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
   };
   card.addEventListener('click', (e) => {
     const t = e.target as HTMLElement;
-    if (t.closest('[data-act="go"]')) opts.onGo();
+    if (t.closest('[data-act="go"]') && (current?.extras.ready ?? true)) opts.onGo();
     const w = t.closest('[data-world]') as HTMLElement | null;
     if (w && current) {
       const world = w.dataset.world as WorldId;
