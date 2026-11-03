@@ -191,6 +191,14 @@ try {
     b.moments.load({ ...b.moments.serialize(), seen: [...new Set([...b.moments.serialize().seen, 'species'])] });
   });
   await page.waitForTimeout(3000);
+  // A Momento about the starter («¡VIDA!») may be up by now: it pauses the dish until it is read, so read it
+  // like a player before going to Settings (a slow software-GL frame decides when it lands).
+  for (let i = 0; i < 6; i++) {
+    const card = page.locator('.mo-card .mo-ok').first();
+    if (!(await card.isVisible().catch(() => false))) break;
+    await card.click().catch(() => undefined);
+    await page.waitForTimeout(500);
+  }
 
   // Settings: RF-07, RF-05, RF-06, RF-02 export.
   await tapSel('.hud-btn[aria-label="Ajustes"]');
