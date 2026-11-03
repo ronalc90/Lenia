@@ -35,6 +35,7 @@ import { setupCosmetics } from './app/cosmetics';
 import { createExtraJournal, EXTRA_JOURNAL_KEY } from './app/journal';
 import { createSaveTransfer } from './app/saveBundle';
 import { LYSIS_TOAST_MS, lysisTargets } from './app/lysis';
+import { momentWaits } from './app/momentGate';
 import { RunawayWatch } from './sim/runaway';
 import { SUPPORTER_JOURNAL } from './store/catalog';
 import { setPortraitPalette } from './ui/portrait';
@@ -317,8 +318,19 @@ function boot(): void {
     // A run shorter than MOMENT_MIN_RUN_SECONDS: the cards wait for its summary (RITMO §2 rule 7).
     // Nor while the run's culture is still incubating unlit or lighting up: "¡VIDA!" about the starter
     // waits until the player can see it (ARTE-PULIDO §7.2b).
+    // Nor over the open Bestiary drawer (a new species' card covered its chips, RF-06): src/app/momentGate.ts.
     isBlocked: () =>
-      (uiRef?.blocked() ?? true) || introOpen() || shortRunRunning(game.session) || flowBusy() || (bridge?.storyShowing() ?? false) || sheetOpen() || encargoShowing() || secretShowing() || !culture.lit,
+      momentWaits({
+        covered: uiRef?.blocked() ?? true,
+        intro: introOpen(),
+        shortRun: shortRunRunning(game.session),
+        flow: flowBusy(),
+        story: bridge?.storyShowing() ?? false,
+        sheet: sheetOpen(),
+        celebration: encargoShowing() || secretShowing(),
+        drawer: uiRef?.drawerOpen ?? false,
+        lit: culture.lit,
+      }),
     downgrade: (id) => bridge?.covered(id) ?? false,
     // Session 1 has cards only for the basics (seed, life, Essence, shapeless, clock); a new species or
     // way of moving is a brief label there, its full card comes in session 2 (docs/CLARIDAD.md §3.3).
