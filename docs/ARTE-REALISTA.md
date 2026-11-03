@@ -701,6 +701,12 @@ Se integra en los mismos huecos: Polaroid, final y tarjeta de identificación. H
 | | `plate.ink` / `ink2` | `#dfe7ee` / `#9aa6b2` | `#1d232a` / `#55606b` | AA: lo comprueba `tokens.test.ts` |
 | | `plate.rule` | `#2a3540` | `#cfc8b8` | marcos y marcas de corte |
 
+- **En el código** (v0.021, `src/ui/art/tokens.ts` → `art.css`): `MATERIAL` y `MATERIAL_AT` (`--bl-mat-*`, más
+  `aluDark` `#2a3036`, la cinta de rotuladora de §6.9), `SCREEN` (tinta sobre el vidrio, `--bl-screen-*`), `INK`
+  (la misma tinta como texto fuera de la pantalla, `--bl-ink-*`), `LAMP` (`--bl-lamp-*`), `BOUNCE`, `PLATE`
+  (`--bl-plate-*`), `CHART_WONG` (`--bl-chart-1…7`), `LINE` (§3.8, `--bl-line-*`) y `PLATE_MM_PER_CELL`. Todos los
+  colores propuestos pasan AA tal cual (`tokens.test.ts`). `candle` es `lamp.3200` en el tema oscuro; en el claro se
+  queda en `#a54f08`, porque una lámpara no es tinta: `#ffb87b` da 1,6 : 1 sobre blanco.
 - Paleta categórica para gráficos dentro de las láminas: **Wong** `#E69F00 #56B4E9 #009E73 #F0E442 #0072B2 #D55E00
   #CC79A7` (F4).
 - Los comportamientos mantienen sus colores, pero en las láminas van siempre **con su forma** (ya es regla) y con

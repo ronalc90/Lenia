@@ -4,12 +4,30 @@
  * `tokensCss()`, kept in sync by tokens.test.ts) so integrators can map their module variables
  * (--rt-*, --mo-*, --bl ui.css vars) onto `--bl-*`.
  *
- * Concept: a polar research station at night. Cold blue life in the dish (cyan), warm candlelight
- * from VELA (candle), gold for the Spark, aurora mint for Datos, moon lavender for the Night.
+ * Concept: a polar research station at night. Cold blue life in the dish (cyan), the warm light of
+ * VELA's pilot lamp (candle), gold for the Spark, aurora mint for Datos, moon lavender for the Night.
  * GDD §14 values are kept where they exist (bg, surface, text, accent, warn, danger, good, gold).
+ * Scientific realism (ADR-029, docs/ARTE-REALISTA.md §6.1) adds materials, screen inks, lamp
+ * temperatures, the scientific plate (lámina) and the line-weight scale at the end of the colour block.
  */
 
 export type ThemeName = 'dark' | 'light';
+
+/**
+ * Filament lamp colours by colour temperature (K → sRGB), Tanner Helland's blackbody fit
+ * (docs/ARTE-REALISTA.md §6.1, R5); `kelvin()` in ./vector reproduces them. The same in both themes:
+ * a lamp is a light, never ink on a light surface (#ffb87b is 1.6:1 on white).
+ */
+export const LAMP = {
+  1900: '#ff8400',
+  2200: '#ff9227',
+  2700: '#ffa757',
+  3000: '#ffb16e',
+  3200: '#ffb87b',
+  3600: '#ffc392',
+} as const;
+
+export type LampK = keyof typeof LAMP;
 
 /** Semantic colour roles. Every text role is AA (≥ 4.5:1) on bg, surface and surface2. */
 export interface Palette {
@@ -39,7 +57,7 @@ export interface Palette {
   accentFill: string;
   /** Label colour on accentFill. */
   accentInk: string;
-  /** VELA's candle: guidance, story, Encargos. */
+  /** VELA's lamp (named candle for history): guidance, story, Encargos. Dark: the 3200 K lamp (ADR-029). */
   candle: string;
   /** The Spark and rewards (GDD §14 #FFD166 in dark). */
   gold: string;
@@ -70,7 +88,7 @@ export const PALETTE: Record<ThemeName, Palette> = {
     accent: '#5bc0eb',
     accentFill: '#5bc0eb',
     accentInk: '#04202e',
-    candle: '#ffb86b',
+    candle: LAMP[3200],
     gold: '#ffd166',
     aurora: '#5ee6c8',
     moon: '#c9d1ff',
@@ -104,12 +122,86 @@ export const PALETTE: Record<ThemeName, Palette> = {
   },
 };
 
+// ── Scientific realism (ADR-029, docs/ARTE-REALISTA.md §6.1) ─────────────────────────────────────────
+
+/**
+ * Instrument materials: gradient stops in the order the bible gives them (top to bottom, or across the
+ * shape), with their offsets in MATERIAL_AT. The same in both themes: an object does not change with the
+ * UI theme. coat = VELA's warm white powder coat (§4.3) · anod = anodised bezel and frames (§3.6) ·
+ * alu = brushed aluminium of engraved plates · chrome = the 5-stop cylinder ramp of handles and tubes
+ * (§3.5-2: dark edge · specular · local · reflected light · dark edge) · glass = a screen, always night ·
+ * rubber = feet, cables · aluDark = the label-maker tape of price chips (§6.9).
+ */
+export const MATERIAL = {
+  coat: ['#f4f2ed', '#e8e5de', '#d9d5cc', '#c3beb3'],
+  anod: ['#3b434a', '#2b3238', '#1f252a', '#161a1e'],
+  alu: ['#b9bcbf', '#e8eaeb', '#dcdfe0', '#a9adb1'],
+  chrome: ['#3a3d40', '#f7f7f5', '#a4a8ab', '#c9dbe4', '#2e3134'],
+  glass: '#03100d',
+  rubber: ['#3a3c3e', '#141516'],
+  aluDark: '#2a3036',
+} as const;
+
+/** Stop offsets (0..1) of each multi-stop MATERIAL, from §4.3, §3.6 and §3.5-2. */
+export const MATERIAL_AT = {
+  coat: [0, 0.12, 0.6, 1],
+  anod: [0, 0.08, 0.55, 1],
+  alu: [0, 0.45, 0.55, 1],
+  chrome: [0, 0.28, 0.5, 0.82, 1],
+  rubber: [0, 1],
+} as const;
+
+/**
+ * Phosphor inks ON an instrument screen (always the night glass, both themes): body and hot core
+ * (§4.3; 505 nm phosphor, L7). teal = default (= aurora) · amber = worried (= warn) · red = alarm ·
+ * gold = proud (= the Spark). Off the screen, text uses INK.
+ */
+export const SCREEN = {
+  teal: { body: '#5ee6c8', core: '#dcfff6' },
+  amber: { body: '#f2a541', core: '#ffe2b8' },
+  red: { body: '#ff5a4a', core: '#ffd0c8' },
+  gold: { body: '#ffd166', core: '#fff1c2' },
+} as const;
+
+/** The screen inks as text off the screen (labels, legends, readouts on panels): AA on every background. */
+export const INK: Record<ThemeName, { teal: string; amber: string; red: string }> = {
+  dark: { teal: SCREEN.teal.body, amber: SCREEN.amber.body, red: SCREEN.red.body },
+  light: { teal: '#08745e', amber: '#8f4d00', red: '#bf3517' },
+};
+
+/** Light the dish bounces onto nearby objects from below (layer 4 of §3.2): rgb(91, 192, 235). */
+export const BOUNCE = { dish: '#5bc0eb' } as const;
+
+/**
+ * The scientific plate (lámina, §6.5): paper, ink, secondary ink, frame and crop-mark rule. Ink and ink2
+ * are AA on the paper (tokens.test.ts); the rule is decorative.
+ */
+export const PLATE: Record<ThemeName, { paper: string; ink: string; ink2: string; rule: string }> = {
+  dark: { paper: '#10161c', ink: '#dfe7ee', ink2: '#9aa6b2', rule: '#2a3540' },
+  light: { paper: '#f3efe6', ink: '#1d232a', ink2: '#55606b', rule: '#cfc8b8' },
+};
+
+/** Categorical colours for charts inside plates: Wong (Nature Methods 8, 441, 2011; F4), colour-blind safe. Fills, never text. */
+export const CHART_WONG = ['#e69f00', '#56b4e9', '#009e73', '#f0e442', '#0072b2', '#d55e00', '#cc79a7'] as const;
+
+/**
+ * Line weights in CSS px at any DPR (§3.8). `hair` is one device pixel (1 / dpr CSS px), so it is not a
+ * constant; see `hairline()` in ./vector. Contour / detail ≈ 1.7 (I1–I2). `leaderDot` is the dot at the
+ * end of a plate's leader line; `icon` is ADR-024's stroke on the 24 grid.
+ */
+export const LINE = { fine: 0.5, detail: 0.75, contour: 1.25, leader: 1, leaderDot: 2.5, icon: 1.75, emph: 2 } as const;
+
+export type LineToken = keyof typeof LINE;
+
+/** Scale of the plates' scale bar (§6.5 rule 4): 1 cell = 0.7 mm, so the Ø128 dish is a 90-mm Petri dish. */
+export const PLATE_MM_PER_CELL = 0.7;
+
 /** Fills that are always bright, used as backgrounds of badges / dots / glows (not as text on light). */
 export const GLOW = {
   essence: '#5bc0eb',
   datos: '#5ee6c8',
   spark: '#ffd166',
-  candle: '#ffb86b',
+  candle: LAMP[3200],
   candleCore: '#fff3d6',
   night: '#c9d1ff',
   good: '#8ae234',
@@ -239,7 +331,7 @@ export const ELEVATION: Record<ThemeName, { elev0: string; elev1: string; elev2:
 export const GLOW_SHADOW: Record<ThemeName, { accent: string; candle: string; gold: string }> = {
   dark: {
     accent: '0 0 0 1px rgb(91 192 235 / .35), 0 0 24px rgb(91 192 235 / .22)',
-    candle: '0 0 0 1px rgb(255 184 107 / .35), 0 0 24px rgb(255 184 107 / .22)',
+    candle: '0 0 0 1px rgb(255 184 123 / .35), 0 0 24px rgb(255 184 123 / .22)',
     gold: '0 0 0 1px rgb(255 209 102 / .35), 0 0 24px rgb(255 209 102 / .22)',
   },
   light: {
@@ -304,6 +396,8 @@ function themeVars(theme: ThemeName): string[] {
   for (const [k, v] of Object.entries(BEHAVIOR_TONE[theme])) out.push(`--bl-beh-${k}: ${v};`);
   for (const [k, v] of Object.entries(ELEVATION[theme])) out.push(`--bl-elev-${k.slice(4)}: ${v};`);
   for (const [k, v] of Object.entries(GLOW_SHADOW[theme])) out.push(`--bl-glow-${k}: ${v};`);
+  for (const [k, v] of Object.entries(INK[theme])) out.push(`--bl-ink-${k}: ${v};`);
+  for (const [k, v] of Object.entries(PLATE[theme])) out.push(`--bl-plate-${kebab(k)}: ${v};`);
   for (const k of Object.keys(SHADOW[theme])) out.push(`--bl-shadow-${k}: var(${k === 'glow' ? '--bl-glow-accent' : `--bl-elev-${({ sm: 1, md: 2, lg: 3 } as Record<string, number>)[k]}`});`);
   out.push(`--bl-ic-fill: ${theme === 'dark' ? 0.2 : 0.14};`);
   return out;
@@ -336,6 +430,19 @@ export function tokensCss(): string {
     shared.push(`--bl-spring-${k}: ${v.css};`);
     shared.push(`--bl-t-spring-${k}: ${v.ms}ms;`);
   }
+  // Scientific realism (ADR-029): theme-independent instrument colours; multi-stop materials are numbered.
+  for (const [k, v] of Object.entries(MATERIAL)) {
+    if (typeof v === 'string') shared.push(`--bl-mat-${kebab(k)}: ${v};`);
+    else v.forEach((c, i) => shared.push(`--bl-mat-${kebab(k)}-${i + 1}: ${c};`));
+  }
+  for (const [k, v] of Object.entries(SCREEN)) {
+    shared.push(`--bl-screen-${k}: ${v.body};`);
+    shared.push(`--bl-screen-${k}-core: ${v.core};`);
+  }
+  for (const [k, v] of Object.entries(LAMP)) shared.push(`--bl-lamp-${k}: ${v};`);
+  for (const [k, v] of Object.entries(BOUNCE)) shared.push(`--bl-bounce-${k}: ${v};`);
+  CHART_WONG.forEach((c, i) => shared.push(`--bl-chart-${i + 1}: ${c};`));
+  for (const [k, v] of Object.entries(LINE)) shared.push(`--bl-line-${kebab(k)}: ${v}px;`);
   const block = (sel: string, lines: string[]) => `${sel} {\n${lines.flatMap((l) => l.split('\n')).map((l) => '  ' + l).join('\n')}\n}\n`;
   const springFallback = Object.entries(SPRING).map(([k, v]) => `--bl-spring-${k}: ${v.fallback};`);
   // Reduce motion (the OS or the game's own setting, which puts .bl-rm on <html>): every entrance and

@@ -1,6 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { contrast, hexToRgb, luminance, oklch, rgbToHex, rgbToOklch } from './color';
-import { BEHAVIOR_TONE, DURATION, ELEVATION, LAYER, PALETTE, RADIUS, ROUTE_COLOR, SPRING, STAGGER, tokensCss, type ThemeName } from './tokens';
+import {
+  BEHAVIOR_TONE,
+  CHART_WONG,
+  DURATION,
+  ELEVATION,
+  INK,
+  LAMP,
+  LAYER,
+  LINE,
+  MATERIAL,
+  MATERIAL_AT,
+  PALETTE,
+  PLATE,
+  RADIUS,
+  ROUTE_COLOR,
+  SCREEN,
+  SPRING,
+  STAGGER,
+  tokensCss,
+  type ThemeName,
+} from './tokens';
 import { ease } from './motion';
 
 const THEMES: ThemeName[] = ['dark', 'light'];
@@ -49,6 +69,69 @@ describe('design tokens', () => {
 
   it('keeps motion short: nothing in the UI vocabulary lasts longer than 0.7 s', () => {
     for (const v of Object.values(DURATION)) expect(v).toBeLessThanOrEqual(700);
+  });
+});
+
+describe('scientific realism tokens (ADR-029, docs/ARTE-REALISTA.md §6.1)', () => {
+  it('screen inks and their cores read on the instrument glass', () => {
+    for (const [k, v] of Object.entries(SCREEN)) {
+      expect(contrast(v.body, MATERIAL.glass), `screen ${k}`).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(v.core, MATERIAL.glass), `screen ${k} core`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('the screen inks used as text off the screen are AA on panels and on the plate paper, in both themes', () => {
+    for (const th of THEMES) {
+      const p = PALETTE[th];
+      for (const bg of [p.bg, p.surface, p.surface2, PLATE[th].paper])
+        for (const [k, v] of Object.entries(INK[th])) expect(contrast(v, bg), `${th} ink ${k} on ${bg}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('plate ink and secondary ink are AA on the plate paper, in both themes', () => {
+    for (const th of THEMES) {
+      expect(contrast(PLATE[th].ink, PLATE[th].paper), `${th} plate ink`).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(PLATE[th].ink2, PLATE[th].paper), `${th} plate ink2`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('the label-maker tape carries text, cost amber and bonus green (AA)', () => {
+    for (const fg of [PALETTE.dark.text, INK.dark.amber, PALETTE.dark.good])
+      expect(contrast(fg, MATERIAL.aluDark), fg).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('candle is the 3200 K lamp in the dark theme and stays AA ink in the light one', () => {
+    expect(PALETTE.dark.candle).toBe(LAMP[3200]);
+    expect(contrast(LAMP[3200], PALETTE.light.surface)).toBeLessThan(3); // a lamp is never ink on white
+    expect(PALETTE.light.candle).not.toBe(LAMP[3200]);
+  });
+
+  it('lamps warm up monotonically: higher temperature, more blue', () => {
+    const ks = Object.keys(LAMP).map(Number);
+    expect(ks).toEqual([1900, 2200, 2700, 3000, 3200, 3600]);
+    const blue = ks.map((k) => hexToRgb(LAMP[k as keyof typeof LAMP])[2]);
+    for (let i = 1; i < blue.length; i++) expect(blue[i]).toBeGreaterThan(blue[i - 1]);
+  });
+
+  it('every multi-stop material has one offset per colour, rising from 0 to 1', () => {
+    for (const [k, at] of Object.entries(MATERIAL_AT)) {
+      const colors = MATERIAL[k as keyof typeof MATERIAL];
+      expect(Array.isArray(colors), k).toBe(true);
+      expect(at.length, k).toBe((colors as readonly string[]).length);
+      expect(at[0]).toBe(0);
+      expect(at[at.length - 1]).toBe(1);
+      for (let i = 1; i < at.length; i++) expect(at[i]).toBeGreaterThan(at[i - 1]);
+    }
+  });
+
+  it('keeps the line scale of §3.8 (contour / detail ≈ 1.7) and the seven Wong colours', () => {
+    expect(LINE.contour / LINE.detail).toBeCloseTo(1.67, 2);
+    expect(LINE.icon).toBe(1.75);
+    expect(CHART_WONG).toHaveLength(7);
+    const css = tokensCss();
+    expect(css).toContain('--bl-mat-chrome-5: #2e3134;');
+    expect(css).toContain('--bl-lamp-2700: #ffa757;');
+    expect(css).toContain('--bl-line-contour: 1.25px;');
   });
 });
 
