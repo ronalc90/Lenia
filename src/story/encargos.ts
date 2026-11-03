@@ -10,7 +10,21 @@
 import { Bus, type GameEvents } from '../core/bus';
 import type { GameView, Text } from '../core/types';
 import { OBJECTIVES } from '../game/balance';
-import { CHAIN, ENCARGO_BY_ID, SIDE, SIDE_REWARD, TREE_GOALS, afterSessionAsk, resolveEncargo, type Cosmetic, type EncargoDef, type GoalDef, COSMETICS } from './encargoScript';
+import {
+  CHAIN,
+  COMMITTEE_WHO,
+  ENCARGO_BY_ID,
+  SIDE,
+  SIDE_REWARD,
+  TREE_GOALS,
+  afterSessionAsk,
+  encargoFeasible,
+  resolveEncargo,
+  type Cosmetic,
+  type EncargoDef,
+  type GoalDef,
+  COSMETICS,
+} from './encargoScript';
 import { SPEAKER_NAMES, alborSpeciesFound } from './script';
 import type { Story } from './story';
 import type { LineDef, Mood, Speaker, StorageLike } from './types';
@@ -51,10 +65,14 @@ export interface EncargoView {
   mood: Mood;
   /** Speaker display name. */
   name: Text;
-  /** The request ({n} resolved). */
+  /** The request ({n} resolved); the Committee's telex quote for its bubble and the start card. */
   ask: Text;
+  /** The plain request the objective bar shows (QA-CLARIDAD #22/#23: never the telex in capitals). */
+  plain: Text;
+  /** How to do it, naming a real button or Tree node (the «?»), or null. */
+  how: Text | null;
   why: Text;
-  /** Ask + progress, for the objective bar: "Ten 3 criaturas estables a la vez (1/3)". */
+  /** Plain ask + progress, for the objective bar: "Ten 3 criaturas estables a la vez (1/3)". */
   label: Text;
   /** Just the progress: "1/3", "2,4/3", "1:20/2:00" ('' for yes/no goals). */
   count: Text;
@@ -120,6 +138,11 @@ export interface Encargos {
   /** Put the side request away for a minute; another one comes later. */
   dismissSide(): void;
   cosmetics(): readonly Cosmetic[];
+  /**
+   * A lab session's clock is running: Encargos speak only through the objective bar (ADR-030,
+   * docs/CLARIDAD2.md §2.8); their bubbles wait for the clock to stop, a "done" just lights the bar.
+   */
+  quiet(): boolean;
   /** UI signal, e.g. 'tab:bestiary'. */
   signal(name: string): void;
   notePrint(): void;
@@ -180,6 +203,9 @@ export function gameGrantOf(id: string, r: EncargoReward, cycle: 'classic' | 'se
   if (objective && cycle === 'sessions') return null;
   return { essence: objective ? 0 : Math.max(0, r.essence), samples: Math.max(0, r.samples) };
 }
+
+/** How often quiet() reads the view (ms): it is asked every frame while a bubble waits. */
+const QUIET_CHECK_MS = 250;
 
 export function createEncargos(deps: EncargosDeps): Encargos {
   const events = new Bus<EncargoEvents>();
@@ -343,12 +369,13 @@ export function createEncargos(deps: EncargosDeps): Encargos {
     const unit = unitOf(def.goal, target);
     // A Tree request while the clock runs: "Al terminar: …" (the Tree opens between sessions).
     const later = v.cycle === 'sessions' && v.session?.phase === 'running' && TREE_GOALS.has(def.goal.metric);
-    const lang = (l: 'es' | 'en') => {
+    const lang = (l: 'es' | 'en', src: Text = def.ask) => {
       const n = fmt(target, l, unit === 'eps' && target < 10 && target % 1 ? 1 : 0);
-      const a = def.ask[l].replace(/\{n\}/g, n);
+      const a = src[l].replace(/\{n\}/g, n);
       return later ? afterSessionAsk(a, l) : a;
     };
     const ask: Text = { es: lang('es'), en: lang('en') };
+    const plain: Text = def.plain ? { es: lang('es', def.plain), en: lang('en', def.plain) } : ask;
     const count = (l: 'es' | 'en'): string => {
       switch (unit) {
         case 'flag':
@@ -370,8 +397,10 @@ export function createEncargos(deps: EncargosDeps): Encargos {
       mood: def.mood,
       name: SPEAKER_NAMES[def.who],
       ask,
+      plain,
+      how: def.how ?? null,
       why: def.why,
-      label: { es: ask.es + suffix('es'), en: ask.en + suffix('en') },
+      label: { es: plain.es + suffix('es'), en: plain.en + suffix('en') },
       count: { es: count('es'), en: count('en') },
       progress: { current, target, unit, frac: target > 0 ? Math.max(0, Math.min(1, current / target)) : 1 },
       reward: resolveReward(def, v),
@@ -439,7 +468,7 @@ export function createEncargos(deps: EncargosDeps): Encargos {
     const pool = SIDE.map((d) => resolveEncargo(d, v)).filter((d) => {
       if (d.once && st.sideDone[d.id]) return false;
       if (d.id === st.lastSide && SIDE.length > 1) return false;
-      if (d.available && !d.available(v)) return false;
+      if (!encargoFeasible(d, v)) return false;
       // Already satisfied level goals make boring requests: skip them.
       if (!d.goal.delta && d.goal.metric !== 'keepAlive' && value(d.goal, v, null) >= targetOf(d.goal, v)) return false;
       return true;
@@ -500,7 +529,7 @@ export function createEncargos(deps: EncargosDeps): Encargos {
       if (st.chainOfferedAt === null) {
         // A step that cannot be done yet (e.g. "look at your creature in the Bestiary" with an empty
         // Bestiary, QA4 F-04) waits until it can.
-        if (t >= nextOfferAt && (!def.available || def.available(v))) offerMain(v);
+        if (t >= nextOfferAt && encargoFeasible(def, v)) offerMain(v);
       } else {
         const target = targetOf(def.goal, v);
         const view = makeView(def, 'main', v, target, st.chainBase);
@@ -603,6 +632,8 @@ export function createEncargos(deps: EncargosDeps): Encargos {
   const timer = pollMs > 0 && typeof setInterval === 'function' ? setInterval(tick, pollMs) : null;
 
   const viewNow = () => deps.getView();
+  let quietAt = -Infinity;
+  let quietNow = false;
 
   const api: Encargos = {
     events,
@@ -620,11 +651,15 @@ export function createEncargos(deps: EncargosDeps): Encargos {
       const def = view ? byId(view.id, v) : id ? byId(id, v) : undefined;
       if (!def || !deps.story) return false;
       const ask = view?.ask ?? def.ask;
+      // «?» = the request, then how to do it (a real button or Tree node) and why; for the Committee,
+      // who they are in plain words (docs/CLARIDAD2.md §5.3 task 6).
       const lines: LineDef[] = [
         { who: def.who, mood: def.mood, text: ask },
+        ...(def.how ? [{ who: 'vela' as const, mood: 'happy' as const, text: def.how }] : []),
         { who: def.who, mood: def.who === 'vela' ? 'happy' : def.mood, text: def.why },
+        ...(def.who === 'committee' ? [{ who: 'vela' as const, mood: 'neutral' as const, text: COMMITTEE_WHO }] : []),
       ];
-      return deps.story.speak(`enc:${def.id}`, ask, lines);
+      return deps.story.speak(`enc:${def.id}`, view?.plain ?? def.plain ?? ask, lines);
     },
     dismissSide() {
       if (!st.side) return;
@@ -634,6 +669,19 @@ export function createEncargos(deps: EncargosDeps): Encargos {
       events.emit('change', {});
     },
     cosmetics: () => st.cosmetics,
+    quiet() {
+      // Asked by the bubble's frame loop: one view read every QUIET_CHECK_MS at most.
+      const t = now();
+      if (t - quietAt < QUIET_CHECK_MS) return quietNow;
+      quietAt = t;
+      try {
+        const v = viewNow();
+        quietNow = v.cycle === 'sessions' && v.session?.phase === 'running';
+      } catch {
+        quietNow = false;
+      }
+      return quietNow;
+    },
     signal(name) {
       if (name === 'tab:bestiary' && !st.seenBestiary) {
         st.seenBestiary = true;

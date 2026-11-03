@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Bus, type GameEvents } from '../core/bus';
 import type { GameView, Text } from '../core/types';
 import { OBJECTIVES } from '../game/balance';
-import { CHAIN, ENCARGO_BY_ID, MAX_ASK_WORDS, MAX_THANKS_WORDS, MAX_WHY_WORDS, SIDE } from './encargoScript';
+import { CHAIN, ENCARGO_BY_ID, MAX_ASK_WORDS, MAX_HOW_WORDS, MAX_THANKS_WORDS, MAX_WHY_WORDS, SIDE, encargoFeasible } from './encargoScript';
 import { ENCARGOS_STORAGE_KEY, createEncargos, gameGrantOf, type EncargoDone, type EncargoReward, type EncargoView } from './encargos';
 import { STORY_JOURNAL } from './script';
 import { createStory } from './story';
@@ -297,6 +297,9 @@ describe('encargos: persistence and boot', () => {
     expect(cur.line!.who).toBe('vela');
     expect(cur.line!.text.es).toContain('Siembra');
     t.story.advance();
+    // How, then why (CLARIDAD2 §5.3 task 6).
+    expect(t.story.current()!.line!.text.es).toContain('Toca la placa');
+    t.story.advance();
     expect(t.story.current()!.line!.text.es).toContain('despierta');
     t.story.advance();
     expect(t.story.current()).toBeNull();
@@ -313,5 +316,61 @@ describe('encargos: never ask for what cannot be done yet (QA4 F-04)', () => {
     t.set({ species: [species('Orbium')] });
     t.wait(600);
     expect(t.offers.map((o) => o.id)).toContain('look');
+  });
+});
+
+describe('encargos: every request says how, in plain words (CLARIDAD2 §5.3 task 6)', () => {
+  /** Real buttons and Tree nodes a player can find on screen. */
+  const PLACES = /Árbol|Bestiario|«Copiar»|placa|chispa|Mundo|tarjeta de inicio|Nutrientes|nadadora|la que gira|semilla/;
+
+  it('QA#39: every offered Encargo has a how that names a real button or tree node', () => {
+    for (const e of [...CHAIN, ...SIDE]) {
+      expect(e.how, e.id).toBeDefined();
+      expect(words(e.how!.es), `${e.id}: ${e.how!.es}`).toBeLessThanOrEqual(MAX_HOW_WORDS);
+      expect(words(e.how!.en), `${e.id}: ${e.how!.en}`).toBeLessThanOrEqual(MAX_HOW_WORDS);
+      expect(e.how!.es, e.id).toMatch(PLACES);
+    }
+    // The copy request names the Copy button and where the Copier is bought.
+    expect(ENCARGO_BY_ID.get('print')!.how!.es).toMatch(/«Copiar».*Copiadora/);
+  });
+
+  it('QA#39: a request with no path yet is not offered (nothing to copy, a World still closed)', () => {
+    const print = ENCARGO_BY_ID.get('print')!;
+    expect(encargoFeasible(print, makeView({ cycle: 'sessions', species: [] }))).toBe(false);
+    expect(encargoFeasible(print, makeView({ cycle: 'sessions', species: [species('Orbium')] }))).toBe(true);
+    const move = ENCARGO_BY_ID.get('move')!;
+    const research = { worlds: ['classic'] } as unknown as GameView['research'];
+    expect(encargoFeasible(move, makeView({ cycle: 'sessions', research }))).toBe(false);
+  });
+
+  it('QA#22/#23: the task bar shows the plain ask; the Committee quote stays in the bubble', () => {
+    const t = harness({ cycle: 'sessions' });
+    const saved = t.enc.serialize();
+    t.enc.load({ ...saved, chain: CHAIN.findIndex((e) => e.id === 'species3'), chainOfferedAt: null, chainBase: null });
+    t.wait(600);
+    const cur = t.enc.current()!;
+    expect(cur.id).toBe('species3');
+    expect(cur.ask.es).toBe('ENVÍEN 3 ESPECIES PARA EL INFORME. FIN.');
+    expect(cur.plain.es).toBe('Consigue 3 especies distintas.');
+    expect(cur.label.es.startsWith('Consigue 3 especies distintas.')).toBe(true);
+    expect(cur.label.es).not.toMatch(/FIN/);
+    // «?»: the quote, how, why, and who the Committee is.
+    expect(t.enc.why()).toBe(true);
+    const said: string[] = [];
+    for (let i = 0; i < 6 && t.story.current(); i++) {
+      said.push(t.story.current()!.line!.text.es);
+      t.story.advance();
+    }
+    expect(said[1]).toContain('Árbol');
+    expect(said[said.length - 1]).toBe('El Comité es quien paga la luz de la Estación.');
+  });
+
+  it('while a session clock runs, Encargos are quiet (only the bar speaks)', () => {
+    const session = { n: 2, phase: 'running' } as unknown as GameView['session'];
+    const t = harness({ cycle: 'sessions', session });
+    expect(t.enc.quiet()).toBe(true);
+    t.set({ session: { ...session!, phase: 'ready' } });
+    t.wait(1);
+    expect(t.enc.quiet()).toBe(false);
   });
 });

@@ -24,6 +24,10 @@ const t = (es: string, en: string): Text => ({ es, en });
 export const MAX_ASK_WORDS = 10;
 export const MAX_WHY_WORDS = 14;
 export const MAX_THANKS_WORDS = 12;
+/** «?» says how (docs/CLARIDAD2.md §5.3 task 6). */
+export const MAX_HOW_WORDS = 14;
+/** Said after a Committee request's how: who they are, in plain words. */
+export const COMMITTEE_WHO: Text = t('El Comité es quien paga la luz de la Estación.', 'The Committee pays for the Station’s lights.');
 
 /** VELA's accessories, unlocked by some Encargos and drawn on her portrait. */
 export type Cosmetic = 'scarf' | 'medal' | 'flower';
@@ -110,8 +114,18 @@ export interface EncargoDef {
   id: string;
   who: Speaker;
   mood: Mood;
-  /** The request, imperative; shown in the objective bar. May contain {n} (target). */
+  /**
+   * The request, imperative. May contain {n} (target). The Committee's is its telex quote (CAPITALS, FIN):
+   * it goes in the bubble and on the start card only; the bar shows `plain` (ADR-030, QA-CLARIDAD #22/#23).
+   */
   ask: Text;
+  /** The plain request for the objective bar (≤ 10 words), when `ask` is a quote. Default `ask`. */
+  plain?: Text;
+  /**
+   * How to do it, naming a real button or Tree node (≤ 14 words; «?» says it): QA-CLARIDAD #39, a request
+   * with no visible way is a dead end.
+   */
+  how?: Text;
   /** Why, in one short line. */
   why: Text;
   /** Said when it is done (by `thanksWho`, default the same speaker; tapes can't react). */
@@ -154,6 +168,21 @@ export function resolveEncargo(def: EncargoDef, v: Pick<import('../core/types').
 
 type View = import('../core/types').GameView;
 const isSessions = (v: View) => v.cycle === 'sessions';
+
+/**
+ * Can the player really do it now, from what they see (QA-CLARIDAD #39: «Haz una copia» with no Copy button)?
+ * Its own `available` rule, and the paths every goal of its kind needs: something in the Bestiary to copy,
+ * the World it names open. A request without a path is not offered (it waits until it has one).
+ */
+export function encargoFeasible(def: EncargoDef, v: View): boolean {
+  if (def.available && !def.available(v)) return false;
+  for (const g of [def.goal, def.also]) {
+    if (!g) continue;
+    if (g.metric === 'prints' && v.species.length === 0) return false;
+    if (g.metric === 'world' && isSessions(v) && g.arg && !(v.research?.worlds ?? []).includes(g.arg)) return false;
+  }
+  return true;
+}
 const calibOpen = (v: View) => v.tabs.calibrate;
 const bestiaryOpen = (v: View) => v.tabs.bestiary && v.species.length > 0;
 /** Sessions: more than one world is open (worlds replace Calibrar). */
@@ -193,6 +222,7 @@ export const CHAIN: EncargoDef[] = [
     who: 'vela',
     mood: 'happy',
     ask: t('Siembra algo en la placa.', 'Sow something in the dish.'),
+    how: t('Toca la placa: cada toque pone una semilla.', 'Tap the dish: each tap drops a seed.'),
     why: t('La placa duerme. Un toque la despierta.', 'The dish is asleep. One tap wakes it up.'),
     thanks: t('¡Eso es! Mira cómo brilla.', 'That\'s it! Look at it glow.'),
     goal: { metric: 'seeds', target: 1 },
@@ -203,6 +233,7 @@ export const CHAIN: EncargoDef[] = [
     who: 'vela',
     mood: 'neutral',
     ask: t('Consigue una criatura que se quede.', 'Get a creature that stays.'),
+    how: t('Siembra en la placa, lejos del cristal y de las demás.', 'Sow in the dish, away from the glass and the others.'),
     why: t('Las que se quedan dan luz. Las otras se apagan.', 'The ones that stay make glow. The others fade.'),
     thanks: t('¡Una amiga nueva! Hola, pequeña.', 'A new friend! Hello, little one.'),
     goal: { metric: 'stableNow', target: 1 },
@@ -213,6 +244,7 @@ export const CHAIN: EncargoDef[] = [
     who: 'vela',
     mood: 'awed',
     ask: t('Mira tu criatura en el Bestiario.', 'Look at your creature in the Bestiary.'),
+    how: t('Toca el botón del Bestiario, abajo.', 'Tap the Bestiary button at the bottom.'),
     why: t('Cada especie tiene nombre. ¡Vamos a conocerla!', 'Every species has a name. Let\'s meet it!'),
     thanks: t('Qué nombre tan elegante. Anotado.', 'What a fancy name. Noted.'),
     goal: { metric: 'speciesSeen', target: 1 },
@@ -225,6 +257,7 @@ export const CHAIN: EncargoDef[] = [
     who: 'vela',
     mood: 'happy',
     ask: t('Compra el Gotero en el Árbol.', 'Buy the Dropper in the Tree.'),
+    how: t('Al terminar la sesión, toca el Gotero en el Árbol.', 'When the session ends, tap the Dropper in the Tree.'),
     why: t('Con él, viven más semillas.', 'With it, more of your seeds live.'),
     thanks: t('¡Gotero nuevo! Huele a laboratorio.', 'A new Dropper! Smells like science.'),
     goal: { metric: 'upgrade', arg: 'dropper', target: 1 },
@@ -236,6 +269,7 @@ export const CHAIN: EncargoDef[] = [
     who: 'vela',
     mood: 'worried',
     ask: t('Ten 3 criaturas vivas a la vez.', 'Have 3 living creatures at once.'),
+    how: t('Siembra tres semillas separadas y espera a que vivan.', 'Sow three seeds apart and wait for them to live.'),
     why: t('¿Me ayudas? Su luz enciende la calefacción. ¡Brrr!', 'Help me? Their light turns the heating on. Brrr!'),
     thanks: t('¡Calorcito! Me pongo la bufanda de Albor en el asa.', 'Warm at last! I’m wearing Albor’s scarf on my handle.'),
     goal: { metric: 'stableNow', target: 3 },
@@ -245,7 +279,9 @@ export const CHAIN: EncargoDef[] = [
     id: 'eps3',
     who: 'committee',
     mood: 'neutral',
-    ask: t('PRODUZCAN 3 ESENCIA POR SEGUNDO. FIN.', 'PRODUCE 3 ESSENCE PER SECOND. END.'),
+    ask: t('PRODUZCAN 3 DE LUZ POR SEGUNDO. FIN.', 'PRODUCE 3 GLOW PER SECOND. END.'),
+    plain: t('Consigue 3 de luz por segundo.', 'Make 3 glow per second.'),
+    how: t('Ten varias criaturas en la placa y recoge su luz.', 'Keep several creatures in the dish and collect their glow.'),
     why: t('EL COMITÉ PAGA LA LUZ. LA LUZ CUESTA. FIN.', 'THE COMMITTEE PAYS FOR THE LIGHTS. LIGHTS COST. END.'),
     thanks: t('RECIBIDO. ACEPTABLE. FIN.', 'RECEIVED. ACCEPTABLE. END.'),
     goal: { metric: 'eps', target: 3 },
@@ -256,6 +292,7 @@ export const CHAIN: EncargoDef[] = [
     who: 'vela',
     mood: 'awed',
     ask: t('Abre el Mundo 2 en el Árbol.', 'Open World 2 in the Tree.'),
+    how: t('Al terminar, compra «Mundo 2 · Frío» en el Árbol.', 'When the session ends, buy “World 2 · Cold” in the Tree.'),
     why: t('Otro mundo, otras reglas. ¡Allí nacen criaturas nuevas!', 'Another world, other rules. New creatures are born there!'),
     thanks: t('¡Mundo nuevo! Te lo dejo elegido para la próxima.', 'A new world! It is picked for your next session.'),
     goal: { metric: 'upgrade', arg: 'worldCold', target: 1 },
@@ -272,6 +309,7 @@ export const CHAIN: EncargoDef[] = [
     who: 'vela',
     mood: 'neutral',
     ask: t('Juega una sesión en el Mundo 2.', 'Play a session in World 2.'),
+    how: t('En la tarjeta de inicio, elige el Mundo 2 y juega.', 'On the start card, pick World 2 and play.'),
     why: t('Allí viven criaturas que aún no conoces.', 'Creatures you have not met yet live there.'),
     thanks: t('Todo tembló un poco. ¡Qué emoción!', 'Everything wobbled a bit. How exciting!'),
     goal: { metric: 'world', arg: 'cold', target: 1 },
@@ -288,6 +326,7 @@ export const CHAIN: EncargoDef[] = [
     who: 'vela',
     mood: 'happy',
     ask: t('Compra Más tiempo en el Árbol.', 'Buy More time in the Tree.'),
+    how: t('Al terminar, compra «Más tiempo» en el Árbol.', 'When the session ends, buy “More time” in the Tree.'),
     why: t('Más tiempo en cada sesión: ¡más criaturas!', 'More time every session: more creatures!'),
     thanks: t('¡Tic, tac! Ya tienes más tiempo.', 'Tick, tock! You have more time now.'),
     goal: { metric: 'upgrade', arg: 'clock', target: 1 },
@@ -304,6 +343,8 @@ export const CHAIN: EncargoDef[] = [
     who: 'committee',
     mood: 'neutral',
     ask: t('ENVÍEN 3 ESPECIES PARA EL INFORME. FIN.', 'SEND 3 SPECIES FOR THE REPORT. END.'),
+    plain: t('Consigue 3 especies distintas.', 'Get 3 different species.'),
+    how: t('Compra un Mundo nuevo en el Árbol y juega allí.', 'Buy a new World in the Tree and play there.'),
     why: t('SIN INFORME NO HAY LUZ. FIN.', 'NO REPORT, NO LIGHTS. END.'),
     thanks: t('INFORME RECIBIDO. NADIE LO LEERÁ. FIN.', 'REPORT RECEIVED. NOBODY WILL READ IT. END.'),
     goal: { metric: 'species', target: 3 },
@@ -314,6 +355,7 @@ export const CHAIN: EncargoDef[] = [
     who: 'vela',
     mood: 'awed',
     ask: t('Atrapa un Destello.', 'Catch a Spark.'),
+    how: t('Cuando cruce la chispa dorada, tócala rápido.', 'When the golden spark drifts by, tap it quickly.'),
     why: t('Pasa volando y deja un regalo. ¡Mira bien!', 'It flies by and leaves a gift. Keep watch!'),
     thanks: t('¡Atrapado! ¡Qué reflejos!', 'Caught! What reflexes!'),
     goal: { metric: 'golden', target: 1 },
@@ -324,6 +366,7 @@ export const CHAIN: EncargoDef[] = [
     who: 'vela',
     mood: 'happy',
     ask: t('Encuentra 2 maneras de moverse.', 'Find 2 ways of moving.'),
+    how: t('Juega en otro Mundo: allí se mueven distinto.', 'Play in another World: they move differently there.'),
     why: t('Unas nadan, otras giran. ¡Cada una a su manera!', 'Some swim, some spin. Each in its own way!'),
     thanks: t('Dos estilos. ¡Esto ya es un baile!', 'Two styles. Now it\'s a dance!'),
     goal: { metric: 'behaviors', target: 2 },
@@ -333,7 +376,9 @@ export const CHAIN: EncargoDef[] = [
     id: 'eps10',
     who: 'committee',
     mood: 'neutral',
-    ask: t('EXIGIMOS 10 ESENCIA POR SEGUNDO. FIN.', 'WE DEMAND 10 ESSENCE PER SECOND. END.'),
+    ask: t('EXIGIMOS 10 DE LUZ POR SEGUNDO. FIN.', 'WE DEMAND 10 GLOW PER SECOND. END.'),
+    plain: t('Consigue 10 de luz por segundo.', 'Make 10 glow per second.'),
+    how: t('Ten más criaturas a la vez y compra mejoras en el Árbol.', 'Keep more creatures at once and buy upgrades in the Tree.'),
     why: t('LA CALEFACCIÓN NO SE PAGA SOLA. FIN.', 'THE HEATING DOES NOT PAY FOR ITSELF. END.'),
     thanks: t('CIFRA ACEPTABLE. SIGAN. FIN.', 'ACCEPTABLE FIGURE. CARRY ON. END.'),
     goal: { metric: 'eps', target: 10 },
@@ -344,6 +389,7 @@ export const CHAIN: EncargoDef[] = [
     who: 'vela',
     mood: 'happy',
     ask: t('Compra Cultivo en el Árbol.', 'Buy Culture in the Tree.'),
+    how: t('Al terminar, compra «Cultivo» en el Árbol.', 'When the session ends, buy “Culture” in the Tree.'),
     why: t('Un caldo más rico. ¡Todas dan más luz!', 'A richer broth. They all make more glow!'),
     thanks: t('Mmm, sopita de laboratorio.', 'Mmm, lab soup.'),
     goal: { metric: 'upgrade', arg: 'culture', target: 1 },
@@ -355,7 +401,9 @@ export const CHAIN: EncargoDef[] = [
     who: 'committee',
     mood: 'neutral',
     ask: t('HAGAN UNA COPIA DE UNA ESPECIE. FIN.', 'MAKE A COPY OF A SPECIES. END.'),
-    why: t('LAS COPIAS DAN ESENCIA. AL COMITÉ LE ENCANTAN. FIN.', 'COPIES GIVE ESSENCE. THE COMMITTEE LOVES COPIES. END.'),
+    plain: t('Planta una copia de una especie.', 'Plant a copy of a species.'),
+    how: t('Toca «Copiar» junto a la semilla. Necesitas la Copiadora del Árbol.', 'Tap “Copy” next to the seed. You need the Copier from the Tree.'),
+    why: t('LAS COPIAS DAN LUZ. AL COMITÉ LE ENCANTAN. FIN.', 'COPIES GIVE GLOW. THE COMMITTEE LOVES COPIES. END.'),
     thanks: t('COPIA REGISTRADA. EXCELENTE. FIN.', 'COPY LOGGED. EXCELLENT. END.'),
     goal: { metric: 'prints', target: 1 },
     reward: { objective: 'print' },
@@ -365,6 +413,7 @@ export const CHAIN: EncargoDef[] = [
     who: 'vela',
     mood: 'awed',
     ask: t('Encuentra 6 especies.', 'Find 6 species.'),
+    how: t('Compra Mundos nuevos en el Árbol: cada uno tiene especies.', 'Buy new Worlds in the Tree: each has its own species.'),
     why: t('Seis ya es una familia. ¡Quiero conocerlas a todas!', 'Six is a family already. I want to meet them all!'),
     thanks: t('¡Una familia entera! Les hice sitio.', 'A whole family! I made room for them.'),
     goal: { metric: 'species', target: 6 },
@@ -374,7 +423,9 @@ export const CHAIN: EncargoDef[] = [
     id: 'eps50',
     who: 'committee',
     mood: 'neutral',
-    ask: t('EXIGIMOS 50 ESENCIA POR SEGUNDO ANTES DEL AMANECER. FIN.', 'WE DEMAND 50 ESSENCE PER SECOND BEFORE DAWN. END.'),
+    ask: t('EXIGIMOS 50 DE LUZ POR SEGUNDO ANTES DEL AMANECER. FIN.', 'WE DEMAND 50 GLOW PER SECOND BEFORE DAWN. END.'),
+    plain: t('Consigue 50 de luz por segundo.', 'Make 50 glow per second.'),
+    how: t('Llena la placa de criaturas y usa Nutrientes.', 'Fill the dish with creatures and use Nutrients.'),
     why: t('EL AMANECER ESTÁ LEJOS. LA FACTURA, NO. FIN.', 'DAWN IS FAR AWAY. THE BILL IS NOT. END.'),
     thanks: t('OBJETIVO CUMPLIDO. SE ARCHIVA. FIN.', 'TARGET MET. FILED. END.'),
     goal: { metric: 'eps', target: 50 },
@@ -385,6 +436,7 @@ export const CHAIN: EncargoDef[] = [
     who: 'vela',
     mood: 'happy',
     ask: t('Compra «Placa más grande» en el Árbol.', 'Buy “Bigger dish” in the Tree.'),
+    how: t('Al terminar, compra «Placa más grande» en el Árbol.', 'When the session ends, buy “Bigger dish” in the Tree.'),
     why: t('Más sitio: más criaturas sin apretarse.', 'More room: more creatures, no squeezing.'),
     thanks: t('¡Placa más grande! Caben todas.', 'A bigger dish! Everyone fits.'),
     goal: { metric: 'upgrade', arg: 'dish', target: 1 },
@@ -396,6 +448,7 @@ export const CHAIN: EncargoDef[] = [
     who: 'vela',
     mood: 'neutral',
     ask: t('Gana 2 000 de luz en una sesión.', 'Earn 2,000 glow in one session.'),
+    how: t('Recoge mucha luz: más criaturas, más tiempo y Nutrientes.', 'Collect lots of glow: more creatures, more time and Nutrients.'),
     why: t('Cuando la placa se llena de luz, madura.', 'When the dish fills with light, it ripens.'),
     thanks: t('Está madura. Casi da pena.', 'It\'s ripe. It\'s almost sad.'),
     goal: { metric: 'sessionEssence', target: 2000 },
@@ -410,6 +463,7 @@ export const CHAIN: EncargoDef[] = [
     who: 'vela',
     mood: 'worried',
     ask: t('Empieza una noche nueva en el Árbol.', 'Start a new night in the Tree.'),
+    how: t('En el Árbol, toca el círculo del centro cuando brille.', 'In the Tree, tap the centre circle when it glows.'),
     why: t('La noche avanza y la memoria se queda.', 'The night moves on, the memory stays.'),
     thanks: t('Una noche nueva. Y nos acordamos de todo.', 'A new night. And we remember everything.'),
     goal: { metric: 'extinctions', target: 1 },
@@ -427,6 +481,7 @@ export const CHAIN: EncargoDef[] = [
     mood: 'neutral',
     minEra: 2,
     ask: t('Compra 5 mejoras en el Árbol.', 'Buy 5 upgrades in the Tree.'),
+    how: t('Al terminar cada sesión, compra mejoras en el Árbol.', 'After each session, buy upgrades in the Tree.'),
     why: t('Lo que aprendes se queda en el Árbol.', 'What you learn stays in the Tree.'),
     thanks: t('Recordar cuesta. Pero vale la pena.', 'Remembering costs. But it\'s worth it.'),
     goal: { metric: 'treeNodes', target: 5 },
@@ -443,6 +498,7 @@ export const CHAIN: EncargoDef[] = [
     mood: 'awed',
     minEra: 2,
     ask: t('Mantén viva una nadadora un minuto.', 'Keep a swimmer alive for one minute.'),
+    how: t('Siembra la nadadora lejos de las demás y cuídala.', 'Sow the swimmer away from the others and look after it.'),
     why: t('Quiero medir cuánto nada sin cansarse.', 'I want to time how long it swims without tiring.'),
     thanks: t('¡Un minuto! Y ni se despeinó.', 'One minute! Not a hair out of place.'),
     goal: { metric: 'keepAlive', arg: 'swimmer', target: 60 },
@@ -460,6 +516,8 @@ export const CHAIN: EncargoDef[] = [
     mood: 'neutral',
     minEra: 3,
     ask: t('INFORME: 10 ESPECIES. FIN.', 'REPORT: 10 SPECIES. END.'),
+    plain: t('Consigue 10 especies distintas.', 'Get 10 different species.'),
+    how: t('Juega en todos tus Mundos: cada uno tiene especies.', 'Play in all your Worlds: each has its own species.'),
     why: t('LOS INFORMES CORTOS NO SE LEEN. LOS LARGOS TAMPOCO. FIN.', 'SHORT REPORTS GO UNREAD. LONG ONES TOO. END.'),
     thanks: t('SE CONCEDE MEDALLA. FIN.', 'MEDAL GRANTED. END.'),
     goal: { metric: 'species', target: 10 },
@@ -472,6 +530,7 @@ export const CHAIN: EncargoDef[] = [
     mood: 'neutral',
     minEra: 4,
     ask: t('Ten tres iguales a la vez.', 'Have three alike at once.'),
+    how: t('Siembra tres de la misma especie, o usa «Copiar».', 'Sow three of the same species, or use “Copy”.'),
     why: t('Juntas brillan más. Como nosotros en invierno.', 'Together they glow more. Like us in winter.'),
     thanks: t('Albor estaría orgullosa. Yo lo estoy.', 'Albor would be proud. I am.'),
     thanksWho: 'vela',
@@ -489,6 +548,7 @@ export const CHAIN: EncargoDef[] = [
     mood: 'awed',
     minEra: 4,
     ask: t('Juega un mundo nuevo hasta que nazca algo.', 'Play a new world until something is born.'),
+    how: t('Compra un Mundo nuevo en el Árbol y siembra allí.', 'Buy a new World in the Tree and sow there.'),
     why: t('Cada mundo esconde especies que aún no tienes.', 'Every world hides species you do not have yet.'),
     thanks: t('¡Una desconocida! Bienvenida.', 'A stranger! Welcome.'),
     goal: { metric: 'species', target: 1, delta: true },
@@ -506,6 +566,7 @@ export const CHAIN: EncargoDef[] = [
     mood: 'happy',
     minEra: 5,
     ask: t('Abre el Mundo 7 · Gigantes.', 'Open World 7 · Giants.'),
+    how: t('Al terminar, compra «Mundo 7 · Gigantes» en el Árbol.', 'When the session ends, buy “World 7 · Giants” in the Tree.'),
     why: t('Criaturas enormes: caben menos, pero valen el doble.', 'Huge creatures: fewer fit, but each is worth double.'),
     thanks: t('¡Mira qué grandotas!', 'Look how big they are!'),
     goal: { metric: 'upgrade', arg: 'worldGiants', target: 1 },
@@ -522,6 +583,7 @@ export const CHAIN: EncargoDef[] = [
     mood: 'neutral',
     minEra: 6,
     ask: t('Encuentra las siete especies de Albor.', 'Find Albor’s seven species.'),
+    how: t('Cada Mundo guarda una especie de Albor. Juega en los siete.', 'Each World keeps one of Albor’s species. Play in all seven.'),
     why: t('Las siete primeras. Con ellas empezó todo.', 'The first seven. Everything began with them.'),
     thanks: t('Las siete. Albor guardaba una flor para hoy.', 'All seven. Albor kept a flower for today.'),
     thanksWho: 'vela',
@@ -535,6 +597,7 @@ export const CHAIN: EncargoDef[] = [
     mood: 'neutral',
     minEra: 6,
     ask: t('Ten 10 criaturas a la vez.', 'Have 10 creatures at once.'),
+    how: t('Compra «Placa más grande» en el Árbol y siembra separado.', 'Buy “Bigger dish” in the Tree and sow apart.'),
     why: t('Que el sol las encuentre a todas despiertas.', 'So the sun finds them all awake.'),
     thanks: t('Todas despiertas. Ya puede salir el sol.', 'All awake. The sun may rise now.'),
     goal: { metric: 'stableNow', target: 10 },
@@ -558,6 +621,7 @@ export const SIDE: EncargoDef[] = [
     once: true,
     available: behaviorWorldOpen('spinner'),
     ask: t('Cultiva una que gire.', 'Grow one that spins.'),
+    how: t('Juega en el Mundo 3 · Remolinos.', 'Play in World 3 · Whirls.'),
     why: t('Yo las llamaba bailarinas. Giran sin marearse.', 'I called them dancers. They spin without getting dizzy.'),
     thanks: t('¡Una bailarina! Albor la adoraría.', 'A dancer! Albor would love it.'),
     thanksWho: 'vela',
@@ -573,6 +637,7 @@ export const SIDE: EncargoDef[] = [
     once: true,
     available: behaviorWorldOpen('pulsing'),
     ask: t('Busca una que lata.', 'Find one that pulses.'),
+    how: t('Juega en otros Mundos: en alguno laten.', 'Play in other Worlds: in one of them they pulse.'),
     why: t('Late como un corazón pequeñito. Escúchala.', 'It beats like a tiny heart. Listen.'),
     thanks: t('Pum, pum. Qué bonito.', 'Thump, thump. How lovely.'),
     thanksWho: 'vela',
@@ -588,6 +653,7 @@ export const SIDE: EncargoDef[] = [
     once: true,
     available: behaviorWorldOpen('divider'),
     ask: t('Encuentra una que se divida en dos.', 'Find one that splits in two.'),
+    how: t('Juega en otros Mundos: en alguno se dividen.', 'Play in other Worlds: in one of them they split.'),
     why: t('Una se vuelve dos. ¡Magia de verdad!', 'One becomes two. Real magic!'),
     thanks: t('¡Gemelas! Anotado dos veces.', 'Twins! Noted twice.'),
     goal: { metric: 'behavior', arg: 'divider', target: 1 },
@@ -600,6 +666,7 @@ export const SIDE: EncargoDef[] = [
     mood: 'awed',
     available: worldsOpen,
     ask: t('Juega un mundo nuevo hasta que nazca algo.', 'Play a new world until something is born.'),
+    how: t('Compra un Mundo nuevo en el Árbol y siembra allí.', 'Buy a new World in the Tree and sow there.'),
     why: t('Cada mundo esconde especies que aún no tienes.', 'Every world hides species you do not have yet.'),
     thanks: t('¡Una desconocida! Bienvenida.', 'A stranger! Welcome.'),
     goal: { metric: 'species', target: 1, delta: true },
@@ -618,6 +685,7 @@ export const SIDE: EncargoDef[] = [
     mood: 'happy',
     available: (v) => v.behaviorsSeen.includes('spinner'),
     ask: t('Mantén una que gire un minuto.', 'Keep a spinner going for one minute.'),
+    how: t('Siembra la que gira lejos de las demás y cuídala.', 'Sow the spinner away from the others and look after it.'),
     why: t('Quiero ver si se marea. Spoiler: no.', 'I want to see if it gets dizzy. Spoiler: no.'),
     thanks: t('Ni un mareo. Impresionante.', 'Not dizzy at all. Impressive.'),
     goal: { metric: 'keepAlive', arg: 'spinner', target: 60 },
@@ -633,6 +701,7 @@ export const SIDE: EncargoDef[] = [
     who: 'vela',
     mood: 'awed',
     ask: t('Atrapa 2 Destellos.', 'Catch 2 Sparks.'),
+    how: t('Toca las chispas doradas cuando crucen la placa.', 'Tap the golden sparks when they drift across the dish.'),
     why: t('Cada Destello trae un regalo. ¡Dos, mejor!', 'Every Spark brings a gift. Two is better!'),
     thanks: t('¡Doble regalo! Brillas, colega.', 'Double gift! You shine, colleague.'),
     goal: { metric: 'golden', target: 2, delta: true },
@@ -643,6 +712,7 @@ export const SIDE: EncargoDef[] = [
     who: 'vela',
     mood: 'happy',
     ask: t('Ten {n} criaturas a la vez.', 'Have {n} creatures at once.'),
+    how: t('Siembra separado hasta llenar la placa.', 'Sow apart until the dish is full.'),
     why: t('Una placa llena canta más fuerte.', 'A full dish sings louder.'),
     thanks: t('¡Qué coro! Se oye desde aquí.', 'What a choir! I can hear it from here.'),
     goal: {
@@ -657,7 +727,9 @@ export const SIDE: EncargoDef[] = [
     who: 'committee',
     mood: 'neutral',
     available: (v) => v.essencePerSec >= 3,
-    ask: t('SUBAN LA ESENCIA A {n} POR SEGUNDO. FIN.', 'RAISE ESSENCE TO {n} PER SECOND. END.'),
+    ask: t('SUBAN LA LUZ A {n} POR SEGUNDO. FIN.', 'RAISE GLOW TO {n} PER SECOND. END.'),
+    plain: t('Consigue {n} de luz por segundo.', 'Make {n} glow per second.'),
+    how: t('Ten más criaturas a la vez y usa Nutrientes.', 'Keep more creatures at once and use Nutrients.'),
     why: t('MÁS ES MÁS. ES NUESTRO LEMA. FIN.', 'MORE IS MORE. IT IS OUR MOTTO. END.'),
     thanks: t('CIFRA ANOTADA. QUEREMOS MÁS. FIN.', 'FIGURE NOTED. WE WANT MORE. END.'),
     goal: { metric: 'eps', target: (v) => nice(Math.max(5, v.essencePerSec * 1.6)) },
@@ -669,6 +741,8 @@ export const SIDE: EncargoDef[] = [
     mood: 'neutral',
     available: (v) => bestiaryOpen(v) && copierOwned(v),
     ask: t('HAGAN 3 COPIAS. FIN.', 'MAKE 3 COPIES. END.'),
+    plain: t('Planta 3 copias.', 'Plant 3 copies.'),
+    how: t('Toca «Copiar» junto a la semilla, tres veces.', 'Tap “Copy” next to the seed, three times.'),
     why: t('TRES COPIAS, TRES VECES MÁS FELICES. FIN.', 'THREE COPIES, THREE TIMES HAPPIER. END.'),
     thanks: t('COPIAS RECIBIDAS. QUÉ ORDEN. FIN.', 'COPIES RECEIVED. SUCH ORDER. END.'),
     goal: { metric: 'prints', target: 3, delta: true },

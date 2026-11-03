@@ -345,7 +345,7 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
         clearBottom();
       }
       // The next bubble waits like any other (a card, VELA, the Bestiary drawer): the frame loop shows it.
-      if (!showing && !(opts.busy?.() ?? false)) next();
+      if (!showing && !(opts.busy?.() ?? false) && !enc.quiet()) next();
       kick();
     }, 380);
   }
@@ -362,9 +362,11 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
     last = now;
     clock += dt;
     layer.classList.toggle('rm', rm());
-    if (!showing && queue.length && !(opts.busy?.() ?? false)) next();
+    // While a session's clock runs only the bar speaks (§2.8): a "done" lit the bar already, an offer waits.
+    if (enc.quiet()) queue = queue.filter((q) => q.kind !== 'cheer');
+    if (!showing && queue.length && !(opts.busy?.() ?? false) && !enc.quiet()) next();
     // A story dialogue took the stage: the offer tucks into the badge (it is there already).
-    if (showing?.kind === 'offer' && !hold && (opts.busy?.() ?? false)) hide(true);
+    if (showing?.kind === 'offer' && !hold && ((opts.busy?.() ?? false) || enc.quiet())) hide(true);
     if (showing) {
       const age = clock - shownAt;
       // The portrait "speaks" the first moments of an offer.
@@ -378,7 +380,9 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
       if (!hold && (now - shownAtMs) / 1000 > duration) hide(showing.kind === 'offer');
     }
     drawParticles(dt);
-    if (showing || queue.length || particles.length) raf = requestAnimationFrame(frame);
+    // An offer waiting for the clock to stop is checked twice a second, not every frame.
+    if (showing || particles.length || (queue.length && !enc.quiet())) raf = requestAnimationFrame(frame);
+    else if (queue.length) window.setTimeout(kick, 500);
   }
 
   bubble.addEventListener('click', (e) => {
@@ -445,7 +449,8 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
       if (!cur) return;
       el.style.setProperty('--c', ACCENT[cur.who]);
       el.classList.toggle('side', cur.kind === 'side');
-      text.textContent = tr(cur.ask, L());
+      // The plain request, never the Committee's telex (QA-CLARIDAD #22/#23: the quote is the bubble's).
+      text.textContent = tr(cur.plain, L());
       fill.style.transform = `scaleX(${Math.min(1, Math.max(0, cur.progress.frac)).toFixed(3)})`;
       num.textContent = tr(cur.count, L());
       row.hidden = cur.progress.unit === 'flag';
