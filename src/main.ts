@@ -16,7 +16,7 @@ import { ART_RENDER_STYLE } from './ui/art/matter';
 import { DEFAULT_ITEM } from './store/catalog';
 import { createDetector, DISH_OVERGROWN_FILL } from './detect/detector';
 import { createGame } from './game/game';
-import { clearDish as clearSavedDish, clearSave, loadSave, offlineSeconds, writeSave } from './game/save';
+import { clearDish as clearSavedDish, clearSave, loadSave, offlineSeconds, verifyStoredGame, writeSave } from './game/save';
 // Art tokens (--bl-*) before every module stylesheet (docs/ARTE.md §12).
 import './ui/art/art.css';
 import { createUI, shortRunRunning } from './ui/ui';
@@ -89,6 +89,8 @@ const STEPS_PER_SEC = SIM_STEPS_PER_SEC;
 /** Detector cadence in simulation steps. */
 const DETECT_EVERY = 10;
 const AUTOSAVE_MS = 30_000;
+/** The autosave waits for an idle moment between frames, at most this long (ms). */
+const AUTOSAVE_IDLE_TIMEOUT_MS = 2000;
 /** The dish itself is saved less often (a GPU readback); also on pagehide / tab hidden. */
 const DISH_SAVE_MS = 5 * 60_000;
 /** Kernel changes (R, rings: a new World) recompile the step shader; let a burst of changes settle. */
@@ -1083,6 +1085,11 @@ function boot(): void {
     bus.on('speciesNew', ({ speciesId, x, y }) => capturePortrait(speciesId, x, y, Math.min(64, Math.ceil(sim!.params.R * 4))));
   }
 
+  /** Run `fn` in an idle moment between frames (at the latest after AUTOSAVE_IDLE_TIMEOUT_MS). */
+  const whenIdle = (fn: () => void): void => {
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(() => fn(), { timeout: AUTOSAVE_IDLE_TIMEOUT_MS });
+    else setTimeout(fn, 0);
+  };
   /**
    * Save. `dish`: 'sync' reads the dish now (page hidden, import, reset: rare, a hitch is fine),
    * 'none' writes the game state only (the 30 s autosave), or a dish read asynchronously.
@@ -1573,14 +1580,19 @@ function boot(): void {
     }
     if (now - lastSave > AUTOSAVE_MS) {
       lastSave = now;
-      // Game state every 30 s; the dish (a GPU readback) every 5 min, asynchronously (QA3 F2).
+      // Game state every 30 s; the dish (a GPU readback) every 5 min, asynchronously (QA3 F2). Never
+      // inside this frame: in idle time, the check of the stored copy and the write as two short tasks.
       if (now - lastDishSave > DISH_SAVE_MS && !s.contextLost) {
         lastDishSave = now;
         s.exportStateAsync()
-          .then((bytes) => save(bytes))
-          .catch(() => save('none'));
-      } else save('none');
-      reportStats();
+          .then((bytes) => whenIdle(() => save(bytes)))
+          .catch(() => whenIdle(() => save('none')));
+      } else
+        whenIdle(() => {
+          verifyStoredGame();
+          whenIdle(() => save('none'));
+        });
+      whenIdle(reportStats);
     }
     requestAnimationFrame(frame);
   }
