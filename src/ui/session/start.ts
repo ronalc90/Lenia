@@ -161,7 +161,7 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
       const l = opts.lang();
       const gifts: string[] = [];
       // Esencia is Luz on screen (ADR-030 §2.1). Light from an Encargo met between sessions says where it comes
-      // from: «20 luz + 300 de un encargo que cumpliste en el Árbol = 320» (QA-CLARIDAD #26, SessionStart.carry).
+      // from: «20 luz + 300 de un encargo que cumpliste entre sesiones = 320» (QA-CLARIDAD #26, SessionStart.carry).
       const carry = Math.max(0, Math.round(start.carry ?? 0));
       if (carry > 0)
         gifts.push(
