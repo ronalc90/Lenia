@@ -11,12 +11,14 @@ import type {
   Behavior,
   BuyQty,
   CreatureView,
+  DropView,
   GameActions,
   GameView,
   GenomeNodeView,
   JournalEntryView,
   LeniaParams,
   Pattern,
+  PipetteView,
   Rarity,
   SeedSpec,
   Settings,
@@ -32,6 +34,45 @@ import { validateNickname } from './leaderboard-types';
 export const MOCK_STEPS_PER_SEC = 30;
 
 const T = (es: string, en: string): Text => ({ es, en });
+
+/**
+ * Stand-in for PA's collection (ADR-030, docs/CLARIDAD2.md §2.2) until src/game/collect.ts lands: the
+ * plan's numbers (§3.2), so the dish UI is built against what the game will do. Dev only.
+ */
+const MOCK_LIGHT = {
+  /** A drop holds this many seconds of its creature's production (LIGHT_CAP_SECONDS). */
+  capS: 4,
+  /** Pipettes go for drops of at least this share (PIPETTE_MIN_SHARE) and take this long a trip (PIPETTE_CYCLE_S[0]). */
+  minShare: 0.5,
+  cycleS: 2.5,
+  /** Docks around the rim (0..1 clockwise from the top), like tools in a rack. */
+  docks: [0.06, 0.94, 0.12, 0.88, 0.18, 0.82, 0.24, 0.76],
+  /** Collision warning horizon (CONTACT_WARN_S), seconds. */
+  warnS: 2,
+};
+
+/** Deterministic 0..1 noise for the mock's own choices (no Math.random in new code). */
+function noise01(i: number): number {
+  const x = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+interface MockDrop {
+  id: number;
+  x: number;
+  y: number;
+  amount: number;
+  cap: number;
+  owner: number | null;
+}
+
+interface MockPipette {
+  id: number;
+  dock: number;
+  target: number | null;
+  trip: number;
+  took: boolean;
+}
 
 interface MockUpgrade {
   id: string;
@@ -121,6 +162,11 @@ export class MockGame implements GameActions {
   tools = { longPress: true, brush: true, eraser: true, speeds: [1, 2, 4], speed: 1, markers: true };
   stats = { playTime: 3 * 3600 + 1240, totalEssence: 2_340_000, eraEssence: 412_000, seeds: 312, creaturesBorn: 88, eraTime: 41 * 60 };
   pipette = { active: false, progress: 0 };
+  /** Collected light (ADR-030): drops on the dish and the pipettes of the ↓ Recoger route. */
+  drops: MockDrop[] = [];
+  pipettes: MockPipette[] = [];
+  private nextDrop = 1;
+  private dangerList: { a: number; b: number; inS: number }[] = [];
   private nextId = 1;
   private nextGolden = 6;
   private seedRng = 1;
@@ -176,6 +222,108 @@ export class MockGame implements GameActions {
 
     if (scene === 'fresh') this.makeFresh();
     if (scene === 'early') this.makeEarly();
+    // Three pipettes bought (fresh starts by hand); every stable creature has some light waiting.
+    if (scene !== 'fresh') this.setPipettes(scene === 'early' ? 1 : 3);
+    for (const c of this.creatures) {
+      if (c.state !== 'stable') continue;
+      const d = this.dropOf(c);
+      d.amount = d.cap * (0.25 + 0.75 * noise01(c.id));
+    }
+  }
+
+  /** Own `n` pipettes (≤ 8), resting on their docks. */
+  setPipettes(n: number): void {
+    this.pipettes = [];
+    for (let i = 0; i < Math.min(8, n); i++) this.pipettes.push({ id: i + 1, dock: MOCK_LIGHT.docks[i], target: null, trip: 0, took: false });
+  }
+
+  private dropOf(c: MockCreature): MockDrop {
+    let d = this.drops.find((x) => x.owner === c.id);
+    if (!d) {
+      d = { id: this.nextDrop++, x: c.x, y: c.y, amount: 0, cap: 1, owner: c.id };
+      this.drops.push(d);
+    }
+    d.cap = Math.max(0.5, c.eps * MOCK_LIGHT.capS);
+    return d;
+  }
+
+  /** Move a drop's light into the wallet and tell the bus (as game/collect.ts will). */
+  private take(d: MockDrop, by: 'hand' | 'pipette' | 'sweep'): number {
+    const amount = d.amount;
+    if (!(amount > 0)) return 0;
+    this.essence += amount;
+    this.stats.totalEssence += amount;
+    bus.emit('lightCollected', { x: d.x, y: d.y, amount, by });
+    if (d.owner === null) this.drops = this.drops.filter((x) => x !== d);
+    else {
+      // The creature's next drop starts empty where it is (a new id: the old one was taken).
+      this.drops = this.drops.filter((x) => x !== d);
+      const c = this.creatures.find((x) => x.id === d.owner);
+      if (c) this.dropOf(c);
+    }
+    return amount;
+  }
+
+  private tickLight(d: number): void {
+    const mult = this.buffs.reduce((m, b) => m * b.mult, 1);
+    const alive = new Set<number>();
+    for (const c of this.creatures) {
+      if (c.state !== 'stable') continue;
+      alive.add(c.id);
+      const dr = this.dropOf(c);
+      dr.x = c.x;
+      dr.y = c.y;
+      dr.cap = Math.max(0.5, c.eps * mult * MOCK_LIGHT.capS);
+      // A full drop waits: nothing made is lost, the creature just stops filling it.
+      dr.amount = Math.min(dr.cap, dr.amount + c.eps * mult * d);
+    }
+    // A creature that went dark leaves its drop loose where it was.
+    for (const dr of this.drops) if (dr.owner !== null && !alive.has(dr.owner)) dr.owner = null;
+    this.drops = this.drops.filter((x) => x.owner !== null || x.amount > 0);
+    // Pipettes: each goes for the ripest drop no one else is going for, sips it half-way, comes back.
+    for (const p of this.pipettes) {
+      if (p.target === null) {
+        let best: MockDrop | null = null;
+        for (const dr of this.drops) {
+          if (dr.amount < MOCK_LIGHT.minShare * dr.cap || this.pipettes.some((o) => o.target === dr.id)) continue;
+          if (!best || dr.amount / dr.cap > best.amount / best.cap) best = dr;
+        }
+        if (best) {
+          p.target = best.id;
+          p.trip = 0;
+          p.took = false;
+        }
+        continue;
+      }
+      p.trip = Math.min(1, p.trip + d / MOCK_LIGHT.cycleS);
+      if (!p.took && p.trip >= 0.5) {
+        p.took = true;
+        const dr = this.drops.find((x) => x.id === p.target);
+        if (dr) this.take(dr, 'pipette');
+      } else if (!p.took && !this.drops.some((x) => x.id === p.target)) {
+        // Tapped first by the player: the pipette goes home and picks another.
+        p.trip = Math.max(p.trip, 1 - p.trip);
+        p.took = true;
+      }
+      if (p.trip >= 1) {
+        p.target = null;
+        p.trip = 0;
+      }
+    }
+    // Two bodies whose outlines will touch within warnS seconds (a crude stand-in for game/contact.ts).
+    this.dangerList = [];
+    const live = this.creatures.filter((c) => c.state === 'stable' || c.state === 'born');
+    for (let i = 0; i < live.length; i++)
+      for (let j = i + 1; j < live.length; j++) {
+        const a = live[i];
+        const b = live[j];
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const dist = Math.hypot(dx, dy) - (a.r + b.r) * 1.9;
+        const closing = -((b.vx - a.vx) * dx + (b.vy - a.vy) * dy) / (Math.hypot(dx, dy) || 1);
+        const inS = closing > 0.2 ? dist / closing : dist < 4 ? 0 : Infinity;
+        if (inS <= MOCK_LIGHT.warnS) this.dangerList.push({ a: a.id, b: b.id, inS: Math.max(0, inS) });
+      }
   }
 
   private makeFresh(): void {
@@ -255,8 +403,7 @@ export class MockGame implements GameActions {
     const eps = this.creatures.reduce((s, c) => s + (c.state === 'stable' ? c.eps : 0), 0);
     const mult = this.buffs.reduce((m, b) => m * b.mult, 1);
     this.essencePerSec = eps * mult;
-    this.essence += this.essencePerSec * d;
-    this.stats.totalEssence += this.essencePerSec * d;
+    // ADR-030: production fills the drops (tickLight); the wallet grows when the light is collected.
     this.stats.eraEssence += this.essencePerSec * d;
 
     for (const c of this.creatures) {
@@ -295,18 +442,18 @@ export class MockGame implements GameActions {
           bus.emit('creatureExploded', { id: c.id, x: c.x, y: c.y });
         } else {
           c.state = 'dead';
-          bus.emit('creatureDied', { id: c.id, x: c.x, y: c.y });
+          // Why it went dark (game/contact.ts deathCause): near another, else it did not take.
+          const near = this.creatures.some((o) => o !== c && o.state !== 'dead' && Math.hypot(o.x - c.x, o.y - c.y) < 2 * 13);
+          bus.emit('creatureDied', { id: c.id, x: c.x, y: c.y, cause: near ? 'crowd' : 'faded' });
         }
       }
-      if (c.state === 'stable' && this.time >= c.incomeAt) {
-        c.incomeAt = this.time + 1.6 + Math.random() * 0.6;
-        bus.emit('income', { id: c.id, x: c.x, y: c.y, amount: c.eps * mult * 1.6 });
-      }
+      // (No periodic "+N" income any more: collecting the drop replaces it, docs/CLARIDAD2.md §2.14.)
     }
     this.creatures = this.creatures.filter((c) => c.state !== 'dead');
 
     for (const b of this.buffs) b.remaining -= dt;
     this.buffs = this.buffs.filter((b) => b.remaining > 0);
+    this.tickLight(d);
 
     if (this.golden) {
       this.golden.x = mod(this.golden.x + this.golden.vx * d, this.gridW);
@@ -397,8 +544,17 @@ export class MockGame implements GameActions {
         age: c.age,
         vx: c.vx / MOCK_STEPS_PER_SEC,
         vy: c.vy / MOCK_STEPS_PER_SEC,
+        hue: sp ? (this.species.indexOf(sp) * 67 + 190) % 360 : undefined,
+        light: this.drops.find((d) => d.owner === c.id)?.amount ?? 0,
       };
     });
+    const drops: DropView[] = this.drops.map((d) => ({ id: d.id, x: d.x, y: d.y, amount: d.amount, fill: Math.min(1, d.amount / d.cap), owner: d.owner }));
+    for (const cv of creatures) {
+      const d = drops.find((x) => x.owner === cv.id);
+      cv.lightAmount = d?.amount ?? 0;
+      cv.light = d?.fill ?? 0;
+    }
+    const pipettes: PipetteView[] = this.pipettes.map((p) => ({ id: p.id, dock: p.dock, target: p.target, trip: p.trip }));
     const genomeGain = Math.floor(Math.sqrt(this.stats.eraEssence / 1e4));
     return {
       essence: this.essence,
@@ -432,7 +588,36 @@ export class MockGame implements GameActions {
       settings: { ...this.settings },
       tabs: { ...this.tabs },
       stats: { ...this.stats },
+      drops,
+      pipettes,
+      dangers: this.dangerList.map((d) => ({ ...d })),
     };
+  }
+
+  // ── ADR-030 actions (GameActions.collect / collectAt / collectPath) ──
+
+  collect(dropId: number): number {
+    const d = this.drops.find((x) => x.id === dropId);
+    return d ? this.take(d, 'hand') : 0;
+  }
+
+  collectAt(x: number, y: number, rCells: number): number {
+    let got = 0;
+    for (const d of [...this.drops]) if (Math.hypot(d.x - x, d.y - y) <= rCells) got += this.take(d, 'hand');
+    return got;
+  }
+
+  collectPath(pts: { x: number; y: number }[], rCells: number): number {
+    let got = 0;
+    for (const p of pts) got += this.collectAt(p.x, p.y, rCells);
+    return got;
+  }
+
+  /** "¡Tiempo!": VELA sweeps what is left on the dish. */
+  sweepAll(): number {
+    let got = 0;
+    for (const d of [...this.drops]) got += this.take(d, 'sweep');
+    return got;
   }
 
   // ───────────────────────────── GameActions ─────────────────────────────
@@ -586,6 +771,10 @@ export class MockGame implements GameActions {
       reward = T(`¡Cosecha! +${Math.round(lump)} Esencia`, `Harvest! +${Math.round(lump)} Essence`);
     }
     bus.emit('goldenCollected', { x, y, reward });
+    // Light without a drop says where it came from, next to the counter (bus luzGift, ADR-030).
+    const gift = Math.max(10, Math.round(this.essencePerSec * 10));
+    this.essence += gift;
+    bus.emit('luzGift', { amount: gift, reason: T('Destello', 'Spark') });
   }
 
   markJournalRead(id?: string): void {
