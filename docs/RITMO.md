@@ -22,6 +22,7 @@ los números viven en [`src/game/cycleBalance.ts`](../src/game/cycleBalance.ts) 
 6. [Bot: la tabla partida a partida](#6-bot-la-tabla-partida-a-partida)
 7. [Cambios en archivos de otros (lista de parches)](#7-cambios-en-archivos-de-otros-lista-de-parches)
 8. [Preguntas abiertas](#8-preguntas-abiertas)
+9. [Recoger la luz (ADR-030): el bot antes y después](#9-recoger-la-luz-adr-030-el-bot-antes-y-después)
 
 ---
 
@@ -312,3 +313,88 @@ ya los modela).
 - **Final de la historia a 1,7 h** (antes 2 h): ¿se acepta, o se alargan las noches 6–7?
 - **Late game**: con Vida eterna a ×1,5–1,8 por partida los números llegan a 10⁹ en la partida 40. Es lo pedido
   («que exploten»); si molesta, Vida eterna a 80 000.
+
+## 9. Recoger la luz (ADR-030): el bot antes y después
+
+Plan: [`docs/CLARIDAD2.md`](CLARIDAD2.md) §2.2, §3. Todas las corridas: `npx vite-node scripts/session-bot.ts 80 7 --runs`
+(B4: además `80 15 --policy=planner`), sobre la misma placa modelo de §6.
+
+**El modelo de recogida** (`scripts/sessionBotCore.ts`). Cada criatura estable llena su gota (como el juego:
+`src/game/collect.ts`, tope de 4 s de su producción). *planner* y *greedy* tocan cada gota madura (≥ 75 %) un paso
+(0,5 s) después de verla, como mucho **3 toques/s**, más los de sembrar. *kid* toca una gota al azar cada 0,8 s (p = 0,7).
+**idle** (nueva) juega como el planner pero **no toca nunca** una gota, ni el Destello, ni los Nutrientes: solo recogen
+sus pipetas. Columnas nuevas: `hand % · pip % · swept % · capped %` (luz recogida a mano, por pipeta, barrida al
+«¡Tiempo!», y producción que esperó en gotas llenas).
+
+**Lo que compra cada uno de la ruta ↓ Recoger.** Quien toca todas las gotas no gana luz con más pipetas: en B1 la ruta
+entera, comprada en el orden del plan o como «lo más barato», retrasó los nodos de producción y hundió las últimas
+noches un 1–6 %. El planner compra solo la **Pipeta** (2 · 4 · 8, la que el niño ve trabajar desde la sesión 3) y deja el
+resto al jugador quieto, que la teje en el orden del planner en cuanto su noche la abre.
+
+### 9.1 Las corridas
+
+| # | Cambio (además del anterior) | planner S1 (luz · Datos · compras) | Crec. noches 1–2 | Fin de la historia | REGLA DURA (bajones, mediana) | Compras tras cada sesión (mín.) | greedy (fin · bajones · mín.) | kid (fin) | idle (bajones desde su Pipeta) |
+|---|---|---|---|---|---|---|---|---|---|
+| B0 | v0.020 (línea base, §3.1 del plan) | 72 · 21 · 4 | ×1,78 | S44 ≈ 1,80 h | 0 | **1** (S11, S46) | 1,82 h · 0 · 2 | 1,35 h | — |
+| B1 | Gotas, pipetas, barrido (planner compra la ruta en orden) | 72 · 21 · 4 | ×1,66 | 1,72 h | **1** (S25 −6 %) | 1 | 1,79 h · 0 · 2 | 1,22 h | 5 |
+| B1c | Igual, planner solo la Pipeta, idle la ruta tejida | 72 · 21 · 4 | ×1,66 | 1,76 h | **0** | **2** | 1,79 h · 0 · 2 | 1,22 h | 5 |
+| B2 | Precios claros: semilla ×1, Nutrientes desde S2, congelados al salir, fuera los últimos 3 s; Destello frecuente adelanta el primero; ruta Destello «?» hasta S3 | 72 · 21 · 4 | ×1,75 | 1,87 h | **2** (S41 −7 %, S44 −6 %) | **0** | 1,88 h · 5 · 0 | 1,33 h | 7 |
+| B2b | Nutrientes congelados con la mejor luz/s de partidas anteriores | 72 · 21 · 4 | **×1,39** | 1,67 h | **1** (S29 −9 %) | 1 | 1,69 h · 6 · 1 | 1,25 h | 7 |
+| B2c | Regla del plan (B2) + Vida eterna hasta 199 niveles (`ETERNAL_LIFE_MAX`) | 72 · 21 · 4 | ×1,75 | 1,90 h | **0** | **2** | 1,92 h · 1 (S13 −7 %) · 2 | 1,33 h | 7 |
+| B3 | Anillo 3 a 250 | 72 · 21 · 4 | ×1,75 | 1,96 h | 0 | 2 | 2,00 h · 0 · 3 | 1,27 h | 7 |
+| B3 | **Anillo 3 a 200** (elegido: el más barato que cumple todo) | 72 · 21 · 4 | ×1,75 | 1,99 h | 0 | 2 | 2,00 h · 0 · 3 | 1,40 h | 4 |
+| **B4** | Final (B2c + anillo 3 a 200), **15 corridas** el planner | **72 · 21 · 4** | **×1,77** | **S44 ≈ 1,99 h** | **0** | **2** | 2,00 h · 0 · 3 | 1,40 h | 4 |
+
+Por qué B2 hundía el final: con el precio fijado en el segundo 8, una partida de 2:30 (que sube ×4–5 dentro de la
+partida) compraba 5–6 Nutrientes donde antes compraba 3; el planner llegó a los 99 niveles de Vida eterna en la sesión 37,
+ya no tenía nada que comprar y la luz quedó plana, con bajones de ruido. B2b (precio desde el récord) lo frenó demasiado.
+Se queda la regla del plan, y Vida eterna vuelve a ser «sin final» de verdad (199 niveles; la hoja sigue diciendo ∞).
+
+### 9.2 B4, planner: mediana de 15 corridas
+
+| # | Noche | Reloj | Jugado | Luz | × ant. | Datos | Compras | Especies | a mano % | pipeta % | en gotas llenas % |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 1 | 0:15 | 0:18 | 72 | — | 21 | 4 | 1 | 80 | 0 | 0,0 |
+| 2 | 1 | 0:35 | 0:35 | 132 | ×1,85 | 9 | 2 | 1 | 91 | 0 | 0,0 |
+| 3 | 1 | 0:40 | 0:40 | 269 | ×2,04 | 20 | 3 | 1 | 95 | 0 | 0,0 |
+| 4 | 2 | 0:45 | 0:45 | 357 | ×1,32 | 17 | 4 | 1 | 30 | 62 | 0,0 |
+| 5 | 2 | 0:45 | 0:45 | 357 | ×1,00 | 19 | 4 | 1 | 0 | 94 | 0,0 |
+| 6 | 2 | 0:45 | 0:45 | 619 | ×1,73 | 32 | 4 | 1 | 22 | 73 | 0,0 |
+| 7 | 2 | 0:45 | 0:48 | 2 224 | ×3,59 | 119 | 4 | 2 | 21 | 75 | 0,0 |
+| 8 | 3 | 1:15 | 1:18 | 9 505 | ×4,27 | 447 | 14 | 3 | 25 | 72 | 0,0 |
+| 10 | 3 | 1:15 | 1:27 | 16,3 K | ×1,27 | 787 | 4 | 3 | 48 | 49 | 0,0 |
+| 12 | 3 | 1:15 | 1:34 | 88,9 K | ×3,06 | 4 286 | 15 | 5 | 51 | 45 | 0,0 |
+| 16 | 4 | 2:10 | 2:34 | 1,11 M | ×1,07 | 57 677 | 5 | 6 | 61 | 36 | 0,1 |
+| 20 | 5 | 2:30 | 2:58 | 3,69 M | ×1,27 | 191 784 | 4 | 6 | 61 | 35 | 0,5 |
+| 24 | 5 | 2:30 | 2:58 | 24,0 M | ×1,65 | 2,0 M | 7 | 7 | 34 | 63 | 0,1 |
+| 32 | 6 | 2:30 | 2:58 | 9,3 · 10⁹ | ×2,35 | 9,8 · 10⁸ | 8 | 7 | 35 | 63 | 0,1 |
+| **44** | **7** | 2:30 | 2:58 | 1,1 · 10¹⁴ | ×2,11 | 1,2 · 10¹³ | 9 | 7 | 34 | 64 | 0,0 |
+
+(«a mano» + «pipeta» + barrido = 100 %; el barrido final es el 3–6 % restante.)
+
+### 9.3 Las puertas de `docs/CLARIDAD2.md` §3.3
+
+| Puerta | Meta | B4 |
+|---|---|---|
+| REGLA DURA (planner, mediana de 15) | 0 bajones | ✅ 0 (corridas sueltas: 15 de 645 parejas, 2 %) |
+| Sesión 1 (planner) | ≥ 60 luz, ≥ 15 Datos, ≥ 3 compras, 1.ª compra ≤ 45 s | ✅ 72 · 21 · 4 · 27 s |
+| ≥ 2 compras tras cada una de las 10 primeras (planner) | se mantiene | ✅ 4/2/3/4/4/4/4/14/11/4; y el «mín. 1» de B0 en S11/S46 sube a **2** |
+| ≥ 2 compras tras cada sesión (greedy) | se mantiene | ✅ mín. 3 |
+| Noches 2/3/4/5 en S4/S8/S13/S20 | se mantiene | ✅ |
+| Final de la historia (planner, greedy) | 1,5–2,2 h | ✅ 1,99 h · 2,00 h |
+| Luz esperando en gotas llenas (planner) | ≤ 10 % en S1–S5; ≤ 3 % con Pipetas rápidas | ✅ 0,0 %; ≤ 0,5 % desde S6 (el planner toca y no las compra) |
+| idle | nunca < `DATOS_MIN`; su luz no baja nunca desde su 1.ª Pipeta; noche 3 antes de S16 | ✅ mín. 3 · ❌ **4 bajones** (S16 −9 %, S24 −2 %, S33 −1 %, S38 −2 %) · ✅ S8 |
+| kid | luz ≥ 60 % del planner en S1–S5; noche 3 en S12 | ✅ 95/112/96/123/117 % · ✅ |
+| 1.ª compra del anillo 3 tras la Noche 2 (B3) | ≤ 3 sesiones (planner y kid) | ❌ **6** (planner) · **11** (kid); con 400: 7 · 13 |
+| Crecimiento noches 1–2 (planner) | ×1,5–3 | ✅ ×1,77 |
+
+**Lo que no cumple, sin esconderlo:**
+- **idle:** recoge todo con sus pipetas (gotas llenas 0 %), pero sin Destellos ni Nutrientes su luz se queda casi plana en la
+  Noche 4 (S14–S23: 0–1 compras por sesión, ahorrando para los nodos del anillo 4) y la mediana baja por ruido. No es la
+  recogida: es su ingreso frente a los precios de la Noche 4.
+- **anillo 3:** ningún precio probado (400, 250, 200) lo baja a 3 sesiones: con 17–32 Datos por sesión en S4–S6, el
+  planner ahorra para el primer nodo de 200 hasta la explosión de la S7–S8 (Mundo 2). Llegar a 3 sesiones pediría un
+  anillo 3 cerca de 60–80 Datos, que rompe la escalera de precios; queda para el integrador.
+- **El final crece más deprisa que en B0:** ×2,1–2,3 por sesión en las noches 6–7 (B0: ×1,7–1,9) y 10¹⁴ de luz en la S44
+  (B0: 10¹⁰). La regla dura se cumple y el final llega a la misma sesión; si los números molestan, lo natural es
+  `BOOST_SECONDS` de 8 a 12–16 s (no probado).

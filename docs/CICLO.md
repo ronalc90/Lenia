@@ -129,6 +129,17 @@ Los avisos (ámbar, cuenta atrás, Recta final) son **proporcionales** a la part
 
 ### 2.3 La Esencia durante la sesión
 
+> **(Corrección ADR-030, `docs/CLARIDAD2.md`)** En pantalla la Esencia se llama **Luz** (*Glow*) y el Abono,
+> **Nutrientes**; el código sigue diciendo `essence` / `boost`. La luz de cada criatura **estable** llena su **gota**
+> (`src/game/collect.ts`): como mucho `LIGHT_CAP_SECONDS` = 4 s de su producción (6 · 8 · 10 s con Gotas grandes); llena,
+> **espera** (no se pierde nada). Entra en la cartera al **recogerla**: un toque o un barrido (`actions.collect*`), una
+> pipeta de la ruta ↓ Recoger, o el barrido de VELA al «¡Tiempo!» y al cargar una partida a medias. Los Datos cuentan la
+> luz **hecha** (al llenar la gota), recogida o no. Lo que entra sin gota (Destello, Encargos, primeros pasos) lleva su
+> motivo (evento `luzGift`). **Un solo precio de semilla** (`SEED_PRICE_STEP` = 1); **Nutrientes** desde la sesión 2,
+> con el precio **fijado cuando sale a la venta** (8 s de la luz/s de ese momento, mínimo 10; el siguiente, el doble) y
+> fuera de venta en los últimos 3 s. Destello frecuente también adelanta el primer Destello. Bot antes/después en
+> `docs/RITMO.md` §9.
+
 Entra por las criaturas (cada segundo), el **Destello** («El Destello te regala 30 s de tu Esencia»), los Encargos y los
 objetivos; se gasta en semillas, copias y Abono. Los Datos se calculan con la Esencia **ganada**, no la guardada: gastar
 nunca castiga.
