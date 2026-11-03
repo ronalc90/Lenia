@@ -115,6 +115,10 @@ export interface SessionState {
   countdown: number;
   /** (ADR-030) The drops of light and the pipettes of this run (collect.ts). */
   light?: CollectState;
+  /** (ADR-030) Session 1 tutorial: the player's first creature is planted (while the run waits). */
+  planted?: boolean;
+  /** (ADR-030) Session 1 tutorial: the clock waits for VELA's line (actions.startClock), not for a seed. */
+  hold?: boolean;
 }
 
 export type SessionEvent =
@@ -739,5 +743,7 @@ export function validateSession(x: unknown): SessionState | null {
     warned: { minute: warned.minute === true, last: warned.last === true, sprint: warned.sprint === true },
     countdown: Math.floor(num(x.countdown, 0, 0, 1000)),
     light: validateCollect(x.light),
+    ...(x.planted === true ? { planted: true } : {}),
+    ...(x.hold === true && phase === 'ready' ? { hold: true } : {}),
   };
 }

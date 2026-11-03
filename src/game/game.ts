@@ -152,6 +152,7 @@ import {
   noteSpecies,
   noteVariant,
   noteSpend,
+  startClock as startSessionClock,
   pityDue,
   recentDatos,
   researchBuy,
@@ -322,6 +323,13 @@ export interface Game {
    * the rules by picking a World; Calibrar was retired (ADR-026).
    */
   setRulesForTests(p: Partial<Pick<LeniaParams, 'mu' | 'sigma' | 'R' | 'dt'>>): void;
+  /**
+   * (sessions, ADR-030) The story's session-1 tutorial will run: the first-ever session starts on an empty
+   * dish, the player's first tap plants the world's sure creature (through 'dishSeed', so it incubates
+   * unlit) and the clock waits for actions.startClock() after VELA's line (or TUTORIAL_HOLD_MAX_S of dish).
+   * Call it before the first tick. Off (default): session 1 keeps its starter and the first tap starts the clock.
+   */
+  setTutorial(on: boolean): void;
 }
 
 interface Golden {
@@ -362,6 +370,9 @@ export function createGame(deps: GameDeps, save?: string): Game {
   let migration: MigrationReport | null = null;
   /** A new session set up on load: re-emit dishClear + its Nevera seeds on the first tick (the dish exists then). */
   let bootReplant: SeedSpec[] | null = null;
+  /** (ADR-030) The story's session-1 tutorial runs (Game.setTutorial) and how long its clock has waited. */
+  let tutorial = false;
+  let holdFor = 0;
   /** Tree projections for the view (UpgradeView list, research view), rebuilt when the tree or Datos change. */
   let treeCache: { key: string; upgrades: UpgradeView[]; affordable: number } | null = null;
 
@@ -2028,7 +2039,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
   }
 
   function fridgePlants(start: SessionStart): SeedSpec[] {
-    const n = Math.min(start.fridgeSlots, room());
+    // The tutorial's first session starts empty: the player sows its first creature (ADR-030).
+    const n = Math.min(start.fridgeSlots - (tutorial && start.n === 1 ? C.STARTER_CREATURES : 0), room());
     const out: SeedSpec[] = [];
     if (n <= 0) return out;
     const codes: string[] = [];
@@ -2049,6 +2061,28 @@ export function createGame(deps: GameDeps, save?: string): Game {
       recentSeeds.push({ x: spot.x, y: spot.y, t: recentMemory(), r, step: reportStep }); // the next plant keeps clear of it
     }
     return out;
+  }
+
+  /**
+   * (ADR-030) Session 1 tutorial: the player's first tap plants the world's sure creature where it landed
+   * (a gift: no charge used) through 'dishSeed', so the integrator incubates it unlit like the Nevera's; the
+   * clock keeps waiting for actions.startClock().
+   */
+  function plantFirst(se: SessionState, x: number, y: number): null {
+    const e = catalogByCode(WORLD_BY_ID[se.world].species[0]);
+    if (!e) return null;
+    const t = turned(scaledTemplate(e, s.calib.R), true);
+    const r = Math.max(t.pattern.w, t.pattern.h) / 2;
+    const spot = clearSpotNear(x, y, r) ?? { x, y };
+    const spec: SeedSpec = { x: spot.x, y: spot.y, radius: r, density: 1, noise: 0, shape: 'pattern', pattern: t.pattern, bias: 1, rotation: t.rotation, rngSeed: Math.floor(rng() * 2147483647) };
+    se.planted = true;
+    se.hold = true;
+    se.seeds++;
+    holdFor = 0;
+    recordSeed(spot.x, spot.y, 0, true, true, r, spot.x !== x || spot.y !== y ? { x, y } : undefined);
+    bus.emit('dishSeed', { specs: [spec] });
+    checkProgress();
+    return null;
   }
 
   /**
@@ -2229,6 +2263,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
             newSpecies: se.newSpecies.length,
             endedEarly: se.endedEarly,
             first: se.n === 1,
+            tutorialHold: se.hold === true,
           }
         : null,
       research: {
@@ -2651,6 +2686,11 @@ export function createGame(deps: GameDeps, save?: string): Game {
     seedAt(x, y, opts) {
       const se = ses();
       if (sessions && (!se || se.phase === 'over')) return null; // the dish is frozen under the end card
+      if (se && tutorial && se.n === 1 && se.phase === 'ready') {
+        if (!se.planted) return plantFirst(se, x, y);
+        bus.emit('seedBlocked', { x, y, reason: 'growing' }); // VELA is talking: the clock has not started
+        return null;
+      }
       const big = !!opts?.big && (sessions ? fx.bigSeed : level('dropper') >= 2);
       const rf = B.SEED_RADIUS * (big ? B.SEED_BIG_RADIUS : 1);
       const cost = seedCost(rf);
@@ -2924,6 +2964,14 @@ export function createGame(deps: GameDeps, save?: string): Game {
       return true;
     },
 
+    startClock() {
+      const se = ses();
+      if (!se || se.phase !== 'ready') return;
+      se.hold = false;
+      sessionEvents(startSessionClock(se));
+      checkProgress();
+    },
+
     collect(dropId) {
       const L = collectable();
       if (!L || !Number.isFinite(dropId)) return 0;
@@ -3046,6 +3094,12 @@ export function createGame(deps: GameDeps, save?: string): Game {
     }
     if (report) processReport(report);
     if (paused) return;
+    // The tutorial's clock never waits forever (a story that never closes its line).
+    const held = ses();
+    if (held?.hold && held.phase === 'ready') {
+      holdFor += dt;
+      if (holdFor >= C.TUTORIAL_HOLD_MAX_S) actions.startClock!();
+    }
     const running = live();
 
     s.eraTime += dt;
@@ -3206,6 +3260,9 @@ export function createGame(deps: GameDeps, save?: string): Game {
       const r = s.research;
       if (!se || !r || se.phase === 'over') return;
       if (se.phase === 'ready') {
+        // The tutorial's first creature was on the lost dish: the player sows it again.
+        se.planted = false;
+        se.hold = false;
         sessionStartInfo ??= beginSession(r, fx).start;
         // The tick chooses the spots again when the dish exists (as for a session set up at load).
         bootReplant = fridgePlants(sessionStartInfo);
@@ -3314,6 +3371,15 @@ export function createGame(deps: GameDeps, save?: string): Game {
       return migration;
     },
     buyNode: (id) => buyTreeNode(id),
+    setTutorial(on) {
+      tutorial = !!on && sessions;
+      const se = ses();
+      // Set before the first tick: the fresh session-1 dish gets no starter (its plants have not been emitted).
+      if (tutorial && se?.n === 1 && se.phase === 'ready' && !se.planted && bootReplant && sessionStartInfo) {
+        recentSeeds.length = 0;
+        bootReplant = fridgePlants(sessionStartInfo);
+      }
+    },
     setRulesForTests(p) {
       const c = s.calib;
       for (const k of ['mu', 'sigma', 'R', 'dt'] as const) {

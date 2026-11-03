@@ -410,3 +410,53 @@ describe('sessions cycle: a low-quality device never gives the big dish away (RF
   });
 });
 
+
+describe('session 1 tutorial: the player sows the first creature, the clock waits for VELA (ADR-030)', () => {
+  it('QA#4/#7 the first-ever session starts empty and the player\'s first tap plants the sure creature without starting the clock', () => {
+    const { g, log, count } = sessionsGame();
+    log.delete('dishSeed'); // what boot announced before the dish existed; the first tick plants it
+    g.setTutorial(true);
+    g.tick(0, null);
+    const planted = () => ((log.get('dishSeed') ?? []) as { specs: { x: number; y: number; shape: string; bias?: number }[] }[]).flatMap((e) => e.specs);
+    expect(planted()).toEqual([]); // no starter: the dish waits for the player's tap
+    expect(g.actions.seedAt(100, 120)).toBeNull(); // planted through dishSeed, so the dish incubates it unlit
+    expect(planted()).toHaveLength(1);
+    expect(planted()[0]).toMatchObject({ x: 100, y: 120, shape: 'pattern', bias: 1 });
+    expect(g.view().session).toMatchObject({ phase: 'ready', tutorialHold: true });
+    expect(count('sessionClock')).toBe(0);
+    expect(g.view().charges).toEqual({ free: B.START_FREE_SEEDS, guaranteed: C.FIRST_SESSION_SURE_SEEDS }); // the first creature is a gift
+    // While VELA talks, a second tap is refused for free.
+    expect(g.actions.seedAt(40, 60)).toBeNull();
+    expect((log.get('seedBlocked')!.at(-1) as { reason: string }).reason).toBe('growing');
+  });
+
+  it('startClock starts the clock once', () => {
+    const { g, count } = sessionsGame();
+    g.setTutorial(true);
+    g.tick(0, null);
+    g.actions.seedAt(100, 120);
+    g.actions.startClock!();
+    g.actions.startClock!();
+    expect(count('sessionClock')).toBe(1);
+    expect(g.view().session).toMatchObject({ phase: 'running', tutorialHold: false });
+    expect(g.actions.seedAt(40, 60)).not.toBeNull(); // free play now
+  });
+
+  it('a tutorial that never closes still starts the clock (fail-safe)', () => {
+    const { g } = sessionsGame();
+    g.setTutorial(true);
+    g.tick(0, null);
+    g.actions.seedAt(100, 120);
+    run(g, C.TUTORIAL_HOLD_MAX_S + 1, null, 0.5);
+    expect(g.view().session!.phase).toBe('running');
+  });
+
+  it('without the tutorial, session 1 keeps its starter and the first tap starts the clock', () => {
+    const { g, log } = sessionsGame();
+    log.delete('dishSeed');
+    g.tick(0, null);
+    expect(((log.get('dishSeed') ?? []) as { specs: unknown[] }[]).flatMap((e) => e.specs)).toHaveLength(C.STARTER_CREATURES);
+    expect(g.actions.seedAt(100, 120)).not.toBeNull();
+    expect(g.view().session!.phase).toBe('running');
+  });
+});
