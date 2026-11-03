@@ -229,6 +229,7 @@ const S = {
   splashTagline: { es: 'Vida artificial que brilla', en: 'Artificial life that glows' },
   splashTap: { es: 'Toca para empezar', en: 'Tap to begin' },
   splashCredit: { es: 'Lenia © Bert Chan · MIT', en: 'Lenia © Bert Chan · MIT' },
+  splashPlate: { es: 'ESTACIÓN VIGILIA · TURNO DE NOCHE', en: 'VIGIL STATION · NIGHT SHIFT' },
 
   // Tutorial
   tutRestart: { es: 'Repetir tutorial', en: 'Replay tutorial' },

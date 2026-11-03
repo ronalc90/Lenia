@@ -1,0 +1,28 @@
+/* Title screen as plate 0 (docs/ARTE-REALISTA.md §6.7); the rest of the title's style is in ui.css. */
+
+/* The instrument label on top: JetBrains Mono, upper case, tracked, under the corner controls. */
+.splash-plate {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: calc(max(12px, env(safe-area-inset-top)) + 64px);
+  margin: 0;
+  text-align: center;
+  font: 600 var(--bl-fs-caption)/18px var(--bl-font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--bl-plate-ink2, #9aa6b2);
+  pointer-events: none;
+  animation: bl-fade-in var(--bl-t-story) var(--bl-ease-standard) var(--bl-t-card) both;
+}
+.bl.rm .splash-plate {
+  animation: none;
+}
+@media (min-width: 700px) {
+  .splash-plate {
+    top: max(28px, env(safe-area-inset-top));
+  }
+}
