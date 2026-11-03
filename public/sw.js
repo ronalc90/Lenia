@@ -1,11 +1,12 @@
 /* Bioluma service worker.
  *
  * Small and conservative:
- *  - precaches the app shell ('.' and index.html) plus the same-origin assets index.html references,
+ *  - precaches the app shell ('.' and index.html) plus the same-origin assets index.html references
+ *    (scripts, styles, icons and the self-hosted fonts of its @font-face rules, docs/ARTE-PULIDO.md §7.1),
  *  - navigation requests: network first, fall back to the cached shell when offline,
  *  - other same-origin GET requests: cache first (Vite assets are content-hashed, so this is safe);
  *    files without a hash (icons, manifest) are served from cache and refreshed in the background,
- *  - never touches cross-origin requests (Google Fonts, analytics), non-GET requests or Range requests,
+ *  - never touches cross-origin requests, non-GET requests or Range requests,
  *  - old caches are deleted on activate.
  *
  * The build stamps CACHE_VERSION with the release (vite.config.ts, src/app/swVersion.ts): every release
@@ -25,10 +26,10 @@ const HASHED = /[-.][A-Za-z0-9_-]{8}\.(?:js|css|woff2?|png|jpg|jpeg|svg|webp|jso
 
 const sameOrigin = (url) => url.origin === self.location.origin;
 
-/** Same-origin URLs that index.html pulls in (scripts, styles, modulepreload, icons). */
+/** Same-origin URLs that index.html pulls in (scripts, styles, modulepreload, icons, @font-face fonts). */
 function referencedAssets(html) {
   const urls = new Set();
-  const re = /(?:src|href)\s*=\s*["']([^"']+)["']/gi;
+  const re = /(?:(?:src|href)\s*=\s*["']|url\(\s*["']?)([^"')\s]+)/gi;
   let m;
   while ((m = re.exec(html))) {
     try {

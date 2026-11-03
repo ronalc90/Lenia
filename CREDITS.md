@@ -93,13 +93,18 @@ dividing) are inspired by, and reimplemented from, published research code. No c
 
 ## Fonts
 
-- **Inter**, by Rasmus Andersson, and **JetBrains Mono**, by JetBrains. Both are licensed under the
-  **SIL Open Font License 1.1**. Currently they are requested from Google Fonts at runtime, with system-font
-  fallbacks; they are not redistributed in this repository. If they are ever bundled, their license texts will be
-  added next to the font files.
-- **Fraunces**, by Undercase Type (Phaedra Charles and Flavia Zimbardi), licensed under the **SIL Open Font License
-  1.1** and requested from Google Fonts in the same way. Used for display titles and italic Latin species names
-  (ADR-024).
+- **Fraunces**, by Undercase Type (Phaedra Charles and Flavia Zimbardi), **SIL Open Font License 1.1**. Used for
+  display titles and italic Latin species names (ADR-024). Served by the game itself since the polish pass
+  (docs/ARTE-PULIDO.md §7.1): the latin subset of the variable font (roman: weights 500–800, `opsz`, `SOFT` 100;
+  italic: 500–700) as obtained from Google Fonts, unmodified, in `public/fonts/`, licence in
+  `public/fonts/OFL-Fraunces.txt`. Source: <https://github.com/undercasetype/Fraunces>.
+- **Inter**, by Rasmus Andersson (The Inter Project Authors), **SIL Open Font License 1.1**: the latin subset of the
+  variable font (400–800), self-hosted in `public/fonts/`, licence in `public/fonts/OFL-Inter.txt`.
+  Source: <https://github.com/rsms/inter>.
+- **JetBrains Mono**, by JetBrains, **SIL Open Font License 1.1**: the latin subset (500–700), self-hosted in
+  `public/fonts/`, licence in `public/fonts/OFL-JetBrainsMono.txt`. Source: <https://github.com/JetBrains/JetBrainsMono>.
+- The font data is unmodified (each file name carries a content hash, a cache key); the service worker keeps them
+  for offline play. The dev pages (`*-dev.html`) still request them from Google Fonts.
 
 ## Audio
 
