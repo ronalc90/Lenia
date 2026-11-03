@@ -56,7 +56,14 @@ import { bigSeedChip, createSeedMeter, seedPriceSheetExplain, type SeedMeter } f
 import { attachSecretInputs, createSecretsUI, createStrokeRecorder, mountBasementEntry, type BasementEntry } from './ui/secrets';
 import { createSessionFlow, createWelcomeCard, datosExplain, type SessionFlow, type SessionFlowSound } from './ui/session';
 import { computeDatos } from './game/session';
-import { PREINCUBATE_STEPS, SIM_STEPS_PER_SEC } from './game/cycleBalance';
+import { PREINCUBATE_STEPS, SESSION_PACE_RAMP_S, SIM_STEPS_PER_SEC } from './game/cycleBalance';
+import { CultureReveal } from './sim/reveal';
+import { dishFx, PULSE } from './ui/fx/stage';
+import { FLY, FlyLayer } from './ui/fx/fly';
+import { LIFE } from './ui/fx/lifecycle';
+import { SHAKE } from './ui/fx/shake';
+import { lowerProfile, type FxAnchors } from './ui/fx/types';
+import { hueHex } from './ui/overlay';
 import { dishSeconds } from './game/dishClock';
 import { nodeText } from './game/tree';
 
@@ -80,8 +87,6 @@ const STORE_API_URL: string = import.meta.env.VITE_STORE_API_URL ?? '';
 const STEPS_PER_SEC = SIM_STEPS_PER_SEC;
 /** Detector cadence in simulation steps. */
 const DETECT_EVERY = 10;
-/** Most incubation steps a frame under the start card (RITMO §7: ≤ 40, so a phone keeps its frame rate). */
-const PREINCUBATE_PER_FRAME = 40;
 const AUTOSAVE_MS = 30_000;
 /** The dish itself is saved less often (a GPU readback); also on pagehide / tab hidden. */
 const DISH_SAVE_MS = 5 * 60_000;
@@ -97,6 +102,32 @@ const SLOW_DISH_WINDOW_S = 4;
 const SLOW_DISH_RATIO = 0.75;
 /** At most one "why was my tap refused" hint in this many ms (a player tapping fast gets one, not ten). */
 const SEED_BLOCKED_HINT_MS = 2500;
+/**
+ * Effects step down one profile (never the simulation's grid) when frames take longer than this for
+ * FX_SLOW_S seconds in a row (docs/ARTE-PULIDO.md §6.1: < 45 fps for 2 s).
+ */
+const FX_SLOW_FRAME_MS = 22;
+const FX_SLOW_S = 2;
+/**
+ * Wall time a frame may spend on the unlit incubation (ARTE-PULIDO A-6): steps with a synchronous
+ * snapshot every 10th, so the starter is ready in a fraction of a second on a phone (hidden, it was
+ * ~2 s of an empty dish where a player could sow blind on it), and a frame never stalls past this.
+ */
+const INCUBATE_FRAME_MS = 8;
+/** A-11 (high profile): the glass glint sweeps once every GLINT_EVERY_S, taking GLINT_SWEEP_S. */
+const GLINT_EVERY_S = 20;
+const GLINT_SWEEP_S = 1.6;
+/** Where Esencia motes go when the HUD gives no anchor (CSS px, top left under the safe area). */
+const FLY_FALLBACK = { x: 30, y: 30 };
+/** Motes a Spark sends to the counter (and to the clock when it added seconds). */
+const SPARK_MOTES = 5;
+const SPARK_CLOCK_MOTES = 3;
+
+/** HUD anchors that Package B adds to the UI (optional: absent, motes fly to the fallback point). */
+interface HudFx {
+  hudAnchor?(id: 'essence' | 'datos' | 'clock'): DOMRect | null;
+  pulseHud?(id: 'essence' | 'datos', amount: number): void;
+}
 
 /** Story scenes about the research tree: they play in the Tree, docked at the top (QA4 F-01). */
 const TREE_SCENES = new Set(['t_tree', 't_world', 'a1_night']);
@@ -161,6 +192,10 @@ function boot(): void {
   }
 
   const quality = pickQuality(settings.quality);
+  // Effects follow the grid's profile (bloom mips, particles, motes, grain, glint: ARTE-PULIDO §6.1)
+  // and step down on their own if the device cannot hold them.
+  let fxQuality: Quality = quality;
+  dishFx.configure(fxQuality);
   // The round walled dish (ADR-025, docs/DISH.md): a square grid allocated once per quality, the rim
   // set by the Placa route of the research tree (DISH_DIAMETERS, capped by quality).
   const dishQ = QUALITY_DISH[quality];
@@ -194,6 +229,11 @@ function boot(): void {
   }
   let lastInteraction = performance.now();
   let idle = false;
+  /**
+   * Calm start (ARTE-PULIDO A-6, owner bug "la criatura inicial corre"): every run's starter incubates
+   * unlit (src/sim/reveal.ts), then the culture is lit and the dish's pace climbs from rest.
+   */
+  const culture = new CultureReveal({ rampS: SESSION_PACE_RAMP_S });
 
   const audio = createAudio(bus);
   // Cosmetics need the leaderboard's equipped-profile getter and vice versa: late-bound closure.
@@ -255,8 +295,10 @@ function boot(): void {
     getView: () => game.view(),
     // Splash/modal (UI), a session card or the tree, VELA talking, a price/guide sheet, a celebration.
     // A run shorter than MOMENT_MIN_RUN_SECONDS: the cards wait for its summary (RITMO §2 rule 7).
+    // Nor while the run's culture is still incubating unlit or lighting up: "¡VIDA!" about the starter
+    // waits until the player can see it (ARTE-PULIDO §7.2b).
     isBlocked: () =>
-      (uiRef?.blocked() ?? true) || introOpen() || shortRunRunning(game.session) || flowBusy() || (bridge?.storyShowing() ?? false) || sheetOpen() || encargoShowing() || secretShowing(),
+      (uiRef?.blocked() ?? true) || introOpen() || shortRunRunning(game.session) || flowBusy() || (bridge?.storyShowing() ?? false) || sheetOpen() || encargoShowing() || secretShowing() || !culture.lit,
     downgrade: (id) => bridge?.covered(id) ?? false,
     // Session 1 has cards only for the basics (seed, life, Essence, shapeless, clock); a new species or
     // way of moving is a brief label there, its full card comes in session 2 (docs/CLARIDAD.md §3.3).
@@ -771,6 +813,59 @@ function boot(): void {
     }
   }
 
+  // ── Esencia flies to the counter (ARTE-PULIDO A-5): motes from the paying creature to the HUD ──
+  const hud = ui as UI & HudFx;
+  const anchors: FxAnchors = {
+    rect: (id) => (id === 'bestiary' ? null : (hud.hudAnchor?.(id) ?? null)),
+    arrive: (id, n) => {
+      if (id === 'essence' || id === 'datos') hud.pulseHud?.(id, n);
+    },
+  };
+  const fly = new FlyLayer(root, {
+    anchors: () => anchors,
+    light: () => document.documentElement.dataset.theme === 'light',
+    reduceMotion: () => reduceMotionNow,
+    fallback: () => FLY_FALLBACK,
+  });
+  let lastEssence = game.view().essence;
+  /** One flight per creature every FLY.perCreatureMs at most. */
+  const flewAt = new Map<number, number>();
+  /** Screen point (viewport CSS px) of a grid point of the dish, with the camera's micro-motion. */
+  const toClient = (x: number, y: number) => {
+    const p = camera.gridToScreen(x, y);
+    return { x: dishBox.left + p.x + dishFx.shake.x, y: dishBox.top + p.y + dishFx.shake.y };
+  };
+  bus.on('income', (e) => {
+    if (dishFx.matterFade < 0.5 || dishBox.at < 0) return;
+    if (!(e.amount >= FLY.minShare * lastEssence)) return;
+    const t = performance.now();
+    if (t - (flewAt.get(e.id) ?? -Infinity) < FLY.perCreatureMs) return;
+    flewAt.set(e.id, t);
+    if (flewAt.size > 64) flewAt.clear();
+    const hue = hueById.get(e.id);
+    const n = 1 + (e.amount >= 0.05 * lastEssence ? 1 : 0) + (e.amount >= 0.15 * lastEssence ? 1 : 0);
+    const p = toClient(e.x, e.y);
+    fly.launch(p.x, p.y, 'essence', hue !== undefined ? hueHex(hue, 70) : '#5bc0eb', n, t);
+  });
+  /** A Spark that added seconds to the clock (sessionExtended 'golden' comes just before goldenCollected). */
+  let sparkClockAt = -Infinity;
+  bus.on('sessionExtended', (e) => {
+    if (e.reason === 'golden') sparkClockAt = performance.now();
+  });
+  bus.on('goldenCollected', (e) => {
+    if (dishBox.at < 0) return;
+    // A-7: golden motes fly to where the reward is counted, after the 60 ms hold.
+    const t = performance.now() + 60;
+    const p = toClient(e.x, e.y);
+    fly.launch(p.x, p.y, 'essence', '#ffd166', SPARK_MOTES, t);
+    if (t - sparkClockAt < 300) fly.launch(p.x, p.y, 'clock', '#ffd166', SPARK_CLOCK_MOTES, t + 120);
+  });
+  // A finger on the dish (a drag, a long press): the living camera holds still (A-9).
+  ui.dishEl.addEventListener('pointerdown', () => (dishFx.pointerDown = true), { passive: true });
+  const fingerUp = () => (dishFx.pointerDown = false);
+  window.addEventListener('pointerup', fingerUp, { passive: true });
+  window.addEventListener('pointercancel', fingerUp, { passive: true });
+
   const detector = createDetector();
   const platform: Platform = initPlatform({ onPause: () => save('sync') });
   platformRef = platform;
@@ -810,8 +905,8 @@ function boot(): void {
   // Dish requests from the game (auto-seeder, rewards, extinction).
   bus.on('dishSeed', ({ specs }) => {
     specs.forEach((s) => sim!.seed(s));
-    // A seed while the run waits (the Nevera's plants on the start card) incubates under the card.
-    if (game.session?.phase === 'ready') preincubate = PREINCUBATE_STEPS;
+    // A seed while the run waits (the Nevera's plants on the start card) incubates unlit.
+    if (game.session?.phase === 'ready') culture.incubate(PREINCUBATE_STEPS);
   });
   // "¡Tiempo!": the sheets and cards opened from the dish close, so the summary is the one layer (QA4 F-05).
   bus.on('sessionEnd', () => {
@@ -819,9 +914,11 @@ function boot(): void {
     priceSheet.close();
     ui.closeTransient();
     ui.resetView();
+    // A-12: the dish freezes under the stamp (the shader greys it), with a jolt of the camera.
+    dishFx.shake.add(SHAKE.timesUp);
   });
   bus.on('sessionStart', () => {
-    preincubate = PREINCUBATE_STEPS;
+    culture.incubate(PREINCUBATE_STEPS);
     // Every run starts on the whole dish (QA4 F-09: a child's taps left it zoomed in for good).
     ui.resetView();
   });
@@ -843,6 +940,7 @@ function boot(): void {
     extrapolator.reset();
     epoch++; // drop snapshots requested before the clear
     reports.length = 0;
+    dishFx.tracks.clear();
   }
   bus.on('dishClear', () => {
     runaway.reset();
@@ -1008,12 +1106,12 @@ function boot(): void {
    * synchronously (a software-rendered test browser). The game clock always follows the steps the dish
    * really ran (dishSeconds, QA4 F-02). Always { scale: 1, lockstep: false } in a release.
    */
-  const debugTime = { scale: 1, lockstep: false };
+  const debugTime = { scale: 1, lockstep: false, fx: 1, fxAuto: true };
   /**
-   * Steps still to incubate under the start card (ADR-027, RITMO §4.3): the Nevera's plants are alive
-   * when the run starts. Up to PREINCUBATE_PER_FRAME steps a frame, never ahead of the detector.
+   * The run's starter incubates unlit (ADR-027, RITMO §4.3; ARTE-PULIDO A-6): the Nevera's plants are
+   * alive when the run starts, and nobody watched them race. Never ahead of the detector.
    */
-  let preincubate = !dishRestored && game.session?.phase === 'ready' ? PREINCUBATE_STEPS : 0;
+  if (!dishRestored && game.session?.phase === 'ready') culture.incubate(PREINCUBATE_STEPS);
   let last = performance.now();
   let acc = 0;
   /** Detector reports produced since the last game tick (async readbacks). */
@@ -1094,6 +1192,8 @@ function boot(): void {
   const tintPool = Array.from({ length: TINT_MAX }, () => ({ x: 0, y: 0, r: 0, hue: 0 }));
   /** Species hue of every registered creature (from the game's view, refreshed 10×/s). */
   const hueById = new Map<number, number>();
+  /** Bodies of the latest snapshot (the matter tracks keep only these). */
+  const trackIds = new Set<number>();
   function detect(snap: ReturnType<NonNullable<typeof sim>['snapshot']>): void {
     const s = sim!;
     const report = detector.update(snap, s.params);
@@ -1127,12 +1227,19 @@ function boot(): void {
     // Every body is kept; its hue is looked up each frame, so a species registered while the dish is
     // paused (its Momento card names the colour) is tinted at once, not at the next report.
     tintSrc.length = 0;
+    trackIds.clear();
     for (const b of bodies) {
       const turned = turns.find((t) => t.id === b.id);
       const ca = turned ? Math.cos(turned.angle) : 1;
       const sa = turned ? Math.sin(turned.angle) : 0;
-      tintSrc.push({ id: b.id, x: b.x, y: b.y, vx: b.vx * ca - b.vy * sa, vy: b.vx * sa + b.vy * ca, r: Math.max(s.params.R, 2.2 * b.radius) });
+      const vx = b.vx * ca - b.vy * sa;
+      const vy = b.vx * sa + b.vy * ca;
+      tintSrc.push({ id: b.id, x: b.x, y: b.y, vx, vy, r: Math.max(s.params.R, 2.2 * b.radius) });
+      // The overlay anchors rings, labels and the Momento focus to this same body (§3.7 spotlight drift).
+      dishFx.tracks.set(b.id, b.x, b.y, vx, vy, s.stepCount);
+      trackIds.add(b.id);
     }
+    dishFx.tracks.retain(trackIds);
     tintStep = s.stepCount;
     reports.push(report);
   }
@@ -1221,6 +1328,57 @@ function boot(): void {
     paceWall = 0;
   }
 
+  // ── Dish effects (docs/ARTE-PULIDO.md §4): pulses, heartbeats, camera, freeze, grain, glint ──
+  /** The dish's on-screen box, read at the start of a frame at most twice a second (no forced layout mid-frame). */
+  const dishBox = { left: 0, top: 0, at: -1 };
+  let reduceMotionNow = game.view().settings.reduceMotion;
+  function dishEffects(s: NonNullable<typeof sim>, fxDt: number, now: number): void {
+    if (now - dishBox.at > 500) {
+      const r = glCanvas.getBoundingClientRect();
+      dishBox.left = r.left;
+      dishBox.top = r.top;
+      dishBox.at = now;
+    }
+    dishFx.reduceMotion = reduceMotionNow;
+    dishFx.simStep = s.stepCount;
+    dishFx.freezeTarget = game.session?.phase === 'over' ? 1 : 0;
+    dishFx.tick(fxDt);
+    s.setPulses(dishFx.pulseA, dishFx.pulseB, dishFx.pulseN, dishFx.time);
+    s.setForming(dishFx.form, dishFx.formN);
+    s.setFreeze(dishFx.freeze);
+    const sh = dishFx.shake;
+    s.setCameraFx(sh.x, sh.y, sh.zoom, sh.breathX, sh.breathY);
+    // A-3 grain: a new pattern 24 times a second (12 on low), frozen with Reduce motion.
+    s.setGrain(reduceMotionNow ? 0 : Math.floor(dishFx.time * dishFx.profile.grainHz));
+    // A-11 (high): a glint runs along the glass once every 20 s (static, faint, with Reduce motion).
+    if (!dishFx.profile.glint) s.setGlint(0, 0);
+    else if (reduceMotionNow) s.setGlint(0.5, 0.35);
+    else {
+      const u = (dishFx.time % GLINT_EVERY_S) / GLINT_SWEEP_S;
+      s.setGlint(Math.min(1, u), u < 1 ? Math.sin(Math.PI * u) : 0);
+    }
+    fly.setMax(dishFx.profile.fly);
+  }
+  /** The culture is lit (A-6): a birth pulse without particles on every starter creature. */
+  function lightCulture(): void {
+    const ahead = sim!.stepCount - tintStep;
+    for (const t of tintSrc) dishFx.pulse(t.x + t.vx * ahead, t.y + t.vy * ahead, t.r, PULSE.birth, LIFE.inhale, LIFE.inhaleS);
+  }
+  /** §6.1: frames over 22 ms for 2 s in a row step the effects down one profile (never the grid). */
+  let slowFor = 0;
+  function watchFxPace(now: number, dt: number): void {
+    if (!debugTime.fxAuto || fxQuality === 'low' || idle || document.hidden) {
+      slowFor = 0;
+      return;
+    }
+    slowFor = dt * 1000 > FX_SLOW_FRAME_MS ? slowFor + dt : 0;
+    if (slowFor < FX_SLOW_S) return;
+    slowFor = 0;
+    fxQuality = lowerProfile(fxQuality);
+    dishFx.configure(fxQuality);
+    if (import.meta.env.DEV || import.meta.env.VITE_E2E === '1') console.info(`[fx] effects profile lowered to ${fxQuality} at ${Math.round(now)} ms`);
+  }
+
   function frame(now: number): void {
     const dt = Math.min(0.25, (now - last) / 1000);
     last = now;
@@ -1237,25 +1395,40 @@ function boot(): void {
     // A Momento eases the dish to a stop (1 → 0 in ~0.45 s) and back; at 0 it holds setPause('moment').
     const ts = momentsUI.timeScale();
 
-    // Incubation under the start card: the detector still sees every 10th step it can (one readback in
-    // flight), and the game ticks with dt 0 (nothing is paid while the run waits).
-    if (preincubate > 0) {
-      if (game.session?.phase !== 'ready' || s.contextLost) preincubate = 0;
-      else if (!document.hidden) {
-        let budget = Math.min(preincubate, PREINCUBATE_PER_FRAME);
-        while (budget > 0 && !detectionDue()) {
-          const k = Math.min(budget, DETECT_EVERY - (s.stepCount % DETECT_EVERY));
-          s.advance(k);
-          budget -= k;
-          preincubate -= k;
-          if (s.stepCount % DETECT_EVERY === 0) requestDetection();
+    // The run's starter incubates unlit (ARTE-PULIDO A-6): never under a Momento's pause, the detector
+    // still sees every 10th step it can (one readback in flight), and the game ticks with dt 0 (nothing
+    // is paid while the run waits). Then the culture is lit and the pace climbs from rest.
+    if (s.contextLost) culture.cancel();
+    const rv = culture.frame(dt, {
+      ready: game.session?.phase === 'ready',
+      momentPaused: pauseSources.has('moment'),
+      hidden: document.hidden,
+      stepping: !isPaused() && !document.hidden,
+    });
+    if (rv.incubateBudget > 0) {
+      // Unlit, the detector reads each 10th step synchronously (nothing on screen waits for it); an
+      // asynchronous read still in flight is waited for, so reports never arrive out of order.
+      const until = performance.now() + INCUBATE_FRAME_MS;
+      let budget = rv.incubateBudget;
+      while (budget > 0 && !snapInFlight && !s.contextLost && performance.now() < until) {
+        if (mustWaitForDetection(s.stepCount, detectedStep, DETECT_EVERY)) {
+          detectedStep = s.stepCount;
+          detect(s.snapshot());
         }
+        const k = Math.min(budget, DETECT_EVERY - (s.stepCount % DETECT_EVERY));
+        s.advance(k);
+        budget -= k;
+        culture.ran(k);
       }
     }
+    if (rv.lit) lightCulture();
+    dishFx.matterFade = rv.fade;
+    s.setMatterFade(rv.fade);
 
     let stepped = 0;
-    if (!isPaused() && !document.hidden) {
-      acc += dt * STEPS_PER_SEC * game.speed * ts * debugTime.scale;
+    // (While the culture incubates unlit, the incubation above is all the stepping.)
+    if (!isPaused() && !document.hidden && !culture.incubating) {
+      acc += dt * STEPS_PER_SEC * game.speed * ts * debugTime.scale * rv.pace;
       // Never fall into a spiral of death: cap work per frame.
       const whole = Math.floor(acc);
       const n = Math.min(whole, 4 * game.speed * debugTime.scale);
@@ -1276,7 +1449,7 @@ function boot(): void {
     if (portraitRequests) for (const r of portraitRequests.call(game)) capturePortrait(r.speciesId, r.x, r.y, r.size, r.creatureId);
 
     // Steps/s the overlay extrapolates labels with (the e2e time scale included; 1 in a release).
-    const rate = isPaused() ? 0 : STEPS_PER_SEC * game.speed * ts * debugTime.scale;
+    const rate = isPaused() ? 0 : STEPS_PER_SEC * game.speed * ts * debugTime.scale * rv.pace;
     if (rate !== lastRate) {
       lastRate = rate;
       (ui as { setSimRate?: (r: number) => void }).setSimRate?.(rate);
@@ -1284,9 +1457,13 @@ function boot(): void {
     // Idle (no input for a minute, GDD §12): draw at 30 fps; the simulation keeps its real step rate.
     if (!idle || now - lastDraw >= IDLE_FRAME_MS - 2) {
       lastDraw = now;
-      s.render({ camera, time: (now - start) / 1000, quality });
-      ui.frame((now - start) / 1000, Math.min(0.25, (now - lastUiFrame) / 1000));
+      const uiDt = Math.min(0.25, (now - lastUiFrame) / 1000);
+      dishEffects(s, uiDt * debugTime.fx, now);
+      s.render({ camera, time: (now - start) / 1000, quality: fxQuality });
+      ui.frame(debugTime.fx === 1 ? (now - start) / 1000 : dishFx.time, uiDt * debugTime.fx);
       lastUiFrame = now;
+      fly.frame(now);
+      watchFxPace(now, dt);
     }
 
     let view: ReturnType<typeof game.view> | null = null;
@@ -1296,6 +1473,8 @@ function boot(): void {
       // Status pills: on every creature in Era 1 (setting), stepping aside while a Momento speaks (a card
       // or its brief label: one label at a time on the dish, docs/ARTE.md §10).
       ui.setCreatureLabels(moments.labelsOnAll(view.era), momentsUI.busy && moments.current() !== null);
+      reduceMotionNow = view.settings.reduceMotion;
+      lastEssence = view.essence;
       ui.update(view);
       refreshTints(view);
       flow.update(view);
@@ -1400,6 +1579,9 @@ function boot(): void {
       debugTime,
       dishStats,
       dishAnim,
+      dishFx,
+      culture,
+      fly,
     });
   }
   leaderboard?.startAutoSubmit();
