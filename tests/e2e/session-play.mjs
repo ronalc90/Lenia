@@ -29,6 +29,8 @@ const out = resolve(opt('--out', `${tmpdir()}/bioluma-play`));
 const only = opt('--only', '');
 const SESSIONS = Number(opt('--sessions', '3'));
 const SCALE = Number(opt('--scale', '6'));
+/** Session 1's pace (its 15 s are the player's first taps: drops to collect, VELA's lines). */
+const S1_SCALE = 2;
 const WIKI = opt('--wiki', '') ? resolve(opt('--wiki', '')) : '';
 if (WIKI) mkdirSync(WIKI, { recursive: true });
 /** Wiki picture prefix per case: Spanish phone, English phone, desktop. */
@@ -677,6 +679,9 @@ async function runCase(c) {
 
     // ── Seed: the first tap starts the clock (session 1: it plants the first creature; the clock waits for VELA) ──
     if (k === 1) {
+      // Session 1 at a player's pace: 15 s of dish at ×SCALE ran out on a loaded software-GL machine before a
+      // single drop could be tapped (the time shortcut is only for the later, longer runs).
+      await page.evaluate((s) => (window.bioluma.debugTime.scale = s), Math.min(SCALE, S1_SCALE));
       await settle(`seed ${k}`);
       // QA#4 (docs/CLARIDAD2.md §2.4): the very first session starts on an empty dish.
       const before = await page.evaluate(() => window.bioluma.game.view().creatures.filter((x) => x.state !== 'dead').length);
@@ -875,6 +880,7 @@ async function runCase(c) {
     say(`Session ${k}: "¡Tiempo!" (${v.essence} Luz, ${v.species} species; ${hand} drops collected by hand; ${turns} glass turns so far).`);
     // The player's taps collect the light (ADR-030): session 1 always has a drop to tap.
     if (k === 1 && hand < 1) problems.push(`[${c.name}] session 1: no drop of light was collected by a tap`);
+    if (k === 1) await page.evaluate((s) => (window.bioluma.debugTime.scale = s), SCALE);
 
     // ── Summary ──
     for (let i = 0; i < 30 && !(await visible('.ss-layer [data-act="tree"]')); i++) {
