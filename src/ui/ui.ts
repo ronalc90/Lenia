@@ -1,6 +1,6 @@
 /**
  * Bioluma UI root: HUD (Essence, the session clock slot, Bitácora, Ajustes), the Encargo bar, the dish
- * (GL canvas + overlay + floating controls), the dock (Bestiario, Abono or Árbol, the Datos preview
+ * (GL canvas + overlay + floating controls), the dock (Bestiario, Nutrientes or Árbol, the Datos preview
  * slot), the Bestiary drawer, modals, toasts and all the juice. Vanilla TS; the game drives it through
  * `update(view)` (~10×/s) and `frame(t, dt)` (every animation frame). The session screens (start card,
  * summary, tree) are mounted by src/ui/session/flow.ts over this root.
@@ -738,7 +738,7 @@ class BiolumaUI implements UI {
     this.dish.append(gl, this.overlay.canvas, this.dishUI, this.objEl);
     this.renderPause();
 
-    // Dock: Bestiary always; Abono while a session runs, the Tree between sessions; the Datos preview.
+    // Dock: Bestiary always; Nutrientes while a session runs, the Tree between sessions; the Datos preview.
     this.bestiaryDot = h('span', { class: 'dot pulse', hidden: true });
     this.bestiaryLabel = h('span', { class: 'dock-l' });
     this.bestiaryBtn = h('button', { type: 'button', class: 'dock-btn dock-bestiary', 'data-tab': 'bestiary' }, ic('bestiary', 26), this.bestiaryLabel, this.bestiaryDot);
@@ -1347,7 +1347,7 @@ class BiolumaUI implements UI {
   // ───────────────────────────── dock ─────────────────────────────
 
   /**
-   * The dock under the dish: Bestiario always (a dot for a species not looked at yet); Abono while a
+   * The dock under the dish: Bestiario always (a dot for a species not looked at yet); Nutrientes while a
    * session runs, the Tree between sessions (from session 2: session 1 has no Datos yet). Every cell
    * keeps its size, so nothing moves when a button appears.
    */
