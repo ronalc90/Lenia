@@ -417,6 +417,7 @@ function settings(x: unknown): Settings {
     oneTouch: bool(x.oneTouch, d.oneTouch),
     quality: QUALITIES.includes(x.quality as Quality) ? (x.quality as Settings['quality']) : d.quality,
     analytics: bool(x.analytics, d.analytics),
+    ...(x.autoCollect === true ? { autoCollect: true } : {}),
   };
 }
 

@@ -428,6 +428,11 @@ export interface Settings {
   analytics: boolean;
   /** UI theme (optional; the UI mirrors it in localStorage 'bioluma.theme'). */
   theme?: 'auto' | 'dark' | 'light';
+  /**
+   * (game, ADR-030) Accessibility: "Recoger la luz sola" / "Collect glow for me", a free level-1 Pipeta from
+   * session 1 for players who cannot tap often. Off by default.
+   */
+  autoCollect?: boolean;
 }
 
 export interface GameView {

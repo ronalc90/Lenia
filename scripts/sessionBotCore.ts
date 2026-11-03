@@ -13,8 +13,14 @@
  *   npx vite-node scripts/session-bot.ts [maxSessions=40] [runs=3] [--verbose] [--policy=planner] [--trace=N] [--runs]
  *
  * Policies: planner (sensible priorities, fills the dish, then Abono), greedy (cheapest node first),
- * kid (taps a lot, buys at random, random world, catches fewer Sparks, rarely an Abono). A run stops
- * two sessions after the story's final question would be asked (night 7 ready) or at maxSessions.
+ * kid (taps a lot, buys at random, random world, catches fewer Sparks, rarely an Abono), idle (plays like
+ * the planner but never touches a drop, a Spark or the Nutrientes: only its pipettes collect — the
+ * "never punish" test of ADR-030). A run stops two sessions after the story's final question would be
+ * asked (night 7 ready) or at maxSessions.
+ *
+ * Collected light (ADR-030, docs/CLARIDAD2.md §3.2): the Luz waits in each creature's drop. planner and
+ * greedy tap every ripe drop (≥ LIGHT_RIPE_SHARE) one step later, at most HAND_TAPS_PER_S taps a second
+ * (seeds are taps of their own); the kid taps a random drop every KID_TAP_EVERY s with KID_TAP_P.
  */
 import { Bus, type GameEvents } from '../src/core/bus';
 import type { Behavior, Creature, DetectorEvent, LeniaParams, Pattern, SeedSpec } from '../src/core/types';
@@ -61,6 +67,11 @@ const GRID = { w: 192, h: 240 };
 export const SUMMARY_SECONDS = 6;
 export const SECONDS_PER_BUY = 2.5;
 export const OVERHEAD_MAX = 45;
+/** A sensible player's taps on drops, per second (plus one per seed). [plan CLARIDAD2 §3.2] */
+const HAND_TAPS_PER_S = 3;
+/** The kid taps a random drop every this many seconds, with this probability. [plan CLARIDAD2 §3.2] */
+const KID_TAP_EVERY = 0.8;
+const KID_TAP_P = 0.7;
 /** Hazards of the model are per simulation step (measured at 30 steps/s): the time-lapse scales them. */
 const PER_STEP = 1 / STEPS_PER_SEC;
 
@@ -377,7 +388,7 @@ for (const w of WORLDS) {
 
 // ───────────────────────────── policies ────────────────────────────
 
-export type PolicyName = 'planner' | 'greedy' | 'kid';
+export type PolicyName = 'planner' | 'greedy' | 'kid' | 'idle';
 
 /** The planner's order of interest (it buys the first affordable one, else saves for it if close). */
 const PLAN = [
@@ -385,17 +396,19 @@ const PLAN = [
   // a new world as soon as it opens (the start card picks it), Esencia and time; Datos-only and
   // comfort nodes last.
   // Night 1 (rings 1–2)
-  // RITMO §5: the clock first — a longer run is the most visible "antes → después".
-  'clock', 'dropper', 'clock', 'dish', 'culture', 'clock', 'worldCold', 'dropper', 'clock', 'culture', 'dish', 'culture', 'dropper',
-  'clock2', 'worldGyro', 'culture', 'dish', 'clock2', 'culture', 'nutrient', 'slots', 'clock2', 'fridge', 'nutrient', 'slots', 'spark', 'startEssence',
-  'nutrient', 'slots', 'fridge', 'notebook', 'fridge', 'print', 'sparkLife', 'sparkTime', 'startEssence', 'notebook',
+  // RITMO §5: the clock first — a longer run is the most visible "antes → después". CLARIDAD2 §1.3: the
+  // first Pipeta in session 1, its second level soon after (the helper the child sees working).
+  'clock', 'pipette', 'dropper', 'clock', 'pipette', 'dish', 'culture', 'clock', 'worldCold', 'dropper', 'clock', 'culture', 'pipette', 'dish', 'culture', 'dropper',
+  'clock2', 'worldGyro', 'culture', 'dish', 'pipetteFast', 'clock2', 'culture', 'nutrient', 'slots', 'clock2', 'fridge', 'dropBig', 'nutrient', 'slots', 'spark', 'startEssence',
+  'pipetteFast', 'nutrient', 'slots', 'fridge', 'notebook', 'fridge', 'print', 'sparkLife', 'sparkTime', 'startEssence', 'notebook', 'pipetteFast', 'dropBig', 'dropBig',
   // Night 2 (ring 3)
-  'lab', 'clock3', 'worldShields', 'clock3', 'worldHelix', 'culture2', 'clock3', 'sprint', 'incubator', 'stabilizer', 'swimAffinity', 'culture2', 'autoSeeder',
+  'lab', 'clock3', 'worldShields', 'clock3', 'worldHelix', 'culture2', 'pipetteMore', 'clock3', 'sprint', 'incubator', 'stabilizer', 'swimAffinity', 'culture2', 'autoSeeder', 'pipetteMagnet', 'pipetteMore',
   'cataloguing', 'stillAffinity', 'sprint', 'stabilizer', 'culture2', 'crowdCost', 'nursery', 'freeSeeds', 'incubator', 'swimAffinity',
   'autoSeeder', 'cataloguing', 'stillAffinity', 'sprint', 'stabilizer', 'bigSeed', 'encTime', 'sparkGift', 'sparkFirst', 'sparkDatos',
   'archive', 'microscope', 'freeSeeds', 'startEssence', 'autoSeeder', 'stabilizer', 'cataloguing', 'encTime', 'notebook',
+  'pipetteMore', 'pipetteMagnet', 'pipetteMore', 'pipetteMore',
   // Night 3 (ring 4)
-  'worldLegs', 'clock4', 'abundance', 'clock4', 'dishXL', 'clock4', 'clock4', 'ecosystem', 'colonyAffinity', 'symbiosis', 'cheapSeeds', 'discoBonus',
+  'worldLegs', 'clock4', 'pipetteMaster', 'abundance', 'clock4', 'dishXL', 'clock4', 'clock4', 'ecosystem', 'colonyAffinity', 'symbiosis', 'cheapSeeds', 'discoBonus',
   'rareSpores', 'mutations', 'sparkMutagen', 'ecosystem', 'colonyAffinity', 'cheapSeeds', 'discoBonus',
   // Night 4 (ring 5)
   'worldGiants', 'eternalLife', 'eternalLife', 'dropperMax', 'encyclopedia', 'encyclopedia', 'encyclopedia',
@@ -403,6 +416,7 @@ const PLAN = [
 
 /** Which world the start card ends up on: the newest (picked for you, it pays the most); a kid taps around. */
 function pickWorld(policy: PolicyName, game: Game, rng: () => number): WorldId {
+  // idle picks like the planner
   const open = game.view().research!.worlds as WorldId[];
   const cur = game.research!.world;
   if (policy === 'kid') return rng() < 0.5 ? open[Math.floor(rng() * open.length)] : cur;
@@ -435,6 +449,12 @@ export interface SessionRow {
   epsEarly: number;
   epsLate: number;
   bought: string[];
+  /** (ADR-030) Luz made by the drops, by who collected it, and what waited in full drops (capped). */
+  made: number;
+  hand: number;
+  pipette: number;
+  sweep: number;
+  capped: number;
 }
 
 export interface RunResult {
@@ -538,6 +558,10 @@ export function runPolicy(policy: PolicyName, maxSessions: number, seed: number,
     let gifts = 0;
     let epsEarly = 0;
     let epsLate = 0;
+    let taps = 0;
+    let kidT = 0;
+    /** Drops that were ripe at the previous step: a sensible player taps them now (a reaction, not a reflex). */
+    let seenRipe = new Set<number>();
     while (game.session!.phase !== 'over' && st < 3600) {
       st += DT;
       t += DT;
@@ -545,9 +569,27 @@ export function runPolicy(policy: PolicyName, maxSessions: number, seed: number,
       const rep = dish.step(DT, speed);
       steps += DT * STEPS_PER_SEC * speed;
       game.tick(DT, { step: Math.round(steps), creatures: rep.creatures, events: rep.events, totalMass: 0, fill: 0.05 });
+      const phase: string = game.session!.phase; // the tick may have ended the run
+      if (phase === 'over') break;
+      // Collected light (ADR-030): the taps on drops come first, then the wallet they fill is spent.
+      const drops = game.view().drops ?? [];
+      if (policy === 'planner' || policy === 'greedy') {
+        taps = Math.min(HAND_TAPS_PER_S, taps + HAND_TAPS_PER_S * DT);
+        for (const d of drops) {
+          if (taps < 1) break;
+          if (seenRipe.has(d.id) && game.actions.collect!(d.id) > 0) taps -= 1;
+        }
+        seenRipe = new Set((game.view().drops ?? []).filter((d) => d.fill >= C.LIGHT_RIPE_SHARE).map((d) => d.id));
+      } else if (policy === 'kid') {
+        kidT += DT;
+        while (kidT >= KID_TAP_EVERY) {
+          kidT -= KID_TAP_EVERY;
+          const full = (game.view().drops ?? []).filter((d) => d.amount > 0);
+          if (full.length && rng() < KID_TAP_P) game.actions.collect!(full[Math.floor(rng() * full.length)].id);
+        }
+      }
       const v = game.view();
       const ses = v.session!;
-      if (ses.phase === 'over') break;
       const stableN = rep.creatures.filter((c) => c.state === 'stable').length;
       if (firstStable === null && stableN > 0 && ses.phase === 'running') firstStable = ses.elapsed;
       if (ses.phase === 'running') {
@@ -561,7 +603,7 @@ export function runPolicy(policy: PolicyName, maxSessions: number, seed: number,
         console.log(`  s${n} t=${st.toFixed(0)}s left=${ses.remaining.toFixed(0)} eps=${v.essencePerSec.toFixed(1)} E=${v.essence.toFixed(0)} earned=${ses.essence.toFixed(0)} stable=${stableN} alive=${rep.creatures.length} cap=${v.seedPrice?.capacity} seed=${v.seedCost} M=${m?.global.toFixed(2)} boosts=${v.boost?.count}`);
       }
       // Spark: 30 s of Esencia (the kid misses most).
-      if (v.golden && rng() < (policy === 'kid' ? 0.12 : 0.3)) {
+      if (v.golden && policy !== 'idle' && rng() < (policy === 'kid' ? 0.12 : 0.3)) {
         const e0 = game.state.essence;
         game.actions.collectGolden();
         gifts += Math.max(0, game.state.essence - e0);
@@ -584,7 +626,7 @@ export function runPolicy(policy: PolicyName, maxSessions: number, seed: number,
       const b = v.boost;
       if (b?.affordable && ses.remaining > 25) {
         // A sensible player takes a ×1,25 whenever it leaves a seed in the wallet (spent Esencia never lowers the Datos).
-        const want = policy === 'kid' ? rng() < 0.004 : price.full || v.seedsGrowing || v.essence - b.cost >= v.seedCost;
+        const want = policy === 'idle' ? false : policy === 'kid' ? rng() < 0.004 : price.full || v.seedsGrowing || v.essence - b.cost >= v.seedCost;
         if (want) game.actions.buyBoost!();
       }
       // Copies (Copiadora): when few creatures live, plant a known species of this world.
@@ -669,6 +711,11 @@ export function runPolicy(policy: PolicyName, maxSessions: number, seed: number,
       epsEarly,
       epsLate,
       bought,
+      made: sum.light?.made ?? 0,
+      hand: sum.light?.hand ?? 0,
+      pipette: sum.light?.pipette ?? 0,
+      sweep: sum.light?.sweep ?? 0,
+      capped: sum.light?.capped ?? 0,
     });
     if (endedAt !== null && n >= (endedSession ?? 0) + 2) break;
   }

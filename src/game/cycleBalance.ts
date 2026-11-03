@@ -152,6 +152,41 @@ export const SESSION_GOLDEN_LIFE = 8;
 export const MOMENT_MIN_RUN_SECONDS = 60;
 export const SESSION_TOAST_MAX_MS = 1500;
 
+// ───────────────────────────── Luz: by hand first, then pipettes (ADR-030) ──
+
+/**
+ * A stable creature fills its own drop of light with its production; the drop holds at most this many
+ * seconds of it and then waits (nothing made is ever lost: it is collected by hand, by a pipette, or swept
+ * at "¡Tiempo!"). [owner: "la Esencia debería recogerse… al inicio a mano"; design (docs/CLARIDAD2.md
+ * §2.2.2): one tap per creature every few seconds in a 15 s run; bot: capped production ≤ 10 % for the
+ * planner in S1–S5]
+ */
+export const LIGHT_CAP_SECONDS = 4;
+/** Gotas grandes: seconds a drop holds, by level (index = level). [design; bot] */
+export const LIGHT_CAP_BY_LEVEL = [LIGHT_CAP_SECONDS, 6, 8, 10];
+/** A drop is "ripe" (it pulses, "¡Lista!" the first time; the bot's sensible player taps it) at this share of its cap. [design] */
+export const LIGHT_RIPE_SHARE = 0.75;
+/** Touch radius of a drop in CSS px at any zoom: a 64 px target, above CLAUDE.md's 48 px. [design] */
+export const LIGHT_TAP_RADIUS_PX = 32;
+/** A creature's touch area is its outline plus this many CSS px. [design] */
+export const LIGHT_BODY_PAD_PX = 16;
+/** Collect pop and flight to the counter (reduceMotion: a 120 ms fade). [design; RITMO §4.4] */
+export const LIGHT_POP_MS = 150;
+export const LIGHT_FLY_MS = 450;
+/** Most drops on the dish at once; past it the oldest loose drop is swept into the wallet (never lost). [design: overlay budget, 16 drops at 30 fps] */
+export const LIGHT_DROPS_MAX = 24;
+/** Pipeta: pipettes by level (index = level); Más pipetas adds PIPETTES_MORE_PER_LEVEL per level (→ 8). [owner: "más cositas"] */
+export const PIPETTES_BY_LEVEL = [0, 1, 2, 3];
+export const PIPETTES_MORE_PER_LEVEL = 1;
+/** Seconds of one pipette trip (go, take, come back), by Pipetas rápidas level. [owner: "más rápidas"; bot] */
+export const PIPETTE_CYCLE_S = [2.5, 2.0, 1.6, 1.3];
+/** A pipette only goes for a drop holding at least this share of its cap (no sipping empty drops). [design] */
+export const PIPETTE_MIN_SHARE = 0.5;
+/** Pipetas con imán: a trip also takes every drop within this many kernel radii R of its target, by level. [design] */
+export const PIPETTE_MAGNET_R = [0, 2, 4];
+/** Session 1 tutorial: the clock starts by itself if VELA's line has not started it after this many seconds of dish (a fail-safe). [design] */
+export const TUTORIAL_HOLD_MAX_S = 45;
+
 // ───────────────────────────── Seeds and room (sessions) ───────────
 
 /**

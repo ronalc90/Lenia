@@ -122,6 +122,17 @@ export interface TreeEffects {
   goldenRewardMult: number;
   datosPerGolden: number;
   mutagenSeeds: number;
+  // ── ↓ Recoger (ADR-030) ──
+  /** Pipettes on the rim (Pipeta, Más pipetas). */
+  pipettes: number;
+  /** Seconds of one pipette trip (Pipetas rápidas). */
+  pipetteCycle: number;
+  /** Seconds of production a drop of light holds (Gotas grandes). */
+  dropCapSeconds: number;
+  /** Pipetas con imán: a trip also takes the drops within this many kernel radii R of its target. */
+  magnetR: number;
+  /** Pipeta maestra: drops are taken the moment they ripen, no trip. */
+  pipetteInstant: boolean;
   // ── 🌙 Night (story era) ──
   night: number;
   /** Multiplier of the Esencia part of the conversion from nights (+10 % each after the first). */
@@ -411,6 +422,11 @@ export function baseEffects(): TreeEffects {
     goldenRewardMult: 1,
     datosPerGolden: 0,
     mutagenSeeds: C.SPARK_SURE_SEEDS,
+    pipettes: C.PIPETTES_BY_LEVEL[0],
+    pipetteCycle: C.PIPETTE_CYCLE_S[0],
+    dropCapSeconds: C.LIGHT_CAP_BY_LEVEL[0],
+    magnetR: C.PIPETTE_MAGNET_R[0],
+    pipetteInstant: false,
     night: 1,
     datosNightMult: 1,
   };

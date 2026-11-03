@@ -31,12 +31,14 @@ import type {
   Creature,
   CreatureView,
   DetectorReport,
+  DropView,
   GameActions,
   GameView,
   GenomeNodeView,
   JournalEntryView,
   LeniaParams,
   Pattern,
+  PipetteView,
   Rarity,
   SeedPriceView,
   SeedSpec,
@@ -99,6 +101,20 @@ import {
   type UpgradeDef,
 } from './defs';
 import { computeProduction, wrapDist, type YieldDetail } from './economy';
+import {
+  collectAt as collectAtDrops,
+  collectDrop,
+  collectPath as collectPathDrops,
+  dropFill,
+  fillDrops,
+  freshCollect,
+  releaseDrops,
+  sweepAll,
+  tickPipettes,
+  type CollectFx,
+  type CollectState,
+  type Pickup,
+} from './collect';
 import { clampToDish, DISH_DIAMETERS, insideDish, moveInDish, randomPointInDish, rimDistance, type DishShape } from '../core/dish';
 import { clipGraphemes } from './format';
 import * as C from './cycleBalance';
@@ -371,6 +387,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
   let baseEps = 0; // production before timed buffs
   let eps = 0; // production including buffs
   let econAcc = 0;
+  /** Paying creatures of one economic tick (reused: no allocation per tick). */
+  const payingBuf: { id: number; x: number; y: number; rate: number }[] = [];
   let golden: Golden | null = null;
   /** Seeds placed lately (t = seconds left in memory) and the radius of matter they stamped. */
   /** Seeds placed lately: `step` = the last report's step when placed (the detector sees it after that). */
@@ -653,6 +671,67 @@ export function createGame(deps: GameDeps, save?: string): Game {
     if (countsForEra) s.eraEssence += x;
     const se = ses();
     if (se) noteEssence(se, x); // earned this session: what becomes Datos
+  }
+
+  // ── Collected light (ADR-030, collect.ts) ──
+
+  /** (sessions) The drops and pipettes of the run on the dish. */
+  function lightState(): CollectState | null {
+    const se = ses();
+    return se ? (se.light ??= freshCollect()) : null;
+  }
+
+  /** What the ↓ Recoger route and the settings give the collectors right now. */
+  function collectFx(): CollectFx {
+    const pipettes = Math.max(fx.pipettes, s.settings.autoCollect ? 1 : 0);
+    return { capSeconds: fx.dropCapSeconds, pipettes, cycle: fx.pipetteCycle, instant: fx.pipetteInstant && fx.pipettes > 0, magnetCells: fx.magnetR * s.calib.R };
+  }
+
+  /**
+   * Luz made by a drop: it counts now (Datos, stats, the night's Esencia) and enters the wallet when it is
+   * collected (pocket). "Los Datos cuentan la luz hecha": collecting late never pays less.
+   */
+  function earnLight(x: number): void {
+    if (!(x > 0)) return;
+    s.stats.totalEssence += x;
+    s.eraEssence += x;
+    const se = ses();
+    if (se) noteEssence(se, x);
+  }
+
+  /** Collected drops fly to the wallet (by hand, by pipette or swept). Returns the Luz pocketed. */
+  function pocket(ps: readonly Pickup[]): number {
+    let total = 0;
+    for (const p of ps) {
+      if (!(p.amount > 0)) continue;
+      s.essence += p.amount;
+      total += p.amount;
+      if (p.by === 'hand') s.flags.collected = true;
+      bus.emit('lightCollected', { x: p.x, y: p.y, amount: p.amount, by: p.by });
+    }
+    return total;
+  }
+
+  /** Luz that comes in without a drop (Spark, Encargo, a first step): wallet and Datos at once, with its reason. */
+  function giftLight(x: number, reason: Text): void {
+    if (!(x > 0) || !Number.isFinite(x)) return;
+    addEssence(x);
+    const L = lightState();
+    if (L) L.gifts += x;
+    bus.emit('luzGift', { amount: x, reason });
+  }
+
+  /** Bodies of the stable creatures of the latest report (a tap on a creature collects its drop). */
+  function bodies(): Map<number, { x: number; y: number; r: number }> {
+    const m = new Map<number, { x: number; y: number; r: number }>();
+    for (const c of creatures) if (c.state === 'stable') m.set(c.id, { x: c.x, y: c.y, r: c.radius });
+    return m;
+  }
+
+  /** The drops of a running session can be collected (paused or not); the end card already swept them. */
+  function collectable(): CollectState | null {
+    const se = ses();
+    return se && se.phase === 'running' ? lightState() : null;
   }
 
   function toast(text: Text, kind: 'info' | 'good' | 'warn' | 'bad' = 'info'): void {
@@ -1357,6 +1436,9 @@ export function createGame(deps: GameDeps, save?: string): Game {
     }
     processPortraitWatch();
     stableIds = new Set(creatures.filter((c) => c.state === 'stable').map((c) => c.id));
+    // A creature that went dark, merged or was wiped leaves its drop on the dish, loose (ADR-030).
+    const L = collectable();
+    if (L) pocket(releaseDrops(L, stableIds));
     lastStates = new Map(creatures.map((c) => [c.id, c.state]));
     const st = stableCount();
     s.eraStablePeak = Math.max(s.eraStablePeak, st);
@@ -1393,7 +1475,18 @@ export function createGame(deps: GameDeps, save?: string): Game {
     perCreature = prod.per;
     perDetail = prod.detail;
     const earning = live();
-    if (earning) addEssence(eps * dt);
+    if (earning && sessions) {
+      // Each stable creature fills its own drop; the wallet gets it when it is collected (ADR-030).
+      const L = lightState();
+      if (L) {
+        payingBuf.length = 0;
+        for (const c of creatures) {
+          const v = perCreature.get(c.id);
+          if (v && v > 0) payingBuf.push({ id: c.id, x: c.x, y: c.y, rate: v * bm });
+        }
+        earnLight(fillDrops(L, payingBuf, dt, collectFx().capSeconds));
+      }
+    } else if (earning) addEssence(eps * dt);
     const se = ses();
     if (se && earning) {
       noteProduction(se, eps, stableCount());
@@ -1405,8 +1498,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
     s.stats.epsPeak = Math.max(s.stats.epsPeak, eps);
     if (eps >= B.CULTURE_UNLOCK_EPS) s.flags.eps10 = true;
 
-    // Floating income numbers (only while the Esencia really comes in).
-    for (const c of earning ? creatures : []) {
+    // Floating income numbers (classic only: in sessions the drops show the light, ADR-030).
+    for (const c of earning && !sessions ? creatures : []) {
       const v = perCreature.get(c.id);
       if (!v) continue;
       let acc = incomeAcc.get(c.id);
@@ -1528,7 +1621,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       const reward = objectiveReward(o);
       if (sessions) {
         // An objective is an Encargo of the session: its Esencia (earned) and +time, +Datos.
-        giveSessionEssence(reward);
+        giveSessionEssence(reward, o.id === 'seed' ? TEXT.gift.firstSeed : o.id === 'stable' ? TEXT.gift.firstCreature : TEXT.gift.goal);
         countEncargo();
       } else if (reward > 0) s.essence += reward;
       toast(TEXT.objectiveDone(reward), 'good');
@@ -1743,7 +1836,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     if (!se || se.phase !== 'running') return;
     const secs = Math.round(C.SPARK_GIFT_SECONDS * fx.goldenRewardMult);
     const amount = Math.max(C.SPARK_GIFT_MIN, Math.round(secs * eps));
-    addEssence(amount);
+    giftLight(amount, TEXT.gift.spark);
     const sure = fx.mutagenSeeds;
     if (sure > 0) s.charges.guaranteed += sure;
     const gift = TEXT.sparkGift(secs, amount);
@@ -1855,11 +1948,11 @@ export function createGame(deps: GameDeps, save?: string): Game {
    * Esencia from an Encargo / objective. While a clock runs it is earned now (→ Datos); otherwise it
    * waits in `carry` for the next session's wallet (and shows in the waiting wallet at once).
    */
-  function giveSessionEssence(x: number): void {
+  function giveSessionEssence(x: number, reason: Text): void {
     if (!(x > 0) || !Number.isFinite(x)) return;
     const se = ses();
     if (se?.phase === 'running') {
-      addEssence(x);
+      giftLight(x, reason);
       return;
     }
     s.carry = { essence: (s.carry?.essence ?? 0) + x, encargos: s.carry?.encargos ?? 0 };
@@ -1886,7 +1979,11 @@ export function createGame(deps: GameDeps, save?: string): Game {
           const se = ses();
           if (se) s.flags[`world:${se.world}`] = true; // a world played (achievement Viajera)
           // What waited for this session (Encargos done in the tree) is earned now.
-          if (se && s.carry) noteEssence(se, s.carry.essence);
+          if (se && s.carry) {
+            noteEssence(se, s.carry.essence);
+            const L = lightState();
+            if (L) L.gifts += s.carry.essence;
+          }
           s.carry = undefined;
           bus.emit('sessionClock', { type: 'clockStart' });
           break;
@@ -2003,6 +2100,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
     const r = s.research;
     if (!se || !r) return;
     se.phase = 'over';
+    // "¡Tiempo!": VELA collects every drop left (ADR-030: light made is never lost).
+    if (se.light) pocket(sweepAll(se.light));
     const best = new Map<string, number>();
     for (const c of creatures) {
       const id = c.state === 'stable' ? creatureSpecies.get(c.id) : undefined;
@@ -2391,9 +2490,11 @@ export function createGame(deps: GameDeps, save?: string): Game {
   function creatureViews(): CreatureView[] {
     const out: CreatureView[] = [];
     const bm = buffMult();
+    const drops = new Map((lightState()?.drops ?? []).filter((d) => d.owner !== null).map((d) => [d.owner!, d]));
     for (const c of creatures) {
       if (c.state === 'dead') continue;
       const sp = speciesById(creatureSpecies.get(c.id));
+      const drop = drops.get(c.id);
       out.push({
         id: c.id,
         x: c.x,
@@ -2409,9 +2510,29 @@ export function createGame(deps: GameDeps, save?: string): Game {
         age: c.age,
         vx: Number.isFinite(c.vx) ? c.vx : 0,
         vy: Number.isFinite(c.vy) ? c.vy : 0,
+        ...(drop ? { light: dropFill(drop), lightAmount: drop.amount } : {}),
       });
     }
     return out;
+  }
+
+  /** (sessions) The drops on the dish: an owned drop sits on its creature (latest report). */
+  function dropViews(): DropView[] {
+    const L = lightState();
+    if (!L) return [];
+    const at = new Map(creatures.map((c) => [c.id, c]));
+    return L.drops.map((d) => {
+      const c = d.owner !== null ? at.get(d.owner) : undefined;
+      return { id: d.id, x: c ? c.x : d.x, y: c ? c.y : d.y, amount: d.amount, fill: dropFill(d), owner: d.owner };
+    });
+  }
+
+  function pipetteViews(): PipetteView[] {
+    const L = lightState();
+    if (!L) return [];
+    const cf = collectFx();
+    if (L.pipettes.length !== cf.pipettes) tickPipettes(L, cf, 0); // the rim shows a pipette as soon as it is bought
+    return L.pipettes.map((p) => ({ id: p.id, dock: p.dock, target: p.target, trip: cf.instant || !(cf.cycle > 0) ? 0 : Math.min(1, p.t / cf.cycle) }));
   }
 
   function view(): GameView {
@@ -2489,6 +2610,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       dish: dish ? { ...dish } : null,
       buffs: s.buffs.map((b) => ({ id: b.id, name: TEXT.bloom, remaining: b.remaining, mult: b.mult })),
       creatures: creatureViews(),
+      ...(sv ? { drops: dropViews(), pipettes: pipetteViews() } : {}),
       objective: obj ? objectiveText(obj.id, objCur, obj.target, sessions) : null,
       objectiveProgress: obj ? { current: Math.min(objCur, obj.target), target: obj.target, reward: objectiveReward(obj) } : null,
       settings: { ...s.settings },
@@ -2802,6 +2924,27 @@ export function createGame(deps: GameDeps, save?: string): Game {
       return true;
     },
 
+    collect(dropId) {
+      const L = collectable();
+      if (!L || !Number.isFinite(dropId)) return 0;
+      const p = collectDrop(L, dropId);
+      return p ? pocket([p]) : 0;
+    },
+
+    collectAt(x, y, rCells) {
+      const L = collectable();
+      if (!L || !Number.isFinite(x) || !Number.isFinite(y)) return 0;
+      const r = Number.isFinite(rCells) && rCells > 0 ? rCells : 0;
+      return pocket(collectAtDrops(L, x, y, r, bodies(), gdist));
+    },
+
+    collectPath(pts, rCells) {
+      const L = collectable();
+      if (!L || !Array.isArray(pts)) return 0;
+      const r = Number.isFinite(rCells) && rCells > 0 ? rCells : 0;
+      return pocket(collectPathDrops(L, pts.slice(0, 256), r, bodies()));
+    },
+
     buyBoost() {
       const se = ses();
       if (!se || se.phase !== 'running' || boostWait(se) > 0 || !(eps > 0)) return false;
@@ -2938,6 +3081,10 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
     if (running) updateGolden(dt);
 
+    // Pipettes (↓ Recoger): their trips run with the dish.
+    const L = running ? collectable() : null;
+    if (L) pocket(tickPipettes(L, collectFx(), dt, gdist));
+
     // Sembrador.
     const as = sessions ? fx.autoSeeder : level('autoSeeder');
     if (as > 0 && running) {
@@ -3023,6 +3170,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
     } else {
       // A loaded session keeps its clock; its world's rules are on the dish already (s.calib).
       sessionStartInfo = se.phase === 'ready' ? beginSession(s.research!, fx).start : null;
+      // Its drops were saved, their creatures were not: everything waiting goes to the wallet (ADR-030).
+      if (se.light) pocket(sweepAll(se.light));
     }
   }
 
@@ -3141,7 +3290,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
         s.essence += essence; // like an objective reward: wallet only (main.ts did this before)
         return;
       }
-      giveSessionEssence(essence);
+      giveSessionEssence(essence, TEXT.gift.encargo);
       countEncargo();
       checkProgress();
     },

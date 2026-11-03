@@ -39,10 +39,13 @@ describe('sessions cycle: the clock and the wallet', () => {
     const rep = report(stable(2));
     run(g, 5, rep, 0.5);
     expect(g.view().essence).toBe(C.SESSION_START_ESSENCE); // creatures before the clock pay nothing
+    expect(g.view().drops).toEqual([]);
     expect(g.actions.seedAt(150, 200)).not.toBeNull();
     expect(count('sessionClock')).toBe(1);
     expect(g.view().session!.phase).toBe('running');
     run(g, 10, rep, 0.5);
+    // ADR-030: the light waits in the drops until it is collected; then the wallet holds all it earned.
+    for (const d of g.view().drops!) g.actions.collect!(d.id);
     const v = g.view();
     expect(v.essence).toBeGreaterThan(C.SESSION_START_ESSENCE);
     expect(v.session!.essence).toBeCloseTo(v.essence - C.SESSION_START_ESSENCE, 6);
@@ -283,7 +286,11 @@ describe('sessions cycle: saves', () => {
     const { g: h } = sessionsGame(2, save);
     expect(h.session).toMatchObject({ n: 1, phase: 'running' });
     expect(h.session!.elapsed).toBeCloseTo(g.session!.elapsed, 6);
-    expect(h.view().essence).toBeCloseTo(g.view().essence, 6);
+    // ADR-030: the drops waiting on the saved dish are swept into the wallet on load.
+    const waiting = g.view().drops!.reduce((a, d) => a + d.amount, 0);
+    expect(waiting).toBeGreaterThan(0);
+    expect(h.view().essence).toBeCloseTo(g.view().essence + waiting, 6);
+    expect(h.view().session!.essence).toBeCloseTo(g.view().session!.essence, 6);
   });
 
   it('a classic save opened in the sessions cycle is migrated generously', () => {

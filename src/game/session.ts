@@ -15,6 +15,7 @@
 import type { Behavior, Text } from '../core/types';
 import * as C from './cycleBalance';
 import { TREE_BY_ID, buyNode, nextGoal, nightInfo, nodeLevel, treeEffects, type BuyResult, type TreeCtx, type TreeEffects } from './tree';
+import { freshCollect, validateCollect, type CollectState } from './collect';
 import { VELA_LINES } from './treeText';
 import { BASE_WORLD, isWorldId, type WorldId } from './worlds';
 
@@ -112,6 +113,8 @@ export interface SessionState {
   warned: { minute: boolean; last: boolean; sprint: boolean };
   /** Last countdown second announced (countdownSeconds … 1), 0 = none yet. */
   countdown: number;
+  /** (ADR-030) The drops of light and the pipettes of this run (collect.ts). */
+  light?: CollectState;
 }
 
 export type SessionEvent =
@@ -244,6 +247,7 @@ export function beginSession(r: ResearchState, fx: TreeEffects): { research: Res
     keep: [],
     warned: { minute: false, last: false, sprint: false },
     countdown: 0,
+    light: freshCollect(),
   };
   const start: SessionStart = {
     n,
@@ -521,6 +525,11 @@ export interface SessionSummary {
   keep: string[];
   /** After applying it, a new night is ready (VELA says so, the tree centre glows). */
   nightReady: boolean;
+  /**
+   * (ADR-030) Where the Luz of the run came from: `made` by the drops (collected by hand, by pipette, or
+   * swept at the end: `sweep` is the "Recogida final"), `gifts` without a drop; `capped` waited in full drops.
+   */
+  light?: { made: number; gifts: number; hand: number; pipette: number; sweep: number; capped: number };
 }
 
 /** Records beaten this session (from the second session on: the first one sets them silently). */
@@ -609,7 +618,13 @@ export function summarize(s: SessionState, r: ResearchState, fx: TreeEffects, sp
     vela: velaKey(s, datos, records, ready, fx),
     keep: s.keep.slice(0, fx.fridge),
     nightReady: ready,
+    light: lightOf(s),
   };
+}
+
+function lightOf(s: SessionState): NonNullable<SessionSummary['light']> {
+  const l = s.light ?? freshCollect();
+  return { made: l.made, gifts: l.gifts, hand: l.hand, pipette: l.pipette, sweep: l.sweep, capped: l.capped };
 }
 
 function applySummaryCore(r: ResearchState, s: SessionState, d: DatosBreakdown, records: RecordHit[], fx: TreeEffects): ResearchState {
@@ -723,5 +738,6 @@ export function validateSession(x: unknown): SessionState | null {
     keep: strs(x.keep, 8),
     warned: { minute: warned.minute === true, last: warned.last === true, sprint: warned.sprint === true },
     countdown: Math.floor(num(x.countdown, 0, 0, 1000)),
+    light: validateCollect(x.light),
   };
 }
