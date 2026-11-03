@@ -275,9 +275,9 @@ de la ruta comprados). Tablas generadas del código: `npx vite-node scripts/tree
 | 1 | Más tiempo | 1 · 1 | 6 | 2 · 3 · 5 · 7 · 10 · 15 (×1,5) | Sesión 0:15 → Sesión 0:20 → Sesión 0:25 → Sesión 0:30 → Sesión 0:35 → Sesión 0:40 → Sesión 0:45 |
 | 2 | Reloj grande | 2 · 1 | 3 | 15 · 30 · 60 (×2) | Sesión 0:45 → Sesión 0:55 → Sesión 1:05 → Sesión 1:15 |
 | 3 | Nevera | 2 · 1 | 3 | 15 · 30 · 60 (×2) | 1 criatura viva al empezar → 2 criaturas vivas al empezar → 3 criaturas vivas al empezar → 4 criaturas vivas al empezar |
-| 4 | Recta final | 3 · 2 | 3 | 400 · 800 · 1600 (×2) | Al final: Esencia ×1 → Al final: Esencia ×1,5 → Al final: Esencia ×2 → Al final: Esencia ×2,5 |
-| 5 | Encargos con prisa | 3 · 2 | 2 | 400 · 800 (×2) | +3 s por encargo → +6 s por encargo → +9 s por encargo |
-| 6 | Reloj de arena | 3 · 2 | 3 | 400 · 800 · 1600 (×2) | Sesión 1:15 → Sesión 1:30 → Sesión 1:45 → Sesión 2:00 |
+| 4 | Recta final | 3 · 2 | 3 | 200 · 400 · 800 (×2) | Al final: luz ×1 → Al final: luz ×1,5 → Al final: luz ×2 → Al final: luz ×2,5 |
+| 5 | Encargos con prisa | 3 · 2 | 2 | 200 · 400 (×2) | +3 s por encargo → +6 s por encargo → +9 s por encargo |
+| 6 | Reloj de arena | 3 · 2 | 3 | 200 · 400 · 800 (×2) | Sesión 1:15 → Sesión 1:30 → Sesión 1:45 → Sesión 2:00 |
 | 7 | Reloj eterno | 4 · 3 | 3 | 12.000 · 24.000 · 48.000 (×2) | Sesión 2:00 → Sesión 2:10 → Sesión 2:20 → Sesión 2:30 |
 
 **Gotero** — Viven más semillas, y tienes más para sembrar.
@@ -285,11 +285,11 @@ de la ruta comprados). Tablas generadas del código: `npx vite-node scripts/tree
 | # | Nodo | Anillo · 🌙 | Niveles | Precios (×factor) | Antes → después (de 0 al máximo) |
 |---|---|---|---|---|---|
 | 1 | Gotero | 1 · 1 | 3 | 2 · 4 · 8 (×2) | Viven 24 de cada 100 → Viven 32 de cada 100 → Viven 45 de cada 100 → Viven 59 de cada 100 |
-| 2 | Esencia de bolsillo | 2 · 1 | 4 | 15 · 30 · 60 · 120 (×2) | Empiezas con 20 de Esencia → Empiezas con 50 de Esencia → Empiezas con 110 de Esencia → Empiezas con 290 de Esencia → Empiezas con 820 de Esencia |
-| 3 | Semillas de regalo | 3 · 2 | 3 | 400 · 800 · 1600 (×2) | 1 semilla gratis → 3 semillas gratis → 5 semillas gratis → 7 semillas gratis |
-| 4 | Semillas fuertes | 3 · 2 | 5 | 400 · 600 · 900 · 1400 · 2000 (×1,5) | Viven 59 de cada 100 → Viven 65 de cada 100 → Viven 71 de cada 100 → Viven 76 de cada 100 → Viven 80 de cada 100 → Viven 84 de cada 100 |
-| 5 | Semilla grande | 3 · 2 | 1 | 400 (×2) | No → Semilla grande (más del doble) |
-| 6 | Sembrador automático | 3 · 2 | 6 | 400 · 600 · 900 · 1400 · 2000 · 3000 (×1,5) | Nunca → Cada 8 s → Cada 6,4 s → Cada 5,1 s → Cada 4,1 s → Cada 3,3 s → Cada 2,6 s |
+| 2 | Luz de bolsillo | 2 · 1 | 4 | 15 · 30 · 60 · 120 (×2) | Empiezas con 20 de luz → Empiezas con 50 de luz → Empiezas con 110 de luz → Empiezas con 290 de luz → Empiezas con 820 de luz |
+| 3 | Semillas de regalo | 3 · 2 | 3 | 200 · 400 · 800 (×2) | 1 semilla gratis → 3 semillas gratis → 5 semillas gratis → 7 semillas gratis |
+| 4 | Semillas fuertes | 3 · 2 | 5 | 200 · 300 · 450 · 680 · 1000 (×1,5) | Viven 59 de cada 100 → Viven 65 de cada 100 → Viven 71 de cada 100 → Viven 76 de cada 100 → Viven 80 de cada 100 → Viven 84 de cada 100 |
+| 5 | Semilla grande | 3 · 2 | 1 | 200 (×2) | No → Semilla grande (más del doble) |
+| 6 | Sembrador automático | 3 · 2 | 6 | 200 · 300 · 450 · 680 · 1000 · 1500 (×1,5) | Nunca → Cada 8 s → Cada 6,4 s → Cada 5,1 s → Cada 4,1 s → Cada 3,3 s → Cada 2,6 s |
 | 7 | Semillas baratas | 4 · 3 | 3 | 12.000 · 24.000 · 48.000 (×2) | Precio normal → Semillas −15 % → Semillas −28 % → Semillas −39 % |
 | 8 | Gotero maestro | 5 · 4 | 1 | 80.000 (×2) | Viven 84 de cada 100 → Viven 100 de cada 100 |
 
@@ -297,37 +297,48 @@ de la ruta comprados). Tablas generadas del código: `npx vite-node scripts/tree
 
 | # | Nodo | Anillo · 🌙 | Niveles | Precios (×factor) | Antes → después (de 0 al máximo) |
 |---|---|---|---|---|---|
-| 1 | Placa más grande | 1 · 1 | 2 | 2 · 6 (×3) | Ø128 → Ø160 → Ø192: Sitio para 3 criaturas → Sitio para 4 criaturas → Sitio para 5 criaturas (Corrección v0.015, `docs/ESPECIES.md` §5) |
-| 2 | Más sitio | 2 · 1 | 3 | 15 · 30 · 60 (×2) | Sitio para 12 criaturas → Sitio para 13 criaturas → Sitio para 14 criaturas → Sitio para 15 criaturas |
-| 3 | Sin apretujones | 3 · 2 | 2 | 400 · 800 (×2) | Sitio para 15 criaturas → Sitio para 16 criaturas → Sitio para 17 criaturas |
-| 4 | Guardería | 3 · 2 | 1 | 400 (×2) | 3 creciendo a la vez → 5 creciendo a la vez |
-| 5 | Incubadora | 3 · 2 | 2 | 400 · 1200 (×3) | Nacen en 8,9 s → Nacen en 7,6 s → Nacen en 6,7 s |
-| 6 | Placa gigante | 4 · 3 | 1 | 12.000 (×2) | Sitio para 17 criaturas → Sitio para 20 criaturas |
-| 7 | Placa variada | 4 · 3 | 2 | 12.000 · 24.000 (×2) | +0 % por especie viva → +3 % por especie viva → +6 % por especie viva |
+| 1 | Placa más grande | 1 · 1 | 2 | 2 · 6 (×3) | Sitio para 3 criaturas → Sitio para 4 criaturas → Sitio para 5 criaturas |
+| 2 | Más sitio | 2 · 1 | 3 | 15 · 30 · 60 (×2) | Sitio para 5 criaturas → Sitio para 6 criaturas → Sitio para 7 criaturas → Sitio para 8 criaturas |
+| 3 | Sin apretujones | 3 · 2 | 2 | 200 · 400 (×2) | Sitio para 8 criaturas → Sitio para 9 criaturas → Sitio para 10 criaturas |
+| 4 | Guardería | 3 · 2 | 1 | 200 (×2) | 3 creciendo a la vez → 5 creciendo a la vez |
+| 5 | Incubadora | 3 · 2 | 2 | 200 · 600 (×3) | Nacen en 8,9 s → Nacen en 7,6 s → Nacen en 6,7 s |
+| 6 | Placa gigante | 4 · 3 | 1 | 12.000 (×2) | Sitio para 10 criaturas → Sitio para 12 criaturas |
+| 7 | Placa variada | 4 · 3 | 2 | 12.000 · 24.000 (×2) | +0 % por especie del Bestiario → +3 % por especie del Bestiario → +6 % por especie del Bestiario |
 
-**Vida** — Cada criatura da más Esencia por segundo.
+**Vida** — Cada criatura da más luz por segundo.
 
 | # | Nodo | Anillo · 🌙 | Niveles | Precios (×factor) | Antes → después (de 0 al máximo) |
 |---|---|---|---|---|---|
-| 1 | Cultivo | 1 · 1 | 5 | 2 · 3 · 5 · 7 · 10 (×1,5) | Esencia ×1 → Esencia ×1,15 → Esencia ×1,32 → Esencia ×1,52 → Esencia ×1,75 → Esencia ×2,01 |
-| 2 | Comida extra | 2 · 1 | 3 | 15 · 30 · 60 (×2) | Esencia +0 % → Esencia +8 % → Esencia +16 % → Esencia +24 % |
-| 3 | Superalimento | 3 · 2 | 3 | 400 · 800 · 1600 (×2) | Esencia ×1 → Esencia ×1,25 → Esencia ×1,56 → Esencia ×1,95 |
-| 4 | Nadadoras | 3 · 2 | 3 | 400 · 800 · 1600 (×2) | Nadadoras +0 % → Nadadoras +15 % → Nadadoras +30 % → Nadadoras +45 % |
-| 5 | Tranquilas | 3 · 2 | 3 | 400 · 800 · 1600 (×2) | Quietas +0 % → Quietas +15 % → Quietas +30 % → Quietas +45 % |
+| 1 | Cultivo | 1 · 1 | 5 | 2 · 3 · 5 · 7 · 10 (×1,5) | Luz ×1 → Luz ×1,15 → Luz ×1,32 → Luz ×1,52 → Luz ×1,75 → Luz ×2,01 |
+| 2 | Bordes nítidos | 2 · 1 | 3 | 15 · 30 · 60 (×2) | Luz +0 % → Luz +8 % → Luz +16 % → Luz +24 % |
+| 3 | Superalimento | 3 · 2 | 3 | 200 · 400 · 800 (×2) | Luz ×1 → Luz ×1,25 → Luz ×1,56 → Luz ×1,95 |
+| 4 | Nadadoras | 3 · 2 | 3 | 200 · 400 · 800 (×2) | Nadadoras y las que giran +0 % → Nadadoras y las que giran +15 % → Nadadoras y las que giran +30 % → Nadadoras y las que giran +45 % |
+| 5 | Tranquilas | 3 · 2 | 3 | 200 · 400 · 800 (×2) | Quietas +0 % → Quietas +15 % → Quietas +30 % → Quietas +45 % |
 | 6 | Familias | 4 · 3 | 3 | 12.000 · 24.000 · 48.000 (×2) | Colonias +0 % → Colonias +15 % → Colonias +30 % → Colonias +45 % |
-| 7 | Amistad | 4 · 3 | 1 | 12.000 (×2) | No → Especies amigas: Esencia ×1,5 |
-| 8 | Vida abundante | 4 · 3 | 1 | 12.000 (×2) | Toda la Esencia ×1 → Toda la Esencia ×1,5 |
-| 9 | Vida eterna | 5 · 4 | ∞ | 50.000 · 55.000 · 61.000 · 67.000 · 73.000 · … (×1,1) | Esencia ×1 → Esencia ×1,1 → Esencia ×1,21 → Esencia ×1,33 → Esencia ×1,46 → Esencia ×1,61 → Esencia ×1,77 → … |
+| 7 | Amistad | 4 · 3 | 1 | 12.000 (×2) | No → Especies amigas: luz ×1,5 |
+| 8 | Vida abundante | 4 · 3 | 1 | 12.000 (×2) | Toda la luz ×1 → Toda la luz ×1,5 |
+| 9 | Vida eterna | 5 · 4 | ∞ | 50.000 · 55.000 · 61.000 · 67.000 · 73.000 · … (×1,1) | Luz ×1 → Luz ×1,1 → Luz ×1,21 → Luz ×1,33 → Luz ×1,46 → Luz ×1,61 → Luz ×1,77 → … |
+
+**Recoger** — Pipetas que recogen la luz por ti.
+
+| # | Nodo | Anillo · 🌙 | Niveles | Precios (×factor) | Antes → después (de 0 al máximo) |
+|---|---|---|---|---|---|
+| 1 | Pipeta | 1 · 1 | 3 | 2 · 4 · 8 (×2) | Recoges tú → 1 pipeta → 2 pipetas → 3 pipetas |
+| 2 | Pipetas rápidas | 2 · 1 | 3 | 15 · 30 · 60 (×2) | Una gota cada 2,5 s → Una gota cada 2 s → Una gota cada 1,6 s → Una gota cada 1,3 s |
+| 3 | Gotas grandes | 2 · 1 | 3 | 15 · 30 · 60 (×2) | La gota guarda 4 s de luz → La gota guarda 6 s de luz → La gota guarda 8 s de luz → La gota guarda 10 s de luz |
+| 4 | Más pipetas | 3 · 2 | 5 | 200 · 300 · 450 · 680 · 1000 (×1,5) | 3 pipetas → 4 pipetas → 5 pipetas → 6 pipetas → 7 pipetas → 8 pipetas |
+| 5 | Pipetas con imán | 3 · 2 | 2 | 200 · 400 (×2) | Una gota por viaje → Y las gotas a 1 criatura de distancia → Y las gotas a 2 criaturas de distancia |
+| 6 | Pipeta maestra | 4 · 3 | 1 | 12.000 (×2) | Las pipetas tardan 1,3 s → La luz llega sola, al momento |
 
 **Descubrir** — Más Datos por cada cosa nueva que encuentras.
 
 | # | Nodo | Anillo · 🌙 | Niveles | Precios (×factor) | Antes → después (de 0 al máximo) |
 |---|---|---|---|---|---|
-| 1 | Cuaderno de campo | 1 · 1 | 3 | 2 · 4 · 8 (×2) | 5 Datos por especie nueva → 7 Datos por especie nueva → 9 Datos por especie nueva → 11 Datos por especie nueva |
+| 1 | Cuaderno de campo | 1 · 1 | 3 | 2 · 4 · 8 (×2) | 10 Datos por especie nueva → 12 Datos por especie nueva → 14 Datos por especie nueva → 16 Datos por especie nueva |
 | 2 | Copiadora | 2 · 1 | 1 | 15 (×2) | No → Copias que siempre viven |
-| 3 | Coleccionista | 3 · 2 | 5 | 400 · 600 · 900 · 1400 · 2000 (×1,5) | Bestiario: Esencia +0 % → Bestiario: Esencia +10 % → Bestiario: Esencia +20 % → Bestiario: Esencia +30 % → Bestiario: Esencia +40 % → Bestiario: Esencia +50 % |
-| 4 | Archivo | 3 · 2 | 2 | 400 · 800 (×2) | Nunca → Copia gratis cada 15 s → Copia gratis cada 8 s |
-| 5 | Microscopio | 3 · 2 | 2 | 400 · 800 (×2) | Ficha simple → Dónde vive y cómo se mueve → Todos los detalles |
+| 3 | Coleccionista | 3 · 2 | 5 | 200 · 300 · 450 · 680 · 1000 (×1,5) | Bestiario: luz +0 % → Bestiario: luz +10 % → Bestiario: luz +20 % → Bestiario: luz +30 % → Bestiario: luz +40 % → Bestiario: luz +50 % |
+| 4 | Archivo | 3 · 2 | 2 | 200 · 400 (×2) | Nunca → Copia gratis cada 15 s → Copia gratis cada 8 s |
+| 5 | Microscopio | 3 · 2 | 2 | 200 · 400 (×2) | Ficha simple → Dónde vive y cómo se mueve → Todos los detalles |
 | 6 | Premio al descubridor | 4 · 3 | 2 | 12.000 · 24.000 (×2) | 3 Datos por manera nueva → 5 Datos por manera nueva → 7 Datos por manera nueva |
 | 7 | Semillas curiosas | 4 · 3 | 1 | 12.000 (×2) | No → Buscan especies que no tienes |
 | 8 | Copias sorpresa | 4 · 3 | 1 | 12.000 (×2) | No → Copias con sorpresa |
@@ -337,23 +348,12 @@ de la ruta comprados). Tablas generadas del código: `npx vite-node scripts/tree
 
 | # | Nodo | Anillo · 🌙 | Niveles | Precios (×factor) | Antes → después (de 0 al máximo) |
 |---|---|---|---|---|---|
-| 1 | Mundo 2 · Frío | 1 · 1 | 1 | 2 (×2) | 2 especies para encontrar → 5 especies para encontrar |
-| 2 | Mundo 3 · Remolinos | 2 · 1 | 1 | 15 (×2) | 5 especies para encontrar → 7 especies para encontrar |
-| 3 | Mundo 4 · Escudos | 3 · 2 | 1 | 400 (×2) | 7 especies para encontrar → 11 especies para encontrar |
-| 4 | Mundo 5 · Discos | 3 · 2 | 1 | 400 (×2) | 11 especies para encontrar → 14 especies para encontrar |
-| 5 | Mundo 6 · Patas | 4 · 3 | 1 | 12.000 (×2) | 14 especies para encontrar → 16 especies para encontrar |
-| 6 | Mundo 7 · Gigantes | 5 · 4 | 1 | 80.000 (×2) | 16 especies para encontrar → 17 especies para encontrar |
-
-**Recoger** — Pipetas que recogen la luz por ti.
-
-| # | Nodo | Anillo · 🌙 | Niveles | Precios (×factor) | Antes → después (de 0 al máximo) |
-|---|---|---|---|---|---|
-| 1 | Pipeta | 1 · 1 | 3 | 2 · 4 · 8 (×2) | Recoges tú → 1 pipeta → 2 pipetas → 3 pipetas |
-| 2 | Pipetas rápidas | 2 · 1 | 3 | 15 · 30 · 60 (×2) | Una gota cada 2,5 s → Una gota cada 2 s → Una gota cada 1,6 s → Una gota cada 1,3 s |
-| 3 | Gotas grandes | 2 · 1 | 3 | 15 · 30 · 60 (×2) | La gota guarda 4 s de luz → La gota guarda 6 s de luz → La gota guarda 8 s de luz → La gota guarda 10 s de luz |
-| 4 | Más pipetas | 3 · 2 | 5 | 400 · 600 · 900 · 1400 · 2000 (×1,5) | 3 pipetas → 4 pipetas → 5 pipetas → 6 pipetas → 7 pipetas → 8 pipetas |
-| 5 | Pipetas con imán | 3 · 2 | 2 | 400 · 800 (×2) | Una gota por viaje → Y las gotas a 1 criatura de distancia → Y las gotas a 2 criaturas de distancia |
-| 6 | Pipeta maestra | 4 · 3 | 1 | 12.000 (×2) | Las pipetas tardan 1,3 s → La luz llega sola, al momento |
+| 1 | Mundo 2 · Frío | 1 · 1 | 1 | 2 (×2) | 1 especie para encontrar → 2 especies para encontrar |
+| 2 | Mundo 3 · Remolinos | 2 · 1 | 1 | 15 (×2) | 2 especies para encontrar → 3 especies para encontrar |
+| 3 | Mundo 4 · Escudos | 3 · 2 | 1 | 200 (×2) | 3 especies para encontrar → 4 especies para encontrar |
+| 4 | Mundo 5 · Hélices | 3 · 2 | 1 | 200 (×2) | 4 especies para encontrar → 5 especies para encontrar |
+| 5 | Mundo 6 · Patas | 4 · 3 | 1 | 12.000 (×2) | 5 especies para encontrar → 6 especies para encontrar |
+| 6 | Mundo 7 · Gigantes | 5 · 4 | 1 | 80.000 (×2) | 6 especies para encontrar → 7 especies para encontrar |
 
 **Destello** — La chispa dorada viene más y regala más.
 
@@ -362,9 +362,9 @@ de la ruta comprados). Tablas generadas del código: `npx vite-node scripts/tree
 | 1 | Destello frecuente | 1 · 1 | 3 | 2 · 4 · 8 (×2) | El primero llega a los 6–12 s → El primero llega a los 5–10 s → El primero llega a los 4–9 s → El primero llega a los 4–7 s |
 | 2 | Destello lento | 2 · 1 | 2 | 15 · 30 (×2) | Se queda 8 s → Se queda 11 s → Se queda 14 s |
 | 3 | Destello del tiempo | 2 · 1 | 2 | 15 · 30 (×2) | +0 s por chispa → +2 s por chispa → +4 s por chispa |
-| 4 | Primer destello | 3 · 2 | 1 | 400 (×2) | La primera a los 4–7 s → La primera a los 1–2 s |
-| 5 | Regalos mejores | 3 · 2 | 3 | 400 · 800 · 1600 (×2) | Regalo: 10 s de luz → Regalo: 12 s de luz → Regalo: 14 s de luz → Regalo: 16 s de luz |
-| 6 | Destello sabio | 3 · 2 | 2 | 400 · 800 (×2) | +0 Datos por chispa → +1 Dato por chispa → +2 Datos por chispa |
+| 4 | Primer destello | 3 · 2 | 1 | 200 (×2) | La primera a los 4–7 s → La primera a los 1–2 s |
+| 5 | Regalos mejores | 3 · 2 | 3 | 200 · 400 · 800 (×2) | Regalo: 10 s de luz → Regalo: 12 s de luz → Regalo: 14 s de luz → Regalo: 16 s de luz |
+| 6 | Destello sabio | 3 · 2 | 2 | 200 · 400 (×2) | +0 Datos por chispa → +1 Dato por chispa → +2 Datos por chispa |
 | 7 | Semillas mágicas | 4 · 3 | 1 | 12.000 (×2) | 1 semilla segura por chispa → 3 semillas seguras por chispa |
 
 Diferencias con la página del plan: **Placa más grande tiene 3 niveles** (sitio para 5 → 7 → 9 → 12; Placa gigante, 15);
