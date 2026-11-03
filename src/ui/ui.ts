@@ -1426,7 +1426,10 @@ class BiolumaUI implements UI {
     const after = (v.essencePerSec * b.nextMult) / b.mult;
     const l = this.lang;
     // «Ahora 2 luz/s → con Nutrientes 3 luz/s. Hasta el final de la sesión. El siguiente cuesta el doble.»
-    return tx(SESSION_UI.boostTip(wholeRate(v.essencePerSec, l), wholeRate(after, l)));
+    // Whole numbers that round alike («3 → 3») would hide the gain: then one decimal («2,6 → 3,3»).
+    const a = wholeRate(v.essencePerSec, l);
+    const b2 = wholeRate(after, l);
+    return tx(a === b2 ? SESSION_UI.boostTip(fmtRate(v.essencePerSec, l), fmtRate(after, l)) : SESSION_UI.boostTip(a, b2));
   }
 
   /** A one-time line over a dock button (what it does), gone after a few seconds or a tap. */
@@ -2452,7 +2455,8 @@ class BiolumaUI implements UI {
         const text =
           e.cause === 'glass' ? tx(alive ? TEXT.deathGlassAlive : TEXT.deathGlass) : e.cause === 'crowd' ? tx(TEXT.deathCrowd) : alive ? '' : tx(TEXT.deathFaded);
         if (alive) ov.puff(e.x, e.y);
-        ov.wentDark(e.x, e.y, text, !alive);
+        // One label at a time on the dish (ARTE §10): while a Momento or VELA speaks, the grey fade alone.
+        ov.wentDark(e.x, e.y, this.deps.isNarrating?.() ? '' : text, !alive);
         return;
       }
       ov.puff(e.x, e.y);
@@ -2460,7 +2464,7 @@ class BiolumaUI implements UI {
     bus.on('creatureExploded', (e) => {
       ov.explodedPulse(e.x, e.y);
       // A fusion seen again (ADR-030 §2.5): its 2 s label at the spot; the first one has its card.
-      if (e.cause === 'touch' && this.deps.mergeTold?.()) ov.wentDark(e.x, e.y, tx(TEXT.merged), false);
+      if (e.cause === 'touch' && this.deps.mergeTold?.() && !this.deps.isNarrating?.()) ov.wentDark(e.x, e.y, tx(TEXT.merged), false);
     });
     // Shapeless matter dissolved (lysis, clean-up): it fades like a puff; it was never a creature that died.
     bus.on('creatureDissolved', (e) => {
