@@ -563,7 +563,13 @@ async function runCase(c) {
   const collectOnce = async () => {
     const r = await page.evaluate(() => {
       const t = window.bioluma.ui.targetRect('drop');
-      return t ? { x: t.x + t.width / 2, y: t.y + t.height / 2 } : null;
+      if (!t) return null;
+      const x = t.x + t.width / 2;
+      const y = t.y + t.height / 2;
+      // Only a drop a finger can reach on the dish (not one under the summary or a card: that tap would press
+      // whatever covers it, «Nueva sesión» included).
+      const hit = document.elementFromPoint(x, y);
+      return hit && hit.closest('.bl-dish') ? { x, y } : null;
     });
     if (!r) return false;
     await tap(r.x, r.y);
