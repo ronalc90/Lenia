@@ -17,7 +17,7 @@ import { fmt, fmtClock, fmtDuration, fmtRate, fmtShort } from './format';
 import { behaviorName, getLang, setLang, stateName, t, tx } from './i18n';
 import { icon, logo } from './icons';
 import { DishInput } from './input';
-import { dropsOnSegment, routeTap } from './dishTap';
+import { dropAt, dropsOnSegment, routeTap } from './dishTap';
 import { FlyLayer, flyDuration } from './fx/fly';
 import { Readout, wholeRate } from './fx/readout';
 import { dishFx } from './fx/stage';
@@ -1804,8 +1804,10 @@ class BiolumaUI implements UI {
       this.vibrate(8);
       return;
     }
-    // A status pill: its behaviour explains itself (Behaviour Guide); never seed under a pill.
-    const pill = this.overlay.statusHit(px, py);
+    // A status pill: its behaviour explains itself (Behaviour Guide); never seed under a pill. A drop
+    // drawn next to the pill is collected first (the finger went for the light).
+    const scene = this.overlay.tapScene();
+    const pill = scene.collecting && dropAt(scene, px, py) >= 0 ? null : this.overlay.statusHit(px, py);
     if (pill) {
       if (pill.behavior && this.deps.onBehaviorInfo) {
         this.sound('open');
@@ -1814,7 +1816,7 @@ class BiolumaUI implements UI {
       return;
     }
     // ADR-030 §2.2.1: a drop, or a creature with light, is collected; a tap never sows on either.
-    const route = routeTap('tap', px, py, this.overlay.tapScene());
+    const route = routeTap('tap', px, py, scene);
     if (route.kind === 'collect') {
       this.closeCard();
       this.collectDrop(route.drop);
