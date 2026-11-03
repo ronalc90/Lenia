@@ -1,15 +1,14 @@
 /**
  * When a Momento may open (docs/MOMENTOS.md §2, docs/CLARIDAD.md §3: one message at a time, never over
  * what the player is reading). src/main.ts reads each surface; a queued card or label waits while any
- * of them is up and opens when the screen is free.
+ * of them is up and opens when the screen is free. The run's own budget (one pausing card, none in the
+ * first 5 s, nothing carried to the next run) is src/moments/policy.ts (ADR-030, docs/CLARIDAD2.md §2.8).
  */
 export interface MomentScreen {
   /** The title screen or a modal (Settings, a species sheet…). */
   covered: boolean;
   /** The opening intro. */
   intro: boolean;
-  /** A run shorter than MOMENT_MIN_RUN_SECONDS is running: its cards wait for the summary (RITMO §2 rule 7). */
-  shortRun: boolean;
   /** A session card (start, summary, welcome) or the research tree. */
   flow: boolean;
   /** VELA is talking. */
@@ -28,5 +27,5 @@ export interface MomentScreen {
 }
 
 export function momentWaits(s: MomentScreen): boolean {
-  return s.covered || s.intro || s.shortRun || s.flow || s.story || s.sheet || s.celebration || s.drawer || !s.lit;
+  return s.covered || s.intro || s.flow || s.story || s.sheet || s.celebration || s.drawer || !s.lit;
 }

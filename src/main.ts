@@ -19,7 +19,7 @@ import { createGame } from './game/game';
 import { clearDish as clearSavedDish, clearSave, loadSave, offlineSeconds, verifyStoredGame, writeSave } from './game/save';
 // Art tokens (--bl-*) before every module stylesheet (docs/ARTE.md §12).
 import './ui/art/art.css';
-import { createUI, shortRunRunning } from './ui/ui';
+import { createUI } from './ui/ui';
 import { createIntro, INTRO_STORAGE_KEY, introSeen, mountIntroEntry, type Intro } from './ui/intro';
 import { LOOK_STORAGE_KEY } from './ui/art/characters/people';
 import { createAudio } from './audio/audio';
@@ -55,7 +55,7 @@ import {
 import { COLORMAPS, colormapLUT, createSecretJournal, createSecrets, SECRET_JOURNAL_KEY, secretDef } from './secrets';
 import { bigSeedChip, createSeedMeter, seedPriceSheetExplain, type SeedMeter } from './ui/seed-price';
 import { attachSecretInputs, createSecretsUI, createStrokeRecorder, mountBasementEntry, type BasementEntry } from './ui/secrets';
-import { createSessionFlow, createWelcomeCard, datosExplain, type SessionFlow, type SessionFlowSound } from './ui/session';
+import { clockPauses, createSessionFlow, createWelcomeCard, datosExplain, type SessionFlow, type SessionFlowSound } from './ui/session';
 import { computeDatos, unlockedWorlds } from './game/session';
 import { PREINCUBATE_STEPS, SESSION_PACE_RAMP_S, SIM_STEPS_PER_SEC } from './game/cycleBalance';
 import { CultureReveal, REVEAL, type RevealContext } from './sim/reveal';
@@ -141,7 +141,7 @@ const TREE_SCENES = new Set(['t_tree', 't_world', 'a1_night']);
  * Why the dish is frozen. The simulation and the economy stop while any source is active; the UI's
  * pause button only reflects 'user' (Momentos, cinematics and the session cards pause silently).
  */
-export type PauseSource = 'user' | 'moment' | 'cinematic' | 'cards';
+export type PauseSource = 'user' | 'moment' | 'cinematic' | 'cards' | 'story' | 'sheet';
 
 /** The seed price sheet as main.ts drives it (open from the pill, refresh while open). */
 interface SeedPriceSheet {
@@ -315,7 +315,6 @@ function boot(): void {
     bus,
     getView: () => game.view(),
     // Splash/modal (UI), a session card or the tree, VELA talking, a price/guide sheet, a celebration.
-    // A run shorter than MOMENT_MIN_RUN_SECONDS: the cards wait for its summary (RITMO §2 rule 7).
     // Nor while the run's culture is still incubating unlit or lighting up: "¡VIDA!" about the starter
     // waits until the player can see it (ARTE-PULIDO §7.2b).
     // Nor over the open Bestiary drawer (a new species' card covered its chips, RF-06): src/app/momentGate.ts.
@@ -323,7 +322,6 @@ function boot(): void {
       momentWaits({
         covered: uiRef?.blocked() ?? true,
         intro: introOpen(),
-        shortRun: shortRunRunning(game.session),
         flow: flowBusy(),
         story: bridge?.storyShowing() ?? false,
         sheet: sheetOpen(),
@@ -772,6 +770,9 @@ function boot(): void {
       const goal = p?.goal ? { name: nodeText(p.goal.id).name, missing: p.goal.missing } : null;
       priceCore.open(datosExplain(computeDatos(se, fx, 0), v.settings.lang, v.research?.night ?? 1, goal));
     },
+    plates: () => moments.drainForSummary(),
+    cultureReady: () => culture.lit,
+    clockHold: () => story.holdsClock(),
   });
   flowRef = flow;
   // An old save turned into Datos: VELA says so once (game.migration is set only on that load).
@@ -1563,6 +1564,9 @@ function boot(): void {
       refreshTints(view);
       flow.update(view);
       setPause('cards', flowBusy());
+      const cp = clockPauses({ talking: story.talking, phase: game.session?.phase, sheet: ui.drawerOpen || sheetOpen() || ui.blocked() });
+      setPause('story', cp.story);
+      setPause('sheet', cp.sheet);
       // A paused Momento card is the one message on screen: the Encargo bar steps back under it (on a wide
       // screen the card beside the dish reached the bar's end).
       if (momentsUI.cardOpen !== momentCardShown) {
