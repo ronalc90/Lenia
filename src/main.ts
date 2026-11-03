@@ -632,7 +632,11 @@ function boot(): void {
     reduceMotion: rmNow,
     getTargetRect: (id) => ui.targetRect(id),
     gridToClient: (x, y) => ui.gridToClient(x, y),
-    revealTarget: (id) => ui.reveal(id),
+    // Never opens the Bestiary over the Tree or a session card (the scene waits hidden there): it covered the
+    // Tree after a purchase and a «Mira tu Bestiario» the player could not see (integration play-through).
+    revealTarget: (id) => {
+      if (!(flowRef?.treeOpen || flowRef?.cardOpen)) ui.reveal(id);
+    },
     // A tree node's sheet is open: its "Comprar" is the next step and the pill would sit on its head
     // (only the Tree's own tasks run while the Tree is up: «Compra una mejora.» has no target).
     hideTask: () => flowRef?.treeSheetOpen ?? false,
