@@ -637,3 +637,8 @@ export const SEED_PATH_LOOKAHEAD_STEPS = 60;
  * "¡Entendido!" landed on the Tree button under it and opened the Tree (QA4 replay, F-05). [QA4]
  */
 export const CARD_TAP_GUARD_MS = 500;
+/**
+ * The dock's phantom-tap guard (QA-CLARIDAD #17, docs/CLARIDAD2.md §2.7): a dock button ignores taps for
+ * this long after something stopped covering it (VELA's box over the dock; the plan's 350 ms).
+ */
+export const DOCK_UNCOVER_GUARD_MS = 350;
