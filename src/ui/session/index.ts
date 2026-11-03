@@ -13,13 +13,19 @@ export { createSessionStart, type SessionStartView, type SessionStartOptions, ty
 export {
   createSessionSummary,
   datosExplain,
-  equationRows,
+  reportRows,
+  reportHeadline,
+  REPORT_TEXT,
   type SessionSummaryView,
   type SessionSummaryOptions,
   type SummaryExtras,
   type SummarySpecies,
   type SummarySound,
-  type EqRow,
+  type ReportRow,
+  type ReportData,
+  type ReportHeadline,
+  type PlateRef,
+  type FirstStep,
 } from './summary';
 export { createSessionFlow, type SessionFlow, type SessionFlowOptions, type SessionFlowSound } from './flow';
 export { createWelcomeCard, type WelcomeCard } from './welcome';

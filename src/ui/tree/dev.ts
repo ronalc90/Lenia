@@ -43,7 +43,7 @@ import { TOTAL_WORLD_SPECIES, WORLD_BY_ID, WORLDS, type WorldId } from '../../ga
 import { catalogGroup, catalogPortrait } from '../../species';
 import { createPriceSheet } from '../moments/price';
 import { computeDatos, researchPickWorld, sessionPreview, unlockedWorlds } from '../../game/session';
-import { createSessionHud, createSessionStart, createSessionSummary, datosExplain, hudViewOf } from '../session';
+import { createSessionHud, createSessionStart, createSessionSummary, datosExplain, hudViewOf, type SummaryExtras } from '../session';
 import { createTreeView } from './treeView';
 import '../art/art.css';
 
@@ -56,11 +56,11 @@ document.documentElement.lang = lang;
 const app = document.getElementById('app')!;
 
 // ───────────── mock species (catalog portraits) ─────────────
-const SPECIES: Record<string, { code: string; name: { es: string; en: string }; hue: number }> = {
-  sp1: { code: 'O2u', name: { es: 'Nadadora celeste', en: 'Sky swimmer' }, hue: 195 },
-  sp2: { code: 'OG2g', name: { es: 'Bailarina violeta', en: 'Violet dancer' }, hue: 275 },
+const SPECIES: Record<string, { code: string; name: { es: string; en: string }; hue: number; latin?: string }> = {
+  sp1: { code: 'O2u', name: { es: 'Nadadora celeste', en: 'Sky swimmer' }, hue: 195, latin: 'Orbium unicaudatus' },
+  sp2: { code: 'OG2g', name: { es: 'Bailarina violeta', en: 'Violet dancer' }, hue: 275, latin: 'Gyrorbium gyrans' },
   sp3: { code: 'S1s', name: { es: 'Escudo verde', en: 'Green shield' }, hue: 140 },
-  sp4: { code: 'H3s', name: { es: 'Hélice rosa', en: 'Pink helix' }, hue: 330 },
+  sp4: { code: 'H3s', name: { es: 'Hélice rosa', en: 'Pink helix' }, hue: 330, latin: 'Helicium sp.' },
   sp5: { code: 'O4d', name: { es: 'Gemela azul', en: 'Blue twin' }, hue: 220 },
   sp6: { code: 'C0v', name: { es: 'Anillo lila', en: 'Lilac ring' }, hue: 300 },
 };
@@ -69,7 +69,7 @@ function speciesInfo(id: string) {
   const s = SPECIES[id];
   if (!s) return null;
   if (!portraitCache.has(id)) portraitCache.set(id, catalogPortrait(s.code));
-  return { name: s.name[lang], portrait: portraitCache.get(id) ?? null, hue: s.hue };
+  return { name: s.name[lang], portrait: portraitCache.get(id) ?? null, hue: s.hue, latin: s.latin ?? null };
 }
 
 // ───────────── presets (shaped like the planner bot's run, docs/CICLO.md §11) ─────────────
@@ -298,14 +298,41 @@ function finish(s: SessionState): void {
   species = Math.max(species, 2);
   showSummary(sum);
 }
-function showSummary(sum: ReturnType<typeof summarize>): void {
+function showSummary(sum: ReturnType<typeof summarize>, story: Partial<SummaryExtras> = {}): void {
   const ctx = { levels: research.levels, datos: research.datos, sessions: research.sessions, species };
   const goal = nextGoal(ctx);
   summary.show(sum, {
     affordable: affordableNodes(ctx).filter((id) => id !== 'lab').length,
     nextGoal: goal && goal.missingDatos > 0 ? { name: nodeText(goal.id).name, missing: goal.missingDatos, sessions: null } : null,
+    ...story,
   });
 }
+
+/** What PA (names, the session before) and PC (today's plates) will hand the report, for the dev page. */
+const STORY: Record<string, Partial<SummaryExtras>> = {
+  first: {
+    swept: 12,
+    collection: { have: 1, total: TOTAL_WORLD_SPECIES, nextWorld: { es: 'Mundo 2', en: 'World 2' }, nextCost: 2 },
+    plates: [{ id: 'stable', kind: 'stable', title: { es: 'Criatura estable', en: 'A stable creature' } }],
+  },
+  rich: {
+    encargoNames: [{ es: 'Ten 3 criaturas a la vez', en: 'Have 3 creatures at once' }],
+    behaviorNames: [{ es: 'gira', en: 'spins' }],
+    swept: 240,
+    previous: { total: 900, fromLight: 820, prize: 10 },
+    collection: { have: 4, total: TOTAL_WORLD_SPECIES, nextWorld: { es: 'Mundo 4', en: 'World 4' }, nextCost: 400 },
+    merged: 2,
+    plates: [
+      { id: 'secondSpecies', kind: 'compare', title: { es: 'Dos especies', en: 'Two species' } },
+      { id: 'behavior.spinner', kind: 'spinner', title: { es: '¡Gira!', en: 'It spins!' } },
+    ],
+  },
+  poor: {
+    previous: { total: 21, fromLight: 2, prize: 10 },
+    lessWorld: { es: 'Mundo 2', en: 'World 2' },
+    collection: { have: 1, total: TOTAL_WORLD_SPECIES, nextWorld: { es: 'Mundo 2', en: 'World 2' }, nextCost: 2 },
+  },
+};
 
 /** A ready-made summary for screenshots. */
 function mockSummary(kind: string): void {
@@ -345,7 +372,7 @@ function mockSummary(kind: string): void {
   const sum = summarize(s, { ...b.research, levels }, fx, species);
   if (kind === 'night') sum.vela = 'night';
   research = applySummary({ ...b.research, levels }, s, sum, fx);
-  showSummary(sum);
+  showSummary(sum, STORY[kind] ?? {});
 }
 
 // ───────────── route ─────────────
@@ -362,8 +389,9 @@ if (view === 'tree') {
       if (sel) tree.select(sel);
       if (sel && q.get('why') === '1') setTimeout(() => (tree.el.querySelector('.rt-pricebox') as HTMLElement | null)?.click(), 450);
       const buy = q.get('buy');
-      if (buy) setTimeout(() => (tree.el.querySelector(`.rt-node[data-id="${buy}"]`) as HTMLElement)?.click(), 100);
-      if (buy) setTimeout(() => (tree.el.querySelector(`.rt-buy[data-buy="${buy}"]`) as HTMLElement | null)?.click(), 600);
+      // After the camera settles: a tap within 350 ms of a camera move is ignored (./camera TAP_QUIET_MS).
+      if (buy) setTimeout(() => (tree.el.querySelector(`.rt-node[data-id="${buy}"]`) as HTMLElement)?.click(), 450);
+      if (buy) setTimeout(() => (tree.el.querySelector(`.rt-buy[data-buy="${buy}"]`) as HTMLElement | null)?.click(), 1000);
     }),
   );
 } else if (view === 'summary') mockSummary(q.get('sum') ?? 'rich');

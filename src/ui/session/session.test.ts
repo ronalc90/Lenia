@@ -5,26 +5,133 @@ import { treeEffects } from '../../game/tree';
 import { nodePriceExplain } from '../tree/treeView';
 import { fmt } from '../format';
 import { hudState } from './hud';
-import { datosExplain, equationRows } from './summary';
+import { datosExplain, reportHeadline, reportRows, type ReportData } from './summary';
+import type { SessionSummary } from '../../game/session';
 
-describe('the Datos equation on the end card', () => {
-  it('shows every step with numbers that add up to the total', () => {
+const NAMES: Record<string, string> = { a: 'Remolino violeta', b: 'Nadadora celeste' };
+const ctxOf = (n = 4) => ({ speciesName: (id: string) => NAMES[id] ?? '?', night: n });
+
+/** A finished session as the game hands it to the report (game/session.ts summarize). */
+function summaryOf(over: Partial<SessionSummary> & { datos: SessionSummary['datos'] }): SessionSummary {
+  return { n: 4, seconds: 30, essence: over.datos.essence, species: [], best: null, records: [], vela: 'poor', keep: [], nightReady: false, ...over };
+}
+
+describe('the session report tells a story (docs/CLARIDAD2.md §2.9)', () => {
+  it('the exciting row comes first', () => {
+    const fx = treeEffects({ lab: 2 });
+    const { session } = beginSession(freshResearch(), fx);
+    noteEssence(session, 963);
+    noteSpecies(session, fx, 'a', true);
+    const sum = summaryOf({ datos: computeDatos(session, fx, 0), species: [{ id: 'a', isNew: true }] });
+    const h = reportHeadline(sum, 'es', ctxOf());
+    expect(h.kind).toBe('species');
+    expect(h.title).toBe('¡Especie nueva! Remolino violeta');
+    expect(h.amount).toBe(`+${C.DATOS_PER_NEW_SPECIES} Datos`);
+    expect(h.note).toBe('Premio de descubrimiento: solo la primera vez');
+    // Without a discovery the headline is the light: never an empty card.
+    const plain = summaryOf({ datos: computeDatos(beginSession(freshResearch(), fx).session, fx, 0) });
+    expect(reportHeadline(plain, 'en', ctxOf()).kind).toBe('light');
+    // Then the rows in their fixed order: light, ÷, night, discoveries, requests, records, … total.
+    const kinds = reportRows(sum, {}, 'es', ctxOf()).map((r) => r.kind);
+    expect(kinds.slice(0, 3)).toEqual(['light', 'div', 'night']);
+    expect(kinds.indexOf('species')).toBeGreaterThan(kinds.indexOf('night'));
+    expect(kinds[kinds.length - 1]).toBe('total');
+  });
+
+  it('rows add up to the total', () => {
     const fx = treeEffects({ lab: 3, encyclopedia: 1 });
     const { session } = beginSession(freshResearch(), fx);
     noteEssence(session, 12.4 * C.DATOS_ESSENCE_DIV);
     noteSpecies(session, fx, 'a', true);
+    noteSpecies(session, fx, 'b', true);
     noteEncargo(session, fx);
-    const d = computeDatos(session, fx, 0);
-    const rows = equationRows(d, 'es', 3);
-    expect(rows.map((r) => r.kind)).toEqual(['essence', 'mult', 'species', 'encargos', 'book']);
-    expect(rows[0].tiles[0].value).toBe(fmt(12.4 * C.DATOS_ESSENCE_DIV, 'es'));
-    expect(rows[0].ops).toEqual(['÷']);
-    expect(rows[0].result).toBe('12');
-    expect(rows[1].result).toBe(String(d.fromEssence));
-    const added = rows.slice(2).reduce((a, r) => a + Number(r.result.replace('+', '')), 0);
-    expect(d.fromEssence + added).toBe(d.total);
+    noteEncargo(session, fx);
+    const d = computeDatos(session, fx, 1);
+    const sum = summaryOf({ datos: d, species: [{ id: 'a', isNew: true }, { id: 'b', isNew: true }], records: [{ kind: 'essence', value: 2000, previous: 900 }] });
+    for (const data of [{}, { encargoNames: [{ es: 'Ten 3 criaturas a la vez', en: 'Have 3 creatures at once' }, { es: 'Atrapa un Destello', en: 'Catch a Spark' }], swept: 24 }] as ReportData[]) {
+      const rows = reportRows(sum, data, 'es', ctxOf(3));
+      const total = rows.find((r) => r.kind === 'total')!;
+      expect(rows.filter((r) => r.kind !== 'total').reduce((a, r) => a + r.adds, 0)).toBe(d.total);
+      expect(total.adds).toBe(0);
+      expect(total.value).toBe(`${fmt(d.total, 'es')} Datos`);
+    }
+    // The light row says how much Luz, the next one what it became: "963 ÷ 25 = 38".
+    const rows = reportRows(sum, {}, 'es', ctxOf(3));
+    expect(rows[0]).toMatchObject({ kind: 'light', label: 'Luz recogida', value: fmt(d.essence, 'es'), adds: 0 });
+    expect(rows[1]).toMatchObject({ kind: 'div', label: `÷ ${C.DATOS_ESSENCE_DIV}`, adds: d.base });
   });
 
+  it('names every reward: each species, each request and each record by its name', () => {
+    const fx = treeEffects({ lab: 1 });
+    const { session } = beginSession(freshResearch(), fx);
+    noteEssence(session, 300);
+    noteSpecies(session, fx, 'a', true);
+    noteEncargo(session, fx);
+    const d = computeDatos(session, fx, 1);
+    const sum = summaryOf({ datos: d, species: [{ id: 'a', isNew: true }], records: [{ kind: 'essence', value: 300, previous: 200 }] });
+    const rows = reportRows(sum, { encargoNames: [{ es: 'Ten 3 criaturas a la vez', en: 'Have 3 creatures at once' }] }, 'es', ctxOf());
+    const label = (k: string) => rows.filter((r) => r.kind === k).map((r) => r.label);
+    expect(label('species')).toEqual(['Especie nueva · Remolino violeta']);
+    expect(label('encargo')).toEqual(['✓ Ten 3 criaturas a la vez']);
+    expect(label('record')[0]).toMatch(/^✓ /);
+    // "7 × 2 encargos" (QA-CLARIDAD #24) never comes back when the names are known.
+    expect(rows.map((r) => r.label).join(' ')).not.toMatch(/\d+ × \d+ encargos/);
+  });
+
+  it('QA#9: first steps are named', () => {
+    const fx = treeEffects({});
+    const { session } = beginSession(freshResearch(), fx);
+    noteEssence(session, 3 * C.DATOS_ESSENCE_DIV);
+    noteEncargo(session, fx);
+    noteEncargo(session, fx);
+    const sum = summaryOf({ n: 1, datos: computeDatos(session, fx, 0) });
+    const rows = reportRows(sum, {}, 'es', ctxOf(1));
+    const steps = rows.filter((r) => r.kind === 'step');
+    expect(steps.map((r) => r.label)).toEqual(['✓ sembrar', '✓ primera criatura']);
+    expect(rows.find((r) => r.kind === 'section' && r.section === 'steps')?.label).toBe('Primeros pasos');
+    expect(rows.map((r) => r.label).join(' ')).not.toMatch(/primeras metas|encargos/i);
+    noteEncargo(session, fx); // the third one: collect the light (ADR-030)
+    const three = summaryOf({ n: 1, datos: computeDatos(session, fx, 0) });
+    const named = reportRows(three, { firstSteps: ['sow', 'creature', 'collect'] }, 'en', ctxOf(1)).filter((r) => r.kind === 'step');
+    expect(named.map((r) => r.label)).toEqual(['✓ sow', '✓ first creature', '✓ collect glow']);
+  });
+
+  it('a smaller payout says why, in a neutral line, and what to do', () => {
+    const fx = treeEffects({ lab: 1 });
+    const { session } = beginSession(freshResearch(), fx);
+    noteEssence(session, 6 * C.DATOS_ESSENCE_DIV);
+    const sum = summaryOf({ n: 2, datos: computeDatos(session, fx, 0) });
+    const data: ReportData = { previous: { total: 21, fromLight: 2, prize: 10 }, lessWorld: { es: 'Mundo 2', en: 'World 2' } };
+    const rows = reportRows(sum, data, 'es', ctxOf(1));
+    const less = rows.find((r) => r.kind === 'less')!;
+    expect(less.tone).toBe('info');
+    expect(less.label).toBe('Hoy no hubo especie nueva (ayer +10). Tu luz sí creció: 2 → 6 Datos.');
+    expect(less.note).toBe('Para descubrir otra: compra Mundo 2 en el Árbol.');
+    // "ayer 2 ↑" next to the Datos the light gave.
+    expect(rows.find((r) => r.kind === 'div')?.note).toBe('↑ ayer 2');
+    // As many or more than yesterday: no such line.
+    expect(reportRows(sum, { previous: { total: 3, fromLight: 2, prize: 0 } }, 'es', ctxOf(1)).some((r) => r.kind === 'less')).toBe(false);
+  });
+
+  it('the final sweep is told but not added twice', () => {
+    const fx = treeEffects({});
+    const { session } = beginSession(freshResearch(), fx);
+    noteEssence(session, 90);
+    const sum = summaryOf({ datos: computeDatos(session, fx, 0) });
+    const sweep = reportRows(sum, { swept: 24 }, 'es', ctxOf(1)).find((r) => r.kind === 'swept')!;
+    expect(sweep).toMatchObject({ label: 'Recogida final (VELA)', value: '+24 luz', adds: 0, note: 'ya está en la luz de arriba' });
+  });
+
+  it('no two-decimal multiplier anywhere in the report', () => {
+    const fx = treeEffects({ lab: 3, encyclopedia: 1 });
+    const { session } = beginSession(freshResearch(), fx);
+    noteEssence(session, 5000);
+    const sum = summaryOf({ datos: computeDatos(session, fx, 0) });
+    for (const lang of ['es', 'en'] as const) for (const r of reportRows(sum, {}, lang, ctxOf(3))) expect(`${r.label} ${r.value} ${r.note ?? ''}`).not.toMatch(/×\d+[.,]\d/);
+  });
+});
+
+describe('the Datos sheet of the HUD preview', () => {
   it('opens as the shared price sheet from the HUD preview, adding up to the same total', () => {
     const fx = treeEffects({ lab: 2 });
     const { session } = beginSession(freshResearch(), fx);
@@ -32,7 +139,7 @@ describe('the Datos equation on the end card', () => {
     noteSpecies(session, fx, 'a', true);
     const d = computeDatos(session, fx, 0);
     const x = datosExplain(d, 'es', 2, { name: { es: 'Más tiempo', en: 'More time' }, missing: 4 });
-    expect(x.terms.map((t) => t.value)).toEqual(['9', '×1,1']);
+    expect(x.terms.map((t) => t.value)).toEqual(['9', '+10 %']); // no two-decimal multiplier (§2.13)
     expect(x.total).toBe(String(d.fromEssence)); // 9 × 1,1 → 9: the equation adds up by itself
     expect(x.rule).toMatch(new RegExp(`^Por cada ${C.DATOS_ESSENCE_DIV} de luz, 1 Dato`)); // ADR-030: Luz on screen
     expect(x.rows!.map((r) => r.label)).toEqual([`+${C.DATOS_PER_NEW_SPECIES}`, '=']);
@@ -41,25 +148,6 @@ describe('the Datos equation on the end card', () => {
     expect(x.advice).toBe('Más tiempo: te faltan 4 Datos');
   });
 
-  it('calls the silent goals of session 1 "first goals", not requests nobody saw', () => {
-    const fx = treeEffects({});
-    const { session } = beginSession(freshResearch(), fx);
-    noteEssence(session, 3 * C.DATOS_ESSENCE_DIV);
-    noteEncargo(session, fx);
-    noteEncargo(session, fx);
-    const d = computeDatos(session, fx, 0);
-    const label = (first: boolean) => equationRows(d, 'es', 1, first).find((r) => r.kind === 'encargos')!.tiles[0].label;
-    expect(label(true)).toBe('primeros pasos'); // QA-CLARIDAD #9
-    expect(label(false)).toBe('encargos');
-  });
-
-  it('says "minimum" when a session earned almost nothing', () => {
-    const fx = treeEffects({});
-    const { session } = beginSession(freshResearch(), fx);
-    const rows = equationRows(computeDatos(session, fx, 0), 'en', 1);
-    expect(rows[rows.length - 1].kind).toBe('minimum');
-    expect(rows[rows.length - 1].result).toBe(`+${C.DATOS_MIN}`);
-  });
 });
 
 describe('the HUD clock', () => {
