@@ -5,6 +5,9 @@
 // scenes forced on screen at the worst moments (a chain of lines and a story choice over the summary, a
 // world scene over the night sheet). Also: buying from the Tree opened with the dock before the run
 // keeps the Tree open (F-06), and the "Toca la placa" task never outlives the first tap (F-03).
+// Polish-pass owner bugs (docs/ARTE-PULIDO.md B-10): «¿Por qué?» unfolds in the same sheet without
+// repeating it; the night's sheet stays clear and full-colour under VELA, its counters never overflow;
+// the spotlight never points at a button the open Bestiary covers; a tapped toast closes.
 //
 // Usage: node tests/e2e/layers.mjs [--dist <dir>] [--out <dir>] [--only mobile|desktop]
 import { spawn, spawnSync } from 'node:child_process';
@@ -30,8 +33,10 @@ dist = resolve(dist);
 function findChromium() {
   const base = '/opt/pw-browsers';
   for (const d of readdirSync(base).filter((d) => d.startsWith('chromium-')).sort().reverse()) {
-    const p = `${base}/${d}/chrome-linux/chrome`;
-    if (existsSync(p)) return p;
+    for (const sub of ['chrome-linux', 'chrome-linux64']) {
+      const p = `${base}/${d}/${sub}/chrome`;
+      if (existsSync(p)) return p;
+    }
   }
   throw new Error('chromium not found under /opt/pw-browsers');
 }
@@ -122,7 +127,8 @@ async function runCase(c) {
 
   // F-20: before the first seed nothing is earned, and the HUD says so.
   const rate = await page.locator('.ess-rate').first().textContent();
-  if (!/^\+0\b/.test((rate ?? '').trim())) problems.push(`[${c.name}] the HUD shows «${rate}» before the first seed (F-20)`);
+  // Nothing is earned yet: «+0/s», or the rate it will charge said as such («+2/s al empezar», B-7).
+  if (!/^\+0\b|al empezar|at start/.test((rate ?? '').trim())) problems.push(`[${c.name}] the HUD shows «${rate}» before the first seed (F-20)`);
   // ── Session 1, never tapping VELA's bubble ──
   await page.evaluate(() => {
     window.__blocked = [];
@@ -243,6 +249,124 @@ async function runCase(c) {
     if (await visible('.rt-sheet.show')) problems.push(`[${c.name}] the sheet's × did not close it after quick buys (F-21)`);
   }
   await page.waitForTimeout(500);
+  // ── Owner bugs of the polish pass (docs/ARTE-PULIDO.md B-10), each failed on v0.018 ──
+  // B-10.5: «¿Por qué cuesta esto?» unfolds in the same sheet (never a second, stacked sheet) and says
+  // something the sheet does not.
+  {
+    // A node a finger can reach (not under VELA's docked bubble or the bars).
+    const id = await page.evaluate(
+      () =>
+        [...document.querySelectorAll('.rt-node.st-available:not([data-id="lab"]), .rt-node.can:not([data-id="lab"]), .rt-node.st-owned:not([data-id="lab"]):not(.max)')].find((e) => {
+          const r = e.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+          return !!hit && e.contains(hit);
+        })?.dataset.id ?? null,
+    );
+    if (id) {
+      await tapSel(`.rt-node[data-id="${id}"]`);
+      await page.waitForTimeout(700);
+      // A player scrolls the sheet down to it.
+      await page.evaluate(() => document.querySelector('.rt-sheet.show .rt-pricebox')?.scrollIntoView({ block: 'center' }));
+      await page.waitForTimeout(250);
+      await tapSel('.rt-sheet.show .rt-pricebox');
+      await page.waitForTimeout(500);
+      const why = await page.evaluate(() => {
+        const sheet = document.querySelector('.rt-sheet.show');
+        const fold = sheet?.querySelector('.rt-why');
+        const stacked = [...document.querySelectorAll('.pp-layer, .mo-price, .pp-sheet')].filter((e) => e.getBoundingClientRect().height > 0 && !e.closest('[hidden]')).length;
+        const body = [...(sheet?.querySelectorAll('.rt-desc, .rt-ba b, .rt-have .why') ?? [])].map((e) => e.textContent.trim().toLowerCase());
+        const said = [...(fold?.querySelectorAll('.rt-why-row p') ?? [])].map((e) => e.textContent.trim().toLowerCase());
+        return { fold: !!fold, stacked, repeats: said.filter((t) => body.includes(t)) };
+      });
+      await shot('tree-why');
+      if (!why.fold) problems.push(`[${c.name}] «¿Por qué cuesta esto?» did not unfold inside the node sheet (B-10.5)`);
+      if (why.stacked) problems.push(`[${c.name}] «¿Por qué?» opened a second sheet over the node sheet (B-10.5)`);
+      if (why.repeats.length) problems.push(`[${c.name}] «¿Por qué?» repeats the sheet: ${why.repeats.join(' | ')} (B-10.5)`);
+      else if (why.fold) say('«¿Por qué?» unfolds in place and repeats nothing');
+      // Its × scrolled away with the explanation: close it as a player who scrolled back would.
+      await page.evaluate(() => document.querySelector('.rt-sheet.show .rt-x')?.click());
+      await page.waitForTimeout(500);
+    }
+  }
+  // B-4: one press gesture: a finger down on a node sinks it within a frame (an animation of scale or
+  // transform), and it springs back on release.
+  {
+    const pressed = await page.evaluate(async () => {
+      const n = document.querySelector('.rt-node:not([hidden])');
+      if (!n) return null;
+      const r = n.getBoundingClientRect();
+      const o = { bubbles: true, cancelable: true, pointerId: 77, pointerType: 'touch', clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, isPrimary: true };
+      n.dispatchEvent(new PointerEvent('pointerdown', o));
+      await new Promise((res) => requestAnimationFrame(() => res(null)));
+      const anims = n.getAnimations().map((a) => JSON.stringify(a.effect?.getKeyframes?.() ?? []));
+      n.dispatchEvent(new PointerEvent('pointercancel', o));
+      return anims.some((k) => /scale|transform/.test(k));
+    });
+    if (pressed === false) problems.push(`[${c.name}] pressing a Tree node does not animate it (B-4)`);
+  }
+  // B-10.2: the night's sheet with VELA talking over the Tree: VELA docks above, nothing dims the sheet,
+  // «Empezar la Noche 2» is the sheet's own, full-colour, tappable button.
+  const sessionsBefore = await page.evaluate(() => {
+    const b = window.bioluma;
+    const n = b.game.research.sessions;
+    b.game.research.sessions = Math.max(n, 40);
+    return n;
+  });
+  await page.evaluate(() => window.bioluma.flow.openTree());
+  await page.waitForTimeout(600);
+  await page.evaluate(() => document.querySelector('.rt-node[data-id="lab"]')?.click());
+  await page.waitForTimeout(800);
+  await page.evaluate(() => window.bioluma.story.play('t_world'));
+  await page.waitForTimeout(1500);
+  await shot('night-sheet-vela');
+  const night = await page.evaluate(() => {
+    const btn = document.querySelector('.rt-sheet.show .rt-buy[data-buy="lab"], .rt-sheet.show .rt-notyet');
+    if (!btn) return { missing: true };
+    const r = btn.getBoundingClientRect();
+    const cx = r.x + r.width / 2;
+    const cy = r.y + r.height / 2;
+    const hit = document.elementFromPoint(cx, cy);
+    let op = 1;
+    for (let e = btn; e; e = e.parentElement) op *= Number(getComputedStyle(e).opacity);
+    let dim = 0;
+    const spot = document.querySelector('canvas.sty-spot');
+    const wrap = document.querySelector('.sty-spotwrap');
+    if (spot && spot.width && wrap && Number(getComputedStyle(wrap).opacity) > 0.01) {
+      const sr = spot.getBoundingClientRect();
+      const k = spot.width / sr.width;
+      dim = spot.getContext('2d').getImageData(Math.round((cx - sr.x) * k), Math.round((cy - sr.y) * k), 1, 1).data[3];
+    }
+    return {
+      hit: !!hit && (hit === btn || btn.contains(hit)),
+      cover: hit ? `${hit.tagName.toLowerCase()}.${String(hit.className).split(' ')[0]}` : 'nothing',
+      op,
+      dim,
+      scrim: !!document.querySelector('.sty-scrim.show'),
+      text: btn.textContent.trim(),
+      ready: btn.classList.contains('rt-buy'),
+      scene: window.bioluma.story.current()?.scene.id ?? null,
+    };
+  });
+  if (night.missing) problems.push(`[${c.name}] the night sheet has no main button (B-10.2)`);
+  else {
+    if (!night.hit) problems.push(`[${c.name}] the night's button is covered by ${night.cover} with VELA talking (B-10.2)`);
+    if (night.op < 0.99) problems.push(`[${c.name}] the night's button is faded (opacity ${night.op.toFixed(2)}) (B-10.2)`);
+    if (night.dim > 8 || night.scrim) problems.push(`[${c.name}] VELA dims the night sheet (spotlight alpha ${night.dim}, scrim ${night.scrim}) (B-10.2)`);
+    if (night.ready && !/Noche|Night/.test(night.text)) problems.push(`[${c.name}] the night's button says «${night.text}» (B-10.2)`);
+    say(`night sheet with VELA (${night.scene}): «${night.text}» tappable=${night.hit} opacity=${night.op.toFixed(2)} dim=${night.dim}`);
+    const counters = await page.evaluate(() => [...document.querySelectorAll('.rt-sheet.show .rt-gatebar b')].map((b) => b.textContent.trim()));
+    for (const t of counters) {
+      const m = /(\d+)\/(\d+)/.exec(t);
+      if (m && Number(m[1]) > Number(m[2])) problems.push(`[${c.name}] a night counter overflows: «${t}» (B-10.3)`);
+    }
+  }
+  await page.evaluate((n) => {
+    const b = window.bioluma;
+    if (b.story.current()) b.story.skip();
+    b.game.research.sessions = n;
+  }, sessionsBefore);
+  await page.evaluate(() => document.querySelector('.rt-sheet.show .rt-x')?.click());
+  await page.waitForTimeout(500);
   await mustHit('.rt-go', 'tree');
   await tapSel('.rt-go');
   await page.waitForTimeout(1500);
@@ -357,6 +481,69 @@ async function runCase(c) {
   await page.waitForTimeout(900);
   if (before > 0 && (await alive()) === 0) problems.push(`[${c.name}] two quick taps on "Limpiar placa" wiped the dish (F-10)`);
   else say(`two quick taps on "Limpiar placa" keep the dish (${before} creatures)`);
+  // B-10.1: VELA asks to open the Bestiary while it is already open: the spotlight never points at the
+  // covered dock button (it points at a card in the drawer, or nowhere), and the task counts as done.
+  await closeMoments();
+  await page.evaluate(() => window.bioluma.ui.openBestiary(true));
+  await page.waitForTimeout(700);
+  await page.evaluate(() => window.bioluma.story.play('t_bestiary'));
+  await page.waitForTimeout(1600);
+  await shot('spotlight-drawer');
+  const spotDrawer = await page.evaluate(() => {
+    const b = window.bioluma;
+    const r = b.storyUI.debug.spotRect?.();
+    const dock = document.querySelector('.bl-dock')?.getBoundingClientRect();
+    const drawer = document.querySelector('.bl-drawer')?.getBoundingClientRect();
+    const layer = document.querySelector('.sty')?.getBoundingClientRect() ?? { left: 0, top: 0 };
+    if (!r) return { ring: null };
+    const ring = { left: r.x + layer.left, top: r.y + layer.top, right: r.x + layer.left + r.w, bottom: r.y + layer.top + r.h };
+    const meets = (a, d) => !!d && a.left < d.right && a.right > d.left && a.top < d.bottom && a.bottom > d.top;
+    const inside = !!drawer && ring.left >= drawer.left - 12 && ring.right <= drawer.right + 12 && ring.top >= drawer.top - 12 && ring.bottom <= drawer.bottom + 12;
+    return { ring, onDock: meets(ring, dock), inside };
+  });
+  if (spotDrawer.ring && (spotDrawer.onDock || !spotDrawer.inside))
+    problems.push(`[${c.name}] with the Bestiary open VELA's spotlight points at ${JSON.stringify(spotDrawer.ring)} (on the dock: ${spotDrawer.onDock}) (B-10.1)`);
+  else say(`spotlight with the drawer open: ${spotDrawer.ring ? 'on a card in the drawer' : 'no ring'}`);
+  for (let i = 0; i < 12; i++) {
+    const st = await page.evaluate(() => {
+      const b = window.bioluma;
+      const cur = b.story.current();
+      if (cur?.scene.id === 't_bestiary' && cur.line) b.storyUI.debug.completeTyping();
+      return { id: cur?.scene.id ?? null, wait: !!cur?.wait };
+    });
+    if (st.id !== 't_bestiary') break;
+    if (st.wait) break;
+    await tapSel('.sty-box:not([hidden])');
+    await page.waitForTimeout(450);
+  }
+  await page.waitForTimeout(800);
+  const left = await page.evaluate(() => window.bioluma.story.current()?.scene.id ?? null);
+  if (left === 't_bestiary') problems.push(`[${c.name}] «Abre el Bestiario» still waits with the Bestiary open (B-10.1)`);
+  await page.evaluate(() => {
+    const b = window.bioluma;
+    if (b.story.current()) b.story.skip();
+    b.ui.openBestiary(false);
+  });
+  await page.waitForTimeout(600);
+  // B-10.4: any toast closes when tapped (≤ 200 ms), with or without an action.
+  // (a warning: it shows even while something else talks)
+  await page.evaluate(() => window.bioluma.bus.emit('toast', { text: { es: 'Prueba de aviso', en: 'Toast test' }, kind: 'warn' }));
+  // Toasts show one at a time: a toast already up goes first (a tap closes it too), then ours.
+  const ours = '.toast[data-text="Prueba de aviso"]:not(.out), .toast[data-text="Toast test"]:not(.out)';
+  for (let i = 0; i < 20 && !(await visible(ours)); i++) {
+    if (await visible('.toast:not(.out)')) await tapSel('.toast:not(.out)');
+    await page.waitForTimeout(250);
+  }
+  await page.waitForTimeout(300);
+  if (await visible(ours)) {
+    await tapSel(ours);
+    await page.waitForTimeout(260);
+    const still = await page.evaluate(() =>
+      [...document.querySelectorAll('.toast')].some((t) => /Prueba de aviso|Toast test/.test(t.textContent ?? '') && !t.classList.contains('out') && t.getBoundingClientRect().height > 0),
+    );
+    if (still) problems.push(`[${c.name}] a tapped toast did not close (B-10.4)`);
+    else say('a tapped toast closes');
+  } else notes.push(`[${c.name}] B-10.4: no toast showed (held)`);
   // The seed bar is free on the dish.
   await closeMoments();
   const opens = await page.evaluate(() => window.__treeOpens ?? []);

@@ -70,8 +70,10 @@ dist = resolve(dist);
 function findChromium() {
   const base = '/opt/pw-browsers';
   for (const d of readdirSync(base).filter((d) => d.startsWith('chromium-')).sort().reverse()) {
-    const p = `${base}/${d}/chrome-linux/chrome`;
-    if (existsSync(p)) return p;
+    for (const sub of ['chrome-linux', 'chrome-linux64']) {
+      const p = `${base}/${d}/${sub}/chrome`;
+      if (existsSync(p)) return p;
+    }
   }
   throw new Error('chromium not found under /opt/pw-browsers');
 }
@@ -288,6 +290,23 @@ async function runCase(c) {
     await tap(box.x + box.width / 2, box.y + box.height / 2);
     return true;
   };
+  /** The tree's sheet shows `id` and nothing in it moves (its slide and its blocks' entrance are over). */
+  const sheetAtRest = (id) =>
+    page
+      .waitForFunction(
+        (id) => {
+          const sh = document.querySelector('.rt-sheet.show');
+          if (!sh || !sh.querySelector(`[data-buy="${id}"], [data-why="${id}"]`)) return false;
+          // Finite animations only: an ambient loop never ends and never moves the button.
+          return !sh
+            .getAnimations({ subtree: true })
+            .some((a) => (a.playState === 'running' || a.pending) && a.effect?.getComputedTiming().iterations !== Infinity);
+        },
+        id,
+        { timeout: 3000, polling: 100 },
+      )
+      .then(() => true)
+      .catch(() => false);
   const view = () => page.evaluate(() => {
     const v = window.bioluma.game.view();
     return {
@@ -611,7 +630,10 @@ async function runCase(c) {
     }
     await settle(`seed ${k}`);
     v = await view();
-    if (!v.session || v.session.phase !== 'running') problems.push(`[${c.name}] session ${k}: the clock did not start after seeding (${JSON.stringify(v.session)})`);
+    // The clock started: it runs, or (a software-GL machine under load can spend a whole short e2e session
+    // on four sowings) it already ran out, which only a started clock can do.
+    const started = !!v.session && (v.session.phase === 'running' || (v.session.phase === 'over' && v.session.remaining < v.session.total));
+    if (!started) problems.push(`[${c.name}] session ${k}: the clock did not start after seeding (${JSON.stringify(v.session)})`);
     say(`Session ${k}: seeded, the clock runs (${v.session?.remaining ?? '?'} s left, ${v.creatures} creatures).`);
     await page.waitForTimeout(1500);
     await settle(`run ${k}`);
@@ -766,17 +788,23 @@ async function runCase(c) {
       }
       if (!ids.length) break;
       const id = want.find((w) => ids.includes(w)) ?? ids[0];
-      await tapSel(`.rt-node[data-id="${id}"]`);
-      await page.waitForTimeout(700);
-      await settle(`tree ${k}`);
+      // Like a finger: tap the node, then wait until its sheet has come to rest (a slow software-GL frame
+      // can hold a 300-ms slide past a fixed wait, and a tap computed mid-slide lands beside the button).
+      for (let t = 0; t < 2; t++) {
+        await tapSel(`.rt-node[data-id="${id}"]`);
+        await page.waitForTimeout(700);
+        await settle(`tree ${k}`);
+        if (await sheetAtRest(id)) break;
+      }
       if (bought === 0) await shot(`s${k}-node-${id}`);
       const before = (await view()).datos;
       const levelOf = (nid) => page.evaluate((nid) => window.bioluma.game.research.levels[nid] ?? 0, nid);
       const lv0 = await levelOf(id);
       // A Placa level this device cannot show is not on sale (RF-12): its button is disabled and says so.
       const free = await page.evaluate(() => !!document.querySelector('.rt-sheet.show')?.textContent?.match(/ya tiene la placa más grande|already has the biggest dish/));
-      if (await visible('.rt-buy:not(:disabled)')) {
-        await tapSel('.rt-buy');
+      if (await visible(`.rt-sheet.show .rt-buy[data-buy="${id}"]:not(:disabled)`)) {
+        await sheetAtRest(id);
+        await tapSel(`.rt-sheet.show .rt-buy[data-buy="${id}"]`);
         await page.waitForTimeout(900);
         const after = (await view()).datos;
         if ((await levelOf(id)) <= lv0) problems.push(`[${c.name}] tree ${k}: buying ${id} did not add a level`);

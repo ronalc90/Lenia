@@ -35,8 +35,10 @@ function findChromium() {
   if (!existsSync(base)) return undefined;
   const dirs = readdirSync(base).filter((d) => d.startsWith('chromium-')).sort().reverse();
   for (const d of dirs) {
-    const p = `${base}/${d}/chrome-linux/chrome`;
-    if (existsSync(p)) return p;
+    for (const sub of ['chrome-linux', 'chrome-linux64']) {
+      const p = `${base}/${d}/${sub}/chrome`;
+      if (existsSync(p)) return p;
+    }
   }
   return undefined;
 }

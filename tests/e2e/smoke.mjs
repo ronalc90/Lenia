@@ -15,8 +15,10 @@ if (shotsDir) mkdirSync(shotsDir, { recursive: true });
 function findChromium() {
   const base = '/opt/pw-browsers';
   for (const d of readdirSync(base).filter((d) => d.startsWith('chromium-')).sort().reverse()) {
-    const p = `${base}/${d}/chrome-linux/chrome`;
-    if (existsSync(p)) return p;
+    for (const sub of ['chrome-linux', 'chrome-linux64']) {
+      const p = `${base}/${d}/${sub}/chrome`;
+      if (existsSync(p)) return p;
+    }
   }
   throw new Error('chromium not found under /opt/pw-browsers');
 }
@@ -139,7 +141,8 @@ try {
     if (!(await page.locator('.bl-drawer').isVisible())) throw new Error(`[${vp.name}] the Bestiary drawer did not open`);
     if (shotsDir) await page.screenshot({ path: `${shotsDir}/${vp.name}-1b-bestiary.png` });
     await page.locator('.bl-drawer .drawer-x').click();
-    await page.waitForTimeout(300);
+    // It slides out (200 ms `exit`, B-5) and is then hidden; a slow software-GL frame may add a little.
+    for (let i = 0; i < 12 && (await page.locator('.bl-drawer').isVisible()); i++) await page.waitForTimeout(100);
     if (await page.locator('.bl-drawer').isVisible()) throw new Error(`[${vp.name}] the Bestiary drawer did not close`);
 
     // Frame floor with the session time-lapse on (CLAUDE.md hard gates, ADR-027): frames drawn in 3 s

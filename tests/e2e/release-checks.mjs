@@ -2,7 +2,8 @@
 // browser (390 × 844, touch). Every check failed on v0.016 before its fix:
 //   RF-06  every visible touch target is at least 48 × 48 px (a finger 23 px off its centre still hits it):
 //          the dish (seed pill, VELA's task ✕), Settings and a Tree node's sheet ("¿Por qué cuesta esto?").
-//   RF-10  before the first seed the HUD, the cards and the creature card show one rate (+0/s).
+//   RF-10  before the first seed the HUD, the cards and the creature card show one rate (+0/s, or the HUD's
+//          «+N/s al empezar» and nothing above it, docs/ARTE-PULIDO.md B-7).
 //   RF-07  Settings has no "Anonymous stats" switch (no telemetry exists) and shows the player id the
 //          privacy page asks for.
 //   RF-05  Settings says when a Quality change applies.
@@ -32,8 +33,10 @@ dist = resolve(dist);
 function findChromium() {
   const base = '/opt/pw-browsers';
   for (const d of readdirSync(base).filter((d) => d.startsWith('chromium-')).sort().reverse()) {
-    const p = `${base}/${d}/chrome-linux/chrome`;
-    if (existsSync(p)) return p;
+    for (const sub of ['chrome-linux', 'chrome-linux64']) {
+      const p = `${base}/${d}/${sub}/chrome`;
+      if (existsSync(p)) return p;
+    }
   }
   throw new Error('chromium not found under /opt/pw-browsers');
 }
@@ -133,7 +136,10 @@ try {
 
   // RF-10: before the first seed, one rate everywhere.
   const rate = (await page.locator('.ess-rate').first().textContent())?.trim() ?? '';
-  if (!/^\+0\b/.test(rate)) problems.push(`RF-10: the HUD shows «${rate}» before the first seed`);
+  // Before the first seed: «+0/s», or the rate it WILL charge said as such («+2,0/s al empezar», B-7).
+  const atStart = /al empezar|at start/.test(rate);
+  const hudRate = atStart ? Number((/\+(\d+[.,]?\d*)/.exec(rate)?.[1] ?? '0').replace(',', '.')) : 0;
+  if (!/^\+0\b/.test(rate) && !atStart) problems.push(`RF-10: the HUD shows «${rate}» before the first seed`);
   const waiting = await page.evaluate(() => {
     const b = window.bioluma;
     const v = b.game.view();
@@ -145,7 +151,8 @@ try {
   const cardTexts = await page.evaluate(() => [...document.querySelectorAll('.mo-card, .ccard')].filter((e) => e.getBoundingClientRect().width > 0).map((e) => e.textContent.replace(/\s+/g, ' ')));
   for (const t of cardTexts) {
     const m = /\+(\d+[.,]?\d*) (Esencia|Essence)\/s/.exec(t);
-    if (waiting.phase === 'ready' && m && Number(m[1].replace(',', '.')) > 0) problems.push(`RF-10: a card says «${m[0]}» while the HUD says ${rate}`);
+    // A card may name a rate only if it is no more than what the HUD says the dish will earn.
+    if (waiting.phase === 'ready' && m && Number(m[1].replace(',', '.')) > hudRate + 1e-6 && !/al empezar|at start/.test(t)) problems.push(`RF-10: a card says «${m[0]}» while the HUD says ${rate}`);
   }
   notes.push(`RF-10: session ${waiting.phase}, stable starter ${waiting.stable}, HUD «${rate}», cards checked ${cardTexts.length}`);
   await shot('ready');
@@ -280,6 +287,10 @@ try {
   await quiet();
   await page.evaluate(() => window.bioluma.ui.openBestiary(true));
   await page.waitForTimeout(1000);
+  // The run's first species can be registered right now: its Momento card would slide in over the
+  // drawer mid-audit (a card still scaling in reads as a 22 × 43 button). Close it, then measure.
+  await quiet();
+  await page.waitForTimeout(500);
   await shot('bestiary');
   for (const b of await auditTargets(page, null)) problems.push(`RF-06 bestiary: ${b}`);
   await page.evaluate(() => window.bioluma.ui.openBestiary(false));

@@ -10,8 +10,10 @@ export const OUT = `${tmpdir()}`;
 export function findChromium() {
   const base = '/opt/pw-browsers';
   for (const d of readdirSync(base).filter((d) => d.startsWith('chromium-')).sort().reverse()) {
-    const p = `${base}/${d}/chrome-linux/chrome`;
-    if (existsSync(p)) return p;
+    for (const sub of ['chrome-linux', 'chrome-linux64']) {
+      const p = `${base}/${d}/${sub}/chrome`;
+      if (existsSync(p)) return p;
+    }
   }
   throw new Error('chromium not found');
 }

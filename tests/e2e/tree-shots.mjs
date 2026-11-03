@@ -24,8 +24,10 @@ mkdirSync(OUT, { recursive: true });
 function findChrome() {
   const base = '/opt/pw-browsers';
   for (const d of readdirSync(base).filter((d) => d.startsWith('chromium-')).sort().reverse()) {
-    const p = path.join(base, d, 'chrome-linux', 'chrome');
-    if (existsSync(p)) return p;
+    for (const sub of ['chrome-linux', 'chrome-linux64']) {
+      const p = path.join(base, d, sub, 'chrome');
+      if (existsSync(p)) return p;
+    }
   }
   throw new Error('Chromium not found under /opt/pw-browsers');
 }
