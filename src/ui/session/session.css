@@ -70,28 +70,46 @@
   flex: none;
   color: var(--bl-accent);
 }
-.ss-dial svg.ring {
+/* The stopwatch face (docs/ARTE-REALISTA.md §6.8): hair minute ticks, detail hour ticks, an instrument needle. */
+.ss-dial svg.face {
   position: absolute;
   inset: 0;
-  transform: rotate(-90deg);
+  overflow: visible;
 }
-.ss-dial .bg {
+.ss-dial .bezel {
   fill: none;
   stroke: var(--ss-line2);
-  stroke-width: 4;
+  stroke-width: 1.4;
 }
-.ss-dial .fg {
-  fill: none;
+.ss-dial .dialbg {
+  fill: color-mix(in srgb, currentColor 7%, var(--bl-surface));
+}
+.ss-dial .mn {
+  stroke: var(--bl-text2);
+  stroke-width: 0.5;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.7;
+}
+.ss-dial .mj {
+  stroke: var(--bl-text);
+  stroke-width: var(--bl-line-detail, 0.75px);
+  vector-effect: non-scaling-stroke;
+}
+.ss-dial .needle {
   stroke: currentColor;
-  stroke-width: 4;
+  stroke-width: var(--bl-line-contour, 1.25px);
   stroke-linecap: round;
-  transition: stroke-dashoffset var(--bl-t-card) linear, stroke var(--bl-t-base);
+  vector-effect: non-scaling-stroke;
 }
-.ss-dial .ic {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
+.ss-dial .cap {
+  fill: currentColor;
+}
+/* The clock waits for the player: a dimmed face and "⏸ Reloj en pausa" under the digits. */
+.ss-hud.paused .ss-dial {
+  opacity: 0.55;
+}
+.ss-hud.paused .ss-time small.s {
+  color: var(--bl-text);
 }
 /* The two labels share one cell (the wider one sets the width): the pill keeps its size when the
    clock starts, so nothing beside it moves (layout-shift.mjs, CLS 0). */

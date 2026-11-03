@@ -423,6 +423,8 @@ else if (view === 'start') {
       if (q.get('why') === '1') setTimeout(() => (top.querySelector('.ss-prev') as HTMLElement | null)?.click(), 50);
     }
     if (q.get('ext')) hud.extended(Number(q.get('ext')), 'species');
+    // ?paused=1: the clock waits for the player (VELA talking, a sheet open): «⏸ Reloj en pausa».
+    if (q.get('paused') === '1') hud.setPaused?.(true);
     if (q.get('banner') === '1') hud.lastMinute(dish);
     if (q.get('stamp') === '1') void hud.timesUp(dish);
   }

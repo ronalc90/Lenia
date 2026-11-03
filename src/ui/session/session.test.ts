@@ -4,6 +4,7 @@ import { beginSession, computeDatos, freshResearch, noteEncargo, noteEssence, no
 import { treeEffects } from '../../game/tree';
 import { nodePriceExplain } from '../tree/treeView';
 import { fmt } from '../format';
+import { NEEDLE, dialTarget, hudSub, stepNeedle } from './hud';
 import { hudState } from './hud';
 import { datosExplain, reportHeadline, reportRows, type ReportData } from './summary';
 import type { SessionSummary } from '../../game/session';
@@ -163,6 +164,44 @@ describe('the HUD clock', () => {
     expect(hudState(v(14, 15))).toBe('run');
     expect(hudState(v(Math.max(warnSeconds(15), countdownSeconds(15)), 15))).toBe('count');
     expect(hudState(v(Math.max(warnSeconds(15), countdownSeconds(15)) + 0.5, 15))).toBe('run');
+  });
+});
+
+describe('the stopwatch dial (docs/ARTE-REALISTA.md §6.4, §6.8)', () => {
+  const run = (target: number, ms: number) => {
+    const n = { x: 0, v: 0 };
+    let peak = 0;
+    let at99 = -1;
+    for (let t = 0; t < ms; t += 1000 / 120) {
+      stepNeedle(n, target, 1 / 120);
+      peak = Math.max(peak, n.x);
+      if (at99 < 0 && Math.abs(n.x - target) <= 0.01 * target) at99 = t;
+    }
+    return { n, peak, at99 };
+  };
+  it('the needle is an underdamped second-order instrument: ζ 0,8, ωn 19, ~99 % in 300 ms, ~1,5 % overshoot', () => {
+    expect(NEEDLE).toEqual({ zeta: 0.8, omega: 19 });
+    const r = run(100, 1200);
+    expect(r.at99).toBeGreaterThan(150);
+    expect(r.at99).toBeLessThan(420);
+    expect(r.peak).toBeGreaterThan(100.5);
+    expect(r.peak).toBeLessThan(103);
+    expect(r.n.x).toBeCloseTo(100, 1);
+  });
+  it('points at the time used; in the last seconds it steps a whole second at a time, and a bonus moves it back', () => {
+    const v = (remaining: number, total = 30) => ({ phase: 'running' as const, remaining, total, n: 2, sprint: null });
+    expect(dialTarget(v(30))).toBe(0);
+    expect(dialTarget(v(15))).toBeCloseTo(180, 5);
+    // Last 10 s: the needle waits on whole seconds (a detent), so 4.4 s left reads as 5.
+    expect(dialTarget(v(4.4))).toBeCloseTo(dialTarget(v(5)), 5);
+    // "+3 s · especie nueva": more time, the needle goes back.
+    expect(dialTarget(v(18, 33))).toBeLessThan(dialTarget(v(15))); // 15 s left of 30, then +3 s: 18 of 33
+    expect(dialTarget({ ...v(30), phase: 'ready' })).toBe(0);
+  });
+  it('says "⏸ Reloj en pausa" while the clock waits for the player', () => {
+    expect(hudSub({ phase: 'running', remaining: 20, total: 30, n: 3, sprint: null }, true, 'es')).toBe('⏸ Reloj en pausa');
+    expect(hudSub({ phase: 'running', remaining: 20, total: 30, n: 3, sprint: null }, false, 'es')).toBe('Sesión 3');
+    expect(hudSub({ phase: 'running', remaining: 20, total: 30, n: 3, sprint: null }, true, 'en')).toBe('⏸ Clock paused');
   });
 });
 
