@@ -235,6 +235,7 @@ function velaSection(ctx: DevCtx): HTMLElement {
   row2.append(portraitCard(ctx, 200, (p) => p.set('vela', 'happy'), es ? 'Sobre panel claro' : 'On a light panel', 'surface', { night: false, cls: 'ad-on-surface' }));
   s.append(row2);
 
+  if (q.has('bench')) s.append(benchCard(ctx, Number(q.get('bench')) || 116));
   s.append(el(`<h3>Mini (avatar) 28 · 40 · 48</h3>`));
   for (const sz of [28, 40, 48]) {
     const r = el(`<div class="ad-row ad-minis" data-shot="mini-${sz}"></div>`);
@@ -267,6 +268,36 @@ function velaSection(ctx: DevCtx): HTMLElement {
     s.append(r);
   }
   return s;
+}
+
+/**
+ * ?bench=<px>: time VELA's Portrait.frame while she talks (budget §3.9: ≤ 0.5 ms a portrait a frame), after a
+ * warm-up that fills the layer cache. The result is on the card and in window.__velaBench (ms per frame).
+ */
+function benchCard(ctx: DevCtx, size: number): HTMLElement {
+  const card = el(`<div class="ad-card ad-night" data-shot="bench"><b>Bench · ${size} px</b><small>…</small></div>`);
+  const p = new Portrait('ad-cv');
+  p.canvas.style.width = `${size}px`;
+  p.canvas.style.height = `${size}px`;
+  p.set('vela', 'worried');
+  card.prepend(p.canvas);
+  const line = MOOD_LINE.worried[ctx.lang];
+  requestAnimationFrame(() => {
+    let t = 0;
+    const step = () => {
+      t += 1 / 60;
+      const k = typed(line, t, 3);
+      p.frame(t, 1 / 60, k.target, k.talking);
+    };
+    for (let i = 0; i < 60; i++) step();
+    const n = 600;
+    const t0 = performance.now();
+    for (let i = 0; i < n; i++) step();
+    const ms = (performance.now() - t0) / n;
+    (window as unknown as { __velaBench: number }).__velaBench = ms;
+    card.querySelector('small')!.textContent = `${ms.toFixed(3)} ms / frame (DPR ${Math.min(3, devicePixelRatio || 1)})`;
+  });
+  return card;
 }
 
 /** Reference photos of docs/arte-realista/referencias (development only: never bundled, never in the game). */
