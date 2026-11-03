@@ -15,6 +15,7 @@ import './intro.css';
 import type { Lang, Text } from '../../core/types';
 import { INTRO_PANELS, INTRO_UI, type IntroLine, type IntroPanel } from '../../story/introScript';
 import { drawDoctorBust, getPlayerLook, PLAYER_LOOK_IDS, PLAYER_LOOK_NAMES, playerSpec, setPlayerLook, type PlayerLookId } from '../art/characters';
+import { restartClass } from '../art/motion';
 import { Portrait } from '../art/portraits';
 import { featherEdges } from '../art/vela';
 import { paintScene } from './scenes';
@@ -208,8 +209,7 @@ export function createIntro(root: HTMLElement, opts: IntroOptions): Intro {
     renderPanel(panels[index]);
     if (!rm()) {
       overlay.classList.remove('swap', 'swap-back');
-      void overlay.offsetWidth;
-      overlay.classList.add(dir === 1 ? 'swap' : 'swap-back');
+      restartClass(overlay, dir === 1 ? 'swap' : 'swap-back');
     }
     // Keyboard focus moves with the panels; the first one focuses the dialog itself (no ring on Next).
     try {

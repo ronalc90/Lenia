@@ -656,13 +656,11 @@ const tape: Painter = (ctx, e) => {
   // Albor (full body), happy, waving goodbye, the lamp in her other hand.
   const k = (br * 1.25) / 95;
   drawDoctorAt(ctx, ALBOR, pose('happy', e, { gesture: 'wave', item: 'lantern' }), t, -br * 0.15, br * 0.62, k);
-  // Sepia tape look and scanlines.
+  // Sepia tape look (a memory). No scanlines over her: the tape's lines belong to the recorder, not to
+  // the person (docs/ARTE-PULIDO.md B-13; read as a render glitch).
   ctx.globalCompositeOperation = 'source-atop';
   ctx.fillStyle = 'rgba(255,170,90,0.16)';
   ctx.fillRect(-br, -br, br * 2, br * 2);
-  ctx.fillStyle = 'rgba(30,15,5,0.1)';
-  const off = rm ? 0 : (t * 10) % 4;
-  for (let y = -br + off; y < br; y += 4) ctx.fillRect(-br, y, br * 2, 1.2);
   ctx.restore();
   ctx.strokeStyle = 'rgba(255,226,180,0.85)';
   ctx.lineWidth = 3 * u;
