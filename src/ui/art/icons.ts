@@ -113,7 +113,39 @@ function spikes(cx: number, cy: number, r0: number, r1: number, count: number, o
 }
 
 const dropper = pipette(1, -1);
-const labPipette = pipette(0, 0);
+
+/**
+ * A vertical Pasteur pipette (↓ Recoger, ADR-030): rubber bulb on top, collar, glass tube narrowing to a tip,
+ * centred on `cx`, scaled by `k` from the top `y0`. An instrument, never a creature (pillar 1).
+ */
+function vPipette(cx: number, y0 = 2.75, k = 1): { s: string; f: string } {
+  const bw = 4.5 * k;
+  const bulb = R(cx - bw / 2, y0, bw, 5.5 * k, 2.25 * k);
+  const collarY = y0 + 5.5 * k;
+  const tw = 1.25 * k;
+  const tube = `M${n(cx - tw)} ${n(collarY)}V${n(collarY + 6.75 * k)}L${n(cx)} ${n(collarY + 9.5 * k)}L${n(cx + tw)} ${n(collarY + 6.75 * k)}V${n(collarY)}`;
+  const f = `M${n(cx - bw / 2)} ${n(y0 + 2.25 * k)}a${n(2.25 * k)} ${n(2.25 * k)} 0 0 1 ${n(bw)} 0V${n(collarY)}h${n(-bw)}z`;
+  return { s: bulb + P(`M${n(cx - bw / 2 - 0.75 * k)} ${n(collarY)}h${n(bw + 1.5 * k)}`) + P(tube), f };
+}
+const pipetteV = vPipette(12);
+/** The drop of light a pipette takes (solid, under the tip). */
+const LIGHT_DROP = D(12, 20.25, 1.45);
+/** Short rays around a drop: the halo that makes the Essence drop into Luz (docs/CLARIDAD2.md §2.1). */
+const HALO_RAYS = (cx: number, cy: number, r0: number, r1: number): string =>
+  P(
+    [-160, -20, 20, 160, -125, -55]
+      .map((a) => {
+        const [x0, y0] = polar(cx, cy, r0, a);
+        const [x1, y1] = polar(cx, cy, r1, a);
+        return `M${n(x0)} ${n(y0)}L${n(x1)} ${n(y1)}`;
+      })
+      .join(''),
+  );
+/** The auto-sower as a dosing arm (docs/ARTE-REALISTA.md §6.8): post, arm, dosing head, a drop below. */
+const DOSING_ARM: IconDef = {
+  f: 'M15 6.25h5a.75.75 0 0 1 .75.75v4a.75.75 0 0 1-.75.75h-5a.75.75 0 0 1-.75-.75V7a.75.75 0 0 1 .75-.75z',
+  s: P('M3.25 20.75h8.5M6.25 20.75V4.25M6.25 6.25h8') + R(14.25, 6.25, 6.5, 5.5, 0.75) + P('M17.5 11.75v2.25M5 4.25h2.5') + SP(drop(17.5, 15.25, 1.6)),
+};
 const swimmerGlyph = (dx = 0, dy = 0, s = 1): string =>
   C(7.5 * s + dx, 12 * s + dy, 3.25 * s) + P(`M${n(11.75 * s + dx)} ${n(12 * s + dy)}h${n(8 * s)}`) + P(head(20 * s + dx, 12 * s + dy, 0, 3.6 * s));
 
@@ -141,6 +173,16 @@ export const ICONS: Record<string, IconDef> = {
   genome: { s: P('M8 3c0 4.6 8 4.4 8 9s-8 4.4-8 9M16 3c0 4.6-8 4.4-8 9s8 4.4 8 9') + P('M9.2 5h5.6M9.2 19h5.6M8.75 10.6h6.5M8.75 13.4h6.5') },
   species: { f: circlePath(12, 12, 7.25), s: C(12, 12, 7.25) + P('M9 13.5c1.6 1.9 4.4 1.9 6 0') + D(9.6, 10.25, 1.05) + D(14.4, 10.25, 1.05) },
   creatures: { f: circlePath(8.25, 9.5, 4) + circlePath(16, 10.5, 3.25) + circlePath(12, 17, 3), s: C(8.25, 9.5, 4) + C(16, 10.5, 3.25) + C(12, 17, 3) },
+  /** Luz (ADR-030): the drop of always, with a halo. */
+  luz: { f: drop(12, 6.25, 4.25), s: P(drop(12, 6.25, 4.25)) + P(dropShine(12, 6.25, 4.25)) + HALO_RAYS(12, 13.25, 6.5, 8.5) },
+
+  // ══════════ ↓ Recoger (ADR-030): pipettes ══════════
+  pipette: { f: pipetteV.f, s: pipetteV.s + LIGHT_DROP },
+  pipetteFast: { f: vPipette(9).f, s: vPipette(9).s + D(9, 20.25, 1.45) + P('M15.25 7.25h5M14.5 11.25h6.25M15.25 15.25h5') },
+  dropBig: { f: drop(10.25, 3.75, 6.25), s: P(drop(10.25, 3.75, 6.25)) + P(dropShine(10.25, 3.75, 6.25)) + PLUS_TR },
+  pipetteMore: { f: vPipette(7.5, 3.75, 0.85).f + vPipette(16.5, 3.75, 0.85).f, s: vPipette(7.5, 3.75, 0.85).s + vPipette(16.5, 3.75, 0.85).s + D(7.5, 20, 1.2) + D(16.5, 20, 1.2) },
+  pipetteMagnet: { f: pipetteV.f, s: pipetteV.s + LIGHT_DROP + D(5, 19.75, 1.1) + D(19, 19.75, 1.1) + P(head(9, 19.9, 0, 1.9)) + P(head(15, 19.9, 180, 1.9)) },
+  pipetteMaster: { f: pipetteV.f, s: vPipette(10.5).s + D(10.5, 20.25, 1.45) + SP(star4(18.25, 6, 3.25, 0.2)) },
 
   // ══════════ behaviours (GDD §14: circle, double circle, arrow, spiral, two dots, cluster) ══════════
   still: { f: circlePath(12, 12, 5.75), s: C(12, 12, 5.75) },
@@ -166,16 +208,10 @@ export const ICONS: Record<string, IconDef> = {
   freeSeeds: { f: 'M5.25 10.25h10a1.5 1.5 0 0 1 1.5 1.5v6.75a1.5 1.5 0 0 1-1.5 1.5h-10a1.5 1.5 0 0 1-1.5-1.5v-6.75a1.5 1.5 0 0 1 1.5-1.5z', s: R(3.75, 10.25, 13, 9.75, 1.5) + P('M3 10.25h14.5M10.25 10.25V20') + P(bow(10.25, 10.25)) + P(drop(19.25, 2.75, 2.15)) },
   stabilizer: { f: drop(12, 7.75, 2.6), s: C(12, 12, 8.75) + C(12, 12, 5.75, DASH(2.2, 2.05)) + P(drop(12, 7.75, 2.6)) },
   bigSeed: { f: drop(9.75, 3.25, 6.25), s: P(drop(9.75, 3.25, 6.25)) + P(dropShine(9.75, 3.25, 6.25)) + SP(drop(19.25, 11.25, 2.25)) },
-  autoSeeder: { f: 'M8 8.5h8a3.25 3.25 0 0 1 3.25 3.25v4a3.25 3.25 0 0 1-3.25 3.25H8a3.25 3.25 0 0 1-3.25-3.25v-4A3.25 3.25 0 0 1 8 8.5z', s: R(4.75, 8.5, 14.5, 10.5, 3.25) + D(9.5, 13.25, 1.3) + D(14.5, 13.25, 1.3) + P('M12 8.5V6.75M2.75 12.5v2.5M21.25 12.5v2.5M10.5 16.25h3') + SP(drop(12, 1.75, 1.7)) },
+  /** Sembrador automático: the same dosing arm, dropping a seed (no robot face, docs/ARTE-REALISTA.md §6.8). */
+  autoSeeder: { f: DOSING_ARM.f, s: P('M3.25 20.75h8.5M6.25 20.75V4.25M6.25 6.25h8') + R(14.25, 6.25, 6.5, 5.5, 0.75) + P('M17.5 11.75v2.25M5 4.25h2.5') + C(17.5, 18, 2.25) + D(17.5, 18, 0.85) },
   cheapSeeds: { f: drop(9.25, 3.25, 5.5), s: P(drop(9.25, 3.25, 5.5)) + P('M18.75 9.5v10.25') + P(head(18.75, 19.75, 90, 3.1)) },
   dropperMax: { f: dropper.f, s: dropper.s + SP(star4(5.25, 18.5, 3.4, 0.2)) },
-  // ↓ Recoger (ADR-030): a lab micropipette and its drop of light (simple glyphs until the route's art lands).
-  pipette: { f: labPipette.f, s: labPipette.s + C(18, 18, 2.6) + D(18, 18, 1) },
-  pipetteFast: { f: labPipette.f, s: labPipette.s + P('M2.5 9.25h4.5M3.75 12.25h3.25') },
-  dropBig: { f: drop(12, 2.75, 6.25), s: P(drop(12, 2.75, 6.25)) + P('M12 12.75v5M9.5 15.25h5') },
-  pipetteMore: { f: labPipette.f, s: labPipette.s + P('M4.5 3.25v5M2 5.75h5') },
-  pipetteMagnet: { f: labPipette.f, s: labPipette.s + P('M2.25 14.5a5 5 0 0 0 5 6.25') + D(18, 18, 1.2) },
-  pipetteMaster: { f: labPipette.f, s: labPipette.s + SP(star4(5.25, 6, 3.4, 0.2)) },
 
   // ══════════ 🧫 Placa ══════════
   dish: { f: 'M4.25 13.25a7.75 3.75 0 1 0 15.5 0a7.75 3.75 0 1 0-15.5 0', s: E(12, 13.25, 7.75, 3.75) + P('M4.25 13.25v2.25c0 2.07 3.47 3.75 7.75 3.75s7.75-1.68 7.75-3.75v-2.25') + P('M3 7.25V3h4.25M3 3l4 4M21 7.25V3h-4.25M21 3l-4 4') },
@@ -303,7 +339,9 @@ export const ICONS: Record<string, IconDef> = {
   burst: { f: circlePath(12, 12, 3.25), s: C(12, 12, 3.25) + P(spikes(12, 12, 5.75, 9, 8, 0)) },
   split: { f: circlePath(7.25, 12, 4) + circlePath(16.75, 12, 4), s: C(7.25, 12, 4) + C(16.75, 12, 4) + P('M12 3.75v16.5', DASH(1.8, 1.8)) },
   upgrade: { f: flaskLiquid, s: P(flaskBody) + P('M12 18.75v-5M9.75 15.75 12 13.5l2.25 2.25') },
-  robot: { f: 'M8 8.5h8a3.25 3.25 0 0 1 3.25 3.25v4a3.25 3.25 0 0 1-3.25 3.25H8a3.25 3.25 0 0 1-3.25-3.25v-4A3.25 3.25 0 0 1 8 8.5z', s: R(4.75, 8.5, 14.5, 10.5, 3.25) + D(9.5, 13.25, 1.3) + D(14.5, 13.25, 1.3) + P('M12 8.5V5.25M2.75 12.5v2.5M21.25 12.5v2.5M10.5 16.25h3') + D(12, 4.5, 1.25) },
+  /** The auto-sower Momento: a dosing arm, not a friendly robot (docs/ARTE-REALISTA.md §6.8). */
+  robot: DOSING_ARM,
+  dosingArm: DOSING_ARM,
   slot: { f: circlePath(6, 12, 2.75) + circlePath(12, 12, 2.75), s: C(6, 12, 2.75) + C(12, 12, 2.75) + C(18.25, 12, 2.5, DASH(1.6, 1.5)) },
   halo: { f: circlePath(12, 12, 4), s: C(12, 12, 4) + C(12, 12, 8.25, DASH(2, 2.6)) },
   palette: { s: P('M12 3.75a8.25 8.25 0 1 0 0 16.5c1.2 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.4-.5-.8-.5-1.3 0-1 .8-1.7 1.8-1.7h2a3.9 3.9 0 0 0 3.9-3.9c0-3.6-3.8-6.7-8.5-6.7z') + D(7.6, 11.4, 1.15) + D(10.4, 7.8, 1.15) + D(14.6, 7.8, 1.15) },
@@ -404,7 +442,7 @@ export const ROUTE_ICON = {
   discovery: 'discovery',
   worlds: 'world',
   spark: 'sparkRoute',
-  /** ↓ Recoger (ADR-030). */
+  /** ↓ Recoger (ADR-030): a Pasteur pipette. */
   collect: 'pipette',
 } as const;
 
@@ -422,7 +460,8 @@ export const WORLD_ICON = {
 /** Groups for the dev sheet and the bible. */
 export const ICON_GROUPS: Record<string, string[]> = {
   concepts: ['essence', 'datos', 'sparkRoute', 'night', 'encargo', 'bestiary', 'tree', 'lab', 'seed', 'sow', 'world', 'species', 'creatures', 'samples', 'genome'],
-  routes: ['time', 'dropper', 'dishRoute', 'life', 'discovery', 'world', 'sparkRoute'],
+  routes: ['time', 'dropper', 'dishRoute', 'life', 'discovery', 'world', 'sparkRoute', 'pipette'],
+  collect: ['pipette', 'pipetteFast', 'dropBig', 'pipetteMore', 'pipetteMagnet', 'pipetteMaster', 'luz'],
   time: ['clock', 'clock2', 'fridge', 'sprint', 'encTime', 'clock3', 'clock4'],
   dropper: ['dropper', 'startEssence', 'freeSeeds', 'stabilizer', 'bigSeed', 'autoSeeder', 'cheapSeeds', 'dropperMax'],
   dish: ['dish', 'slots', 'crowdCost', 'nursery', 'incubator', 'dishXL', 'ecosystem'],
@@ -430,9 +469,8 @@ export const ICON_GROUPS: Record<string, string[]> = {
   discovery: ['notebook', 'print', 'cataloguing', 'archive', 'microscope', 'discoBonus', 'rareSpores', 'mutations', 'encyclopedia'],
   worlds: ['worldClassic', 'worldCold', 'worldGyro', 'worldShields', 'worldHelix', 'worldLegs', 'worldGiants'],
   spark: ['spark', 'sparkLife', 'sparkTime', 'sparkFirst', 'sparkGift', 'sparkDatos', 'sparkMutagen'],
-  collect: ['pipette', 'pipetteFast', 'dropBig', 'pipetteMore', 'pipetteMagnet', 'pipetteMaster'],
   behaviours: ['still', 'pulsing', 'swimmer', 'spinner', 'divider', 'colony', 'behavior'],
-  moments: ['sow', 'fade', 'burst', 'split', 'upgrade', 'robot', 'sliders', 'tag', 'slot', 'gift', 'eye', 'up', 'down'],
+  moments: ['sow', 'fade', 'burst', 'split', 'upgrade', 'dosingArm', 'sliders', 'tag', 'slot', 'gift', 'eye', 'up', 'down'],
   hud: ['settings', 'sound', 'mute', 'music', 'vibrate', 'motion', 'contrast', 'textsize', 'globe', 'pause', 'play', 'speed', 'stop', 'journal', 'trophy', 'leaderboard', 'help', 'info', 'warning', 'question', 'menu', 'share'],
   actions: ['close', 'back', 'check', 'plus', 'minus', 'chevronUp', 'chevronDown', 'chevronLeft', 'chevronRight', 'centre', 'follow', 'target', 'eraser', 'broom', 'pencil', 'brush', 'trash', 'copy', 'download', 'upload', 'camera', 'external', 'lock', 'unlock', 'stamp', 'rebirth', 'restore', 'stats'],
   store: ['bag', 'hanger', 'palette', 'halo', 'name', 'crown', 'user', 'heart', 'shield', 'bolt', 'layers', 'hand', 'star', 'sparkles'],

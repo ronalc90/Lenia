@@ -170,3 +170,25 @@ describe('icon set v2', () => {
     expect(treeIcon('nope')).toBe(treeIcon('question'));
   });
 });
+
+describe('the clarity pass icons (docs/CLARIDAD2.md §5.5 task 9, docs/ARTE-REALISTA.md §6.8)', () => {
+  it('the ↓ Recoger route and its six nodes have pipette icons of their own', () => {
+    expect(ROUTE_ICON.collect).toBe('pipette');
+    const ids = ['pipette', 'pipetteFast', 'dropBig', 'pipetteMore', 'pipetteMagnet', 'pipetteMaster'];
+    for (const id of ids) expect(hasIcon(id), id).toBe(true);
+    expect(new Set(ids.map((id) => ICONS[id].s)).size).toBe(ids.length);
+    // A pipette is not the Gotero's dropper.
+    expect(ICONS.pipette.s).not.toBe(ICONS.dropper.s);
+  });
+
+  it('Luz is the drop with a halo, not the bare Essence drop', () => {
+    expect(hasIcon('luz')).toBe(true);
+    expect(ICONS.luz.s).not.toBe(ICONS.essence.s);
+  });
+
+  it('the auto-sower is a dosing arm: no face, no robot', () => {
+    // The old robot had two eye dots on a rounded head: a face (§6.8 forbids it).
+    expect(ICONS.robot.s).not.toMatch(/cx="9\.5" cy="13\.25"/);
+    expect(ICONS.robot.s).toBe(ICONS.dosingArm.s);
+  });
+});
