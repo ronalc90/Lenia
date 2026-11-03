@@ -398,21 +398,27 @@ const PLAN = [
   // Night 1 (rings 1–2)
   // RITMO §5: the clock first — a longer run is the most visible "antes → después". CLARIDAD2 §1.3: the
   // first Pipeta in session 1, its second level soon after (the helper the child sees working).
+  // A player who taps every ripe drop gains nothing from more pipettes: the rest of the route waits until
+  // the night's production nodes are bought (B1: earlier, they delayed the growth nodes).
   'clock', 'pipette', 'dropper', 'clock', 'pipette', 'dish', 'culture', 'clock', 'worldCold', 'dropper', 'clock', 'culture', 'pipette', 'dish', 'culture', 'dropper',
-  'clock2', 'worldGyro', 'culture', 'dish', 'pipetteFast', 'clock2', 'culture', 'nutrient', 'slots', 'clock2', 'fridge', 'dropBig', 'nutrient', 'slots', 'spark', 'startEssence',
-  'pipetteFast', 'nutrient', 'slots', 'fridge', 'notebook', 'fridge', 'print', 'sparkLife', 'sparkTime', 'startEssence', 'notebook', 'pipetteFast', 'dropBig', 'dropBig',
+  'clock2', 'worldGyro', 'culture', 'dish', 'clock2', 'culture', 'nutrient', 'slots', 'clock2', 'fridge', 'nutrient', 'slots', 'spark', 'startEssence',
+  'nutrient', 'slots', 'fridge', 'notebook', 'fridge', 'print', 'sparkLife', 'sparkTime', 'startEssence', 'notebook', 'pipetteFast', 'dropBig', 'pipetteFast', 'dropBig', 'pipetteFast', 'dropBig',
   // Night 2 (ring 3)
-  'lab', 'clock3', 'worldShields', 'clock3', 'worldHelix', 'culture2', 'pipetteMore', 'clock3', 'sprint', 'incubator', 'stabilizer', 'swimAffinity', 'culture2', 'autoSeeder', 'pipetteMagnet', 'pipetteMore',
+  'lab', 'clock3', 'worldShields', 'clock3', 'worldHelix', 'culture2', 'clock3', 'sprint', 'incubator', 'stabilizer', 'swimAffinity', 'culture2', 'autoSeeder',
   'cataloguing', 'stillAffinity', 'sprint', 'stabilizer', 'culture2', 'crowdCost', 'nursery', 'freeSeeds', 'incubator', 'swimAffinity',
   'autoSeeder', 'cataloguing', 'stillAffinity', 'sprint', 'stabilizer', 'bigSeed', 'encTime', 'sparkGift', 'sparkFirst', 'sparkDatos',
   'archive', 'microscope', 'freeSeeds', 'startEssence', 'autoSeeder', 'stabilizer', 'cataloguing', 'encTime', 'notebook',
-  'pipetteMore', 'pipetteMagnet', 'pipetteMore', 'pipetteMore',
+  'pipetteMore', 'pipetteMagnet', 'pipetteMore', 'pipetteMagnet', 'pipetteMore', 'pipetteMore', 'pipetteMore',
   // Night 3 (ring 4)
-  'worldLegs', 'clock4', 'pipetteMaster', 'abundance', 'clock4', 'dishXL', 'clock4', 'clock4', 'ecosystem', 'colonyAffinity', 'symbiosis', 'cheapSeeds', 'discoBonus',
-  'rareSpores', 'mutations', 'sparkMutagen', 'ecosystem', 'colonyAffinity', 'cheapSeeds', 'discoBonus',
+  'worldLegs', 'clock4', 'abundance', 'clock4', 'dishXL', 'clock4', 'clock4', 'ecosystem', 'colonyAffinity', 'symbiosis', 'cheapSeeds', 'discoBonus',
+  'rareSpores', 'mutations', 'sparkMutagen', 'ecosystem', 'colonyAffinity', 'cheapSeeds', 'discoBonus', 'pipetteMaster',
   // Night 4 (ring 5)
   'worldGiants', 'eternalLife', 'eternalLife', 'dropperMax', 'encyclopedia', 'encyclopedia', 'encyclopedia',
 ];
+
+/** The idle player knows it never taps: the ↓ Recoger route first, then the planner's order. */
+const RECOGER = ['pipette', 'pipette', 'pipette', 'pipetteFast', 'dropBig', 'pipetteFast', 'dropBig', 'pipetteFast', 'dropBig', 'pipetteMore', 'pipetteMore', 'pipetteMagnet', 'pipetteMore', 'pipetteMore', 'pipetteMore', 'pipetteMagnet', 'pipetteMaster'];
+const IDLE_PLAN = [...RECOGER, ...PLAN];
 
 /** Which world the start card ends up on: the newest (picked for you, it pays the most); a kid taps around. */
 function pickWorld(policy: PolicyName, game: Game, rng: () => number): WorldId {
@@ -670,7 +676,7 @@ export function runPolicy(policy: PolicyName, maxSessions: number, seed: number,
       else if (policy === 'kid') pick = can[Math.floor(rng() * can.length)].id;
       else {
         // The plan in order; else the cheapest. Save for the planned one when it is close.
-        const want = PLAN.find((id) => {
+        const want = (policy === 'idle' ? IDLE_PLAN : PLAN).find((id) => {
           const s = states.get(id);
           return s && !s.maxed && s.block !== 'locked' && s.block !== 'night' && s.block !== 'hidden';
         });
