@@ -234,10 +234,10 @@ describe('the stopwatch dial (docs/ARTE-REALISTA.md §6.4, §6.8)', () => {
     expect(dialTarget(v(18, 33))).toBeLessThan(dialTarget(v(15))); // 15 s left of 30, then +3 s: 18 of 33
     expect(dialTarget({ ...v(30), phase: 'ready' })).toBe(0);
   });
-  it('says "⏸ Reloj en pausa" while the clock waits for the player', () => {
-    expect(hudSub({ phase: 'running', remaining: 20, total: 30, n: 3, sprint: null }, true, 'es')).toBe('⏸ Reloj en pausa');
+  it('says "⏸ En pausa" while the clock waits for the player, no wider than "Sesión 3"', () => {
+    expect(hudSub({ phase: 'running', remaining: 20, total: 30, n: 3, sprint: null }, true, 'es')).toBe('⏸ En pausa');
     expect(hudSub({ phase: 'running', remaining: 20, total: 30, n: 3, sprint: null }, false, 'es')).toBe('Sesión 3');
-    expect(hudSub({ phase: 'running', remaining: 20, total: 30, n: 3, sprint: null }, true, 'en')).toBe('⏸ Clock paused');
+    expect(hudSub({ phase: 'running', remaining: 20, total: 30, n: 3, sprint: null }, true, 'en')).toBe('⏸ Paused');
   });
 });
 

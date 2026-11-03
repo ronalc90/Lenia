@@ -5,7 +5,7 @@
  *    moves like an instrument's (second order, ζ 0,8, ωn 19: ~99 % in 300 ms, 1,5 % overshoot; reduce motion:
  *    it jumps) and points at the time used; in the last seconds it steps a whole second at a time (a detent).
  *    The minutes "2:41" beside it; before the first seed it waits ("3:00 · Siembra para empezar").
- *  - setPaused(true): "⏸ Reloj en pausa" while VELA talks or a sheet is open (ADR-030: the clock waits).
+ *  - setPaused(true): "⏸ En pausa" while VELA talks or a sheet is open (ADR-030: the clock waits).
  *  - Amber in the last 30 s (colour and ring, no endless pulse); the last 10 s tick one by one, growing
  *    away from the dial (scale 1.12 from the left, B-7; sound hook every second).
  *  - "¡Último minuto!" banner once (slides down 300 ms, stays 1.6 s, leaves in 200 ms), a gold
@@ -74,7 +74,7 @@ export interface SessionHud {
   preview(p: SessionPreviewView | null): void;
   /**
    * (ADR-030, docs/CLARIDAD2.md §8.1) The clock waits for the player (VELA talking, a sheet open, the pause):
-   * "⏸ Reloj en pausa" under the digits and a dimmed face. PC calls it.
+   * "⏸ En pausa" under the digits and a dimmed face. PC calls it.
    */
   setPaused?(on: boolean): void;
   dispose(): void;
@@ -104,7 +104,7 @@ export function dialTarget(v: SessionHudView): number {
   return Math.min(1, Math.max(0, 1 - left / v.total)) * 360;
 }
 
-/** The small line under the digits: "Sesión 3", or "⏸ Reloj en pausa" while the clock waits for the player. */
+/** The small line under the digits: "Sesión 3", or "⏸ En pausa" while the clock waits for the player. */
 export function hudSub(v: SessionHudView, paused: boolean, l: Lang): string {
   return paused ? SESSION_UI.paused[l] : SESSION_UI.session(v.n)[l];
 }
@@ -228,7 +228,7 @@ export function createSessionHud(container: HTMLElement, opts: SessionHudOptions
         needleTarget = target;
         if (!needleRaf) settle();
       }
-      // "Sesión 3" always ("⏸ Reloj en pausa" while the clock waits); "Siembra para empezar" while waiting (CSS
+      // "Sesión 3" always ("⏸ En pausa" while the clock waits); "Siembra para empezar" while waiting (CSS
       // shows one or the other: a narrow HUD keeps the short one).
       sub.textContent = hudSub(v, paused, l);
       waitSub.textContent = SESSION_UI.waiting[l];

@@ -501,7 +501,8 @@ export const SESSION_UI = {
   worldLeft: (n: number) => (n === 1 ? t('Te falta 1 por descubrir', '1 still to discover') : t(`Te faltan ${n} por descubrir`, `${n} still to discover`)),
   worldDone: t('✓ Completo · aquí ganas menos Datos', '✓ Complete · fewer Data here'),
   /** The clock pill while VELA talks or a sheet is open: the clock waits for the player. */
-  paused: t('⏸ Reloj en pausa', '⏸ Clock paused'),
+  // As short as «Sesión 3»: the longer «Reloj en pausa» widened the clock pill over the LUZ readout on a 390-px phone.
+  paused: t('⏸ En pausa', '⏸ Paused'),
   /** Session 1 before the clock starts. */
   clockNotYet: (clock: string) => t(`${clock} · aún no corre`, `${clock} · not running yet`),
   /** The Nutrientes button (bottom bar, centre): waiting, on sale, no life, too late. */
