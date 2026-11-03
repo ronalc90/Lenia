@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bezierPoint, FLY, flyControl, flyDuration, flyProgress } from './fly';
+import { bezierPoint, FLY, flyControl, flyDuration, flyProgress, pushTrail } from './fly';
 
 /** A-5: the mote's path and timing (the canvas is drawn in the browser). */
 describe('Esencia motes fly to the counter', () => {
@@ -29,5 +29,22 @@ describe('Esencia motes fly to the counter', () => {
     expect(flyProgress(0.5)).toBeLessThan(0.5);
     expect(flyProgress(0.9) - flyProgress(0.8)).toBeGreaterThan(flyProgress(0.2) - flyProgress(0.1));
     expect(flyProgress(1)).toBe(1);
+  });
+
+  it('the trail holds only positions the mote really passed, oldest first (no ghost at the corner)', () => {
+    const tr = new Float32Array(FLY.trail * 2).fill(-1); // a previous flight's leftovers
+    let n = 0;
+    const seen: number[][] = [];
+    for (let k = 1; k <= 6; k++) {
+      n = pushTrail(tr, n, k * 10, k);
+      const pts: number[][] = [];
+      for (let i = 0; i < n; i++) pts.push([tr[i * 2], tr[i * 2 + 1]]);
+      seen.push(pts.flat());
+    }
+    expect(seen[0]).toEqual([10, 1]);
+    expect(seen[1]).toEqual([10, 1, 20, 2]);
+    expect(seen[2]).toEqual([10, 1, 20, 2, 30, 3]);
+    expect(seen[3]).toEqual([10, 1, 20, 2, 30, 3, 40, 4]);
+    expect(seen[5]).toEqual([30, 3, 40, 4, 50, 5, 60, 6]);
   });
 });

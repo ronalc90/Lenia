@@ -52,6 +52,26 @@ export function bezierPoint(u: number, x0: number, y0: number, cx: number, cy: n
   out.y = v * v * y0 + 2 * v * u * cy + u * u * y1;
 }
 
+/**
+ * Record a position in a trail of FLY.trail points (x, y pairs, oldest first) holding `n` of them; returns
+ * the new count. The buffer shifts only once full: shifting earlier pulled unset slots (or the previous
+ * flight's points) into view, drawn as ghosts at the screen's corner (integrator review of v0.019).
+ */
+export function pushTrail(tr: Float32Array, n: number, x: number, y: number): number {
+  if (n < FLY.trail) {
+    tr[n * 2] = x;
+    tr[n * 2 + 1] = y;
+    return n + 1;
+  }
+  for (let k = 0; k < FLY.trail - 1; k++) {
+    tr[k * 2] = tr[k * 2 + 2];
+    tr[k * 2 + 1] = tr[k * 2 + 3];
+  }
+  tr[(FLY.trail - 1) * 2] = x;
+  tr[(FLY.trail - 1) * 2 + 1] = y;
+  return n;
+}
+
 /** Control point: the midpoint pushed perpendicular by `bend` of the distance on `side` (±1). */
 export function flyControl(x0: number, y0: number, x1: number, y1: number, bend: number, side: number, out: { x: number; y: number }): void {
   const dx = x1 - x0;
@@ -272,20 +292,7 @@ export class FlyLayer {
         if (toAccent > 0) this.atlas.draw(ctx, SPR.disc, this.accent, x, y, FLY.haloPx * sc * 2.4, toAccent * fadeIn);
         this.atlas.draw(ctx, SPR.disc, this.white, x, y, FLY.corePx * sc * 2.6, 0.95 * fadeIn);
       }
-      // Shift the trail and record this position.
-      const tr = m.trail;
-      for (let k = 0; k < FLY.trail - 1; k++) {
-        tr[k * 2] = tr[k * 2 + 2];
-        tr[k * 2 + 1] = tr[k * 2 + 3];
-      }
-      if (m.trailN < FLY.trail) {
-        tr[m.trailN * 2] = x;
-        tr[m.trailN * 2 + 1] = y;
-        m.trailN++;
-      } else {
-        tr[(FLY.trail - 1) * 2] = x;
-        tr[(FLY.trail - 1) * 2 + 1] = y;
-      }
+      m.trailN = pushTrail(m.trail, m.trailN, x, y);
     }
     if (ctx) {
       ctx.globalAlpha = 1;
