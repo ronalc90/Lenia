@@ -302,7 +302,7 @@ export const SCENES: SceneDef[] = [
     tutorial: true,
     duringRun: true,
     priority: 83,
-    after: ['t_clock'],
+    after: ['t_stable'],
     title: t('Recoger la luz', 'Collecting glow'),
     // Step 6: the first drop at 75 %. The dish waits while she says it; the drop can be tapped meanwhile.
     when: (c) => firstSession(c) && c.v.session?.phase === 'running' && ripeDrop(c) && c.n('collected') === 0,
@@ -316,7 +316,7 @@ export const SCENES: SceneDef[] = [
     duringRun: true,
     chain: true,
     priority: 82,
-    after: ['t_clock'],
+    after: ['t_stable'],
     title: t('Otra semilla', 'Another seed'),
     // Step 7, after the first collection (or a while into the clock if no drop came).
     when: (c) => firstSession(c) && c.v.session?.phase === 'running' && (c.done('t_collect') || c.n('collected') > 0 || c.since('t_clock') >= 10),

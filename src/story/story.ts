@@ -577,8 +577,12 @@ export function createStory(deps: StoryDeps): Story {
 
   function eligible(def: SceneDef, c: StoryCtx, t: number): boolean {
     if (!def.repeatable && st.done.has(def.id)) return false;
-    // While a lab session's clock runs only the tutorial and the first Spark talk (§2.8).
-    if (!def.duringRun && c.v.cycle === 'sessions' && c.v.session?.phase === 'running') return false;
+    // While a lab session's clock runs only the tutorial and the first Spark talk (§2.8): the scenes
+    // marked duringRun, and in session 1 its tutorial (the clock waits while VELA talks).
+    if (!def.duringRun && c.v.cycle === 'sessions' && c.v.session?.phase === 'running') {
+      const first = c.v.session.first ?? c.v.session.n <= 1;
+      if (!(def.tutorial && first)) return false;
+    }
     if (def.tutorial && st.tutorialSkipped) return false;
     if ((st.deferUntil[def.id] ?? 0) > t) return false;
     if (def.after && !def.after.every((id) => st.done.has(id))) return false;

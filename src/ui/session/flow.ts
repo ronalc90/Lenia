@@ -199,7 +199,9 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
       startPending = true;
       return;
     }
-    start.show(st, { encargo: o.encargo?.() ?? null, seedPrice: game.view().seedCost, ready: o.cultureReady?.() ?? true });
+    // «¡Empezar!» starts waiting: the run's culture is set to incubate right after this event (main.ts),
+    // so the dish's state now is the last run's; update() enables it once the new culture is lit.
+    start.show(st, { encargo: o.encargo?.() ?? null, seedPrice: game.view().seedCost, ready: !o.cultureReady });
   }
 
   function showSummary(): void {

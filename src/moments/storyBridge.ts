@@ -34,6 +34,8 @@ export interface StoryLike {
   current(): { phase: string } | null;
   /** Scene starts (optional): the tutorial's own lines mark their Momentos told. */
   on?(type: 'sceneStart', fn: (p: { scene: { id: string; replay: boolean } }) => void): () => void;
+  /** The game view (optional): the session-1 tutorial tells its basics only in the sessions loop. */
+  getView?(): { cycle?: string };
   play(sceneId: string): boolean;
   skip(): void;
   archive(): { scenes: { id: string; seen: boolean }[] };
@@ -117,7 +119,14 @@ export function linkStory(moments: Moments, story: StoryLike): StoryBridge {
   const timer = typeof setInterval === 'function' ? setInterval(flush, RETRY_MS) : null;
   const offStart = story.on?.('sceneStart', ({ scene }) => {
     const told = TOLD_BY_SCENE[scene.id];
-    if (told && !scene.replay) moments.markTold(told);
+    let sessions = false;
+    try {
+      sessions = story.getView?.().cycle === 'sessions';
+    } catch {
+      sessions = false;
+    }
+    // The classic loop keeps "one thing per event" the old way (a covered Momento is a brief label).
+    if (told && !scene.replay && sessions) moments.markTold(told);
   });
 
   return {
