@@ -23,6 +23,8 @@ import { BUNDLE_PREFIX, decodeSaveText } from '../app/saveBundle';
 import { WORLD_TEXT } from '../game/treeText';
 import { isWorldId } from '../game/worlds';
 import { BUILD_DATE, VERSION_LABEL } from '../version';
+import { PHOTOS, PHOTO_CREDITS_NOTE, PHOTO_IDS } from './art/photos';
+import './credits.css';
 
 export interface ModalHandle {
   readonly wrap: HTMLElement;
@@ -641,6 +643,23 @@ export function openSettings(host: ModalHost, ctx: Ctx): ModalHandle {
             h('p', null, t('creditsGame')),
             h('p', null, t('creditsLenia')),
             h('p', null, t('creditsKeys')),
+          ),
+        ),
+        // One credit per archive photo (ADR-029, CREDITS.md «Fotografías de archivo»): what, who, licence,
+        // what was changed, and links to the source and the licence (CC BY asks for both).
+        h(
+          'div',
+          { class: 'set-card credits credits-photos', 'data-testid': 'credits-photos' },
+          h(
+            'div',
+            null,
+            h('p', null, h('strong', null, t('creditsPhotos'))),
+            ...PHOTO_IDS.map((id) => {
+              const ph = PHOTOS[id];
+              const link = (href: string, label: string) => h('a', { href, target: '_blank', rel: 'noopener noreferrer' }, label);
+              return h('p', null, `${tx(ph.credit)} `, link(ph.source, t('creditsPhotoSource')), ' · ', link(ph.licenceUrl, t('creditsPhotoLicence')));
+            }),
+            h('p', null, tx(PHOTO_CREDITS_NOTE)),
           ),
         ),
       ),

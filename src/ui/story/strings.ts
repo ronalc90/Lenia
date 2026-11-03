@@ -1,5 +1,6 @@
 /** UI strings of the story layer (es + en). Story lines live in src/story/script.ts. */
 import type { Lang, Text } from '../../core/types';
+import { PHOTOS, PHOTO_CREDITS_NOTE, PHOTO_IDS } from '../art/photos';
 
 const t = (es: string, en: string): Text => ({ es, en });
 
@@ -28,6 +29,22 @@ export const S = {
     t('Gracias por mirar.', 'Thank you for watching.'),
     t('El experimento continúa.', 'The experiment continues.'),
   ],
+  /**
+   * The archive photographs in the closing roll, one line each (ADR-029): what, who and the licence,
+   * then what was changed and that the institutions do not endorse the game. Settings › Créditos has
+   * the full lines with their links.
+   */
+  photoCredits: {
+    title: t('Fotografías de archivo', 'Archive photographs'),
+    lines: PHOTO_IDS.map((id): Text => {
+      const p = PHOTOS[id];
+      return { es: `${p.title.es}: ${p.author} (${p.licence.es}).`, en: `${p.title.en}: ${p.author} (${p.licence.en}).` };
+    }),
+    note: {
+      es: `Recortadas, reescaladas y recomprimidas para el juego. ${PHOTO_CREDITS_NOTE.es}`,
+      en: `Cropped, rescaled and recompressed for the game. ${PHOTO_CREDITS_NOTE.en}`,
+    } as Text,
+  },
 };
 
 export function secretHint(lang: Lang, p: { species: number; speciesTotal: number; behaviors: number; behaviorsTotal: number; answered: boolean }): string {

@@ -205,6 +205,9 @@ const S = {
     es: 'Lenia fue creada por Bert Wang-Chak Chan. Catálogo de especies y artículos de Lenia: MIT License, Copyright (c) 2018 Bert Chan.',
     en: 'Lenia was created by Bert Wang-Chak Chan. Species catalog and Lenia papers: MIT License, Copyright (c) 2018 Bert Chan.',
   },
+  creditsPhotos: { es: 'Fotografías de archivo', en: 'Archive photographs' },
+  creditsPhotoSource: { es: 'Fuente', en: 'Source' },
+  creditsPhotoLicence: { es: 'Licencia', en: 'Licence' },
   creditsKeys: {
     es: 'Teclado: Espacio pausa · E borrar · J bitácora · M silencio · rueda zoom · clic derecho borra.',
     en: 'Keyboard: Space pause · E erase · J journal · M mute · wheel zoom · right-click erases.',
