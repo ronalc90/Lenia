@@ -20,7 +20,8 @@ function themeHere(): PortraitTheme {
 }
 import { EXPORT_PREFIX } from '../game/balance';
 import { BUNDLE_PREFIX, decodeSaveText } from '../app/saveBundle';
-import { WORLD_TEXT } from '../game/treeText';
+import { SESSION_UI, WORLD_TEXT } from '../game/treeText';
+import { wholeRate } from './fx/readout';
 import { isWorldId } from '../game/worlds';
 import { BUILD_DATE, VERSION_LABEL } from '../version';
 import { PHOTOS, PHOTO_CREDITS_NOTE, PHOTO_IDS } from './art/photos';
@@ -802,13 +803,21 @@ function speciesBody(
   );
   const stat = (label: string, value: string) =>
     h('div', { class: 'stat' }, h('div', { class: 's-l' }, label), h('div', { class: 's-v' }, value));
+  // How much light it gives among the 7 species, as beads (ADR-030, docs/CLARIDAD2.md §6 #6: «Da luz:
+  // ●●●○○»); the decimal multiplier only while the game has no beads for it.
+  const beads = typeof s.lightBeads === 'number' ? Math.max(1, Math.min(5, Math.round(s.lightBeads))) : 0;
   const grid = h(
     'div',
     { class: 'spc-grid' },
-    stat(t('multiplier'), t('multiplierValue', { v: fmtShort(s.mult, lang) })),
+    beads
+      ? stat(t('spcLight'), '●'.repeat(beads) + '○'.repeat(5 - beads))
+      : stat(t('multiplier'), t('multiplierValue', { v: fmtShort(s.mult, lang) })),
     stat(t('timesSeen'), timesText(s.timesSeen, lang)),
-    // What it earns right now, all of its living members together (game: SpeciesView.production).
-    s.production ? stat(t('spcEarnsNow'), `+${fmtRate(s.production.eps, lang)}${t('perSec')}`) : null,
+    // What it earns right now, all of its living members together (game: SpeciesView.production), in
+    // whole «luz/s» (§6 #1); before the clock runs, when it will start.
+    s.production
+      ? stat(t('spcEarnsNow'), v.session?.phase === 'ready' ? t('spcLightAtStart') : tx(SESSION_UI.luzPerSec(wholeRate(s.production.eps, lang))))
+      : null,
     s.production ? stat(t('spcAliveNow'), fmt(s.production.members, lang)) : null,
   );
   // The upgrades that make it earn more (game: SpeciesView.boostedBy).

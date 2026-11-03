@@ -113,7 +113,12 @@ const S = {
   atStart: { es: 'al empezar', en: 'at start' },
   spcEarnsNow: { es: 'Da ahora', en: 'Earns now' },
   spcAliveNow: { es: 'Vivas ahora', en: 'Alive now' },
-  spcBoostedBy: { es: 'Le ayudan:', en: 'Boosted by:' },
+  /** §6 #7: the upgrades that help it, said as where they are. */
+  spcBoostedBy: { es: 'Le ayuda en el Árbol:', en: 'Helped in the Tree by:' },
+  /** §6 #6: how much light it gives among the 7, as beads. */
+  spcLight: { es: 'Da luz', en: 'Glow' },
+  /** The species sheet before the clock runs (QA-CLARIDAD: "+0/s" read as "it gives nothing"). */
+  spcLightAtStart: { es: 'Empieza a dar luz cuando arranque el reloj', en: 'Starts to glow when the clock starts' },
   era: { es: 'Noche', en: 'Night' },
   livesIn: { es: 'Vive en', en: 'Lives in' },
   print: { es: 'Imprimir', en: 'Print' },
