@@ -5,6 +5,7 @@
 import type { Lang } from '../../core/types';
 import type { BadgeData, FrameData, NameColorData, PaletteData } from '../../store/catalog';
 import { paletteCss } from '../../store/apply';
+import { restartClass } from '../art/motion';
 import { sicon, svgInner } from './icons';
 
 type Attrs = Record<string, string | number | boolean | null | undefined | EventListener>;
@@ -77,9 +78,7 @@ export function toaster(): Toaster {
     show(text, kind = 'info') {
       box.textContent = text;
       box.dataset.kind = kind;
-      box.classList.remove('on');
-      void box.offsetWidth;
-      box.classList.add('on');
+      restartClass(box, 'on');
       clearTimeout(timer);
       timer = window.setTimeout(() => box.classList.remove('on'), 2800);
     },

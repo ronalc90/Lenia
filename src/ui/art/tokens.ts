@@ -177,8 +177,13 @@ export const TYPE = {
 
 export type TypeRole = keyof typeof TYPE;
 
-/** Corner radii (px). Icons use 2 (outer) and 1 (inner) on their 24 grid. */
-export const RADIUS = { xs: 6, sm: 8, md: 12, lg: 16, xl: 24, pill: 999 } as const;
+/**
+ * Corner radii (px), five and no more (docs/ARTE-PULIDO.md B-2): chips 8, buttons and inner tiles 12,
+ * cards and the primary button 16, sheet tops and Momento cards 24, pills 999. A nested radius is the
+ * outer one minus the padding (a 16 card with 12 of padding holds 4–8 corners, never 14). Icons use 2
+ * (outer) and 1 (inner) on their own 24 grid.
+ */
+export const RADIUS = { sm: 8, md: 12, lg: 16, xl: 24, pill: 999 } as const;
 
 /** Spacing (px): a 4-pt grid; screen gutters are `md` (16). */
 export const SPACE = { xxs: 2, xs: 4, sm: 8, ms: 12, md: 16, lg: 24, xl: 32, xxl: 48 } as const;
@@ -195,6 +200,8 @@ export const LAYER = {
   dishFx: 5,
   dishLabels: 10,
   hud: 20,
+  /** Esencia motes flying from the dish to the HUD (ARTE-PULIDO A-5): above the HUD, below sheets. */
+  fx: 25,
   sheet: 30,
   toast: 40,
   dialogue: 50,
@@ -203,30 +210,88 @@ export const LAYER = {
   cinematic: 80,
 } as const;
 
-/** Elevation shadows per theme. */
-export const SHADOW: Record<ThemeName, { sm: string; md: string; lg: string; glow: string }> = {
+/**
+ * Elevation (docs/ARTE-PULIDO.md B-3, after Comeau "Designing beautiful shadows" and Material's dark
+ * theme): one light from the top left (the shader's LIGHT), layered shadows tinted with the background's
+ * hue (215°), never pure black; higher = larger offset and blur, lower opacity per layer. In the dark
+ * the surface lightens with elevation (surface → surface2), so the shadow only has to whisper.
+ *   elev1 cards on the page · elev2 sheets, drawer, VELA, toasts · elev3 Momento cards, modals.
+ * Glows: a 1-px ring plus a soft halo, only for the spotlight, the Spark and VELA.
+ */
+export const ELEVATION: Record<ThemeName, { elev0: string; elev1: string; elev2: string; elev3: string }> = {
   dark: {
-    sm: '0 1px 2px rgba(0,0,0,.5)',
-    md: '0 6px 18px rgba(0,0,0,.45), 0 1px 2px rgba(0,0,0,.5)',
-    lg: '0 18px 48px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.5)',
-    glow: '0 0 0 1px rgba(91,192,235,.35), 0 0 24px rgba(91,192,235,.25)',
+    elev0: 'none',
+    elev1: 'inset 0 1px 0 rgb(207 232 245 / .05), 0 1px 2px hsl(215 50% 2% / .5), 0 2px 6px hsl(215 50% 2% / .3)',
+    elev2: 'inset 0 1px 0 rgb(207 232 245 / .06), 0 2px 4px hsl(215 50% 2% / .35), 0 8px 16px hsl(215 50% 2% / .35), 0 16px 32px hsl(215 50% 2% / .3)',
+    elev3:
+      'inset 0 1px 0 rgb(207 232 245 / .06), 0 2px 4px hsl(215 50% 2% / .35), 0 8px 16px hsl(215 50% 2% / .35), 0 16px 32px hsl(215 50% 2% / .3), 0 32px 64px hsl(215 50% 2% / .35)',
   },
   light: {
-    sm: '0 1px 2px rgba(24,36,52,.12)',
-    md: '0 6px 18px rgba(24,36,52,.12), 0 1px 2px rgba(24,36,52,.1)',
-    lg: '0 18px 48px rgba(24,36,52,.16), 0 2px 6px rgba(24,36,52,.1)',
-    glow: '0 0 0 1px rgba(10,114,166,.35), 0 0 18px rgba(10,114,166,.18)',
+    elev0: 'none',
+    elev1: 'inset 0 1px 0 rgb(255 255 255 / .7), 0 1px 2px hsl(215 30% 30% / .14), 0 2px 6px hsl(215 30% 30% / .08)',
+    elev2: 'inset 0 1px 0 rgb(255 255 255 / .7), 0 2px 4px hsl(215 30% 30% / .1), 0 8px 16px hsl(215 30% 30% / .1), 0 16px 32px hsl(215 30% 30% / .08)',
+    elev3:
+      'inset 0 1px 0 rgb(255 255 255 / .7), 0 2px 4px hsl(215 30% 30% / .1), 0 8px 16px hsl(215 30% 30% / .1), 0 16px 32px hsl(215 30% 30% / .08), 0 32px 64px hsl(215 30% 30% / .12)',
   },
 };
 
-/** Motion durations (ms) and easings (docs/ARTE.md §7). Mirrored by motion.ts. */
-export const DURATION = { tap: 90, quick: 140, base: 200, sheet: 260, card: 320, story: 480, celebrate: 700 } as const;
+/** The three glows (ring + halo) per theme: the life accent, VELA's candle, the Spark's gold. */
+export const GLOW_SHADOW: Record<ThemeName, { accent: string; candle: string; gold: string }> = {
+  dark: {
+    accent: '0 0 0 1px rgb(91 192 235 / .35), 0 0 24px rgb(91 192 235 / .22)',
+    candle: '0 0 0 1px rgb(255 184 107 / .35), 0 0 24px rgb(255 184 107 / .22)',
+    gold: '0 0 0 1px rgb(255 209 102 / .35), 0 0 24px rgb(255 209 102 / .22)',
+  },
+  light: {
+    accent: '0 0 0 1px rgb(10 114 166 / .35), 0 0 24px rgb(10 114 166 / .16)',
+    candle: '0 0 0 1px rgb(165 79 8 / .35), 0 0 24px rgb(165 79 8 / .14)',
+    gold: '0 0 0 1px rgb(133 86 0 / .35), 0 0 24px rgb(133 86 0 / .14)',
+  },
+};
+
+/** @deprecated names kept while the modules migrate (`--bl-shadow-*` = elevation 1/2/3 and the accent glow). */
+export const SHADOW: Record<ThemeName, { sm: string; md: string; lg: string; glow: string }> = {
+  dark: { sm: ELEVATION.dark.elev1, md: ELEVATION.dark.elev2, lg: ELEVATION.dark.elev3, glow: GLOW_SHADOW.dark.accent },
+  light: { sm: ELEVATION.light.elev1, md: ELEVATION.light.elev2, lg: ELEVATION.light.elev3, glow: GLOW_SHADOW.light.accent },
+};
+
+/**
+ * Motion durations (ms), the whole vocabulary (docs/ARTE-PULIDO.md B-2, NN/g "Animation duration",
+ * Material 3 motion tokens): exits are shorter than entrances, nothing the player sees often lasts long.
+ *   tap 90 finger down · quick 140 colour/opacity of a state · base 200 small appear/disappear ·
+ *   exit 160 every exit · sheet 300 in / sheetOut 200 out · card 320 a value pops ·
+ *   story 480 VELA, banners · celebrate 700 a purchase, Datos, a new species.
+ */
+export const DURATION = { tap: 90, quick: 140, base: 200, exit: 160, sheet: 300, sheetOut: 200, card: 320, story: 480, celebrate: 700 } as const;
+/** Stagger between list items (ms) and the most items that wait their turn (the rest enter with the last). */
+export const STAGGER = { step: 40, max: 6 } as const;
 export const EASING = {
   standard: 'cubic-bezier(0.2, 0, 0, 1)',
   enter: 'cubic-bezier(0.05, 0.7, 0.1, 1)',
   exit: 'cubic-bezier(0.3, 0, 0.8, 0.15)',
   pop: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
   linear: 'linear',
+} as const;
+
+/**
+ * Springs (M3 Expressive spatial springs, mass 1), as CSS `linear()` curves sampled from the simulated
+ * spring and the duration they take to settle (docs/ARTE-PULIDO.md B-2):
+ *   fast    stiffness 800, damping 0.6: overshoots 9 % (a button let go, a pop, a heartbeat)
+ *   default stiffness 380, damping 0.8: overshoots 1.4 % (cards and sheets settling, VELA)
+ *   slow    stiffness 200, damping 0.8: same shape, longer (big celebrations, the Night)
+ * Movement only: colour and opacity never spring (Comeau). Browsers without `linear()` (Safari < 17.2)
+ * fall back to `pop` (fast) and `enter` (default, slow) through @supports in art.css.
+ */
+const SPRING_FAST_POINTS = [
+  0, 0.103, 0.309, 0.546, 0.758, 0.914, 1.02, 1.074, 1.093, 1.087, 1.07, 1.048, 1.027, 1.011, 1, 0.994, 0.992, 0.992, 0.993, 0.995, 0.997, 0.999, 1, 1, 1,
+] as const;
+const SPRING_DEFAULT_POINTS = [
+  0, 0.066, 0.21, 0.374, 0.532, 0.669, 0.781, 0.864, 0.924, 0.965, 0.99, 1.004, 1.012, 1.014, 1.014, 1.012, 1.01, 1.008, 1.005, 1.004, 1.002, 1.001, 1.001, 1, 1,
+] as const;
+export const SPRING = {
+  fast: { ms: 400, points: SPRING_FAST_POINTS, css: `linear(${SPRING_FAST_POINTS.join(', ')})`, fallback: EASING.pop },
+  default: { ms: 480, points: SPRING_DEFAULT_POINTS, css: `linear(${SPRING_DEFAULT_POINTS.join(', ')})`, fallback: EASING.enter },
+  slow: { ms: 650, points: SPRING_DEFAULT_POINTS, css: `linear(${SPRING_DEFAULT_POINTS.join(', ')})`, fallback: EASING.enter },
 } as const;
 
 const kebab = (s: string): string => s.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
@@ -237,30 +302,50 @@ function themeVars(theme: ThemeName): string[] {
   for (const [k, v] of Object.entries(p)) out.push(`--bl-${kebab(k)}: ${v};`);
   for (const [k, v] of Object.entries(ROUTE_COLOR[theme])) out.push(`--bl-route-${k}: ${v};`);
   for (const [k, v] of Object.entries(BEHAVIOR_TONE[theme])) out.push(`--bl-beh-${k}: ${v};`);
-  for (const [k, v] of Object.entries(SHADOW[theme])) out.push(`--bl-shadow-${k}: ${v};`);
+  for (const [k, v] of Object.entries(ELEVATION[theme])) out.push(`--bl-elev-${k.slice(4)}: ${v};`);
+  for (const [k, v] of Object.entries(GLOW_SHADOW[theme])) out.push(`--bl-glow-${k}: ${v};`);
+  for (const k of Object.keys(SHADOW[theme])) out.push(`--bl-shadow-${k}: var(${k === 'glow' ? '--bl-glow-accent' : `--bl-elev-${({ sm: 1, md: 2, lg: 3 } as Record<string, number>)[k]}`});`);
   out.push(`--bl-ic-fill: ${theme === 'dark' ? 0.2 : 0.14};`);
   return out;
 }
 
+/** px → rem at the browser default 16 px, so the game's "Large text" (root 112.5 %) scales every size. */
+const rem = (px: number): string => `${+(px / 16).toFixed(4)}rem`;
+
 /** The generated stylesheet (art.css). */
 export function tokensCss(): string {
   const shared: string[] = [];
-  for (const [k, v] of Object.entries(GLOW)) shared.push(`--bl-glow-${kebab(k)}: ${v};`);
+  // Always-bright fills (badges, dots): `--bl-lum-*` (the `--bl-glow-*` names are the glow shadows).
+  for (const [k, v] of Object.entries(GLOW)) shared.push(`--bl-lum-${kebab(k)}: ${v};`);
   shared.push(`--bl-font-display: ${FONT.display};`);
   shared.push(`--bl-font-ui: ${FONT.ui};`);
   shared.push(`--bl-font-mono: ${FONT.mono};`);
   for (const [k, v] of Object.entries(TYPE)) {
-    shared.push(`--bl-fs-${k}: ${v.size}px;`);
-    shared.push(`--bl-lh-${k}: ${v.line}px;`);
+    shared.push(`--bl-fs-${k}: ${rem(v.size)};`);
+    shared.push(`--bl-lh-${k}: ${rem(v.line)};`);
     shared.push(`--bl-fw-${k}: ${v.weight};`);
   }
   for (const [k, v] of Object.entries(RADIUS)) shared.push(`--bl-r-${k}: ${v}px;`);
   for (const [k, v] of Object.entries(SPACE)) shared.push(`--bl-s-${k}: ${v}px;`);
   shared.push(`--bl-touch: ${TOUCH}px;`);
   for (const [k, v] of Object.entries(LAYER)) shared.push(`--bl-z-${kebab(k)}: ${v};`);
-  for (const [k, v] of Object.entries(DURATION)) shared.push(`--bl-t-${k}: ${v}ms;`);
+  for (const [k, v] of Object.entries(DURATION)) shared.push(`--bl-t-${kebab(k)}: ${v}ms;`);
+  shared.push(`--bl-stagger: ${STAGGER.step}ms;`);
   for (const [k, v] of Object.entries(EASING)) shared.push(`--bl-ease-${k}: ${v};`);
-  const block = (sel: string, lines: string[]) => `${sel} {\n${lines.map((l) => '  ' + l).join('\n')}\n}\n`;
+  for (const [k, v] of Object.entries(SPRING)) {
+    shared.push(`--bl-spring-${k}: ${v.css};`);
+    shared.push(`--bl-t-spring-${k}: ${v.ms}ms;`);
+  }
+  const block = (sel: string, lines: string[]) => `${sel} {\n${lines.flatMap((l) => l.split('\n')).map((l) => '  ' + l).join('\n')}\n}\n`;
+  const springFallback = Object.entries(SPRING).map(([k, v]) => `--bl-spring-${k}: ${v.fallback};`);
+  // Reduce motion (the OS or the game's own setting, which puts .bl-rm on <html>): every entrance and
+  // exit is an 80-ms fade (docs/ARTE.md §7), springs do not overshoot, lists do not stagger.
+  const reduced = [
+    ...Object.keys(DURATION).map((k) => `--bl-t-${kebab(k)}: ${k === 'tap' ? 1 : 80}ms;`),
+    ...Object.keys(SPRING).map((k) => `--bl-t-spring-${k}: 80ms;`),
+    ...Object.keys(SPRING).map((k) => `--bl-spring-${k}: linear;`),
+    '--bl-stagger: 0ms;',
+  ];
   return [
     '/* GENERATED from src/ui/art/tokens.ts by tokensCss(); edit the TS file, then run\n' +
       '   `node --experimental-strip-types --no-warnings src/ui/art/write-css.mjs` (tokens.test.ts fails while they differ). */\n',
@@ -270,6 +355,9 @@ export function tokensCss(): string {
     block(".art-force-dark,\n[data-theme='light'] .art-force-dark", [...themeVars('dark'), 'color-scheme: dark;']),
     '/* Icons: duotone fill layer (docs/ARTE.md §5). */\n',
     block('.bl-ic .f', ['fill: currentColor;', 'stroke: none;', 'opacity: var(--bl-ic-fill);']),
-    block('@media (prefers-reduced-motion: reduce)', [':root { --bl-t-quick: 1ms; --bl-t-base: 1ms; --bl-t-sheet: 80ms; --bl-t-card: 80ms; --bl-t-story: 80ms; --bl-t-celebrate: 1ms; }']),
+    '/* Springs need linear() (Chrome 113, Firefox 112, Safari 17.2); older engines get the nearest bezier. */\n',
+    block('@supports not (animation-timing-function: linear(0, 1))', [block(':root', springFallback).trimEnd()]),
+    block('@media (prefers-reduced-motion: reduce)', [block(':root', reduced).trimEnd()]),
+    block(':root.bl-rm,\n.bl-rm,\n.rm', reduced),
   ].join('\n');
 }

@@ -11,6 +11,7 @@ import type { Camera } from '../../core/camera';
 import type { Lang } from '../../core/types';
 import type { Secrets } from '../../secrets/secrets';
 import type { SecretEffect, SecretView } from '../../secrets/types';
+import { restartClass } from '../art/motion';
 import { type BasementPanel, createBasementPanel } from './basement';
 import { EffectsLayer } from './effects';
 import { RevealQueue } from './reveal';
@@ -97,10 +98,8 @@ export function createSecretsUI(root: HTMLElement, secrets: Secrets, opts: Secre
 
   const wake = (ms: number) => {
     for (const el of document.querySelectorAll<HTMLElement>('[data-secret-logo]')) {
-      el.classList.remove('bls-logo-awake');
-      void el.offsetWidth; // restart the animation
       el.classList.toggle('bls-rm', opts.reduceMotion());
-      el.classList.add('bls-logo-awake');
+      restartClass(el, 'bls-logo-awake');
       setTimeout(() => el.classList.remove('bls-logo-awake'), ms);
     }
   };

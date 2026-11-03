@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { contrast, hexToRgb, luminance, oklch, rgbToHex, rgbToOklch } from './color';
-import { BEHAVIOR_TONE, DURATION, PALETTE, ROUTE_COLOR, tokensCss, type ThemeName } from './tokens';
+import { BEHAVIOR_TONE, DURATION, ELEVATION, LAYER, PALETTE, RADIUS, ROUTE_COLOR, SPRING, STAGGER, tokensCss, type ThemeName } from './tokens';
+import { ease } from './motion';
 
 const THEMES: ThemeName[] = ['dark', 'light'];
 
@@ -48,5 +49,43 @@ describe('design tokens', () => {
 
   it('keeps motion short: nothing in the UI vocabulary lasts longer than 0.7 s', () => {
     for (const v of Object.values(DURATION)) expect(v).toBeLessThanOrEqual(700);
+  });
+});
+
+describe('the closed system (docs/ARTE-PULIDO.md B-2)', () => {
+  it('has the five radii, the fx layer between the HUD and the sheets, and four elevations per theme', () => {
+    expect(Object.values(RADIUS)).toEqual([8, 12, 16, 24, 999]);
+    expect(LAYER.hud).toBeLessThan(LAYER.fx);
+    expect(LAYER.fx).toBeLessThan(LAYER.sheet);
+    expect(LAYER.fx).toBe(25);
+    for (const th of THEMES) expect(Object.keys(ELEVATION[th])).toEqual(['elev0', 'elev1', 'elev2', 'elev3']);
+  });
+
+  it('exits are shorter than entrances, lists stagger 40 ms for at most 6 items', () => {
+    expect(DURATION.exit).toBeLessThan(DURATION.base);
+    expect(DURATION.sheetOut).toBeLessThan(DURATION.sheet);
+    expect(STAGGER).toEqual({ step: 40, max: 6 });
+  });
+
+  it('the springs are the simulated M3 curves: fast overshoots ~9 %, default ~1.4 %, all settle at 1', () => {
+    expect(SPRING.fast.css).toBe(
+      'linear(0, 0.103, 0.309, 0.546, 0.758, 0.914, 1.02, 1.074, 1.093, 1.087, 1.07, 1.048, 1.027, 1.011, 1, 0.994, 0.992, 0.992, 0.993, 0.995, 0.997, 0.999, 1, 1, 1)',
+    );
+    expect(Math.max(...SPRING.fast.points)).toBeCloseTo(1.093, 3);
+    expect(Math.max(...SPRING.default.points)).toBeCloseTo(1.014, 3);
+    expect([SPRING.fast.ms, SPRING.default.ms, SPRING.slow.ms]).toEqual([400, 480, 650]);
+    for (const k of ['springFast', 'springDefault', 'springSlow'] as const) {
+      expect(ease[k](0)).toBe(0);
+      expect(ease[k](1)).toBe(1);
+    }
+    expect(ease.springFast(0.35)).toBeGreaterThan(1); // the overshoot
+  });
+
+  it('Reduce motion turns every entrance and exit into an 80-ms fade and stops staggering', () => {
+    const css = tokensCss();
+    const block = css.slice(css.indexOf(':root.bl-rm'));
+    expect(block).toContain('--bl-t-sheet: 80ms;');
+    expect(block).toContain('--bl-spring-fast: linear;');
+    expect(block).toContain('--bl-stagger: 0ms;');
   });
 });

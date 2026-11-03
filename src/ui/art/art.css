@@ -2,42 +2,41 @@
    `node --experimental-strip-types --no-warnings src/ui/art/write-css.mjs` (tokens.test.ts fails while they differ). */
 
 :root {
-  --bl-glow-essence: #5bc0eb;
-  --bl-glow-datos: #5ee6c8;
-  --bl-glow-spark: #ffd166;
-  --bl-glow-candle: #ffb86b;
-  --bl-glow-candle-core: #fff3d6;
-  --bl-glow-night: #c9d1ff;
-  --bl-glow-good: #8ae234;
-  --bl-glow-danger: #e4572e;
+  --bl-lum-essence: #5bc0eb;
+  --bl-lum-datos: #5ee6c8;
+  --bl-lum-spark: #ffd166;
+  --bl-lum-candle: #ffb86b;
+  --bl-lum-candle-core: #fff3d6;
+  --bl-lum-night: #c9d1ff;
+  --bl-lum-good: #8ae234;
+  --bl-lum-danger: #e4572e;
   --bl-font-display: Fraunces, 'Fraunces Fallback', Georgia, 'Times New Roman', serif;
   --bl-font-ui: Inter, 'Inter Fallback', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --bl-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
-  --bl-fs-caption: 13px;
-  --bl-lh-caption: 18px;
+  --bl-fs-caption: 0.8125rem;
+  --bl-lh-caption: 1.125rem;
   --bl-fw-caption: 600;
-  --bl-fs-small: 14px;
-  --bl-lh-small: 20px;
+  --bl-fs-small: 0.875rem;
+  --bl-lh-small: 1.25rem;
   --bl-fw-small: 500;
-  --bl-fs-body: 16px;
-  --bl-lh-body: 24px;
+  --bl-fs-body: 1rem;
+  --bl-lh-body: 1.5rem;
   --bl-fw-body: 500;
-  --bl-fs-lead: 18px;
-  --bl-lh-lead: 26px;
+  --bl-fs-lead: 1.125rem;
+  --bl-lh-lead: 1.625rem;
   --bl-fw-lead: 600;
-  --bl-fs-title: 22px;
-  --bl-lh-title: 28px;
+  --bl-fs-title: 1.375rem;
+  --bl-lh-title: 1.75rem;
   --bl-fw-title: 700;
-  --bl-fs-headline: 28px;
-  --bl-lh-headline: 34px;
+  --bl-fs-headline: 1.75rem;
+  --bl-lh-headline: 2.125rem;
   --bl-fw-headline: 700;
-  --bl-fs-display: 36px;
-  --bl-lh-display: 40px;
+  --bl-fs-display: 2.25rem;
+  --bl-lh-display: 2.5rem;
   --bl-fw-display: 700;
-  --bl-fs-hero: 48px;
-  --bl-lh-hero: 52px;
+  --bl-fs-hero: 3rem;
+  --bl-lh-hero: 3.25rem;
   --bl-fw-hero: 800;
-  --bl-r-xs: 6px;
   --bl-r-sm: 8px;
   --bl-r-md: 12px;
   --bl-r-lg: 16px;
@@ -56,6 +55,7 @@
   --bl-z-dish-fx: 5;
   --bl-z-dish-labels: 10;
   --bl-z-hud: 20;
+  --bl-z-fx: 25;
   --bl-z-sheet: 30;
   --bl-z-toast: 40;
   --bl-z-dialogue: 50;
@@ -65,15 +65,24 @@
   --bl-t-tap: 90ms;
   --bl-t-quick: 140ms;
   --bl-t-base: 200ms;
-  --bl-t-sheet: 260ms;
+  --bl-t-exit: 160ms;
+  --bl-t-sheet: 300ms;
+  --bl-t-sheet-out: 200ms;
   --bl-t-card: 320ms;
   --bl-t-story: 480ms;
   --bl-t-celebrate: 700ms;
+  --bl-stagger: 40ms;
   --bl-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --bl-ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
   --bl-ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
   --bl-ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
   --bl-ease-linear: linear;
+  --bl-spring-fast: linear(0, 0.103, 0.309, 0.546, 0.758, 0.914, 1.02, 1.074, 1.093, 1.087, 1.07, 1.048, 1.027, 1.011, 1, 0.994, 0.992, 0.992, 0.993, 0.995, 0.997, 0.999, 1, 1, 1);
+  --bl-t-spring-fast: 400ms;
+  --bl-spring-default: linear(0, 0.066, 0.21, 0.374, 0.532, 0.669, 0.781, 0.864, 0.924, 0.965, 0.99, 1.004, 1.012, 1.014, 1.014, 1.012, 1.01, 1.008, 1.005, 1.004, 1.002, 1.001, 1.001, 1, 1);
+  --bl-t-spring-default: 480ms;
+  --bl-spring-slow: linear(0, 0.066, 0.21, 0.374, 0.532, 0.669, 0.781, 0.864, 0.924, 0.965, 0.99, 1.004, 1.012, 1.014, 1.014, 1.012, 1.01, 1.008, 1.005, 1.004, 1.002, 1.001, 1.001, 1, 1);
+  --bl-t-spring-slow: 650ms;
   --bl-night: #06090d;
   --bl-bg: #0b0e12;
   --bl-surface: #141a21;
@@ -109,10 +118,17 @@
   --bl-beh-spinner: #ffd166;
   --bl-beh-divider: #ff8fab;
   --bl-beh-colony: #f2a541;
-  --bl-shadow-sm: 0 1px 2px rgba(0,0,0,.5);
-  --bl-shadow-md: 0 6px 18px rgba(0,0,0,.45), 0 1px 2px rgba(0,0,0,.5);
-  --bl-shadow-lg: 0 18px 48px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.5);
-  --bl-shadow-glow: 0 0 0 1px rgba(91,192,235,.35), 0 0 24px rgba(91,192,235,.25);
+  --bl-elev-0: none;
+  --bl-elev-1: inset 0 1px 0 rgb(207 232 245 / .05), 0 1px 2px hsl(215 50% 2% / .5), 0 2px 6px hsl(215 50% 2% / .3);
+  --bl-elev-2: inset 0 1px 0 rgb(207 232 245 / .06), 0 2px 4px hsl(215 50% 2% / .35), 0 8px 16px hsl(215 50% 2% / .35), 0 16px 32px hsl(215 50% 2% / .3);
+  --bl-elev-3: inset 0 1px 0 rgb(207 232 245 / .06), 0 2px 4px hsl(215 50% 2% / .35), 0 8px 16px hsl(215 50% 2% / .35), 0 16px 32px hsl(215 50% 2% / .3), 0 32px 64px hsl(215 50% 2% / .35);
+  --bl-glow-accent: 0 0 0 1px rgb(91 192 235 / .35), 0 0 24px rgb(91 192 235 / .22);
+  --bl-glow-candle: 0 0 0 1px rgb(255 184 107 / .35), 0 0 24px rgb(255 184 107 / .22);
+  --bl-glow-gold: 0 0 0 1px rgb(255 209 102 / .35), 0 0 24px rgb(255 209 102 / .22);
+  --bl-shadow-sm: var(--bl-elev-1);
+  --bl-shadow-md: var(--bl-elev-2);
+  --bl-shadow-lg: var(--bl-elev-3);
+  --bl-shadow-glow: var(--bl-glow-accent);
   --bl-ic-fill: 0.2;
   color-scheme: dark;
 }
@@ -154,10 +170,17 @@
   --bl-beh-spinner: #855600;
   --bl-beh-divider: #b1235a;
   --bl-beh-colony: #8f4d00;
-  --bl-shadow-sm: 0 1px 2px rgba(24,36,52,.12);
-  --bl-shadow-md: 0 6px 18px rgba(24,36,52,.12), 0 1px 2px rgba(24,36,52,.1);
-  --bl-shadow-lg: 0 18px 48px rgba(24,36,52,.16), 0 2px 6px rgba(24,36,52,.1);
-  --bl-shadow-glow: 0 0 0 1px rgba(10,114,166,.35), 0 0 18px rgba(10,114,166,.18);
+  --bl-elev-0: none;
+  --bl-elev-1: inset 0 1px 0 rgb(255 255 255 / .7), 0 1px 2px hsl(215 30% 30% / .14), 0 2px 6px hsl(215 30% 30% / .08);
+  --bl-elev-2: inset 0 1px 0 rgb(255 255 255 / .7), 0 2px 4px hsl(215 30% 30% / .1), 0 8px 16px hsl(215 30% 30% / .1), 0 16px 32px hsl(215 30% 30% / .08);
+  --bl-elev-3: inset 0 1px 0 rgb(255 255 255 / .7), 0 2px 4px hsl(215 30% 30% / .1), 0 8px 16px hsl(215 30% 30% / .1), 0 16px 32px hsl(215 30% 30% / .08), 0 32px 64px hsl(215 30% 30% / .12);
+  --bl-glow-accent: 0 0 0 1px rgb(10 114 166 / .35), 0 0 24px rgb(10 114 166 / .16);
+  --bl-glow-candle: 0 0 0 1px rgb(165 79 8 / .35), 0 0 24px rgb(165 79 8 / .14);
+  --bl-glow-gold: 0 0 0 1px rgb(133 86 0 / .35), 0 0 24px rgb(133 86 0 / .14);
+  --bl-shadow-sm: var(--bl-elev-1);
+  --bl-shadow-md: var(--bl-elev-2);
+  --bl-shadow-lg: var(--bl-elev-3);
+  --bl-shadow-glow: var(--bl-glow-accent);
   --bl-ic-fill: 0.14;
   color-scheme: light;
 }
@@ -201,10 +224,17 @@
   --bl-beh-spinner: #ffd166;
   --bl-beh-divider: #ff8fab;
   --bl-beh-colony: #f2a541;
-  --bl-shadow-sm: 0 1px 2px rgba(0,0,0,.5);
-  --bl-shadow-md: 0 6px 18px rgba(0,0,0,.45), 0 1px 2px rgba(0,0,0,.5);
-  --bl-shadow-lg: 0 18px 48px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.5);
-  --bl-shadow-glow: 0 0 0 1px rgba(91,192,235,.35), 0 0 24px rgba(91,192,235,.25);
+  --bl-elev-0: none;
+  --bl-elev-1: inset 0 1px 0 rgb(207 232 245 / .05), 0 1px 2px hsl(215 50% 2% / .5), 0 2px 6px hsl(215 50% 2% / .3);
+  --bl-elev-2: inset 0 1px 0 rgb(207 232 245 / .06), 0 2px 4px hsl(215 50% 2% / .35), 0 8px 16px hsl(215 50% 2% / .35), 0 16px 32px hsl(215 50% 2% / .3);
+  --bl-elev-3: inset 0 1px 0 rgb(207 232 245 / .06), 0 2px 4px hsl(215 50% 2% / .35), 0 8px 16px hsl(215 50% 2% / .35), 0 16px 32px hsl(215 50% 2% / .3), 0 32px 64px hsl(215 50% 2% / .35);
+  --bl-glow-accent: 0 0 0 1px rgb(91 192 235 / .35), 0 0 24px rgb(91 192 235 / .22);
+  --bl-glow-candle: 0 0 0 1px rgb(255 184 107 / .35), 0 0 24px rgb(255 184 107 / .22);
+  --bl-glow-gold: 0 0 0 1px rgb(255 209 102 / .35), 0 0 24px rgb(255 209 102 / .22);
+  --bl-shadow-sm: var(--bl-elev-1);
+  --bl-shadow-md: var(--bl-elev-2);
+  --bl-shadow-lg: var(--bl-elev-3);
+  --bl-shadow-glow: var(--bl-glow-accent);
   --bl-ic-fill: 0.2;
   color-scheme: dark;
 }
@@ -217,6 +247,54 @@
   opacity: var(--bl-ic-fill);
 }
 
+/* Springs need linear() (Chrome 113, Firefox 112, Safari 17.2); older engines get the nearest bezier. */
+
+@supports not (animation-timing-function: linear(0, 1)) {
+  :root {
+    --bl-spring-fast: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --bl-spring-default: cubic-bezier(0.05, 0.7, 0.1, 1);
+    --bl-spring-slow: cubic-bezier(0.05, 0.7, 0.1, 1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  :root { --bl-t-quick: 1ms; --bl-t-base: 1ms; --bl-t-sheet: 80ms; --bl-t-card: 80ms; --bl-t-story: 80ms; --bl-t-celebrate: 1ms; }
+  :root {
+    --bl-t-tap: 1ms;
+    --bl-t-quick: 80ms;
+    --bl-t-base: 80ms;
+    --bl-t-exit: 80ms;
+    --bl-t-sheet: 80ms;
+    --bl-t-sheet-out: 80ms;
+    --bl-t-card: 80ms;
+    --bl-t-story: 80ms;
+    --bl-t-celebrate: 80ms;
+    --bl-t-spring-fast: 80ms;
+    --bl-t-spring-default: 80ms;
+    --bl-t-spring-slow: 80ms;
+    --bl-spring-fast: linear;
+    --bl-spring-default: linear;
+    --bl-spring-slow: linear;
+    --bl-stagger: 0ms;
+  }
+}
+
+:root.bl-rm,
+.bl-rm,
+.rm {
+  --bl-t-tap: 1ms;
+  --bl-t-quick: 80ms;
+  --bl-t-base: 80ms;
+  --bl-t-exit: 80ms;
+  --bl-t-sheet: 80ms;
+  --bl-t-sheet-out: 80ms;
+  --bl-t-card: 80ms;
+  --bl-t-story: 80ms;
+  --bl-t-celebrate: 80ms;
+  --bl-t-spring-fast: 80ms;
+  --bl-t-spring-default: 80ms;
+  --bl-t-spring-slow: 80ms;
+  --bl-spring-fast: linear;
+  --bl-spring-default: linear;
+  --bl-spring-slow: linear;
+  --bl-stagger: 0ms;
 }

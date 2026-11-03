@@ -1,5 +1,6 @@
 /** Shared context handed to panels and modals by the UI root. */
 import type { BuyQty, Currency, GameActions, GameView } from '../core/types';
+import { restartClass } from './art/motion';
 import { h, ic } from './dom';
 import { t, type StrKey } from './i18n';
 import type { UIDeps, UISound } from './ui';
@@ -80,7 +81,5 @@ export function introEl(ctx: Ctx, tab: TabId): HTMLElement | null {
 
 /** Restart a one-shot CSS animation class. */
 export function retrigger(el: Element, cls: string): void {
-  el.classList.remove(cls);
-  void (el as HTMLElement).offsetWidth;
-  el.classList.add(cls);
+  restartClass(el, cls);
 }
