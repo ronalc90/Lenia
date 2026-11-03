@@ -169,6 +169,21 @@ export const INK: Record<ThemeName, { teal: string; amber: string; red: string }
   light: { teal: '#08745e', amber: '#8f4d00', red: '#bf3517' },
 };
 
+/**
+ * What a number means, by colour (ADR-030, docs/CLARIDAD2.md §2.11), one rule for the whole UI:
+ *   cost   amber, with ↑ or the price ("4 luz", "Nutrientes · 16", "Cuesta 30 Datos");
+ *   gain   green, with × or + ("+25 %", "+10 Datos"; a discount is a gain: "−15 % ↓");
+ *   off    grey ×1, a factor that does nothing now (text3: only for non-essential labels, ≥ 3:1);
+ *   danger red !, the collision warning and VELA's alarm.
+ * cost / gain / danger are AA text on bg, surface, surface2 and the plate paper (tokens.test.ts). `danger` IS the
+ * palette's role (`--bl-danger`, already in use), listed here so the four meanings live together; the CSS gets
+ * `--bl-cost`, `--bl-gain` and `--bl-off`.
+ */
+export const MEANING: Record<ThemeName, { cost: string; gain: string; off: string; danger: string }> = {
+  dark: { cost: INK.dark.amber, gain: PALETTE.dark.good, off: PALETTE.dark.text3, danger: PALETTE.dark.danger },
+  light: { cost: INK.light.amber, gain: PALETTE.light.good, off: PALETTE.light.text3, danger: PALETTE.light.danger },
+};
+
 /** Light the dish bounces onto nearby objects from below (layer 4 of §3.2): rgb(91, 192, 235). */
 export const BOUNCE = { dish: '#5bc0eb' } as const;
 
@@ -208,12 +223,13 @@ export const GLOW = {
   danger: '#e4572e',
 } as const;
 
-export type RouteId = 'time' | 'dropper' | 'dish' | 'life' | 'discovery' | 'worlds' | 'spark';
+export type RouteId = 'time' | 'dropper' | 'dish' | 'life' | 'discovery' | 'worlds' | 'spark' | 'collect';
 
 /**
  * Route colours of the research tree (docs/CICLO.md §4.1): celeste, turquesa, lavanda, rosa,
- * naranja, violeta, dorado. Dark values are the ones the tree already uses (continuity); light
- * values are deepened to AA on white.
+ * naranja, violeta, dorado, and the instrument silver of ↓ Recoger (ADR-030: brushed aluminium,
+ * between the MATERIAL.alu stops; the pipettes are instruments, never living things). Dark values are
+ * the ones the tree already uses (continuity); light values are deepened to AA on white.
  */
 export const ROUTE_COLOR: Record<ThemeName, Record<RouteId | 'core', string>> = {
   dark: {
@@ -224,6 +240,7 @@ export const ROUTE_COLOR: Record<ThemeName, Record<RouteId | 'core', string>> = 
     discovery: '#ffa552',
     worlds: '#c792ff',
     spark: '#ffd166',
+    collect: '#c3c8cc',
     core: '#e6edf3',
   },
   light: {
@@ -234,6 +251,7 @@ export const ROUTE_COLOR: Record<ThemeName, Record<RouteId | 'core', string>> = 
     discovery: '#a14b06',
     worlds: '#7131c0',
     spark: '#855600',
+    collect: '#55606b',
     core: '#0f1720',
   },
 };
@@ -398,6 +416,8 @@ function themeVars(theme: ThemeName): string[] {
   for (const [k, v] of Object.entries(GLOW_SHADOW[theme])) out.push(`--bl-glow-${k}: ${v};`);
   for (const [k, v] of Object.entries(INK[theme])) out.push(`--bl-ink-${k}: ${v};`);
   for (const [k, v] of Object.entries(PLATE[theme])) out.push(`--bl-plate-${kebab(k)}: ${v};`);
+  // --bl-danger is emitted with the palette above (MEANING.danger is the same value).
+  for (const k of ['cost', 'gain', 'off'] as const) out.push(`--bl-${k}: ${MEANING[theme][k]};`);
   for (const k of Object.keys(SHADOW[theme])) out.push(`--bl-shadow-${k}: var(${k === 'glow' ? '--bl-glow-accent' : `--bl-elev-${({ sm: 1, md: 2, lg: 3 } as Record<string, number>)[k]}`});`);
   out.push(`--bl-ic-fill: ${theme === 'dark' ? 0.2 : 0.14};`);
   return out;

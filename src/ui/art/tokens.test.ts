@@ -11,6 +11,7 @@ import {
   LINE,
   MATERIAL,
   MATERIAL_AT,
+  MEANING,
   PALETTE,
   PLATE,
   RADIUS,
@@ -132,6 +133,39 @@ describe('scientific realism tokens (ADR-029, docs/ARTE-REALISTA.md §6.1)', () 
     expect(css).toContain('--bl-mat-chrome-5: #2e3134;');
     expect(css).toContain('--bl-lamp-2700: #ffa757;');
     expect(css).toContain('--bl-line-contour: 1.25px;');
+  });
+});
+
+describe('cost / gain colour rule (ADR-030, docs/CLARIDAD2.md §2.11)', () => {
+  it('cost, gain and danger read as text on every panel and on the plate paper; off is a quiet label', () => {
+    for (const th of THEMES) {
+      const p = PALETTE[th];
+      for (const bg of [p.bg, p.surface, p.surface2, PLATE[th].paper]) {
+        for (const k of ['cost', 'gain', 'danger'] as const) expect(contrast(MEANING[th][k], bg), `${th} ${k} on ${bg}`).toBeGreaterThanOrEqual(4.5);
+        expect(contrast(MEANING[th].off, bg), `${th} off on ${bg}`).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
+
+  it('cost is the amber ink, gain the good green, off the tertiary grey, danger the palette danger', () => {
+    for (const th of THEMES) {
+      expect(MEANING[th]).toEqual({ cost: INK[th].amber, gain: PALETTE[th].good, off: PALETTE[th].text3, danger: PALETTE[th].danger });
+      expect(new Set(Object.values(MEANING[th])).size, th).toBe(4);
+    }
+  });
+
+  it('art.css carries --bl-cost, --bl-gain, --bl-off once per theme block and keeps one --bl-danger', () => {
+    const root = tokensCss().split("[data-theme='light']")[0];
+    for (const k of ['cost', 'gain', 'off', 'danger']) expect(root.match(new RegExp(`--bl-${k}:`, 'g')), k).toHaveLength(1);
+    expect(root).toContain(`--bl-cost: ${MEANING.dark.cost};`);
+  });
+
+  it('the ↓ Recoger route has its instrument-silver colour, AA and apart from the centre', () => {
+    for (const th of THEMES) {
+      expect(contrast(ROUTE_COLOR[th].collect, PALETTE[th].bg), th).toBeGreaterThanOrEqual(4.5);
+      expect(ROUTE_COLOR[th].collect).not.toBe(ROUTE_COLOR[th].core);
+    }
+    expect(tokensCss()).toContain('--bl-route-collect: #c3c8cc;');
   });
 });
 

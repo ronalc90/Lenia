@@ -161,6 +161,7 @@
   --bl-route-discovery: #ffa552;
   --bl-route-worlds: #c792ff;
   --bl-route-spark: #ffd166;
+  --bl-route-collect: #c3c8cc;
   --bl-route-core: #e6edf3;
   --bl-beh-still: #5bc0eb;
   --bl-beh-pulsing: #b892ff;
@@ -182,6 +183,9 @@
   --bl-plate-ink: #dfe7ee;
   --bl-plate-ink2: #9aa6b2;
   --bl-plate-rule: #2a3540;
+  --bl-cost: #f2a541;
+  --bl-gain: #8ae234;
+  --bl-off: #7d8995;
   --bl-shadow-sm: var(--bl-elev-1);
   --bl-shadow-md: var(--bl-elev-2);
   --bl-shadow-lg: var(--bl-elev-3);
@@ -220,6 +224,7 @@
   --bl-route-discovery: #a14b06;
   --bl-route-worlds: #7131c0;
   --bl-route-spark: #855600;
+  --bl-route-collect: #55606b;
   --bl-route-core: #0f1720;
   --bl-beh-still: #0a6f9f;
   --bl-beh-pulsing: #6a3fcf;
@@ -241,6 +246,9 @@
   --bl-plate-ink: #1d232a;
   --bl-plate-ink2: #55606b;
   --bl-plate-rule: #cfc8b8;
+  --bl-cost: #8f4d00;
+  --bl-gain: #2b7210;
+  --bl-off: #6b7784;
   --bl-shadow-sm: var(--bl-elev-1);
   --bl-shadow-md: var(--bl-elev-2);
   --bl-shadow-lg: var(--bl-elev-3);
@@ -281,6 +289,7 @@
   --bl-route-discovery: #ffa552;
   --bl-route-worlds: #c792ff;
   --bl-route-spark: #ffd166;
+  --bl-route-collect: #c3c8cc;
   --bl-route-core: #e6edf3;
   --bl-beh-still: #5bc0eb;
   --bl-beh-pulsing: #b892ff;
@@ -302,6 +311,9 @@
   --bl-plate-ink: #dfe7ee;
   --bl-plate-ink2: #9aa6b2;
   --bl-plate-rule: #2a3540;
+  --bl-cost: #f2a541;
+  --bl-gain: #8ae234;
+  --bl-off: #7d8995;
   --bl-shadow-sm: var(--bl-elev-1);
   --bl-shadow-md: var(--bl-elev-2);
   --bl-shadow-lg: var(--bl-elev-3);
