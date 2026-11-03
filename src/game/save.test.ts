@@ -4,9 +4,9 @@
  * here explicitly with `cycle: 'classic'` until it is deleted (ADR-028). The sessions cycle has its own tests (sessions.test.ts,
  * spacing.test.ts, dish.test.ts, tests/unit/ranking-sessions.test.ts…).
  */
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createGame } from './game';
-import { clearSave, decodeDish, encodeDish, isPersistent, loadSave, setStorage, writeSave, type StorageLike } from './save';
+import { clearSave, decodeDish, encodeDish, isPersistent, loadSave, setStorage, verifyStoredGame, writeSave, type StorageLike } from './save';
 import { deserializeState } from './state';
 import { creature, GYRO_SIG, recordingBus, report, seededRng } from './testUtil';
 
@@ -145,6 +145,34 @@ describe('save.ts storage helpers', () => {
     expect([l.dishW, l.dishH, l.savedAt]).toEqual([6, 4, 1_000_000]);
     clearSave();
     expect(loadSave().game).toBeNull();
+  });
+
+  it('the autosave does not re-parse a stored game already verified in idle time (perf)', () => {
+    const map = new Map<string, string>();
+    setStorage({ getItem: (k) => map.get(k) ?? null, setItem: (k, v) => void map.set(k, v), removeItem: (k) => void map.delete(k) });
+    const g = played();
+    const a = g.serialize();
+    writeSave(a);
+    verifyStoredGame();
+    g.actions.setSetting('lang', 'es');
+    const b = g.serialize();
+    const parse = vi.spyOn(JSON, 'parse');
+    try {
+      expect(writeSave(b)).toBe(true);
+      expect(parse).not.toHaveBeenCalled();
+    } finally {
+      parse.mockRestore();
+    }
+    expect(map.get('bioluma.game.bak')).toBe(a);
+    expect(map.get('bioluma.game')).toBe(b);
+  });
+
+  it('an unverified stored game is still checked before it becomes the backup', () => {
+    const map = new Map<string, string>([['bioluma.game', '{"v":2,"sum":"00000000","data":{}}']]);
+    setStorage({ getItem: (k) => map.get(k) ?? null, setItem: (k, v) => void map.set(k, v), removeItem: (k) => void map.delete(k) });
+    verifyStoredGame();
+    expect(writeSave(played().serialize())).toBe(true);
+    expect(map.has('bioluma.game.bak')).toBe(false);
   });
 
   /** Map-backed storage that throws (like QuotaExceededError) once the total size passes the quota. */

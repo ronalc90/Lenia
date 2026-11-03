@@ -40,21 +40,33 @@ const memoryStorage: StorageLike = {
 };
 
 let override: StorageLike | null | undefined;
+/** The browser storage once a probe write went through (a save reads and writes 5–7 keys). */
+let probed: StorageLike | null = null;
+/**
+ * The last game string known to pass verification (read at load, or checked by verifyStoredGame in
+ * idle time). writeSave copies the previous game to the backup only when it verifies; re-parsing it
+ * inside every autosave was half the autosave (≈ 2.5 ms on a desktop for a 26-species save).
+ */
+let verified: string | null = null;
 
 /** Tests: inject a storage (null = force the in-memory fallback, undefined = auto). */
 export function setStorage(s: StorageLike | null | undefined): void {
   override = s;
+  probed = null;
+  verified = null;
   memory.clear();
 }
 
 function storage(): StorageLike {
   if (override !== undefined) return override ?? memoryStorage;
+  if (probed) return probed;
   try {
     const ls = (globalThis as { localStorage?: StorageLike }).localStorage;
     if (ls) {
       const probe = '__bioluma_probe__';
       ls.setItem(probe, '1');
       ls.removeItem(probe);
+      probed = ls;
       return ls;
     }
   } catch {
@@ -181,7 +193,20 @@ export interface LoadedSave {
   savedAt: number;
 }
 
-const validGame = (s: string | null): s is string => !!s && deserializeState(s) !== null;
+const validGame = (s: string | null): s is string => !!s && (s === verified || deserializeState(s) !== null);
+
+/**
+ * Verify the stored game now, so the next writeSave need not (call it in idle time, a moment before
+ * the autosave: the check and the write become two short tasks instead of one long one).
+ */
+export function verifyStoredGame(): void {
+  try {
+    const g = get(K_GAME);
+    if (g !== null && g !== verified && deserializeState(g) !== null) verified = g;
+  } catch {
+    /* unreadable storage: writeSave checks again */
+  }
+}
 
 /** Load the newest valid save (falls back to the last good copy). Never throws. */
 export function loadSave(): LoadedSave {
@@ -190,6 +215,7 @@ export function loadSave(): LoadedSave {
     const main = get(K_GAME);
     const bak = get(K_GAME_BAK);
     out.game = validGame(main) ? main : validGame(bak) ? bak : null;
+    if (out.game === main) verified = main;
     // Nothing readable but something is there (corrupt, or written by a newer build): park it
     // where the autosave will not overwrite it, instead of losing it two saves from now.
     if (out.game === null && (main || bak) && get(K_UNREADABLE) === null) set(K_UNREADABLE, (main || bak)!);
