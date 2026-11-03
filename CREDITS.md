@@ -118,6 +118,22 @@ reference for envelopes, not as a library.
 by hand/in code; the dish, the creatures and the colormap are rendered live by the simulation. Bestiary portraits and
 store screenshots are captured from the game itself.
 
+### Reference photographs (repository only, never shipped)
+
+`docs/arte-realista/referencias/` holds five photographs that the artists trace over in the dev art page
+(docs/ARTE-REALISTA.md §3.3). They are **not** part of any build. Each sits next to a `.txt` with its source and
+licence; all are downscaled copies.
+
+| File | Author | Source | Licence |
+|---|---|---|---|
+| `ref-guante-nitrilo.jpg` | Tjwood | <https://commons.wikimedia.org/wiki/File:Disposable_nitrile_glove.jpg> | Public domain (released by the author) |
+| `ref-cuaderno-lbnl-1941.jpg` | Daderot | <https://commons.wikimedia.org/wiki/File:Lab_book_-_Lawrence_Berkeley_National_Laboratory_-_DSC08822.JPG> | Public domain (released by the author) |
+| `ref-incubadora-co2-binder.jpg` | Shinryuu | <https://commons.wikimedia.org/wiki/File:Binder_CB_210_incubator_interior.jpg> | Public domain (released by the author) |
+| `ref-incubadora-guantes-cdc-1978.jpg` | CDC / Betty Partin | <https://wwwn.cdc.gov/phil/Details.aspx?pid=31827> | Public domain (US federal government work) |
+| `ref-panel-incubadora-co2.jpg` | Darja.Lavogina | <https://commons.wikimedia.org/wiki/File:CO2_inkubaator_rakukultuur_DL20221105.jpg> | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) (rescaled and recompressed) |
+
+The VELA prototype in `docs/arte-realista/prototipo/` (code and its two renders) was written for this project.
+
 ## Code
 
 Bioluma's own code is MIT licensed, Copyright (c) 2026 ronalc90; see [`LICENSE`](LICENSE). Build tooling (Vite,

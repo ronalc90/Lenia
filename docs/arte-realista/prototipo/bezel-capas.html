@@ -1,0 +1,14 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><title>bezel</title>
+<style>@font-face{font-family:"JetBrains Mono";src:url(../../../public/fonts/jetbrains-mono-latin.83c005d4.woff2) format("woff2");font-weight:100 800}
+@font-face{font-family:"Inter";src:url(../../../public/fonts/inter-latin.3100e775.woff2) format("woff2");font-weight:100 900}
+html,body{margin:0;background:#0b0e12;color:#cfd6dd;font:600 13px Inter,sans-serif}
+.g{display:grid;grid-template-columns:repeat(4,250px);gap:10px;padding:12px}figure{margin:0;background:#141a21;border-radius:10px;padding:8px}canvas{width:234px;height:170px;display:block}</style></head><body><div class="g" id="g"></div>
+<script src="vela-proto.js"></script><script>
+const names=['1 silueta base','2 color local','3 sombra de forma','4 luz reflejada','5 especular','6 luz de borde','7 textura','8 contorno nítido'];
+const dpr=window.devicePixelRatio||1;
+document.fonts.load('700 10px "JetBrains Mono"').then(()=>{
+names.forEach((n,i)=>{const f=document.createElement('figure');const c=document.createElement('canvas');c.width=234*dpr;c.height=170*dpr;f.append(c);const cap=document.createElement('figcaption');cap.textContent=n;f.append(cap);document.getElementById('g').append(f);
+const ctx=c.getContext('2d');const k=234*dpr/30;ctx.setTransform(k,0,0,k,-40*k,-40*k);
+ctx.fillStyle='#1b2024';ctx.fillRect(0,0,100,100);VELA.setPx(30/234);ctx.fillStyle='#03100d';ctx.fill(new Path2D('M20.5 26.5H61.5A2 2 0 0 1 63.5 28.5V55.5A2 2 0 0 1 61.5 57.5H20.5A2 2 0 0 1 18.5 55.5V28.5A2 2 0 0 1 20.5 26.5Z'));VELA.drawBezel(ctx,i+1);});
+document.title='ready';});
+</script></body></html>

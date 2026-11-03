@@ -1,0 +1,8 @@
+Archivo: ref-panel-incubadora-co2.jpg (720 x 540, JPEG q80, 30 KB). Original: 4608 x 3456 JPEG.
+Título: CO2 inkubaator rakukultuur DL20221105: panel de control de una incubadora de CO2 (lecturas de 7 segmentos "37.0" y "5.0").
+Fuente: https://commons.wikimedia.org/wiki/File:CO2_inkubaator_rakukultuur_DL20221105.jpg
+Autora: Darja.Lavogina (usuaria de Wikimedia Commons, obra propia).
+Licencia: CC BY-SA 4.0, https://creativecommons.org/licenses/by-sa/4.0/
+Fecha: 5 de noviembre de 2022.
+Por qué no es IA: el EXIF de Commons trae la cámara (Samsung SM-G525F, firmware G525FXXS5BVI1) y la hora de captura 2022:11:05 14:13:41. Es una foto de móvil de un equipo real de laboratorio.
+Uso previsto: SOLO REFERENCIA (no se empaqueta: es Share-Alike y se ve la marca). Es la mejor referencia del lenguaje de una lectura de instrumento: panel ovalado, displays LED de 7 segmentos, teclas de membrana, rótulos serigrafiados.

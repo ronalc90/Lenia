@@ -1,0 +1,9 @@
+Archivo: ref-guante-nitrilo.jpg (400 x 600, JPEG q82, 27 KB). Original: el mismo tamaño, 400 x 600.
+Título: Disposable nitrile glove.
+Fuente: https://commons.wikimedia.org/wiki/File:Disposable_nitrile_glove.jpg
+Autor: Tjwood (en.wikipedia).
+Licencia: dominio público ("This work has been released into the public domain by its author, Tjwood. This applies worldwide."). https://creativecommons.org/publicdomain/mark/1.0/
+Fecha: 8 de diciembre de 2004.
+Por qué no es IA: fotografía de 2004.
+Personas: solo una mano con guante.
+Uso previsto: REFERENCIA para dibujar en vector el guante de nitrilo del jugador (§3.5 de ARTE-REALISTA.md): tono #3f8fd8 a #6fb3f0, translucidez en la yema, arrugas en los nudillos, puño enrollado.

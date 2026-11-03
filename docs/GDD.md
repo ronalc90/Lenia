@@ -20,13 +20,14 @@
 > | — | Kernel y crecimiento exactos de Chan (kn = 1, gn = 1, polinomiales) en lugar de gaussianos | §4, §22 |
 > | — | Corrección de la reducción de lecturas por simetría de 8 pliegues | §4, §17 |
 >
-> **Correcciones v1.2 y v1.3 (marcadas en el lugar):**
+> **Correcciones v1.2, v1.3 y v1.4 (marcadas en el lugar):**
 >
 > | ADR | Corrección | Dónde |
 > |---|---|---|
 > | [ADR-025](../DECISIONS.md#adr-025-round-walled-petri-dish-that-grows-glass-deflection-instead-of-wrap) | **(v1.2)** La placa es una **placa de Petri redonda con cristal** que crece con la ruta Placa (Ø128 → Ø224, limitada por la calidad); el cristal desvía a las nadadoras. Se acaban el toro y el aspecto 4:5: grilla cuadrada fija (baja 168², media/alta 232²) con la placa dentro. Detalle en [`DISH.md`](DISH.md). | §4, §8, §9, §13, §17 |
 > | [ADR-026](../DECISIONS.md#adr-026-lab-sessions-with-a-clock-a-research-tree-of-7-straight-routes-and-worlds) | **(v1.3)** Se juega en **sesiones de laboratorio** con reloj (0:15 → 2:30); la Esencia de cada sesión se vuelve **Datos** (÷ 25 + descubrimientos) que compran un **Árbol** de 7 rutas rectas; las reglas de la vida son 7 **Mundos**; la **noche** avanza gratis. Se retiran Calibrar, Muestras, Genoma, Extinción y el progreso offline. Detalle en [`CICLO.md`](CICLO.md) y [`RITMO.md`](RITMO.md). | §2, §4, §5, §6, §8, §10, §11, §12, §23 |
 > | [ADR-027](../DECISIONS.md#adr-027-time-lapse-in-the-session-runs-and-incubation-under-the-start-card) | **(v1.3)** Cámara rápida en las sesiones (×1,5 pasos por segundo) e incubación de la criatura inicial bajo la tarjeta de inicio; el reloj de la sesión cuenta tiempo de placa. | §4, §6, §17 |
+> | [ADR-029](../DECISIONS.md#adr-029-realismo-científico-vela-the-mc-7-instrument-documentary-doctors-archive-photographs) | **(v1.4)** **Realismo científico**: VELA es el monitor de cultivo MC-7, los doctores van en encuadre documental sin caras, se permiten fotografías de archivo humanas en planos fijos y el arte se dibuja con el método vectorial de 8 capas. Detalle en [`ARTE-REALISTA.md`](ARTE-REALISTA.md). | §14 |
 
 ## Índice
 
@@ -680,6 +681,8 @@ Modo claro opcional en Fase 2, con la placa siempre oscura.
 **Iconografía.** Iconos de línea de 24 px, trazo 1.5 **(Corrección v1.3, ADR-024: trazo 1.75 con un relleno suave del 20 %, porque 1.5 se rompía a 16–20 px)**, un solo color; set propio dibujado en SVG, sin bibliotecas externas. **Icono de la app:** una placa circular con un Orbium estilizado, generado como SVG (`public/icon.svg`) y rasterizado a 512, 192 y 180 px (maskable incluido). Ningún arte generado por IA.
 
 **Motion.** Transiciones de panel de 180 ms con easing estándar; ningún elemento de interfaz se anima en bucle salvo el halo de las criaturas y el punto de "nuevo". Reducir movimiento apaga ambos. **(v1.1)** El Destello y los efectos de la capa de diversión son la excepción deliberada (breves y respetan Reducir movimiento).
+
+**Realismo científico (Corrección v1.4, ADR-029).** El microscopio nocturno se lleva a todo lo que no es la placa: VELA es un instrumento de laboratorio (el monitor de cultivo MC-7, que habla por su pantalla) y los doctores se ven en encuadre documental, sin caras dibujadas ni fotografiadas. Los planos fijos de la intro pueden usar **fotografías de archivo hechas por personas** (dominio público o CC BY, nunca de personas identificables, ≤ 50 KB cada una y ≤ 600 KB en total, con su crédito); todo lo que se mueve sigue dibujado en código, en capas de luz y material. Sigue sin haber arte generado por IA. Especificación: [`ARTE-REALISTA.md`](ARTE-REALISTA.md).
 
 **Capturas y tienda.** Los retratos del bestiario y las capturas de tienda salen del propio juego (botón de captura en ajustes, exporta PNG a 1080 × 1920 con el HUD oculto); no se dibujan a mano.
 

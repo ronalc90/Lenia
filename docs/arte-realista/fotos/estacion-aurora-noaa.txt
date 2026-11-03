@@ -1,0 +1,11 @@
+Archivo: estacion-aurora-noaa.webp (900 x 596, WebP q52, 49,9 KB). Original: 4272 x 2830 JPEG.
+Título: Aurora australis and Milky Way seen over NOAA Atmospheric Research Observatory at South Pole Station
+Fuente: https://commons.wikimedia.org/wiki/File:Aurora_australis_and_Milky_Way_seen_over_NOAA_Atmospheric_Research_Observatory_at_South_Pole_Station_(19771223522).jpg
+Origen primario: NOAA Photo Library, colección "NOAA At The Ends of the Earth", Image ID anta0151 (Flickr https://www.flickr.com/photos/noaaphotolib/19771223522/)
+Autor: Ross Burgener, ET, NOAA/OAR/ESRL/GMD (empleado de NOAA). Crédito: "NOAA Photo Library / Ross Burgener".
+Licencia: dominio público, obra de un empleado federal de EE. UU. (plantilla PD-USGov-NOAA). Marca: https://creativecommons.org/publicdomain/mark/1.0/
+  Nota: la ficha de Commons también lleva CC BY 2.0 heredado de Flickr (https://creativecommons.org/licenses/by/2.0/); acreditar al autor satisface las dos.
+Fecha: tomada el 5 de mayo de 2013 (publicada en Flickr el 17 de julio de 2015).
+Por qué no es IA: fotografía de 2013 (anterior a los generadores de imagen), hecha en servicio por personal de NOAA y catalogada con ID en el archivo oficial de la agencia.
+Personas: ninguna. Edificio real (observatorio de NOAA): no nombrarlo; en el juego es la ficticia Estación Vigilia (oscurecer y recortar).
+Uso previsto: fondo del panel "station" de la intro; ventana del laboratorio en las escenas nocturnas; posible horizonte de la portada y de la celebración de la Noche (src/ui/session/night.ts).

@@ -9,6 +9,10 @@
 >
 > **Reglas que no se negocian** (CLAUDE.md regla 10, ADR-020): nada de arte generado por IA; todo se dibuja con SVG,
 > Canvas 2D, WebGL o CSS; ninguna dependencia nueva; fuentes solo de Google Fonts con su licencia en `CREDITS.md`.
+> **(Corrección v0.021, ADR-029)** Se permiten además fotografías de archivo hechas por personas (dominio público o
+> CC BY, nunca de personas identificables), solo en planos fijos, ≤ 50 KB cada una y ≤ 600 KB en total, en
+> `public/art/photos/` y con su crédito. Los personajes y el método de dibujo los fija ahora
+> [`ARTE-REALISTA.md`](ARTE-REALISTA.md).
 > Móvil primero (390 × 844) y escritorio (1366 × 768), tema claro y oscuro, es/en, *Reducir movimiento*, objetivos
 > táctiles ≥ 48 px, contraste AA.
 
@@ -43,7 +47,8 @@ Dos luces cuentan la historia, y **nunca se mezclan**:
 | **Cálida, humana** | vela `#FFB86B`, oro `#FFD166` | VELA (su llama), el Destello, los premios, la Dra. Albor | «alguien te cuida», «¡bien hecho!» |
 
 Los materiales del mundo son tres: **vidrio** (placas, matraces, el cuerpo de VELA: bordes blanco-escarcha, brillo
-especular arriba a la izquierda), **escarcha** (en las esquinas, en el borde de la placa, en el Mundo Frío) y **papel
+especular arriba a la izquierda; **(Corrección v0.021, ADR-029)** VELA ya no es de vidrio: es el monitor MC-7, de
+pintura en polvo, anodizado, cromo y vidrio ahumado, [`ARTE-REALISTA.md`](ARTE-REALISTA.md) §4.3), **escarcha** (en las esquinas, en el borde de la placa, en el Mundo Frío) y **papel
 y metal viejo** (las cintas de Albor, el télex del Comité, el cuaderno). La interfaz es un **instrumento**: superficies
 oscuras y sobrias que nunca compiten con la placa (GDD §14: la placa es la única fuente de color saturado).
 
@@ -197,6 +202,14 @@ claro y oscuro) y un brillo blanco. Uso: junto a cifras (HUD, resumen, chips de 
 
 ## 6. Personajes
 
+> **(Corrección v0.021, ADR-029)** Esta sección describe la dirección retirada: VELA matraz con cara, manos y llama
+> (§6.1) y los doctores *chibi* (§6.6). La vigente es [`ARTE-REALISTA.md`](ARTE-REALISTA.md): **VELA es el monitor
+> de cultivo MC-7** (pantalla con traza, lámpara piloto ámbar de 1900–3600 K y LED rojo de alarma, nueve estados,
+> §4) y **los doctores van en encuadre documental, sin caras** (tú en primera persona con guante y bata; Albor de
+> espaldas, en Polaroid o a contraluz, §5). Se conservan la caja de 100 × 100, la API de `Portrait`, los ids del
+> vestuario y de las batas, la grabadora, el télex y el ocular (con el kit de materiales). El texto de abajo queda
+> como historia del diseño.
+
 Todos se dibujan en Canvas 2D dentro de una caja de 100 × 100 unidades (`src/ui/art/vela.ts`, `cast.ts`;
 API idéntica a `src/ui/story/portraits.ts` en `src/ui/art/portraits.ts`). Sin imágenes, sin `Math.random`, sin
 `shadowBlur` en el bucle (los brillos son degradados radiales), bordes que se desvanecen (se apoyan en cualquier
@@ -204,6 +217,8 @@ panel). *Reducir movimiento* congela el balanceo, el oleaje y el parpadeo de la 
 boca al hablar (test: el mismo fotograma en cualquier instante).
 
 ### 6.1 VELA
+
+*(Corrección v0.021, ADR-029: retirado; VELA es el MC-7 de [`ARTE-REALISTA.md`](ARTE-REALISTA.md) §4.)*
 
 **Anatomía** (de abajo arriba): matraz de fondo redondo de **vidrio claro** (borde blanco-escarcha, más brillante
 arriba donde la ilumina la vela; brillo especular largo a la izquierda; reflejo cálido de la llama en el hombro
@@ -260,6 +275,8 @@ Cuaderno de campo abierto bajo la lámpara: papel cálido rayado, un Orbium dibu
 que escribe línea a línea cuando «hablas».
 
 ### 6.6 Los doctores — Albor y tú
+
+*(Corrección v0.021, ADR-029: retirado; sin caras, encuadre documental de [`ARTE-REALISTA.md`](ARTE-REALISTA.md) §5.)*
 
 Pedido del dueño: *«doctores animados y bonitos»*. `src/ui/art/characters/` (`doctor.ts` el dibujante, `people.ts`
 quién es quién). Proporción chibi: la cabeza es casi la mitad del cuerpo; bata blanca corta, manos de manopla, botitas.
@@ -401,7 +418,7 @@ Cerrado: `worldArt(id, { locked: true })` desatura y atenúa (con candado en el 
 | Hacer | No hacer |
 |---|---|
 | Un botón cian por pantalla («¡Empezar!», «Comprar · 12») | Botones lima gigantes; tres colores de primario (`session-start.png`, `tree-mid.png`) |
-| Llama de VELA cálida, cara sobre el líquido | Llama azul; cara oscura sobre vidrio oscuro (`story-companion.png`) |
+| Llama de VELA cálida, cara sobre el líquido *(Corrección v0.021, ADR-029: lámpara piloto cálida, sin cara)* | Llama azul; cara oscura sobre vidrio oscuro (`story-companion.png`) |
 | Iconos de `art/icons.ts`, trazo 1,75 | Mezclar 1,5 / 1,8 / 2; emoji junto a iconos de línea (⏳ en la barra de semilla) |
 | Emblemas de color junto a cifras | Emoji 💧 📊 🌙 en el texto de la interfaz |
 | Tarjetas de Mundo con su ilustración | Tarjetas de solo texto con un borde de color (`session-start.png`) |
@@ -480,5 +497,7 @@ Nada de esto lo toca el arte: lo aplican los integradores en sus archivos. Todo 
 - **Fraunces** — Undercase Type (Phaedra Charles, Flavia Zimbardi), SIL Open Font License 1.1, vía Google Fonts.
   *Añadir a `CREDITS.md`.*
 - **Inter** — Rasmus Andersson, OFL 1.1. **JetBrains Mono** — JetBrains, OFL 1.1 (ya acreditadas).
-- Todo lo demás (iconos, emblemas, personajes, Mundos, placa) está dibujado en código para este juego. Las criaturas
+- Todo lo demás (iconos, emblemas, personajes, Mundos, placa) está dibujado en código para este juego.
+  *(Corrección v0.021, ADR-029: salvo las fotografías de archivo de `public/art/photos/`, acreditadas en
+  `CREDITS.md` › «Fotografías de archivo».)* Las criaturas
   son patrones reales del catálogo de Bert Chan (MIT).

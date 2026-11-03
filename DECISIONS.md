@@ -400,11 +400,14 @@ ADR that supersedes the old one.
 ## ADR-024: Art direction: code-drawn, one icon grid, warm candle against cold life
 
 - **Status:** Accepted (2026-10-04). Source: owner request ("apartado artístico del más alto nivel"); the bible is
-  [`docs/ARTE.md`](docs/ARTE.md).
+  [`docs/ARTE.md`](docs/ARTE.md). *(Corrección v0.021: partly superseded by ADR-029, scientific realism.)*
 - **Context:** an audit of every screen found mixed stroke widths, emoji next to line icons, no single primary-action
   colour, layering bugs and a cold-blue candle on VELA, which contradicts her name and the story.
 - **Decision:**
   - All art stays code-drawn (SVG, Canvas 2D, shaders); still no AI art and no raster assets from generators.
+    *(Corrección v0.021, ADR-029: human-made archive photographs, public domain or CC BY and never of an identifiable
+    person, are allowed in still shots, at most 50 KB each and 600 KB in total; everything that moves stays
+    code-drawn, now with the eight-layer vector method of docs/ARTE-REALISTA.md §3.)*
   - One icon set in `src/ui/art/icons.ts`: 24 px grid, **stroke 1.75** (1.5 broke at 16–20 px), round joins, a 20 %
     duotone fill. Legacy icon functions re-export it.
   - Design tokens `--bl-*` (`src/ui/art/tokens.ts` → `art.css`), AA-tested text roles in both themes, z-layers.
@@ -412,6 +415,9 @@ ADR that supersedes the old one.
     italic Latin names; JetBrains Mono only for instrument readouts.
   - VELA: glass flask, bioluminescent liquid, cork and a **warm** candle flame; six moods. One code-drawn backdrop per
     Mundo, so a world is picked by its look.
+    *(Corrección v0.021, ADR-029: VELA is now the MC-7 culture monitor (screen trace, 1900–3600 K pilot lamp, red
+    alarm LED, nine states) and the chibi doctors give way to a documentary framing with no faces. The warm lamp
+    against the cold life stays; the Mundo backdrops are unchanged.)*
   - Matter ramp reaches white at 0.94 (not 0.7) so creature interiors keep structure.
 - **Consequences:** GDD §14 gets "(Corrección v1.3)" for stroke and number type. CREDITS.md lists Fraunces. The
   integrators swap the art in following ARTE.md §12.
@@ -582,3 +588,46 @@ ADR that supersedes the old one.
   `git diff -- src/core/types.ts` for removed members. Deleting the classic loop must delete its tests, its texts
   (`content.ts` UPGRADE_TEXT, the Extinción/Genoma Momentos and illustrations) and the classic validator path of the
   ranking only after no client older than the sessions cycle can submit.
+
+## ADR-029: "Realismo científico": VELA the MC-7 instrument, documentary doctors, archive photographs
+
+- **Status:** Accepted (2026-11-03, v0.021). Partly supersedes ADR-024 (VELA's look, the chibi doctors and "all art
+  code-drawn"); the rest of ADR-024 stands. Source: the owner rejected the cartoon art («mucho mejor, que no sea
+  animado; súper realista y definido, líneas claras, realista al extremo, súper científico»). The bible is
+  [`docs/ARTE-REALISTA.md`](docs/ARTE-REALISTA.md); its §8 is the risk table behind this record.
+- **Context:** ADR-024 made VELA a glass flask with a face, floating hands and a candle flame, drew the two doctors
+  chibi (head half the body, big eyes, blush) and kept every pixel code-drawn. The owner wants the opposite tone:
+  laboratory instruments, real materials and light, clean lines only where a real edge is. Drawing realistic faces
+  by code falls into the uncanny valley, and photographs of real people bring image rights that a free licence does
+  not cover (bible §2.6, §5.1).
+- **Decision:**
+  1. **VELA becomes the MC-7 culture monitor**: a bench instrument (white powder-coated chassis, smoked-glass fascia,
+     teal phosphor screen, amber filament pilot lamp at 1900–3600 K, separate red alarm LED, engraved plate
+     «VELA · MONITOR DE CULTIVO · MC-7», chrome handle, probe cable to the dish). She speaks through the screen
+     trace and its label; no face, eyes, mouth or hands. Nine states (bible §4.5); the story `Mood` gains `'alarm'`
+     additively. The `Portrait`/`drawPortrait`/`drawVelaArt` API, the 100 × 100 box and the wardrobe ids stay.
+  2. **The doctors are framed documentary-style, with no real faces**: you in first person (gloved hand and the cuff
+     of the coat you picked; the three looks become three real lab coats with the same ids `curls`, `beanie`, `bun`),
+     Albor from behind, in a Polaroid or as a backlit profile, and through her objects. No full face is drawn; faces
+     only with a commissioned photo shoot and signed image-rights releases (future, bible §5.8).
+  3. **Human-made archive photographs are allowed**, under these limits: public domain or CC BY only (never
+     Share-Alike in the bundle, never AI-generated, dated before 2022 or with camera EXIF), **never an identifiable
+     person**, only in still shots (intro panels, a few scene backdrops), **at most 50 KB each and 600 KB in total**,
+     WebP in `public/art/photos/`, each credited in `CREDITS.md` and in the in-game Credits with author, source,
+     licence and "cropped, rescaled and recompressed"; no agency logo and no implied endorsement (CDC, NOAA, NSF, NIH).
+     Every scene must still draw without its photo (`loadPhoto` resolves `null` offline or on error). Reference
+     photographs for tracing live in `docs/arte-realista/referencias/` and are never shipped.
+  4. **The vector method of bible §3 is the production method**: hand-written SVG path data turned into `Path2D`,
+     drawn on Canvas 2D in eight layers (silhouette, local colour, form shadow, reflected light, specular, rim
+     light, texture, crisp contour), static layers cached per size × DPR (`LayerCache`), the line-weight scale of
+     §3.8. Still no `ctx.filter`, no `shadowBlur` in the loop, no `Math.random`, no generative tools, not even for
+     tracing.
+- **Consequences:**
+  - Shared pieces land first (bible §7.0): the tokens of §6.1 in `src/ui/art/tokens.ts` → `art.css` (`candle` is now
+    the 3200 K lamp in the dark theme; the light theme keeps its AA ink), the vector kit `src/ui/art/vector/`, the
+    photo loader `src/ui/art/photos.ts` with its credits, and the service worker precaches the photos. Then four
+    parallel packages: P1 VELA, P2 people, P3 scenes and photos on screen, P4 plates, reports and texts.
+  - The single-file build inlines the photos as data URIs (≈ +33 %, about 300 KB); it must stay under the 2 MB gate.
+  - Tests that pinned the cartoon (faces change, blink) are rewritten towards the new behaviour, not deleted.
+  - ADR-024, `docs/ARTE.md` §1, §6, §11, §13, `docs/STORY.md` (cast) and GDD §14 carry «(Corrección v0.021, ADR-029)»
+    or «(Corrección v1.4, ADR-029)» notes where they describe the flask, the chibi doctors or "everything drawn in code".

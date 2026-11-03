@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>VELA prototipo</title>
+<style>
+@font-face{font-family:"JetBrains Mono";src:url(../../../public/fonts/jetbrains-mono-latin.83c005d4.woff2) format("woff2");font-weight:100 800}
+@font-face{font-family:"Inter";src:url(../../../public/fonts/inter-latin.3100e775.woff2) format("woff2");font-weight:100 900}
+html,body{margin:0;background:#0b0e12;color:#a7b3bf;font:500 13px Inter,sans-serif}
+.grid{display:grid;grid-template-columns:repeat(4,260px);gap:14px;padding:16px}
+figure{margin:0;background:#141a21;border-radius:12px;padding:10px;text-align:center}
+canvas{display:block;width:240px;height:240px}
+.mini{display:flex;gap:14px;padding:0 16px 16px;align-items:center}
+.mini canvas{width:48px;height:48px;background:#141a21;border-radius:10px}
+</style></head><body>
+<div class="grid" id="g"></div><div class="mini" id="m"></div>
+<script src="vela-proto.js"></script>
+<script>
+const states=['idle','talking','happy','worried','surprised','sleeping','alarm','proud'];
+const dpr=window.devicePixelRatio||1;
+function cv(size,host,label){const f=document.createElement('figure');const c=document.createElement('canvas');c.width=size*dpr;c.height=size*dpr;c.style.width=c.style.height=size+'px';f.append(c);if(label){const cap=document.createElement('figcaption');cap.textContent=label;f.append(cap)}host.append(f);return c}
+document.fonts.load('700 10px "JetBrains Mono"').then(()=>{
+ for(const s of states){const c=cv(240,document.getElementById('g'),s);const ctx=c.getContext('2d');const k=240*dpr/100;ctx.setTransform(k,0,0,k,0,0);VELA.drawVelaInstrument(ctx,s,1.35,s==='talking'?0.8:0,false,240)}
+ for(const s of states){const c=document.createElement('canvas');c.width=c.height=48*dpr;c.style.width=c.style.height='48px';document.getElementById('m').append(c);const ctx=c.getContext('2d');const k=48*dpr/100;ctx.setTransform(k,0,0,k,0,0);VELA.drawVelaMini(ctx,s,1.35,s==='talking'?0.8:0,false,48)}
+ document.title='ready';
+});
+</script></body></html>

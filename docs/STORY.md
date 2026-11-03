@@ -47,7 +47,8 @@
 Llegas a la **Estación Vigilia**, un laboratorio en una isla polar, justo cuando empieza la **noche polar**: cuatro meses
 sin sol. La única luz es la que crece en una placa de cultivo. Te recibe **VELA**, la asistente del laboratorio: un
 robotito con forma de matraz y una llama de vela en el tapón, alegre, precisa y un poco nerviosa («Es un acrónimo.
-Nadie sabe de qué»). La científica anterior, la **doctora Albor**, se fue antes de la noche. Nadie te dice por qué.
+Nadie sabe de qué»). *(Corrección v0.021, ADR-029: VELA es el monitor de cultivo MC-7 del laboratorio, que habla por
+su pantalla y cuya lámpara piloto nunca se apaga; [`ARTE-REALISTA.md`](ARTE-REALISTA.md) §4.)* La científica anterior, la **doctora Albor**, se fue antes de la noche. Nadie te dice por qué.
 
 **Acto I · Noche polar (Era 1, el tutorial).** VELA te enseña a sembrar, a fallar sin miedo, a reconocer la primera
 criatura («Tiene borde. Tiene forma. ¡Se queda!»), la Esencia, el Gotero, el Bestiario, el Calibrador. Aparece el
@@ -104,7 +105,9 @@ completa: alguien, desde muy arriba, mira la estación como tú miras la placa.
 
 You arrive at **Vigil Station**, a lab on a polar island, just as the **polar night** begins: four months without sun.
 The only light is what grows in a culture dish. **VELA**, the lab assistant — a tiny flask-shaped robot with a candle
-flame on its cork, cheerful, precise and a little anxious ("It's an acronym. Nobody knows for what") — welcomes you. The
+flame on its cork, cheerful, precise and a little anxious ("It's an acronym. Nobody knows for what") — welcomes you.
+*(Corrección v0.021, ADR-029: VELA is the lab's MC-7 culture monitor, who speaks through her screen and whose pilot
+lamp never goes out; docs/ARTE-REALISTA.md §4.)* The
 previous scientist, **Dr. Albor**, left before the night. Nobody tells you why.
 
 **Act I · Polar Night (Era 1, the tutorial).** VELA teaches you to sow, to fail without fear, to recognise the first
@@ -143,11 +146,11 @@ ending the recursion closes: someone, from high above, watches the station the w
 
 | Character | Look (all procedural canvas art) | Voice | Wants |
 |---|---|---|---|
-| **VELA** (companion, tutorial guide) | A round-bottom flask with glowing bioluma inside, a face on the glass, a candle flame on the cork ("vela" = candle), floating hands. Hovers, breathes, blinks, sloshes; moods neutral / happy (^ ^, waves) / worried (brows, sweat drop, small flame) / awed (big shiny eyes, tall flame, sparkles); mouth syncs with typing. | Cheerful, precise, a bit anxious. Short sentences. Counts things. Tic: **«Anotado.» / "Noted."** Calls you «colega» / "colleague". | Keep the lab alive; fulfil Albor's request without lying to you. |
-| **Dr. Albor** (mentor, on tape) | A chibi scientist (docs/ARTE.md §6.6): dark bob with a silver streak, round glasses, freckles, teal sweater, mustard scarf, her night lantern. On tape: a warm sepia memory with scanlines and a cassette whose reels spin; live (secret ending) in full colour with the dawn behind. | Warm, tired, poetic-scientific; "Day N of the night"; dry wit. | Protect the Choir from becoming a factory; be understood. |
+| **VELA** (companion, tutorial guide) | *(Corrección v0.021, ADR-029: the MC-7 culture monitor — screen trace, amber pilot lamp, red alarm LED, nine states; docs/ARTE-REALISTA.md §4. Retired look:)* A round-bottom flask with glowing bioluma inside, a face on the glass, a candle flame on the cork ("vela" = candle), floating hands. Hovers, breathes, blinks, sloshes; moods neutral / happy (^ ^, waves) / worried (brows, sweat drop, small flame) / awed (big shiny eyes, tall flame, sparkles); mouth syncs with typing. | Cheerful, precise, a bit anxious. Short sentences. Counts things. Tic: **«Anotado.» / "Noted."** Calls you «colega» / "colleague". | Keep the lab alive; fulfil Albor's request without lying to you. |
+| **Dr. Albor** (mentor, on tape) | *(Corrección v0.021, ADR-029: never a drawn face — from behind in a Polaroid, a backlit profile at dawn, her objects; docs/ARTE-REALISTA.md §5. Retired look:)* A chibi scientist (docs/ARTE.md §6.6): dark bob with a silver streak, round glasses, freckles, teal sweater, mustard scarf, her night lantern. On tape: a warm sepia memory with scanlines and a cassette whose reels spin; live (secret ending) in full colour with the dawn behind. | Warm, tired, poetic-scientific; "Day N of the night"; dry wit. | Protect the Choir from becoming a factory; be understood. |
 | **The Committee** (foil) | A telex machine printing a paper strip, red light, a stamp. | CAPITALS, bureaucratic, always ends **FIN / END**. Unintentionally funny. | Numbers. More numbers. |
 | **The Choir** (the creatures) | A microscope eyepiece with a **real live Orbium** (CPU Lenia, 64×64) swimming inside; each spoken dot sends a ring out. | First dots (your rhythm), then three small words at a time, lowercase, borrowed from your Journal. | To be answered. |
-| **You** (journal voice, the night-shift scientist) | A chibi scientist in the look picked in the intro (curls + goggles, beanie + stethoscope, bun + glasses), writing in the field notebook when "speaking". | Terse first person, serif italic. | — the player decides. |
+| **You** (journal voice, the night-shift scientist) | *(Corrección v0.021, ADR-029: first person — your gloved hand and the cuff of the lab coat you picked; docs/ARTE-REALISTA.md §5.5. Retired look:)* A chibi scientist in the look picked in the intro (curls + goggles, beanie + stethoscope, bun + glasses), writing in the field notebook when "speaking". | Terse first person, serif italic. | — the player decides. |
 
 ---
 
