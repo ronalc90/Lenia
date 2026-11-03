@@ -57,7 +57,8 @@ import { attachSecretInputs, createSecretsUI, createStrokeRecorder, mountBasemen
 import { createSessionFlow, createWelcomeCard, datosExplain, type SessionFlow, type SessionFlowSound } from './ui/session';
 import { computeDatos } from './game/session';
 import { PREINCUBATE_STEPS, SESSION_PACE_RAMP_S, SIM_STEPS_PER_SEC } from './game/cycleBalance';
-import { CultureReveal } from './sim/reveal';
+import { CultureReveal, REVEAL } from './sim/reveal';
+import { IncubationPacer, type IncubationIO } from './sim/incubate';
 import { dishFx, PULSE } from './ui/fx/stage';
 import { FLY, FlyLayer } from './ui/fx/fly';
 import { LIFE } from './ui/fx/lifecycle';
@@ -110,8 +111,9 @@ const FX_SLOW_FRAME_MS = 22;
 const FX_SLOW_S = 2;
 /**
  * Wall time a frame may spend on the unlit incubation (ARTE-PULIDO A-6): steps with a synchronous
- * snapshot every 10th, so the starter is ready in a fraction of a second on a phone (hidden, it was
- * ~2 s of an empty dish where a player could sow blind on it), and a frame never stalls past this.
+ * snapshot every 10th, so the starter is ready soon (hidden, it was ~2 s of an empty dish where a
+ * player could sow blind on it), and a frame never stalls past this: the reads are paced so none
+ * waits for steps queued in its own frame, the steps a frame queues follow the GPU (src/sim/incubate.ts).
  */
 const INCUBATE_FRAME_MS = 8;
 /** A-11 (high profile): the glass glint sweeps once every GLINT_EVERY_S, taking GLINT_SWEEP_S. */
@@ -1112,6 +1114,29 @@ function boot(): void {
    * alive when the run starts, and nobody watched them race. Never ahead of the detector.
    */
   if (!dishRestored && game.session?.phase === 'ready') culture.incubate(PREINCUBATE_STEPS);
+  /**
+   * Pacing of the unlit incubation's synchronous reads (src/sim/incubate.ts). Lockstep e2e builds keep
+   * one whole boundary a frame (a software-rendered test browser would otherwise incubate for minutes).
+   */
+  const pacers = new Map<boolean, IncubationPacer>();
+  const incubation = (lockstep: boolean): IncubationPacer => {
+    let p = pacers.get(lockstep);
+    if (!p) {
+      p = new IncubationPacer({ budgetMs: INCUBATE_FRAME_MS, every: DETECT_EVERY, maxSteps: REVEAL.hiddenBudget, ...(lockstep ? { minSteps: DETECT_EVERY } : {}) });
+      pacers.set(lockstep, p);
+    }
+    return p;
+  };
+  const incubateIO: IncubationIO = {
+    due: () => mustWaitForDetection(sim!.stepCount, detectedStep, DETECT_EVERY),
+    read: () => {
+      const s = sim!;
+      detectedStep = s.stepCount;
+      detect(s.snapshot());
+      return s.lastReadWaitMs;
+    },
+    now: () => performance.now(),
+  };
   let last = performance.now();
   let acc = 0;
   /** Detector reports produced since the last game tick (async readbacks). */
@@ -1405,22 +1430,10 @@ function boot(): void {
       hidden: document.hidden,
       stepping: !isPaused() && !document.hidden,
     });
-    if (rv.incubateBudget > 0) {
-      // Unlit, the detector reads each 10th step synchronously (nothing on screen waits for it); an
-      // asynchronous read still in flight is waited for, so reports never arrive out of order.
-      const until = performance.now() + INCUBATE_FRAME_MS;
-      let budget = rv.incubateBudget;
-      while (budget > 0 && !snapInFlight && !s.contextLost && performance.now() < until) {
-        if (mustWaitForDetection(s.stepCount, detectedStep, DETECT_EVERY)) {
-          detectedStep = s.stepCount;
-          detect(s.snapshot());
-        }
-        const k = Math.min(budget, DETECT_EVERY - (s.stepCount % DETECT_EVERY));
-        s.advance(k);
-        budget -= k;
-        culture.ran(k);
-      }
-    }
+    // Unlit, the detector reads each 10th step synchronously (nothing on screen waits for it), paced so
+    // a read never waits for steps queued in the same frame (src/sim/incubate.ts); an asynchronous read
+    // still in flight is waited for, so reports never arrive out of order.
+    if (rv.incubateBudget > 0 && !snapInFlight && !s.contextLost) culture.ran(incubation(debugTime.lockstep).frame(s, rv.incubateBudget, incubateIO).ran);
     if (rv.lit) lightCulture();
     dishFx.matterFade = rv.fade;
     s.setMatterFade(rv.fade);

@@ -235,6 +235,8 @@ export class WebGLSimulation implements Simulation {
   private seedCounter = 1;
   private backup: { data: Float32Array; step: number } | null = null;
   private lastSnap: FieldSnapshot | null = null;
+  /** ms the last synchronous snapshot() waited in readPixels (the GPU's backlog; src/sim/incubate.ts). */
+  private readWaitMs = 0;
   private pbo: WebGLBuffer | null = null;
   private pending: Promise<FieldSnapshot> | null = null;
   private readonly onLost: (e: Event) => void;
@@ -634,10 +636,17 @@ export class WebGLSimulation implements Simulation {
     gl.viewport(0, 0, w, h);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     const px = new Uint8Array(w * h * 4);
+    const t0 = performance.now();
     gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    this.readWaitMs = performance.now() - t0;
     const snap = decodeSnapshotPixels(px, w, h, this.snapScale, this.gridW, this.gridH, this._step);
     this.lastSnap = snap;
     return snap;
+  }
+
+  /** ms the last synchronous snapshot() spent waiting for the GPU (0 when nothing was read). */
+  get lastReadWaitMs(): number {
+    return this.readWaitMs;
   }
 
   /**
