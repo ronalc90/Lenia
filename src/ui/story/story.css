@@ -481,8 +481,9 @@
 /* ───────────── archive panel ───────────── */
 
 .sty-archive {
-  --c-text: #e6edf3;
-  --c-dim: #8b98a5;
+  /* Theme tokens: Settings is light in the light theme (QA#34: white text on a light sheet). */
+  --c-text: var(--bl-text, #e6edf3);
+  --c-dim: var(--bl-text2, #a7b3bf);
   font-family: Inter, system-ui, sans-serif;
   color: var(--c-text);
   display: flex;
@@ -531,8 +532,8 @@
   min-height: 112px;
   padding: 14px 10px 12px;
   border-radius: var(--bl-r-md);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: #141a21;
+  border: 1px solid var(--bl-line, rgba(255, 255, 255, 0.08));
+  background: var(--bl-surface2, #1b232c);
   font: 600 var(--bl-fs-small)/1.25 Inter, system-ui, sans-serif;
   color: var(--c-text);
   text-align: center;
@@ -540,7 +541,7 @@
 }
 .sty-archive .sa-end.found {
   border-color: color-mix(in srgb, var(--c) 50%, transparent);
-  background: radial-gradient(120% 100% at 50% 0%, color-mix(in srgb, var(--c) 18%, transparent), transparent 70%), #141a21;
+  background: radial-gradient(120% 100% at 50% 0%, color-mix(in srgb, var(--c) 18%, transparent), transparent 70%), var(--bl-surface2, #1b232c);
   cursor: pointer;
 }
 .sty-archive .sa-end.secret {
@@ -554,8 +555,8 @@
   display: grid;
   place-items: center;
   font: 700 var(--bl-fs-lead)/1 Inter, system-ui, sans-serif;
-  color: #3a4552;
-  background: radial-gradient(circle at 40% 35%, #222c37, #0e1318 70%);
+  color: var(--c-dim);
+  background: var(--bl-surface3, #222c37);
   box-shadow: none;
 }
 .sty-archive .sa-end.found .sa-glyph {
@@ -584,7 +585,7 @@
 .sty-archive .sa-bar {
   height: 6px;
   border-radius: var(--bl-r-sm);
-  background: #222c37;
+  background: var(--bl-surface3, #222c37);
   overflow: hidden;
 }
 .sty-archive .sa-bar i {
@@ -612,16 +613,16 @@
   min-height: 40px;
   padding: 0 12px;
   border-radius: var(--bl-r-md);
-  border: 1px solid rgba(91, 192, 235, 0.3);
-  background: rgba(91, 192, 235, 0.08);
+  border: 1px solid color-mix(in srgb, var(--bl-accent, #5bc0eb) 30%, transparent);
+  background: color-mix(in srgb, var(--bl-accent, #5bc0eb) 8%, transparent);
   color: var(--c-text);
   font: 500 var(--bl-fs-small)/1 Inter, system-ui, sans-serif;
   cursor: pointer;
 }
 .sty-archive .sa-scene[disabled] {
-  border-color: rgba(255, 255, 255, 0.06);
+  border-color: var(--bl-line, rgba(255, 255, 255, 0.06));
   background: transparent;
-  color: #4a5562;
+  color: var(--bl-text3, #6b7785);
   cursor: default;
 }
 

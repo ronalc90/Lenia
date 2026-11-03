@@ -80,7 +80,8 @@ export function createArchive(
         // Hint at the secret only once the player has seen a first ending.
         small.textContent = a.found > 0 ? secretHint(L, secretProgress(story.serialize().choices, story.getView())) : '· · ·';
       } else {
-        label.textContent = '· · ·';
+        // An ending not reached yet has no name (QA-CLARIDAD #34: «¿Qué es Cosecha?»).
+        label.textContent = '???';
         small.textContent = tr(S.notYet, L);
       }
       card.append(glyph, label, small);
@@ -101,7 +102,8 @@ export function createArchive(
       dot.style.background = ENDINGS[k].color;
       dot.style.color = ENDINGS[k].color;
       const name = document.createElement('span');
-      name.textContent = tr(LEANING_NAMES[k], L);
+      // Named once its ending was reached; before that, «???» like the ending's card.
+      name.textContent = a.endings.some((e) => e.id === k && e.found) ? tr(LEANING_NAMES[k], L) : '???';
       const bar = document.createElement('span');
       bar.className = 'sa-bar';
       const fill = document.createElement('i');
