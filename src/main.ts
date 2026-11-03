@@ -667,6 +667,9 @@ function boot(): void {
     onPause: (on) => setPause('moment', on),
     getTargetRect: (id) => ui.targetRect(id),
     creaturePos: (id) => ui.creaturePos(id),
+    // The brief and the dish's labels share one placement (src/ui/labelPlace.ts): never on top of each other.
+    creatureBodies: () => ui.creatureBodies(),
+    onBriefBox: (box) => ui.keepClear(box),
     speciesPortrait: (sid) => game.view().species.find((sp) => sp.id === sid)?.portrait ?? null,
     speciesInfo: (sid) => speciesInputFromView(game.view(), sid),
     onShowUpgrade: (id) => ui.reveal(`upgrade.${id}`),

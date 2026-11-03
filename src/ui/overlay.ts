@@ -18,6 +18,7 @@ import type { TapCreature, TapScene } from './dishTap';
 import { DROP_FX, DropLayer, type CreatureResolver } from './fx/drops';
 import { PipetteLayer } from './fx/pipettes';
 import { behaviorName, stateName } from './i18n';
+import { placeLabel, type LabelObstacles, type LabelPlacement, type LabelRequest } from './labelPlace';
 import { earningNow, StatusLayer } from './moments/status';
 import { DISSOLVE_MS, STABLE_AGE_STEPS } from '../game/cycleBalance';
 import { defaultItem, type DishTheme, type HaloStyle, type SparkSkin, type TrailStyle } from '../store/catalog';
@@ -200,6 +201,8 @@ interface Label {
   between?: number;
   /** Fitted text and widths, measured once (A-10: no measureText per frame). */
   fit?: { text: string; sub: string; w1: number; w2: number; maxW: number };
+  /** Last frame's slot (./labelPlace), so the label keeps its side while that side stays clear. */
+  slot?: number;
 }
 
 /** A seed that landed away from the tap (spacing rule): arrow from the finger to the seed. */
@@ -323,6 +326,15 @@ export class Overlay {
    */
   private occ = new Float32Array(4 * 96);
   private occN = 0;
+  /** Living creatures' bodies as drawn this frame (x, y, r in CSS px): messages step off them (./labelPlace). */
+  private bodyDiscs = new Float32Array(3 * 64);
+  private bodyN = 0;
+  private readonly bodyView = { discs: this.bodyDiscs, n: 0 };
+  /** A message drawn outside this canvas (the Momento brief, canvas px): nothing here is drawn under it. */
+  private readonly kept = { on: false, l: 0, t: 0, r: 0, b: 0 };
+  private readonly labelObs: LabelObstacles = { boxes: this.occ, nBoxes: 0, discs: this.bodyDiscs, nDiscs: 0 };
+  private readonly labelReq: LabelRequest = { x: 0, y: 0, w: 0, h: 0, gap: 0, bounds: { l: 0, t: 0, r: 0, b: 0 }, slot: -1 };
+  private readonly labelOut: LabelPlacement = { x: 0, y: 0, slot: -1, clear: false };
   /** Name / status lines asked for by drawCreatures this frame (drawn later, unclipped, without overlaps). */
   private nameQ: { x: number; y: number; s: Smoothed | null; text: string; color: string }[] = [];
   private nameN = 0;
@@ -1151,6 +1163,8 @@ export class Overlay {
     this.applyProfile();
     this.occN = 0;
     this.nameN = 0;
+    // The brief is placed first (it is the Momento); every label, number and name here keeps out of it.
+    if (this.kept.on) this.occupy(this.kept.l, this.kept.t, this.kept.r, this.kept.b);
     const ctx = this.ctx;
     const cam = this.camera;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1284,10 +1298,36 @@ export class Overlay {
       c.r = this.outlineRadius(s);
       c.state = s.state;
       c.behavior = s.behavior;
+      if (n < 64) {
+        const k = n * 3;
+        this.bodyDiscs[k] = c.x;
+        this.bodyDiscs[k + 1] = c.y;
+        this.bodyDiscs[k + 2] = c.r;
+      }
       n++;
     }
+    this.bodyN = this.bodyView.n = Math.min(n, 64);
     this.scene.creatureCount = n;
     this.scene.dropCount = this.drops.tapCount;
+  }
+
+  /** Living creatures' bodies as drawn in the latest frame (x, y, r triples, canvas CSS px): the brief steps off them. */
+  bodies(): { readonly discs: Float32Array; readonly n: number } {
+    return this.bodyView;
+  }
+
+  /**
+   * A message drawn over this canvas by someone else (the Momento brief), in canvas CSS px, or null when it
+   * is gone: labels, numbers and names keep out of it (./labelPlace: two messages never overlap).
+   */
+  keepClear(box: { l: number; t: number; r: number; b: number } | null): void {
+    const k = this.kept;
+    k.on = !!box;
+    if (!box) return;
+    k.l = box.l;
+    k.t = box.t;
+    k.r = box.r;
+    k.b = box.b;
   }
 
   /** What is under a finger, as drawn in the latest frame (src/ui/dishTap.ts reads it). Reused object. */
@@ -2379,13 +2419,27 @@ export class Overlay {
       const glyphW = L.glyph ? 18 : 0;
       const W = Math.max(fit.w1 + glyphW, fit.w2) + 24;
       const H = fit.sub ? 44 : 28;
-      // Keep the pill on screen.
-      let x = px;
-      let y = py - 40 - lift - H / 2;
-      x = Math.min(this.w - W / 2 - 6, Math.max(W / 2 + 6, x));
-      if (y - H / 2 < 6) y = py + 40 + H / 2;
-      // One label at a time where they would collide: the newest wins, the older one waits.
-      if (!this.roomFor(x - W / 2, y - H / 2, x + W / 2, y + H / 2)) continue;
+      // On screen, off every other message (the brief included) and off living creatures while the dish has
+      // room (./labelPlace). Newest first: when no slot is free of messages the older label waits.
+      const rq = this.labelReq;
+      rq.x = px;
+      rq.y = py;
+      rq.w = W;
+      rq.h = H;
+      rq.gap = 40 + lift;
+      rq.bounds.l = 6;
+      rq.bounds.t = 6;
+      rq.bounds.r = this.w - 6;
+      rq.bounds.b = this.h - 6;
+      rq.slot = L.slot ?? -1;
+      const ob = this.labelObs;
+      ob.nBoxes = this.occN;
+      ob.nDiscs = this.bodyN;
+      const at = this.labelOut;
+      if (!placeLabel(rq, ob, at)) continue;
+      L.slot = at.slot;
+      const x = at.x;
+      const y = at.y;
       this.occupy(x - W / 2, y - H / 2, x + W / 2, y + H / 2);
       ctx.save();
       if (pop !== 1) {

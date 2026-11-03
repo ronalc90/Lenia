@@ -214,6 +214,10 @@ export interface UI {
   addOverlayLayer(fn: OverlayLayer, slot?: OverlayLayerSlot): () => void;
   /** Live (smoothed) grid position of a creature, or null (Momentos follow it while zooming). */
   creaturePos(id: number): { x: number; y: number } | null;
+  /** Living creatures' bodies as drawn (x, y, r triples, dish canvas px): a Momento brief steps off them. */
+  creatureBodies(): { readonly discs: Float32Array; readonly n: number };
+  /** The Momento brief's box (dish canvas px) or null: the dish's labels keep out of it. */
+  keepClear(box: { l: number; t: number; r: number; b: number } | null): void;
   /** Creature status pills: on the most informative creatures (`onAll`), or hidden while a Momento explains. */
   setCreatureLabels(onAll: boolean, hidden: boolean): void;
   /** Slot next to the seed cost for the price meter + reason chip (src/ui/moments SlotMeter). */
@@ -1122,6 +1126,14 @@ class BiolumaUI implements UI {
 
   creaturePos(id: number): { x: number; y: number } | null {
     return this.overlay.creaturePos(id);
+  }
+
+  creatureBodies(): { readonly discs: Float32Array; readonly n: number } {
+    return this.overlay.bodies();
+  }
+
+  keepClear(box: { l: number; t: number; r: number; b: number } | null): void {
+    this.overlay.keepClear(box);
   }
 
   setCreatureLabels(onAll: boolean, hidden: boolean): void {

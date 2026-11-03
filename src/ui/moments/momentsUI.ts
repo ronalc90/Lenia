@@ -27,6 +27,7 @@ import { BRIEF_MS } from '../../moments/config';
 import type { Moments } from '../../moments/moments';
 import type { Chip, MomentAction, MomentId, MomentView, UiTarget, VelaMood } from '../../moments/types';
 import { restartClass } from '../art/motion';
+import { placeLabel, type LabelObstacles, type LabelPlacement, type LabelRequest } from '../labelPlace';
 import { Portrait } from '../story/portraits';
 import { behaviorRowsHtml, createBehaviorGuideSheet, type BehaviorGuideSheet, type ExtraBooster } from './behavior-guide';
 import { createHelp, type HelpSheet } from './help';
@@ -61,6 +62,10 @@ export interface MomentsUIOptions {
   getTargetRect?(id: UiTarget): DOMRect | null;
   /** Live grid position of a creature (overlay.creaturePos), so the zoom follows it. */
   creaturePos?(id: number): { x: number; y: number } | null;
+  /** Living creatures' bodies on the dish canvas (overlay.bodies: x, y, r triples, dish px): a brief steps off them. */
+  creatureBodies?(): { readonly discs: ArrayLike<number>; readonly n: number } | null;
+  /** Where the brief is (dish px), null when it is gone: the dish's own labels keep out of it (overlay.keepClear). */
+  onBriefBox?(box: { l: number; t: number; r: number; b: number } | null): void;
   /** Bestiary portrait of a species, for the "new species" diagram. */
   speciesPortrait?(speciesId: string): Pattern | null;
   /** The card's primary button (e.g. 'sterilize' → actions.sterilizeDish()). */
@@ -920,6 +925,7 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
 
   function startBrief(m: MomentView): void {
     brief = { m, at: clock() };
+    briefReq.slot = -1;
     measureBriefAvoid();
     const lang = L();
     const chip = m.chips[0];
@@ -940,6 +946,66 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
     briefEl.hidden = true;
     briefEl.classList.remove('show');
     if (!act) layer.classList.remove('on');
+    tellBriefBox(null);
+  }
+
+  // One solver for the brief and the dish's labels (../labelPlace): the brief steps off living creatures
+  // and out of the controls; the dish's labels then keep out of the brief. Reused every frame.
+  const briefCtl = new Float32Array(4 * 16);
+  let briefBodies = new Float32Array(3 * 64);
+  const briefObs: LabelObstacles = { boxes: briefCtl, nBoxes: 0, discs: briefBodies, nDiscs: 0 };
+  const briefReq: LabelRequest = { x: 0, y: 0, w: 0, h: 0, gap: 0, bounds: { l: 0, t: 0, r: 0, b: 0 }, slot: -1 };
+  const briefAt: LabelPlacement = { x: 0, y: 0, slot: -1, clear: false };
+  const briefBox = { l: 0, t: 0, r: 0, b: 0 };
+  function tellBriefBox(box: typeof briefBox | null): void {
+    try {
+      opts.onBriefBox?.(box);
+    } catch {
+      /* the dish may be gone */
+    }
+  }
+  /** The brief's slot next to its creature (layer px), or false: no slot clear of the controls. */
+  function solveBrief(x: number, y: number, w: number, h: number, lr: DOMRect, d: DOMRect | null): boolean {
+    const ox = d ? d.left - lr.left : 0;
+    const oy = d ? d.top - lr.top : 0;
+    let n = 0;
+    for (const a of briefAvoid) {
+      if (n >= 16) break;
+      const k = n++ * 4;
+      briefCtl[k] = a.l - 2;
+      briefCtl[k + 1] = a.t - 2;
+      briefCtl[k + 2] = a.r + 2;
+      briefCtl[k + 3] = a.b + 2;
+    }
+    briefObs.nBoxes = n;
+    let bodies: { readonly discs: ArrayLike<number>; readonly n: number } | null = null;
+    try {
+      bodies = opts.creatureBodies?.() ?? null;
+    } catch {
+      bodies = null;
+    }
+    const nb = bodies ? bodies.n : 0;
+    if (briefBodies.length < nb * 3) briefBodies = briefObs.discs = new Float32Array(nb * 3);
+    for (let i = 0; i < nb; i++) {
+      const k = i * 3;
+      briefBodies[k] = bodies!.discs[k] + ox;
+      briefBodies[k + 1] = bodies!.discs[k + 1] + oy;
+      briefBodies[k + 2] = bodies!.discs[k + 2];
+    }
+    briefObs.nDiscs = nb;
+    briefReq.x = x;
+    briefReq.y = y;
+    briefReq.w = w;
+    briefReq.h = h;
+    // The old spot (its centre 46 px above the creature) is the first slot; the bob gets 2 px of air.
+    briefReq.gap = Math.max(8, 46 - h / 2);
+    briefReq.bounds.l = 8;
+    briefReq.bounds.t = 8;
+    briefReq.bounds.r = lr.width - 8;
+    briefReq.bounds.b = lr.height - 8;
+    if (!placeLabel(briefReq, briefObs, briefAt)) return false;
+    briefReq.slot = briefAt.slot;
+    return true;
   }
 
   function placeBrief(t: number): void {
@@ -950,9 +1016,13 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
     let y = lr.height * 0.3;
     const g = focusGrid(m);
     const p = g ? gridToLocal(g.x, g.y) : null;
+    const w = briefEl.offsetWidth || 160;
+    const h = briefEl.offsetHeight || 40;
+    let solved = false;
     if (p) {
-      x = p.x;
-      y = p.y - 46;
+      solved = solveBrief(p.x, p.y, w, h, lr, dishRect());
+      x = solved ? briefAt.x : p.x;
+      y = solved ? briefAt.y : p.y - 46;
     } else {
       const r = targetRect(m);
       if (r) {
@@ -969,12 +1039,10 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
         }
       }
     }
-    const w = briefEl.offsetWidth || 160;
-    const h = briefEl.offsetHeight || 40;
     x = clamp(x, w / 2 + 8, lr.width - w / 2 - 8);
     y = clamp(y, h / 2 + 8, lr.height - h / 2 - 8);
     // Step out of a control it would cover: below one in the upper half, above one in the lower half.
-    for (let pass = 0; pass < 2; pass++)
+    for (let pass = 0; pass < 2 && !solved; pass++)
       for (const a of briefAvoid) {
         const M = 6;
         if (x + w / 2 > a.l - M && x - w / 2 < a.r + M && y + h / 2 > a.t - M && y - h / 2 < a.b + M) {
@@ -988,6 +1056,17 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
     const bob = rm() ? 0 : Math.sin(age * 3) * 2;
     briefEl.style.transform = `translate(${(x - w / 2).toFixed(1)}px, ${(y - h / 2 + bob).toFixed(1)}px)`;
     briefEl.style.opacity = fade.toFixed(3);
+    // Tell the dish where the brief is (dish px, with the bob's 2 px): its labels keep out of it.
+    const d = dishRect();
+    if (d) {
+      const ox = d.left - lr.left;
+      const oy = d.top - lr.top;
+      briefBox.l = x - w / 2 - ox;
+      briefBox.t = y - h / 2 - 2 - oy;
+      briefBox.r = x + w / 2 - ox;
+      briefBox.b = y + h / 2 + 2 - oy;
+      tellBriefBox(briefBox);
+    }
   }
 
   // ───────────── spotlight ─────────────
@@ -1311,6 +1390,7 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
       window.removeEventListener('keydown', onKey);
       if (raf) cancelAnimationFrame(raf);
       guideSheet?.dispose();
+      tellBriefBox(null);
       layer.remove();
     },
   };
