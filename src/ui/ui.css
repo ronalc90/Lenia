@@ -5598,7 +5598,7 @@ button.chip {
   min-width: 0;
 }
 .ess-label {
-  font: 600 13px/1 var(--instrument);
+  font: 600 var(--bl-fs-caption)/1 var(--instrument);
   letter-spacing: 0.14em;
   color: var(--dim);
   text-transform: uppercase;
@@ -5628,7 +5628,7 @@ button.chip {
   z-index: 4;
   max-width: calc(100vw - 140px);
   padding: 6px 10px;
-  border-radius: var(--bl-r-sm, 8px);
+  border-radius: var(--bl-r-sm);
   border: 1px solid var(--bl-plate-rule, var(--line-2));
   background: var(--surface);
   color: var(--bl-gain, var(--good));
