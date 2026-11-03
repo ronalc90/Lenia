@@ -26,15 +26,15 @@ describe('behaviour guide: what changes (numbers come from balance.ts)', () => {
     it(`${b}: bonus = BEHAVIOR_MULT.${b}, in both languages`, () => {
       const g = behaviorGuide(b);
       expect(g.mult).toBe(BEHAVIOR_MULT[b]);
-      expect(bonusText(b, 'es')).toBe(`${g.name.es}: ${multText(BEHAVIOR_MULT[b], 'es')} Esencia`);
-      expect(bonusText(b, 'en')).toBe(`${g.name.en}: ${multText(BEHAVIOR_MULT[b], 'en')} Essence`);
+      expect(bonusText(b, 'es')).toBe(`${g.name.es}: ${multText(BEHAVIOR_MULT[b], 'es')} luz`);
+      expect(bonusText(b, 'en')).toBe(`${g.name.en}: ${multText(BEHAVIOR_MULT[b], 'en')} glow`);
       // The behaviour moment shows the same chip first.
       expect(MOMENT_BY_ID.get(`behavior.${b}` as never)!.lines[0]).toEqual(g.what);
     });
   }
 
   it('reads naturally', () => {
-    expect(bonusText('swimmer', 'es')).toBe(`Nadadora: ${multText(BEHAVIOR_MULT.swimmer, 'es')} Esencia`);
+    expect(bonusText('swimmer', 'es')).toBe(`Nadadora: ${multText(BEHAVIOR_MULT.swimmer, 'es')} luz`);
     expect(multText(1.6, 'es')).toBe('×1,6');
     expect(multText(2.5, 'en')).toBe('×2.5');
     expect(baselineText('es')).toBe(`comparada con una quieta ${multText(BEHAVIOR_MULT.still, 'es').replace(/,0$/, '')}`);

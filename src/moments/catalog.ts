@@ -13,6 +13,7 @@ import type { Behavior, GameView, Lang, Text } from '../core/types';
 import { GOLDEN_LIFE, OFFLINE_RATE, SAMPLES_NEW_BEHAVIOR, SAMPLES_NEW_SPECIES } from '../game/balance';
 import { DATOS_PER_NEW_BEHAVIOR, DATOS_PER_NEW_SPECIES, SESSION_TIME_PER_SPECIES } from '../game/cycleBalance';
 import { warnSeconds } from '../game/session';
+import { TEXT as GAME_TEXT } from '../game/content';
 import { fmt, fmtDuration, fmtRate } from '../ui/format';
 import { closestKnown } from '../species/looks';
 import { behaviorGuide, bonusText } from './behaviors';
@@ -66,13 +67,14 @@ export function nearestCreature(v: GameView, x: number, y: number, maxD = 30): {
   return best;
 }
 
+/** Esencia is called Luz on screen (ADR-030, docs/CLARIDAD2.md §2.1); the code keeps `essence`. */
 const essenceChip = (n: number, sign: '+' | '−', perSec = false): Chip =>
   chip(
-    both((l) => `${sign}${perSec ? fmtRate(n, l) : fmt(n, l)} ${l === 'es' ? 'Esencia' : 'Essence'}${perSec ? '/s' : ''}`),
+    both((l) => `${sign}${perSec ? fmtRate(n, l) : fmt(n, l)} ${l === 'es' ? 'luz' : 'glow'}${perSec ? '/s' : ''}`),
     sign === '+' ? 'good' : 'warn',
     'essence',
   );
-/** "Nadadora: ×1,6 Esencia" — the production bonus of a behaviour, named (balance.ts, never a copy). */
+/** "Nadadora: ×1,6 luz" — the production bonus of a behaviour, named (balance.ts, never a copy). */
 const behaviorBonusChip = (b: Behavior): Chip => chip(both((l) => bonusText(b, l)), 'good', 'up');
 const samplesChip = (n: number): Chip =>
   chip(both((l) => `+${n} ${l === 'es' ? (n === 1 ? 'Muestra' : 'Muestras') : n === 1 ? 'Sample' : 'Samples'}`), 'good', 'sample');
@@ -81,7 +83,7 @@ const datosChip = (n: number): Chip => chip(both((l) => `+${n} ${l === 'es' ? 'D
 const secondsChip = (n: number): Chip => chip(both(() => `+${n} s`), 'good', 'clock');
 const sessionsLoop = (v: GameView): boolean => v.cycle === 'sessions';
 const genomeChip = (n: number): Chip => chip(both((l) => `+${fmt(n, l)} ${l === 'es' ? 'Genoma' : 'Genome'}`), 'violet', 'genome');
-const zeroChip = chip(t('0 Esencia/s', '0 Essence/s'), 'grey', 'x');
+const zeroChip = chip(t('0 luz/s', '0 glow/s'), 'grey', 'x');
 
 /** Seconds left on the session clock when its Momento explains it (the HUD's "¡Último minuto!"). */
 /** The lab session in the view (sessions loop; absent in the classic loop). */
@@ -127,6 +129,12 @@ const CLASSIC_UPGRADE_LINES: readonly [Text, Text] = [
   t('Mira la placa: lo vas a notar.', 'Watch the dish: you will notice it.'),
 ];
 
+/** The income card in the sessions loop: light is collected from drops (ADR-030 §2.2). */
+const SESSIONS_INCOME_LINES: readonly [Text, Text] = [
+  t('Cada criatura con forma llena una gota de luz.', 'Every creature with a shape fills a drop of glow.'),
+  t('Toca la gota para recogerla: con luz siembras más.', 'Tap the drop to collect it: glow buys more seeds.'),
+];
+
 /** The species card in the classic loop (Samples still exist there). */
 const CLASSIC_SPECIES_LINES: readonly [Text, Text] = [
   t('Nadie la había visto aquí. Se guarda en tu Bestiario.', 'Nobody had seen it here. It goes into your Bestiary.'),
@@ -154,10 +162,14 @@ const BEHAVIOR_TEXT: Record<Behavior, { title: Text; brief: Text; mood: MomentDe
   colony: { title: t('¡Una colonia!', 'A colony!'), brief: t('¡Colonia!', 'Colony!'), mood: 'happy' },
 };
 
+/** Plate numbers of the behaviour cards («LÁMINA 08 · Una criatura quieta»). */
+const BEHAVIOR_PLATE: Record<Behavior, number> = { still: 8, pulsing: 9, swimmer: 10, spinner: 11, divider: 12, colony: 13 };
+
 function behaviorMoment(b: Behavior, priority: number): MomentDef {
   const tx = BEHAVIOR_TEXT[b];
   return {
     id: `behavior.${b}` as MomentId,
+    plate: BEHAVIOR_PLATE[b],
     priority,
     title: tx.title,
     // VELA says "what it is"; the card adds what changes, how to get more and how to boost it.
@@ -186,6 +198,7 @@ function behaviorMoment(b: Behavior, priority: number): MomentDef {
 export const MOMENTS: MomentDef[] = [
   {
     id: 'seed',
+    plate: 1,
     priority: 94,
     title: t('¡Una semilla!', 'A seed!'),
     lines: [
@@ -200,7 +213,7 @@ export const MOMENTS: MomentDef[] = [
     trigger: onEvent('seed', (p) => p.manual),
     build: from('seed', (p) => ({
       focus: at(p.x, p.y, 2.4),
-      // The first seeds are free: say "¡Gratis!", never "−0 Esencia".
+      // The first seeds are free: say "¡Gratis!", never "−0 luz".
       chips: [p.cost > 0 ? essenceChip(p.cost, '−') : chip(t('¡Gratis!', 'Free!'), 'good', 'gift')],
       data: { amount: p.cost },
     })),
@@ -209,6 +222,7 @@ export const MOMENTS: MomentDef[] = [
   },
   {
     id: 'dissolve',
+    plate: 2,
     priority: 96,
     title: t('Se apagó', 'It faded'),
     lines: [
@@ -223,19 +237,22 @@ export const MOMENTS: MomentDef[] = [
     // Only a fade the player can relate to: never before their first seed (QA4 F-07: the starter faded
     // under VELA's first lines and the first thing a new player saw was "Se apagó").
     trigger: onEvent('creatureDied', (_p, c) => c.view().stats.seeds > 0),
-    build: from('creatureDied', (p) => ({ focus: at(p.x, p.y, 2.2), chips: [zeroChip], data: {} })),
+    // Why it went dark, said at the spot (ADR-030 §2.5: game/contact.ts deathCause).
+    build: from('creatureDied', (p) => ({ focus: at(p.x, p.y, 2.2), chips: [zeroChip], data: {}, brief: deathBrief(p.cause) })),
     delayMs: 300,
     story: ['t_fail'],
   },
   {
     id: 'explode',
+    plate: 3,
     priority: 95,
-    title: t('Materia sin forma', 'Shapeless matter'),
+    // The first fusion of the save: the run's one pausing card (§2.5); after that, a label at the spot.
+    title: t('¡Se juntaron!', 'They merged!'),
     lines: [
-      t('Dos semillas se tocaron y se fundieron: ya no tienen forma.', 'Two seeds touched and melted together: no shape any more.'),
-      t('Sin forma no da Esencia. La disuelvo para salvar la placa.', 'No shape, no Essence. I dissolve it to save the dish.'),
+      t('Al tocarse, dos criaturas se hacen una mancha sin forma.', 'When two creatures touch they become one shapeless blob.'),
+      t('Sin forma no hay luz. Siembra lejos de las demás.', 'No shape, no glow. Sow away from the others.'),
     ],
-    brief: t('¡Sin forma!', 'No shape!'),
+    brief: GAME_TEXT.merged,
     illustration: 'explode',
     icon: 'burst',
     mood: 'worried',
@@ -247,6 +264,7 @@ export const MOMENTS: MomentDef[] = [
   },
   {
     id: 'stable',
+    plate: 4,
     priority: 100,
     title: t('¡VIDA!', 'LIFE!'),
     lines: [
@@ -274,13 +292,14 @@ export const MOMENTS: MomentDef[] = [
   },
   {
     id: 'income',
+    plate: 5,
     priority: 90,
-    title: t('Esto es Esencia', 'This is Essence'),
+    title: t('Esto es luz', 'This is glow'),
     lines: [
-      t('Cada criatura con forma te da Esencia cada segundo.', 'Every creature with a shape gives you Essence every second.'),
-      t('Arriba: «+1/s» quiere decir 1 de Esencia cada segundo.', 'Up top: “+1/s” means 1 Essence every second.'),
+      t('Cada criatura con forma te da luz cada segundo.', 'Every creature with a shape gives you glow every second.'),
+      t('Arriba: «+1 luz/s» quiere decir 1 de luz cada segundo.', 'Up top: “+1 glow/s” means 1 glow every second.'),
     ],
-    brief: t('+Esencia', '+Essence'),
+    brief: t('+luz', '+glow'),
     illustration: 'essence',
     icon: 'essence',
     mood: 'happy',
@@ -293,12 +312,15 @@ export const MOMENTS: MomentDef[] = [
         focus: at(p.x, p.y, 1.6, p.id, ['hud.essence']),
         chips: [essenceChip(eps, '+', true)],
         data: { amount: eps },
+        // Sessions: the light waits in a drop until it is collected (ADR-030 §2.2).
+        lines: sessionsLoop(v) ? [...SESSIONS_INCOME_LINES] : undefined,
       };
     }),
     story: ['t_essence'],
   },
   {
     id: 'species',
+    plate: 6,
     priority: 85,
     title: t('¡Especie nueva!', 'New species!'),
     lines: [
@@ -347,6 +369,7 @@ export const MOMENTS: MomentDef[] = [
   },
   {
     id: 'secondSpecies',
+    plate: 7,
     priority: 84,
     title: t('Dos especies distintas', 'Two different species'),
     // One line; the comparison above the two cards names what you SEE is different (a hole, a bright
@@ -394,11 +417,12 @@ export const MOMENTS: MomentDef[] = [
   behaviorMoment('colony', 75),
   {
     id: 'division',
+    plate: 14,
     priority: 76,
     title: t('¡Una se hizo dos!', 'One became two!'),
     lines: [
       t('Una criatura se partió en dos criaturas.', 'One creature split into two creatures.'),
-      t('Ahora hay dos, y las dos pueden dar Esencia.', 'Now there are two, and both can make Essence.'),
+      t('Ahora hay dos, y las dos pueden dar luz.', 'Now there are two, and both can make glow.'),
     ],
     brief: t('¡Una se hizo dos!', 'One became two!'),
     illustration: 'division',
@@ -415,11 +439,12 @@ export const MOMENTS: MomentDef[] = [
   },
   {
     id: 'golden',
+    plate: 15,
     priority: 110,
     title: t('¡Un Destello!', 'A Spark!'),
     lines: [
       t('Una chispa dorada cruza la placa. ¡Tócala rápido!', 'A golden spark drifts across the dish. Tap it, quick!'),
-      t('Si la atrapas, te regala 30 segundos de tu Esencia.', 'Catch it and it gives you 30 seconds of your Essence.'),
+      t('Si la atrapas, te regala luz.', 'Catch it and it gives you glow.'),
     ],
     brief: t('¡Toca el Destello!', 'Tap the Spark!'),
     illustration: 'golden',
@@ -439,6 +464,7 @@ export const MOMENTS: MomentDef[] = [
   },
   {
     id: 'upgrade',
+    plate: 16,
     priority: 60,
     title: t('¡Mejora comprada!', 'Upgrade bought!'),
     lines: [
@@ -471,11 +497,12 @@ export const MOMENTS: MomentDef[] = [
   },
   {
     id: 'autoseed',
+    plate: 17,
     priority: 58,
     title: t('Siembra automática', 'Auto-sowing'),
     lines: [
       t('El sembrador automático siembra por ti, solito.', 'The auto-sower plants seeds for you, all by itself.'),
-      t('Cada semilla gasta un poquito de Esencia.', 'Each seed spends a little Essence.'),
+      t('Cada semilla gasta un poquito de luz.', 'Each seed spends a little glow.'),
     ],
     brief: t('Siembra automática', 'Auto-sown'),
     illustration: 'autoseed',
@@ -488,11 +515,12 @@ export const MOMENTS: MomentDef[] = [
   },
   {
     id: 'clock',
+    plate: 18,
     priority: 95,
     title: t('Tu tiempo de laboratorio', 'Your lab time'),
     lines: [
       t('Este reloj es tu tiempo de laboratorio. ¡Ya casi se acaba!', 'This clock is your lab time. It is almost up!'),
-      t('Al llegar a 0:00, tu Esencia se cuenta. ¡No pierdes nada!', 'At 0:00 your Essence is counted. You lose nothing!'),
+      t('Al llegar a 0:00, tu luz se cuenta. ¡No pierdes nada!', 'At 0:00 your glow is counted. You lose nothing!'),
     ],
     brief: t('¡Ya casi!', 'Almost up!'),
     illustration: 'clock',
@@ -527,6 +555,7 @@ export const MOMENTS: MomentDef[] = [
   },
   {
     id: 'seedPrice',
+    plate: 19,
     priority: 62,
     title: t('¿Por qué sube?', 'Why does it rise?'),
     lines: [
@@ -543,7 +572,7 @@ export const MOMENTS: MomentDef[] = [
       const v = c.view();
       const price = priceData(v);
       const bought = v.seedPrice?.bought ?? 0;
-      const chips: Chip[] = [chip(both((l) => `${l === 'es' ? 'Semilla' : 'Seed'}: ${fmt(v.seedCost, l)}`), 'warn', 'essence')];
+      const chips: Chip[] = [chip(both((l) => `${l === 'es' ? 'Semilla' : 'Seed'}: ${fmt(v.seedCost, l)} ${l === 'es' ? 'luz' : 'glow'}`), 'warn', 'essence')];
       if (bought > 0) chips.push(chip(both((l) => `${l === 'es' ? 'Compradas hoy' : 'Bought today'}: ${fmt(bought, l)}`), 'info', 'up'));
       return { focus: ui('seed', 'dish'), chips, data: { price } };
     },
@@ -551,13 +580,15 @@ export const MOMENTS: MomentDef[] = [
   },
   {
     id: 'overgrown',
+    plate: 20,
     priority: 105,
-    title: t('¡La placa se desbordó!', 'The dish overflowed!'),
+    // The other first-time accident with a card (§2.5): «LÁMINA 20 · ¡Demasiada vida junta!».
+    title: t('¡Demasiada vida junta!', 'Too much life!'),
     lines: [
-      t('Mucha materia sin forma: ya no da Esencia.', 'Lots of shapeless matter: no more Essence.'),
-      t('Límpiala gratis y siembra separado.', 'Clean it for free and sow apart.'),
+      t('Muchas se juntaron y la mancha creció sin parar.', 'Many merged and the blob kept on growing.'),
+      t('Límpiala gratis y deja sitio entre criaturas.', 'Clean it for free and leave room between creatures.'),
     ],
-    brief: t('¡Placa desbordada! 0 Esencia/s', 'Dish overflowed! 0 Essence/s'),
+    brief: t('¡Placa desbordada! 0 luz/s', 'Dish overflowed! 0 glow/s'),
     illustration: 'overgrown',
     icon: 'burst',
     mood: 'worried',
@@ -576,6 +607,7 @@ export const MOMENTS: MomentDef[] = [
   },
   {
     id: 'extinctionReady',
+    plate: 21,
     priority: 80,
     title: t('Extinción disponible', 'Extinction ready'),
     lines: [
@@ -595,6 +627,7 @@ export const MOMENTS: MomentDef[] = [
   },
   {
     id: 'extinction',
+    plate: 22,
     priority: 92,
     title: t('¡Era nueva!', 'A new Era!'),
     lines: [
@@ -615,6 +648,7 @@ export const MOMENTS: MomentDef[] = [
   },
   {
     id: 'offline',
+    plate: 23,
     priority: 120,
     title: t('Mientras no estabas', 'While you were away'),
     lines: [t('Tus criaturas siguieron trabajando mientras no estabas.', 'Your creatures kept working while you were gone.'), offlineShare],
@@ -631,7 +665,87 @@ export const MOMENTS: MomentDef[] = [
       data: { amount: p.essence, seconds: p.seconds },
     })),
   },
+  // ── ADR-030 (docs/CLARIDAD2.md §2.2, §2.5): collected light, the warning before a touch, steering ──
+  {
+    id: 'contact',
+    plate: 24,
+    priority: 98,
+    title: t('¡Cuidado!', 'Careful!'),
+    lines: [
+      t('Si dos criaturas se tocan, se juntan y se apagan.', 'If two creatures touch, they merge and go dark.'),
+      t('Siembra lejos de las demás o guía a la nadadora.', 'Sow away from the others or steer the swimmer.'),
+    ],
+    brief: GAME_TEXT.contactSoon,
+    illustration: 'explode',
+    icon: 'burst',
+    mood: 'worried',
+    color: UI.warn,
+    // The game's warning link (GameView.dangers): two outlines will touch within CONTACT_WARN_S.
+    trigger: { kind: 'poll', when: (c) => sessionOf(c.view())?.phase === 'running' && (c.view().dangers?.length ?? 0) > 0 },
+    build: (_p, c) => {
+      const v = c.view();
+      const d = v.dangers?.[0];
+      const a = d ? v.creatures.find((x) => x.id === d.a) : undefined;
+      const b = d ? v.creatures.find((x) => x.id === d.b) : undefined;
+      const swimmer = [a, b].some((x) => x?.behavior === 'swimmer');
+      const focus: MomentFocus =
+        a && b ? { grid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, id: null }, others: [{ x: a.x, y: a.y, id: a.id }, { x: b.x, y: b.y, id: b.id }], target: null, zoom: 1.4 } : ui('dish');
+      return { focus, chips: [], data: {}, brief: swimmer ? GAME_TEXT.contactSteer : GAME_TEXT.contactSoon };
+    },
+    // A warning, never a stop (the dish keeps running so the player can act).
+    forceBrief: true,
+    valid: (_d, c) => (c.view().dangers?.length ?? 0) > 0,
+  },
+  {
+    id: 'collect',
+    plate: 25,
+    priority: 89,
+    title: t('Recoger la luz', 'Collecting glow'),
+    lines: [
+      t('Cada criatura con forma llena una gota de luz.', 'Every creature with a shape fills a drop of glow.'),
+      t('Tócala o pasa el dedo por encima para recogerla.', 'Tap it or swipe over it to collect it.'),
+    ],
+    brief: t('¡Luz recogida!', 'Glow collected!'),
+    illustration: 'essence',
+    icon: 'essence',
+    mood: 'happy',
+    color: UI.accent,
+    trigger: onEvent('lightCollected', (p) => p.by === 'hand' && p.amount > 0),
+    build: from('lightCollected', (p) => ({ focus: at(p.x, p.y, 1.6, null, ['hud.essence']), chips: [essenceChip(p.amount, '+')], data: { amount: p.amount } })),
+    delayMs: 300,
+  },
+  {
+    id: 'steer',
+    plate: 26,
+    priority: 69,
+    title: t('Guiar', 'Steering'),
+    lines: [
+      t('Apoya el dedo en una nadadora y arrástralo.', 'Put your finger on a swimmer and drag it.'),
+      t('Gira hacia tu dedo, nunca hacia el cristal.', 'It turns towards your finger, never into the glass.'),
+    ],
+    brief: t('Arrástrala para guiarla', 'Drag it to steer'),
+    illustration: 'swimmer',
+    icon: 'behavior',
+    mood: 'happy',
+    color: BEHAVIOR_COLOR.swimmer ?? UI.accent,
+    // A swimmer on a running dish, once its way of moving was told (the steering gesture is ADR-030 §2.5).
+    trigger: { kind: 'poll', when: (c) => sessionOf(c.view())?.phase === 'running' && c.view().creatures.some((x) => x.state === 'stable' && x.behavior === 'swimmer') },
+    build: (_p, c) => {
+      const sw = c.view().creatures.find((x) => x.state === 'stable' && x.behavior === 'swimmer');
+      return { focus: sw ? at(sw.x, sw.y, 1.8, sw.id) : ui('dish'), chips: [], data: { behavior: 'swimmer' } };
+    },
+    requires: 'behavior.swimmer',
+    delayMs: 600,
+  },
 ];
+
+/** A seed that never took went dark: the label says why (ADR-030 §2.5). */
+function deathBrief(cause: GameEvents['creatureDied']['cause']): Text | undefined {
+  if (cause === 'glass') return GAME_TEXT.deathGlass;
+  if (cause === 'crowd') return GAME_TEXT.deathCrowd;
+  if (cause === 'faded') return GAME_TEXT.deathFaded;
+  return undefined;
+}
 
 export const MOMENT_BY_ID: ReadonlyMap<MomentId, MomentDef> = new Map(MOMENTS.map((m) => [m.id, m]));
 export const MOMENT_IDS: readonly MomentId[] = MOMENTS.map((m) => m.id);
@@ -661,6 +775,9 @@ export const HELP_ORDER: readonly MomentId[] = [
   'extinctionReady',
   'extinction',
   'offline',
+  'contact',
+  'collect',
+  'steer',
 ];
 
 /** Story scene ids this module may consume (for the story bridge and its tests). */

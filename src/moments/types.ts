@@ -36,7 +36,14 @@ export type MomentId =
   | 'overgrown'
   | 'extinctionReady'
   | 'extinction'
-  | 'offline';
+  | 'offline'
+  // ── ADR-030 (docs/CLARIDAD2.md §2.5, §5.3 task 3) ──
+  /** Two creatures will touch soon (GameView.dangers): a warning label, never a card. */
+  | 'contact'
+  /** The first drop of Luz collected by hand (plate 25 «Recoger la luz»). */
+  | 'collect'
+  /** A swimmer can be steered with a finger (plate 26 «Guiar»). */
+  | 'steer';
 
 /**
  * How much the game explains:
@@ -128,7 +135,7 @@ export type UiTarget =
 export type ChipTone = 'good' | 'bad' | 'warn' | 'info' | 'gold' | 'violet' | 'grey';
 export type ChipIcon = 'essence' | 'sample' | 'genome' | 'clock' | 'up' | 'down' | 'x' | 'check' | 'gift' | 'slot' | null;
 
-/** A consequence/reward pill under the card text ("+1 Esencia/s", "−2 Esencia"). */
+/** A consequence/reward pill under the card text ("+1 luz/s", "−2 luz"). */
 export interface Chip {
   text: Text;
   tone: ChipTone;
@@ -223,10 +230,14 @@ export interface Built {
   data: MomentData;
   /** This occurrence's lines when they depend on the loop (classic vs sessions); default `def.lines`. */
   lines?: Text[];
+  /** This occurrence's brief label (e.g. why a seed went dark); default `def.brief`. */
+  brief?: Text;
 }
 
 export interface MomentDef {
   id: MomentId;
+  /** Its plate number in the report and the help sheet («LÁMINA 03»): fixed per Momento (§5.3 task 3, with PD). */
+  plate: number;
   /** Higher first when several are queued. */
   priority: number;
   /** ≤ 4 words (tests). */
@@ -287,6 +298,26 @@ export interface MomentView {
   /** Increments per opening (UI keys animations on it). */
   seq: number;
 }
+
+/**
+ * A Momento handed to the session report as a plate (§2.8: what had no card during the run). The report
+ * shows its number and title, and can open it with `moments.replay(id)`. PD's `SummaryExtras.plates`.
+ */
+export interface MomentPlate {
+  id: MomentId;
+  /** «LÁMINA 06». */
+  plate: number;
+  title: Text;
+  lines: Text[];
+  brief: Text;
+  illustration: IllustrationKind;
+  icon: MomentIcon;
+  color: string;
+  chips: Chip[];
+  data: MomentData;
+}
+/** The name the plan gives it (docs/CLARIDAD2.md §8.1). */
+export type PlateRef = MomentPlate;
 
 export interface MomentsEvents {
   /** A moment opens (card or brief label). */

@@ -123,7 +123,7 @@ describe('the LIFE card and the creature label say the same rate (RF-10)', () =>
   });
   it('while the clock runs: the chip is the creature\'s own rate, never a made-up 1', () => {
     const b = life.build!({ id: 7, x: 10, y: 10 }, ctxFor('running', 2));
-    expect(JSON.stringify(b.chips)).toContain('+2,0 Esencia/s');
+    expect(JSON.stringify(b.chips)).toContain('+2,0 luz/s');
     expect(life.build!({ id: 7, x: 10, y: 10 }, ctxFor('running', 0)).chips ?? []).toEqual([]);
   });
 });

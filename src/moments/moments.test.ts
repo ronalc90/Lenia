@@ -55,6 +55,16 @@ function happen(h: Harness, id: MomentId): void {
     case 'autoseed':
       emit(h, 'seed', { x: 1, y: 2, cost: 3, manual: false });
       return;
+    case 'contact':
+      // A running dish (no sessions budget here: the generic trigger test) with two creatures about to touch.
+      (h.view as { session?: unknown }).session = { n: 2, phase: 'running', limit: 30, bonus: 0, elapsed: 10, remaining: 20 };
+      h.view.creatures = [creature(1, 'stable', 40, 40), creature(2, 'stable', 60, 40)];
+      h.view.dangers = [{ a: 1, b: 2, inS: 1.5 }];
+      return;
+    case 'steer':
+      (h.view as { session?: unknown }).session = { n: 2, phase: 'running', limit: 30, bonus: 0, elapsed: 10, remaining: 20 };
+      h.view.creatures = [{ ...creature(1, 'stable', 40, 40), behavior: 'swimmer' }];
+      return;
     case 'secondSpecies':
       h.view.species = [species('sp1'), species('sp2')];
       h.view.creatures = [{ ...creature(1, 'stable', 20, 20), speciesId: 'sp1' }];
@@ -172,7 +182,7 @@ describe('moments: triggers', () => {
     const h = harness();
     emit(h, 'behaviorNew', { behavior: 'swimmer', x: 5, y: 5 });
     h.advance(LONG);
-    expect(h.m.current()!.chips[0].text).toEqual({ es: 'Nadadora: ×1,6 Esencia', en: 'Swimmer: ×1.6 Essence' });
+    expect(h.m.current()!.chips[0].text).toEqual({ es: 'Nadadora: ×1,6 luz', en: 'Swimmer: ×1.6 glow' });
   });
 
   it('the divider behaviour also counts as the first division', () => {
@@ -487,7 +497,7 @@ describe('moments: help sheet replay', () => {
     expect(cur.replay).toBe(true);
     expect(h.m.isPausing()).toBe(false);
     expect(cur.focus.grid).toBeNull();
-    expect(cur.chips[0].text.en).toBe('−7 Essence');
+    expect(cur.chips[0].text.en).toBe('−7 glow');
     h.m.dismiss();
     expect(h.m.help().find((e) => e.id === 'seed')?.seen).toBe(true);
     expect(h.m.help().filter((e) => e.seen)).toHaveLength(1);
@@ -580,5 +590,221 @@ describe('moments: the poll is cheap (perf)', () => {
     const m = createMoments({ bus: h.bus, getView: () => ((seen = h.view.essence), h.view), storage: null, now: () => h.now(), pollMs: 0 });
     m.tick();
     expect(seen).toBe(h.view.essence);
+  });
+});
+
+// ───────────── the interruption budget (ADR-030, docs/CLARIDAD2.md §2.8) ─────────────
+
+/** A sessions-loop view with a run in the given phase, `elapsed` seconds into its clock. */
+function run(h: Harness, n: number, phase: 'ready' | 'running' | 'over', elapsed = 10, first = n === 1): void {
+  h.view.cycle = 'sessions';
+  h.view.session = {
+    n,
+    world: 'classic',
+    phase,
+    limit: 30,
+    bonus: 0,
+    elapsed,
+    remaining: Math.max(0, 30 - elapsed),
+    progress: elapsed / 30,
+    essence: 0,
+    seeds: 1,
+    sprint: null,
+    newSpecies: 0,
+    endedEarly: false,
+    first,
+  };
+}
+
+const fusion = (h: Harness, x = 40, y = 40) => emit(h, 'creatureExploded', { id: 7, x, y, cause: 'touch' });
+
+describe('moments: one pausing card per run, only for a first-time accident (CLARIDAD2 §2.8)', () => {
+  it('QA#25: Momentos of a run never open at the start of the next run', () => {
+    const h = harness();
+    run(h, 3, 'running');
+    h.blocked.on = true; // a sheet covers the dish until the clock runs out
+    emit(h, 'behaviorNew', { behavior: 'spinner', x: 50, y: 50 });
+    h.view.species = [species('sp1'), species('sp2')];
+    emit(h, 'speciesNew', { speciesId: 'sp2', name: 'Scutium', rarity: 'common', x: 60, y: 60 });
+    h.advance(LONG);
+    run(h, 3, 'over');
+    h.advance(LONG);
+    run(h, 4, 'ready', 0);
+    h.blocked.on = false;
+    h.advance(LONG);
+    expect(h.m.current()).toBeNull();
+    run(h, 4, 'running', 1);
+    h.advance(LONG * 4);
+    expect(h.m.current()).toBeNull();
+    expect(h.m.isBusy()).toBe(false);
+  });
+
+  it('a run shows at most one pausing card, and only for a first-time accident', () => {
+    const h = harness();
+    run(h, 2, 'running');
+    const opened: { id: string; mode: string }[] = [];
+    h.m.on('open', ({ moment }) => opened.push({ id: moment.id, mode: moment.mode }));
+    // A discovery is a brief label (and a plate in the report), never a pause.
+    emit(h, 'behaviorNew', { behavior: 'swimmer', x: 50, y: 50 });
+    h.advance(LONG);
+    expect(h.m.isPausing()).toBe(false);
+    h.advance(BRIEF_MS + LONG);
+    // The first fusion of the save: the one card of the run.
+    fusion(h);
+    h.advance(LONG);
+    expect(h.m.current()?.id).toBe('explode');
+    expect(h.m.isPausing()).toBe(true);
+    h.m.dismiss();
+    h.advance(COOLDOWN_MS + LONG);
+    // Another first-time accident in the same run: a brief label only.
+    h.view.overgrown = true;
+    emit(h, 'dishOvergrown', { on: true });
+    h.advance(LONG);
+    expect(h.m.current()?.id).toBe('overgrown');
+    expect(h.m.current()?.mode).toBe('brief');
+    expect(h.m.isPausing()).toBe(false);
+    const cards = opened.filter((o) => o.mode === 'full');
+    expect(cards.map((c) => c.id)).toEqual(['explode']);
+    // It stays unexplained: its card can come in a later run.
+    expect(h.m.seen('overgrown')).toBe(false);
+  });
+
+  it('a seen accident is a brief label after that, and the budget resets with the next run', () => {
+    const h = harness();
+    run(h, 2, 'running');
+    fusion(h);
+    h.advance(LONG);
+    expect(h.m.isPausing()).toBe(true);
+    h.m.dismiss();
+    h.advance(COOLDOWN_MS + LONG);
+    run(h, 3, 'running');
+    h.view.overgrown = true;
+    emit(h, 'dishOvergrown', { on: true });
+    h.advance(LONG);
+    expect(h.m.current()?.id).toBe('overgrown');
+    expect(h.m.isPausing()).toBe(true);
+  });
+
+  it('no card in the first 5 s of a run', () => {
+    const h = harness();
+    run(h, 2, 'running', 2);
+    fusion(h);
+    h.advance(LONG);
+    expect(h.m.isPausing()).toBe(false);
+    expect(h.m.current()?.mode ?? 'brief').toBe('brief');
+    expect(h.m.seen('explode')).toBe(false);
+  });
+
+  it('the first session gets its accident card too (the tutorial scenes do not use the budget)', () => {
+    const h = harness();
+    run(h, 1, 'running', 8);
+    fusion(h);
+    h.advance(LONG);
+    expect(h.m.current()?.id).toBe('explode');
+    expect(h.m.isPausing()).toBe(true);
+  });
+
+  it('nothing opens while the run waits for its clock or after time is up, and the story is not held by it', () => {
+    const h = harness();
+    run(h, 2, 'ready', 0);
+    h.view.creatures = [creature(1)];
+    emit(h, 'creatureStable', { id: 1, x: 50, y: 50 });
+    h.advance(LONG);
+    expect(h.m.current()).toBeNull();
+    expect(h.m.isBusy()).toBe(false);
+    run(h, 2, 'over');
+    emit(h, 'behaviorNew', { behavior: 'still', x: 50, y: 50 });
+    h.advance(LONG);
+    expect(h.m.current()).toBeNull();
+  });
+
+  it('deferred Momentos are handed to the summary as plates, and the queue is emptied', () => {
+    const h = harness();
+    run(h, 2, 'running');
+    emit(h, 'behaviorNew', { behavior: 'still', x: 50, y: 50 });
+    h.advance(LONG);
+    expect(h.m.current()?.mode).toBe('brief');
+    h.advance(BRIEF_MS + LONG);
+    h.blocked.on = true;
+    h.view.species = [species('sp1')];
+    emit(h, 'speciesNew', { speciesId: 'sp1', name: 'Orbium', rarity: 'common', x: 60, y: 60 });
+    h.advance(LONG);
+    run(h, 2, 'over');
+    const plates = h.m.drainForSummary();
+    expect(plates.map((p) => p.id).sort()).toEqual(['behavior.still', 'species']);
+    for (const p of plates) {
+      expect(p.title.es).not.toBe('');
+      expect(p.plate).toBeGreaterThan(0);
+    }
+    expect(h.m.isActive('species')).toBe(false);
+    expect(h.m.seen('species')).toBe(true);
+    expect(h.m.drainForSummary()).toEqual([]);
+  });
+
+  it('the first Spark of a running session is VELA’s (t_golden), never a Momento', () => {
+    const h = harness();
+    run(h, 4, 'running');
+    h.view.golden = { x: 50, y: 50, life: 1 };
+    emit(h, 'goldenSpawn', { x: 50, y: 50 });
+    h.advance(LONG);
+    expect(h.m.current()).toBeNull();
+    expect(h.m.isActive('golden')).toBe(false);
+  });
+
+  it('the classic loop keeps its cards', () => {
+    const h = harness();
+    emit(h, 'behaviorNew', { behavior: 'swimmer', x: 50, y: 50 });
+    h.advance(LONG);
+    expect(h.m.isPausing()).toBe(true);
+  });
+
+  it('a scene that told a basic marks it explained without opening it', () => {
+    const h = harness();
+    run(h, 1, 'ready', 0);
+    emit(h, 'seed', { x: 1, y: 2, cost: 0, manual: true });
+    h.m.markTold(['seed']);
+    run(h, 1, 'running', 1);
+    h.advance(LONG);
+    expect(h.m.current()).toBeNull();
+    expect(h.m.seen('seed')).toBe(true);
+  });
+});
+
+describe('moments: accidents say why, at the spot (CLARIDAD2 §2.5)', () => {
+  it('a seed that went dark says why in its label', () => {
+    const h = harness();
+    run(h, 2, 'running');
+    emit(h, 'creatureDied', { id: 3, x: 10, y: 10, cause: 'glass' });
+    h.advance(LONG);
+    expect(h.m.current()?.id).toBe('dissolve');
+    expect(h.m.current()?.brief.es).toBe('Se apagó: muy pegada al cristal');
+  });
+
+  it('the warning before a touch is a label, and names the steering when one is a swimmer', () => {
+    const h = harness();
+    run(h, 2, 'running');
+    h.view.creatures = [{ ...creature(1, 'stable', 40, 40), behavior: 'swimmer' }, creature(2, 'stable', 60, 40)];
+    h.view.dangers = [{ a: 1, b: 2, inS: 1.2 }];
+    h.advance(LONG);
+    const cur = h.m.current();
+    expect(cur?.id).toBe('contact');
+    expect(cur?.mode).toBe('brief');
+    expect(cur?.brief.en).toBe('Careful! Drag it to steer it away');
+    expect(h.m.isPausing()).toBe(false);
+  });
+
+  it('the first fusion of the save is the plate-03 card «¡Se juntaron!», then a label', () => {
+    const h = harness();
+    run(h, 2, 'running');
+    fusion(h);
+    h.advance(LONG);
+    expect(h.m.current()?.title.es).toBe('¡Se juntaron!');
+    expect(MOMENT_BY_ID.get('explode')!.plate).toBe(3);
+    h.m.dismiss();
+    h.advance(COOLDOWN_MS + LONG);
+    expect(h.m.seen('explode')).toBe(true);
+    fusion(h, 70, 70);
+    h.advance(LONG);
+    expect(h.m.current()).toBeNull();
   });
 });

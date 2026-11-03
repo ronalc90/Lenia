@@ -6,7 +6,7 @@
  *
  *   Qué es               what you see ("se desliza sin parar")
  *   Qué cambia           the exact bonus, read from src/game/balance.ts BEHAVIOR_MULT
- *                        ("Nadadora: ×1,6 Esencia", compared with "Quieta: ×1")
+ *                        ("Nadadora: ×1,6 luz", compared with "Quieta: ×1")
  *   Dónde encontrarla    which World grows it (src/game/worlds.ts): the example is a
  *                        species that lives in a world and shows that behaviour (no
  *                        rules or numbers: the player picks worlds, not parameters)
@@ -139,7 +139,7 @@ const TEXT: Record<Behavior, Pick<BehaviorGuide, 'what' | 'see' | 'how' | 'hint'
     hint: t('¿Has visto alguna partirse en dos?', 'Seen one split in two?'),
     note: {
       kind: 'risk',
-      text: t('Si se dividen demasiado, la placa se desborda y deja de dar Esencia.', 'If they split too much, the dish overflows and stops giving Essence.'),
+      text: t('Si se dividen demasiado, la placa se desborda y deja de dar luz.', 'If they split too much, the dish overflows and stops giving glow.'),
     },
   },
   colony: {
@@ -192,9 +192,9 @@ export function multText(m: number, lang: Lang): string {
   return '×' + (lang === 'es' ? s.replace('.', ',') : s);
 }
 
-/** "Nadadora: ×1,6 Esencia". */
+/** "Nadadora: ×1,6 luz" (Esencia is Luz on screen, ADR-030). */
 export function bonusText(b: Behavior, lang: Lang): string {
-  return `${behaviorGuide(b).name[lang]}: ${multText(BEHAVIOR_MULT[b], lang)} ${lang === 'es' ? 'Esencia' : 'Essence'}`;
+  return `${behaviorGuide(b).name[lang]}: ${multText(BEHAVIOR_MULT[b], lang)} ${lang === 'es' ? 'luz' : 'glow'}`;
 }
 
 /** "comparada con una quieta ×1" / "compared with a still one ×1". */

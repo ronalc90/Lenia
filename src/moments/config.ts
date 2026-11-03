@@ -42,3 +42,13 @@ export const MAX_TITLE_WORDS = 4;
 export const MAX_LINE_WORDS = 14;
 export const MAX_LINES = 2;
 export const MAX_BRIEF_WORDS = 7;
+
+/**
+ * The interruption budget of a lab session (ADR-030, docs/CLARIDAD2.md §2.8; owner: "at most one pausing
+ * card per run, only for a first-time accident"). A 15–45 s run cannot take more than one stop: everything
+ * else is a brief label on the dish and a plate in the report. Pacing of the explainer layer, like the
+ * timings above, so it lives here and not in src/game/balance.ts.
+ */
+export const RUN_CARD_MAX = 1;
+/** No pausing card in the first seconds of a run's clock: the player has just started playing (§2.8). */
+export const RUN_QUIET_START_S = 5;

@@ -11,6 +11,7 @@
 import { Bus, type GameEvents } from '../core/bus';
 import type { GameView } from '../core/types';
 import { HELP_ORDER, MOMENT_BY_ID, MOMENTS } from './catalog';
+import { isAccident, runVerdict, type RunFacts, type RunVerdict } from './policy';
 import {
   BOOT_QUIET_MS,
   BRIEF_MS,
@@ -31,6 +32,7 @@ import {
   type MomentData,
   type MomentDef,
   type MomentId,
+  type MomentPlate,
   type MomentView,
   type MomentsDeps,
   type MomentsEvents,
@@ -89,6 +91,17 @@ export interface Moments {
   show(id: MomentId, opts?: { payload?: unknown; mode?: 'full' | 'brief' }): boolean;
   /** Dev: forget one (or every) explained moment. */
   forget(id?: MomentId): void;
+  /**
+   * The session report takes what had no card during the run (ADR-030, docs/CLARIDAD2.md §2.8): the
+   * brief labels shown and everything still queued, as plates. The queue is emptied: nothing is carried
+   * into the next run. A first-time accident stays unexplained (its card may still come in a later run).
+   */
+  drainForSummary(): MomentPlate[];
+  /**
+   * Another surface already told these (a session-1 tutorial line of VELA's): mark them explained and
+   * drop them from the queue without opening anything (one thing per event).
+   */
+  markTold(ids: readonly MomentId[]): void;
   serialize(): MomentsSave;
   load(data: unknown): boolean;
   /** New game: forget everything (keeps the explain mode). */
@@ -125,6 +138,7 @@ export const SAMPLE_PAYLOADS: Partial<{ [K in keyof GameEvents]: GameEvents[K] }
   extinctionDone: { era: 2, genome: 9 },
   offlineReturn: { seconds: 11400, essence: 12400 },
   dishOvergrown: { on: true },
+  lightCollected: { x: 96, y: 120, amount: 8, by: 'hand' },
 };
 
 const WATCHED: (keyof GameEvents)[] = [
@@ -179,6 +193,12 @@ export function createMoments(deps: MomentsDeps): Moments {
   let evalQueued = false;
   /** Behaviour moments told as a brief label while deferred: their full card waits for a creature. */
   const deferred = new Set<MomentId>();
+  // The run being played (sessions loop): its card budget and its plates for the report (§2.8).
+  let runN: number | null = null;
+  let runCards = 0;
+  let plates: MomentPlate[] = [];
+  /** The run's facts, refreshed with every poll (one view read per poll, never per frame). */
+  let facts: RunFacts | null = null;
   const lastAt = new Map<keyof GameEvents, number>();
   const lastPayload = new Map<keyof GameEvents, unknown>();
   const prev: PollMemory = { seedCost: null, calib: null };
@@ -248,6 +268,60 @@ export function createMoments(deps: MomentsDeps): Moments {
     last: (e) => lastPayload.get(e),
   };
 
+  function factsOf(v: GameView): RunFacts {
+    const se = v.session ?? null;
+    return { cycle: v.cycle, phase: se ? se.phase : null, elapsed: se?.elapsed ?? 0, cards: runCards };
+  }
+
+  function currentFacts(): RunFacts | null {
+    if (!facts) {
+      try {
+        facts = factsOf(deps.getView());
+      } catch {
+        return null;
+      }
+    }
+    return { ...facts, cards: runCards };
+  }
+
+  function verdictOf(id: MomentId): RunVerdict | null {
+    const f = currentFacts();
+    return f ? runVerdict(id, f) : null;
+  }
+
+  /** A new run: what the last one still had queued is never shown in this one (QA#25). */
+  function noteRun(v: GameView): void {
+    const n = v.cycle === 'sessions' && v.session ? v.session.n : null;
+    if (n === runN) return;
+    if (runN !== null && n !== null) {
+      queue = [];
+      plates = [];
+    }
+    runN = n;
+    runCards = 0;
+  }
+
+  function plateOf(def: MomentDef, built: Built): MomentPlate {
+    return {
+      id: def.id,
+      plate: def.plate,
+      title: def.title,
+      lines: built.lines ?? def.lines,
+      brief: built.brief ?? def.brief,
+      illustration: def.illustration,
+      icon: def.icon,
+      color: def.color,
+      chips: built.chips,
+      data: built.data,
+    };
+  }
+
+  /** A label shown in a run: its card goes to the report (warnings like "about to touch" have none). */
+  function addPlate(def: MomentDef, built: Built): void {
+    if (def.forceBrief || plates.some((p) => p.id === def.id)) return;
+    plates.push(plateOf(def, built));
+  }
+
   function canQueue(def: MomentDef): boolean {
     if (mode === 'off') return false;
     if (seen.has(def.id)) return false;
@@ -268,6 +342,16 @@ export function createMoments(deps: MomentsDeps): Moments {
       }
       return;
     }
+    // An event of a new run starts that run's budget before it queues (QA#25), with fresh facts.
+    try {
+      const v = ctx.view(); // the poll's own view while a poll runs (v0.021)
+      noteRun(v);
+      facts = factsOf(v);
+    } catch {
+      /* view not ready: keep the last facts */
+    }
+    // The first Spark of a running session is VELA's line (t_golden), never a Momento (§2.8).
+    if (verdictOf(def.id) === 'story') return;
     let built: Built;
     try {
       built = def.build(payload, ctx);
@@ -286,7 +370,7 @@ export function createMoments(deps: MomentsDeps): Moments {
       mode: m,
       title: def.title,
       lines: built.lines ?? def.lines,
-      brief: def.brief,
+      brief: built.brief ?? def.brief,
       illustration: def.illustration,
       icon: def.icon,
       mood: def.mood,
@@ -357,8 +441,11 @@ export function createMoments(deps: MomentsDeps): Moments {
     const top = ready[0].def.priority;
     if (queue.some((q) => q.at > t && q.at - t <= PRIORITY_GRACE_MS && q.def.priority > top)) return;
     for (const q of ready) {
+      // The run's budget (§2.8): before and after the clock nothing opens; the report takes it.
+      const verdict = verdictOf(q.def.id);
+      if (verdict === 'hold') return;
       queue = queue.filter((x) => x !== q);
-      if (seen.has(q.def.id)) continue;
+      if (seen.has(q.def.id) || verdict === 'story') continue;
       let ok = true;
       try {
         ok = q.def.valid ? q.def.valid(q.built.data, ctx) : true;
@@ -370,14 +457,18 @@ export function createMoments(deps: MomentsDeps): Moments {
       let later = false;
       try {
         downgrade = deps.downgrade?.(q.def.id) ?? false;
-        later = !q.def.forceBrief && mode === 'full' && (deps.defer?.(q.def.id) ?? false);
+        // In a run the budget decides (a deferred card would wait for a card that never comes).
+        later = verdict === null && !q.def.forceBrief && mode === 'full' && (deps.defer?.(q.def.id) ?? false);
       } catch {
         downgrade = false;
       }
-      const m: 'full' | 'brief' = q.def.forceBrief || mode === 'brief' || downgrade || later ? 'brief' : 'full';
+      const label = verdict === 'brief' || verdict === 'later';
+      const m: 'full' | 'brief' = q.def.forceBrief || mode === 'brief' || downgrade || later || label ? 'brief' : 'full';
       if (later) {
         if (q.def.id.startsWith('behavior.')) deferred.add(q.def.id);
-      } else markSeen(q.def, q.built);
+      } else if (verdict !== 'later' || m === 'full') markSeen(q.def, q.built);
+      if (verdict !== null && m === 'full') runCards++;
+      if (verdict !== null && m === 'brief') addPlate(q.def, q.built);
       openNow(q.def, q.built, m, false);
       return;
     }
@@ -424,6 +515,15 @@ export function createMoments(deps: MomentsDeps): Moments {
   }
 
   function pollOnce(): void {
+    // The run's budget and facts come from this poll's one view (QA#25; v0.021: one view per poll).
+    let v: GameView | null = null;
+    try {
+      v = ctx.view();
+      noteRun(v);
+      facts = factsOf(v);
+    } catch {
+      facts = null;
+    }
     pollDeferred();
     if (mode !== 'off') {
       for (const def of MOMENTS) {
@@ -439,14 +539,10 @@ export function createMoments(deps: MomentsDeps): Moments {
       }
     }
     // Remember the view for the next "went up/down" checks.
-    try {
-      const v = ctx.view();
-      prev.seedCost = v.seedCost;
-      const c = v.calibration;
-      prev.calib = { mu: c.mu, sigma: c.sigma, R: c.R, dt: c.dt };
-    } catch {
-      /* view not ready */
-    }
+    if (!v) return;
+    prev.seedCost = v.seedCost;
+    const c = v.calibration;
+    prev.calib = { mu: c.mu, sigma: c.sigma, R: c.R, dt: c.dt };
   }
 
   function tick(): void {
@@ -522,7 +618,9 @@ export function createMoments(deps: MomentsDeps): Moments {
     isPausing: () => !!open && open.mode === 'full' && !open.replay,
     isBusy() {
       // Queued (even if still in its delay) counts: the story must not start the same lesson meanwhile.
-      return (!!open && !open.replay) || queue.length > 0;
+      // Not while the run holds them (no clock): VELA's session-1 lines play then (§2.4).
+      if (!!open && !open.replay) return true;
+      return queue.length > 0 && queue.some((q) => verdictOf(q.def.id) !== 'hold');
     },
     dismiss() {
       close();
@@ -592,6 +690,39 @@ export function createMoments(deps: MomentsDeps): Moments {
       persist();
       events.emit('change', {});
     },
+    drainForSummary() {
+      for (const q of queue) {
+        if (q.def.forceBrief || seen.has(q.def.id)) continue;
+        let ok = true;
+        try {
+          ok = q.def.valid ? q.def.valid(q.built.data, ctx) : true;
+        } catch {
+          ok = false;
+        }
+        if (!ok) continue;
+        addPlate(q.def, q.built);
+        if (!isAccident(q.def.id)) markSeen(q.def, q.built);
+      }
+      queue = [];
+      const out = plates;
+      plates = [];
+      return out;
+    },
+    markTold(ids) {
+      let changed = false;
+      for (const id of ids) {
+        if (!MOMENT_BY_ID.has(id)) continue;
+        queue = queue.filter((q) => q.def.id !== id);
+        deferred.delete(id);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        changed = true;
+      }
+      if (changed) {
+        persist();
+        events.emit('change', {});
+      }
+    },
     serialize,
     load(data) {
       const ok = load(data);
@@ -603,6 +734,8 @@ export function createMoments(deps: MomentsDeps): Moments {
       seen = new Set();
       memo = new Map();
       queue = [];
+      plates = [];
+      runCards = 0;
       lastCloseAt = -Infinity;
       persist();
       events.emit('change', {});
