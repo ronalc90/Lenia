@@ -20,7 +20,8 @@ import { ACHIEVEMENT_TEXT, BEHAVIOR_NAMES, CLASSIC_ONLY_TEXT, JOURNAL, SESSION_O
 import { BRANCH_TEXT, NODE_TEXT, SESSION_UI, TREE_UI, VALUE_TEXT, VELA_LINES, WORLD_TEXT } from './treeText';
 
 /** Banned anywhere (case-insensitive). */
-const BANNED_ANY = [/μ/, /σ/, /r[ée]gimen|regime/i, /genom[ae]/i, /extinci|extinct/i, /calibr/i, /esp[ée]cimen|specimen/i, /\bpasos\b/i, /Ø/];
+/** "pasos" = simulation steps; «primeros pasos» (the summary's first steps, ADR-030) is plain Spanish. */
+const BANNED_ANY = [/μ/, /σ/, /r[ée]gimen|regime/i, /genom[ae]/i, /extinci|extinct/i, /calibr/i, /esp[ée]cimen|specimen/i, /(?<!primeros )\bpasos\b/i, /Ø/];
 /** The old currency (capitalised; a story "sample" sent to the Committee is fine). */
 const BANNED_CASE = [/\bMuestras?\b/, /\bSamples?\b/];
 
@@ -130,6 +131,58 @@ describe('clarity: no jargon in what the player reads', () => {
     expect(problems('x', { es: 'Arriba: «+1/s» es tu Esencia.', en: 'Up top: "+1/s" is your Essence.' })).toEqual([]);
     expect(problems('x', { es: 'Ahora 2 luz/s → con Nutrientes 2,5 luz/s.', en: 'Now 2 glow/s → with Nutrients 2.5 glow/s.' })).toEqual([]);
     expect(problems('x', { es: 'Tu luz/s sube.', en: 'Your glow/s rises.' }).length).toBe(2);
+  });
+});
+
+/**
+ * ADR-030: the in-run currency is Luz / Glow on screen (code ids stay `essence`) and the boost is Nutrientes.
+ * The game's own texts are checked now; the story's, the Encargos' and the UI's (other packages) when the
+ * integrator turns LUZ_RENAME on, after every package has landed.
+ */
+const LUZ_RENAME = false;
+const OLD_NAMES = [/esencia/i, /essence/i, /\babono\b/i, /fertili[sz]er/i];
+const oldNames = (all: [string, Text][]) =>
+  all.flatMap(([p, t]) => (['es', 'en'] as const).filter((l) => OLD_NAMES.some((re) => re.test(t[l]))).map((l) => `${p} ${l}: «${t[l]}»`));
+
+function gameTexts(): [string, Text][] {
+  const all: [string, Text][] = [];
+  const tx = Object.fromEntries(Object.entries(TEXT).filter(([k]) => !CLASSIC_ONLY_TEXT.includes(k)));
+  texts(tx, 'TEXT', all);
+  texts(ACHIEVEMENT_TEXT, 'ACHIEVEMENT_TEXT', all);
+  texts(JOURNAL, 'JOURNAL', all);
+  texts(SESSION_OBJECTIVE_TEXT, 'SESSION_OBJECTIVE_TEXT', all);
+  texts(NODE_TEXT, 'NODE_TEXT', all);
+  texts(BRANCH_TEXT, 'BRANCH_TEXT', all);
+  texts(VALUE_TEXT, 'VALUE_TEXT', all);
+  texts(TREE_UI, 'TREE_UI', all);
+  texts(SESSION_UI, 'SESSION_UI', all);
+  texts(VELA_LINES, 'VELA_LINES', all);
+  texts(WORLD_TEXT, 'WORLD_TEXT', all);
+  return all;
+}
+
+describe('Luz and Nutrientes (ADR-030)', () => {
+  it('no player text of the game says Esencia/Essence or Abono', () => {
+    expect(oldNames(gameTexts())).toEqual([]);
+  });
+
+  it.skipIf(!LUZ_RENAME)('no player text says Esencia/Essence (story, Encargos and endings too)', () => {
+    const all: [string, Text][] = sceneTexts();
+    for (const e of [...CHAIN, ...SIDE]) for (const k of ['ask', 'why', 'thanks'] as const) all.push([`${e.id}.${k}`, e[k]]);
+    texts(STORY_JOURNAL, 'STORY_JOURNAL', all);
+    texts(ENDINGS, 'ENDINGS', all);
+    expect(oldNames(all)).toEqual([]);
+  });
+
+  it('no multiplier with two decimals outside "Show the maths" (the tree\'s before → after is the maths)', () => {
+    const all: [string, Text][] = [];
+    const tx = Object.fromEntries(Object.entries(TEXT).filter(([k]) => !CLASSIC_ONLY_TEXT.includes(k)));
+    texts(tx, 'TEXT', all);
+    texts(SESSION_UI, 'SESSION_UI', all);
+    texts(TREE_UI, 'TREE_UI', all);
+    texts(VELA_LINES, 'VELA_LINES', all);
+    const twoDecimals = /×\d+[.,]\d\d/;
+    expect(all.filter(([, t]) => twoDecimals.test(t.es) || twoDecimals.test(t.en)).map(([p, t]) => `${p}: «${t.es}»`)).toEqual([]);
   });
 });
 

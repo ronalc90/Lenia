@@ -165,7 +165,7 @@ describe('sessions cycle: gifts and boosts are proportional', () => {
     expect(after.essence - before.essence).toBeCloseTo(gift, 6);
     expect(after.charges!.guaranteed).toBe(before.charges!.guaranteed + C.SPARK_SURE_SEEDS);
     const reward = (log.get('goldenCollected')![0] as { reward: { es: string } }).reward.es;
-    expect(reward).toContain(`${C.SPARK_GIFT_SECONDS} s de tu Esencia`);
+    expect(reward).toContain(`¡Destello! +${gift} luz`); // short enough for 360 px (QA-CLARIDAD #31)
     expect(g.session!.goldens).toBe(1);
   });
 

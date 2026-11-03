@@ -263,11 +263,11 @@ export const ACHIEVEMENT_TEXT: Record<string, { name: Text; desc: Text }> = {
   divider: { name: t('Una se hace dos', 'One becomes two'), desc: t('Mira una criatura que se divide.', 'See a creature that splits.') },
   colony: { name: t('Colonia', 'Colony'), desc: t('Junta tres iguales: una colonia.', 'Gather three alike: a colony.') },
   allBehaviors: { name: t('Observadora', 'Watcher'), desc: t('Mira todas las maneras de moverse.', 'See every way of moving.') },
-  eps10: { name: t('Productiva', 'Productive'), desc: t('Gana 10 Esencia por segundo.', 'Earn 10 Essence per second.') },
-  eps100: { name: t('Floreciente', 'Flourishing'), desc: t('Gana 100 Esencia por segundo.', 'Earn 100 Essence per second.') },
-  eps1000: { name: t('Jardín de luz', 'Garden of light'), desc: t('Gana 1 000 Esencia por segundo.', 'Earn 1,000 Essence per second.') },
-  essence1e4: { name: t('Diez mil', 'Ten thousand'), desc: t('Gana 10 000 Esencia en total.', 'Earn 10,000 Essence in total.') },
-  essence1e6: { name: t('Millonaria', 'Millionaire'), desc: t('Gana 1 000 000 de Esencia en total.', 'Earn 1,000,000 Essence in total.') },
+  eps10: { name: t('Productiva', 'Productive'), desc: t('Haz 10 de luz por segundo.', 'Make 10 glow per second.') },
+  eps100: { name: t('Floreciente', 'Flourishing'), desc: t('Haz 100 de luz por segundo.', 'Make 100 glow per second.') },
+  eps1000: { name: t('Jardín de luz', 'Garden of light'), desc: t('Haz 1 000 de luz por segundo.', 'Make 1,000 glow per second.') },
+  essence1e4: { name: t('Diez mil', 'Ten thousand'), desc: t('Haz 10 000 de luz en total.', 'Make 10,000 glow in total.') },
+  essence1e6: { name: t('Millonaria', 'Millionaire'), desc: t('Haz 1 000 000 de luz en total.', 'Make 1,000,000 glow in total.') },
   golden1: { name: t('Destello', 'Spark'), desc: t('Atrapa un Destello.', 'Catch a Spark.') },
   golden10: { name: t('Cazadora de luz', 'Light catcher'), desc: t('Atrapa 10 Destellos.', 'Catch 10 Sparks.') },
   golden50: { name: t('Polilla', 'Moth'), desc: t('Atrapa 50 Destellos.', 'Catch 50 Sparks.') },
@@ -297,7 +297,7 @@ export const CLASSIC_ACHIEVEMENT_TEXT: Record<string, { name: Text; desc: Text }
   heritage: { name: t('Herencia', 'Heritage'), desc: t('Compra un nodo del Genoma.', 'Buy a Genome node.') },
 };
 
-export const achievementReward = (bonus: number): Text => t(`+${pct(bonus)} Esencia`, `+${pct(bonus)} Essence`);
+export const achievementReward = (bonus: number): Text => t(`+${pct(bonus)} de luz`, `+${pct(bonus)} glow`);
 
 // ───────────────────────────── Objectives ──────────────────────────
 // The objective line is replaced by the Encargos (main.ts); OBJECTIVE_TEXT is the classic wording
@@ -311,19 +311,19 @@ const OBJECTIVE_TEXT: Record<string, Text> = {
   dropper: t('Compra el Gotero en el Laboratorio', 'Buy the Dropper in the Lab'),
   two: t('Ten 2 criaturas vivas', 'Have 2 living creatures'),
   seeder: t('Compra el Sembrador automático', 'Buy the Auto-seeder'),
-  eps3: t('Gana 3 Esencia por segundo', 'Earn 3 Essence per second'),
+  eps3: t('Haz 3 de luz por segundo', 'Make 3 glow per second'),
   calib: t('Compra el Calibrador', 'Buy the Calibrator'),
   move: t('Mueve un mando en Calibrar', 'Move a knob in Calibrate'),
   species3: t('Descubre 3 criaturas distintas', 'Discover 3 different creatures'),
   golden: t('Atrapa un Destello dorado', 'Catch a golden Spark'),
   behaviors2: t('Mira 2 formas de moverse', 'See 2 ways of moving'),
-  eps10: t('Gana 10 Esencia por segundo', 'Earn 10 Essence per second'),
+  eps10: t('Haz 10 de luz por segundo', 'Make 10 glow per second'),
   culture: t('Compra Cultivo', 'Buy Culture'),
   print: t('Planta otra igual desde el Bestiario', 'Plant another one from the Bestiary'),
   species6: t('Descubre 6 criaturas distintas', 'Discover 6 different creatures'),
-  eps50: t('Gana 50 Esencia por segundo', 'Earn 50 Essence per second'),
+  eps50: t('Haz 50 de luz por segundo', 'Make 50 glow per second'),
   dish: t('Compra la Placa', 'Buy the Dish'),
-  era100k: t('Gana 100 000 Esencia en esta noche', 'Earn 100,000 Essence this night'),
+  era100k: t('Haz 100 000 de luz en esta noche', 'Make 100,000 glow this night'),
   extinct: t('Empieza una noche nueva (Extinción)', 'Start a new night (Extinction)'),
 };
 
@@ -337,7 +337,7 @@ export const SESSION_OBJECTIVE_TEXT: Record<string, Text> = {
   dish: t('Compra «Placa más grande» en el Árbol', 'Buy “Bigger dish” in the Tree'),
   print: t('Haz una copia desde el Bestiario', 'Make a copy from the Bestiary'),
   // The same step as the Encargo `era100k` (J-40), which the player sees; both count the session's Esencia.
-  era100k: t('Gana 2 000 Esencia en una sesión', 'Earn 2,000 Essence in one session'),
+  era100k: t('Haz 2 000 de luz en una sesión', 'Make 2,000 glow in one session'),
   extinct: t('Empieza una noche nueva en el Árbol', 'Start a new night in the Tree'),
 };
 
@@ -371,7 +371,7 @@ export const TEXT = {
   sporeReward: (n: number) => t(`¡Lluvia de semillas! ${n} gratis`, `Seed shower! ${n} free`),
   mutagenReward: (n: number) => t(`¡Semillas mágicas! Las próximas ${n} siempre viven`, `Magic seeds! Your next ${n} always live`),
   objectiveDone: (reward: number) =>
-    reward > 0 ? t(`Objetivo cumplido: +${f(reward)} Esencia`, `Objective complete: +${f(reward)} Essence`) : t('Objetivo cumplido', 'Objective complete'),
+    reward > 0 ? t(`Objetivo cumplido: +${f(reward)} de luz`, `Objective complete: +${f(reward)} glow`) : t('Objetivo cumplido', 'Objective complete'),
   dishSaturated: t('Placa llena: el Sembrador espera a que haya sitio.', 'Dish full: the Auto-seeder waits for room.'),
   newBehavior: (b: Behavior) => t(`¡Nueva manera de moverse: ${BEHAVIOR_NAMES[b].es}!`, `New way of moving: ${BEHAVIOR_NAMES[b].en}!`),
   freePrintReady: t('Archivo: ¡copia gratis lista!', 'Archive: free copy ready!'),
@@ -382,13 +382,12 @@ export const TEXT = {
   /** Registration number shown under a species name (QA2 §5.3: "Criatura N", not "Espécimen"). */
   specimen: (n: number) => t(`Criatura ${n}`, `Creature ${n}`),
   multCollection: t('Colección', 'Collection'),
-  multBehaviors: t('Comportamientos vistos', 'Behaviours seen'),
+  multBehaviors: t('Maneras de moverse vistas', 'Ways of moving seen'),
   multAchievements: t('Logros', 'Achievements'),
   variantSuffix: t(' (sorpresa)', ' (surprise)'),
   // ── Sessions cycle (docs/CICLO.md) ──
-  /** Coordinator: the proportional Spark gift says what it is ("30 s de tu Esencia"). */
-  sparkGift: (secs: number, amount: number) =>
-    t(`El Destello te regala ${secs} s de tu Esencia: +${f(amount)}`, `The Spark gives you ${secs} s of your Essence: +${f(amount)}`),
+  /** The Spark's gift, short enough for 360 px (QA-CLARIDAD #31): «¡Destello! +60 luz». */
+  sparkGift: (amount: number) => t(`¡Destello! +${f(amount)} luz`, `Spark! +${f(amount)} glow`),
   sparkSure: (n: number) =>
     n === 1 ? t('…y tu próxima semilla vivirá seguro', '…and your next seed will surely live') : t(`…y tus próximas ${n} semillas vivirán seguro`, `…and your next ${n} seeds will surely live`),
   /**
@@ -397,9 +396,10 @@ export const TEXT = {
    */
   dishFull: (n: number) =>
     t(`¡Placa llena! Caben ${n}. Compra «Placa más grande» en el Árbol.`, `Dish full! Room for ${n}. Buy “Bigger dish” in the Tree.`),
-  /** Abono: the in-session production boost. */
-  boost: t('Abono', 'Fertiliser'),
-  boostBought: (mult: string, multEn = mult) => t(`¡Abono! Esencia ${mult} hasta el final.`, `Fertiliser! Essence ${multEn} until the end.`),
+  /** Nutrientes (was Abono, ADR-030): the in-session production boost. */
+  boost: t('Nutrientes', 'Nutrients'),
+  /** `pct`: what all the Nutrientes bought today add, in whole percent («+25 %», a gain in green). */
+  boostBought: (pct: number) => t(`¡Nutrientes! +${pct} % de luz hasta el final.`, `Nutrients! +${pct}% glow until the end.`),
   multTree: t('Árbol (Vida)', 'Tree (Life)'),
   multWorld: t('Mundo', 'World'),
   multEcosystem: t('Placa variada', 'Mixed dish'),

@@ -34,7 +34,7 @@ describe('the Datos equation on the end card', () => {
     const x = datosExplain(d, 'es', 2, { name: { es: 'Más tiempo', en: 'More time' }, missing: 4 });
     expect(x.terms.map((t) => t.value)).toEqual(['9', '×1,1']);
     expect(x.total).toBe(String(d.fromEssence)); // 9 × 1,1 → 9: the equation adds up by itself
-    expect(x.rule).toMatch(new RegExp(`^Por cada ${C.DATOS_ESSENCE_DIV} de Esencia, 1 Dato`));
+    expect(x.rule).toMatch(new RegExp(`^Por cada ${C.DATOS_ESSENCE_DIV} de luz, 1 Dato`)); // ADR-030: Luz on screen
     expect(x.rows!.map((r) => r.label)).toEqual([`+${C.DATOS_PER_NEW_SPECIES}`, '=']);
     expect(x.rows![1].text).toBe(`${d.total} Datos al terminar`);
     expect(d.fromEssence + C.DATOS_PER_NEW_SPECIES).toBe(d.total);
@@ -49,7 +49,7 @@ describe('the Datos equation on the end card', () => {
     noteEncargo(session, fx);
     const d = computeDatos(session, fx, 0);
     const label = (first: boolean) => equationRows(d, 'es', 1, first).find((r) => r.kind === 'encargos')!.tiles[0].label;
-    expect(label(true)).toBe('primeras metas');
+    expect(label(true)).toBe('primeros pasos'); // QA-CLARIDAD #9
     expect(label(false)).toBe('encargos');
   });
 

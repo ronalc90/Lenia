@@ -148,11 +148,11 @@ describe('always more: "antes → después"', () => {
   it('reads like the plan', () => {
     expect(beforeAfter({}, 'clock')).toMatchObject({ before: { es: 'Sesión 0:15' }, after: { es: 'Sesión 0:20' } });
     expect(beforeAfter({ clock: 6, clock2: 1 }, 'clock2').after!.es).toBe('Sesión 1:05');
-    expect(beforeAfter({ culture: 1 }, 'culture')).toMatchObject({ before: { es: 'Esencia ×1,15' }, after: { es: 'Esencia ×1,32', en: 'Essence ×1.32' } });
+    expect(beforeAfter({ culture: 1 }, 'culture')).toMatchObject({ before: { es: 'Luz ×1,15' }, after: { es: 'Luz ×1,32', en: 'Glow ×1.32' } });
     expect(beforeAfter({}, 'dish')).toMatchObject({ before: { es: `Sitio para ${C.DISH_CAPACITY[0]} criaturas` }, after: { es: `Sitio para ${C.DISH_CAPACITY[1]} criaturas`, en: `Room for ${C.DISH_CAPACITY[1]} creatures` } });
     expect(beforeAfter({}, 'slots')).toMatchObject({ before: { es: `Sitio para ${C.DISH_CAPACITY[0]} criaturas` }, after: { es: `Sitio para ${C.DISH_CAPACITY[0] + 1} criaturas` } });
-    expect(beforeAfter({}, 'sparkGift')).toMatchObject({ before: { es: 'Regalo: 10 s de Esencia' }, after: { es: 'Regalo: 12 s de Esencia' } });
-    expect(beforeAfter({}, 'sprint').after!.es).toBe('Al final: Esencia ×1,5');
+    expect(beforeAfter({}, 'sparkGift')).toMatchObject({ before: { es: 'Regalo: 10 s de luz' }, after: { es: 'Regalo: 12 s de luz' } });
+    expect(beforeAfter({}, 'sprint').after!.es).toBe('Al final: luz ×1,5');
     expect(beforeAfter({}, 'incubator')).toMatchObject({ before: { es: 'Nacen en 8,9 s' }, after: { es: 'Nacen en 7,6 s', en: 'Hatch in 7.6 s' }, better: true });
     expect(beforeAfter({}, 'fridge')).toMatchObject({ before: { es: '1 criatura viva al empezar' }, after: { es: '2 criaturas vivas al empezar' } });
     expect(beforeAfter({}, 'cheapSeeds')).toMatchObject({ before: { es: 'Precio normal' }, after: { es: 'Semillas −15 %' } });

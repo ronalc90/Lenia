@@ -182,7 +182,6 @@ import {
   TREE_BY_ID,
   affordableNodes,
   effectLine,
-  multText,
   nightInfo,
   nodeCost,
   nodeLevel,
@@ -1902,7 +1901,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     giftLight(amount, TEXT.gift.spark);
     const sure = fx.mutagenSeeds;
     if (sure > 0) s.charges.guaranteed += sure;
-    const gift = TEXT.sparkGift(secs, amount);
+    const gift = TEXT.sparkGift(amount);
     const more = sure > 0 ? TEXT.sparkSure(sure) : null;
     const reward: Text = more ? { es: `${gift.es} ${more.es}`, en: `${gift.en} ${more.en}` } : gift;
     s.stats.golden++;
@@ -3106,7 +3105,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       se.boosts++;
       const mult = boostMult(se);
       bus.emit('boostBought', { count: se.boosts, mult, cost });
-      toast(TEXT.boostBought(multText(mult).es, multText(mult).en), 'good');
+      toast(TEXT.boostBought(Math.round((mult - 1) * 100)), 'good');
       return true;
     },
   };
