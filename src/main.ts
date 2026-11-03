@@ -1392,7 +1392,9 @@ function boot(): void {
   /** §6.1: frames over 22 ms for 2 s in a row step the effects down one profile (never the grid). */
   let slowFor = 0;
   function watchFxPace(now: number, dt: number): void {
-    if (!debugTime.fxAuto || fxQuality === 'low' || idle || document.hidden) {
+    // The unlit incubation is a few seconds of deliberate GPU work at every run start: never judged
+    // (it lowered the effects one profile per run on a mid-range phone, QA review of v0.019).
+    if (!debugTime.fxAuto || fxQuality === 'low' || idle || document.hidden || culture.incubating) {
       slowFor = 0;
       return;
     }
