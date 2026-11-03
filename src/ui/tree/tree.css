@@ -87,29 +87,28 @@
   gap: 8px;
   min-height: 52px;
   padding: 6px 14px 6px 10px;
-  border-radius: 16px;
+  border-radius: var(--bl-r-lg);
   background: color-mix(in srgb, var(--bl-surface) 88%, transparent);
   border: 1px solid var(--rt-line2);
-  box-shadow: 0 6px 20px var(--rt-shadow);
-  backdrop-filter: blur(8px);
+  box-shadow: var(--bl-elev-2);
   color: var(--bl-aurora);
 }
 .rt-datos b {
   display: block;
-  font: 800 1.45rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-title)/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
 .rt-datos small {
   display: block;
   margin-top: 2px;
-  font: 700 0.7rem/1 var(--bl-font-ui);
+  font: 700 var(--bl-fs-caption)/1 var(--bl-font-ui);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--bl-text2);
 }
 .rt-datos.bump b {
-  animation: rt-bump 0.45s var(--bl-ease-standard);
+  animation: rt-bump var(--bl-t-story) var(--bl-ease-standard);
 }
 /* PriceTicker (Momentos) right of the Datos: "−12 · Más tiempo" for ~2 s after a purchase. */
 .rt-datos {
@@ -131,10 +130,9 @@
   align-items: baseline;
   gap: 8px;
   padding: 6px 12px;
-  border-radius: 12px;
+  border-radius: var(--bl-r-md);
   background: color-mix(in srgb, var(--bl-surface) 80%, transparent);
   border: 1px solid var(--rt-line);
-  backdrop-filter: blur(6px);
   line-height: 1.15;
 }
 .rt-top .rt-go {
@@ -146,7 +144,7 @@
 .rt-title h2 {
   margin: 0;
   flex: none;
-  font: 800 0.9rem/1.15 var(--bl-font-ui);
+  font: 800 var(--bl-fs-small)/1.15 var(--bl-font-ui);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -154,7 +152,7 @@
 .rt-title p {
   margin: 0;
   min-width: 0;
-  font: 600 0.78rem/1.2 var(--bl-font-ui);
+  font: 600 var(--bl-fs-caption)/1.2 var(--bl-font-ui);
   color: var(--bl-text2);
   white-space: nowrap;
   overflow: hidden;
@@ -170,16 +168,13 @@
   min-height: 52px;
   padding: 0 18px 0 14px;
   border: 0;
-  border-radius: 16px;
+  border-radius: var(--bl-r-lg);
   background: var(--bl-accent-fill);
   color: var(--bl-accent-ink) !important;
-  font: 800 0.98rem/1 var(--bl-font-ui) !important;
-  box-shadow: var(--bl-shadow-glow);
+  font: 800 var(--bl-fs-body)/1 var(--bl-font-ui) !important;
+  box-shadow: var(--bl-glow-accent);
   cursor: pointer;
   white-space: nowrap;
-}
-.rt-go:active {
-  transform: scale(0.97);
 }
 .rt-go:focus-visible,
 .rt-tool:focus-visible,
@@ -237,7 +232,7 @@
   stroke-linecap: round;
   stroke-width: 2.4;
   opacity: 0.5;
-  transition: opacity 0.3s, stroke-width 0.3s;
+  transition: opacity var(--bl-t-sheet), stroke-width var(--bl-t-sheet);
 }
 .rt-edge.on {
   stroke-width: 5;
@@ -255,7 +250,7 @@
   opacity: 0.7;
 }
 .rt-edge.grow {
-  animation: rt-grow 0.7s var(--bl-ease-standard) both;
+  animation: rt-grow var(--bl-t-celebrate) var(--bl-ease-standard) both;
 }
 .rt-gate-label {
   position: absolute;
@@ -268,7 +263,7 @@
   background: var(--bl-surface);
   border: 1px dashed var(--rt-line2);
   color: var(--bl-text2);
-  font: 700 0.72rem/1 var(--bl-font-ui);
+  font: 700 var(--bl-fs-caption)/1 var(--bl-font-ui);
   white-space: nowrap;
   pointer-events: none;
 }
@@ -284,12 +279,12 @@
   background: color-mix(in srgb, var(--bc) 16%, var(--bl-surface));
   border: 2px solid var(--bc);
   color: var(--bc);
-  font: 900 1.7rem/1 var(--bl-font-ui);
+  font: 900 var(--bl-fs-headline)/1 var(--bl-font-ui);
   letter-spacing: 0.04em;
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.25s;
+  transition: opacity var(--bl-t-base);
 }
 .rt.far .rt-branch {
   opacity: 1;
@@ -312,61 +307,76 @@
   content: '';
   position: absolute;
   inset: -14px;
-  border-radius: 24px;
+  border-radius: var(--bl-r-xl);
 }
 .rt-tile {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  border-radius: 18px;
+  border-radius: var(--bl-r-lg);
   background: var(--rt-tile);
   border: 2.5px solid var(--rt-line2);
   color: var(--bl-text2);
-  box-shadow: 0 4px 14px var(--rt-shadow);
-  transition: transform 0.18s var(--bl-ease-standard), border-color 0.25s, background 0.25s, color 0.25s;
+  box-shadow: var(--bl-elev-2);
+  transition: transform var(--bl-t-base) var(--bl-ease-standard), border-color var(--bl-t-base), background var(--bl-t-base), color var(--bl-t-base);
 }
 .rt-node:hover .rt-tile {
   transform: scale(1.06);
 }
 .rt-node.sel .rt-tile {
   transform: scale(1.12);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--bc) 35%, transparent), 0 8px 24px var(--rt-shadow);
+  box-shadow: var(--bl-elev-2);
+  outline: 3px solid color-mix(in srgb, var(--bc) 35%, transparent);
+  outline-offset: 2px;
 }
-/* available, not affordable yet: readable, quiet */
+/*
+ * Node states (docs/ARTE-PULIDO.md B-9): one look per state, nothing loops but the ONE recommended node.
+ *   owned        2 px route colour, route colour at 18 % inside, still
+ *   available    1.5 px route colour at 45 %, surface: readable, quiet (not enough Datos yet)
+ *   can buy      2 px route colour, surface2; its price badge turns good-green
+ *   recommended  the same + a ring that grows 1 → 1.35 and fades (transform/opacity only, 1.6 s)
+ *   mystery      1.5 px dashed line2, transparent
+ */
 .rt-node.st-available .rt-tile {
+  background: var(--bl-surface);
   color: color-mix(in srgb, var(--bc) 80%, var(--bl-text));
-  border-color: color-mix(in srgb, var(--bc) 45%, var(--rt-line2));
+  border: 1.5px solid color-mix(in srgb, var(--bc) 45%, transparent);
 }
-/* affordable: pulsing green */
 .rt-node.can .rt-tile {
-  border-color: var(--bl-good);
-  color: var(--bl-text);
-  animation: rt-pulse 1.6s ease-in-out infinite;
-}
-/* owned: bright branch border + glow */
-.rt-node.st-owned .rt-tile {
-  background: color-mix(in srgb, var(--bc) 22%, var(--rt-tile));
-  border-color: var(--bc);
+  background: var(--bl-surface2);
+  border: 2px solid var(--bc);
   color: var(--bc);
-  box-shadow: 0 0 18px color-mix(in srgb, var(--bc) 45%, transparent), 0 4px 14px var(--rt-shadow);
+}
+.rt-node.st-owned .rt-tile {
+  background: color-mix(in srgb, var(--bc) 18%, var(--rt-tile));
+  border: 2px solid var(--bc);
+  color: var(--bc);
 }
 :where([data-theme='light']) .rt-node.st-owned .rt-tile,
 .rt[data-theme='light'] .rt-node.st-owned .rt-tile {
   background: color-mix(in srgb, var(--bc) 13%, #fff);
 }
-.rt-node.st-owned.can .rt-tile {
-  border-color: var(--bl-good);
+/* The one node to buy next (the hand's on the first visit, else the cheapest one ready). */
+.rt-node.rec .rt-tile::after,
+.rt-node.big.ready .rt-tile::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 2px solid var(--bc);
+  pointer-events: none;
+  opacity: 0;
+  animation: rt-rec 1.6s var(--bl-ease-standard) infinite; /* css-lint-ok: the recommended node's ambient ring (B-9) */
 }
 /* locked (visible, a prerequisite missing) */
 .rt-node.st-locked .rt-tile {
   opacity: 0.62;
-  border-style: solid;
 }
 /* mystery: '?' */
 .rt-node.st-mystery .rt-tile {
   background: transparent;
-  border: 2.5px dashed var(--bl-text3);
+  border: 1.5px dashed var(--bl-line2);
   color: var(--bl-text3);
   box-shadow: none;
 }
@@ -381,12 +391,15 @@
 }
 .rt-node.big .rt-tile {
   border-radius: 50%;
-  border-width: 3px;
+  border-width: 2px;
+}
+/* The night can move on: the centre turns moon-gold and wears the same ring (one gesture for "this"). */
+.rt-node.big.ready {
+  --bc: var(--bl-gold);
 }
 .rt-node.big.ready .rt-tile {
   border-color: var(--bl-gold);
   color: var(--bl-gold);
-  animation: rt-moon 2s ease-in-out infinite;
 }
 .rt-node .rt-badge {
   position: absolute;
@@ -395,15 +408,15 @@
   min-width: 26px;
   height: 22px;
   padding: 0 6px;
-  border-radius: 11px;
+  border-radius: var(--bl-r-md);
   display: grid;
   place-items: center;
   background: var(--bl-surface2);
   border: 1.5px solid var(--rt-line2);
   color: var(--bl-text);
-  font: 800 0.72rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-caption)/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
-  box-shadow: 0 2px 6px var(--rt-shadow);
+  box-shadow: var(--bl-elev-1);
 }
 .rt-node.st-owned .rt-badge {
   border-color: var(--bc);
@@ -422,11 +435,11 @@
   gap: 1px;
   height: 22px;
   padding: 0 6px 0 3px;
-  border-radius: 11px;
+  border-radius: var(--bl-r-md);
   background: var(--bl-surface2);
   border: 1.5px solid var(--rt-line2);
   color: var(--bl-text2);
-  font: 800 0.72rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-caption)/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
 }
 .rt-node .rt-lockb {
@@ -450,11 +463,11 @@
   width: 104px;
   text-align: center;
   pointer-events: none;
-  transition: opacity 0.2s;
+  transition: opacity var(--bl-t-base);
 }
 .rt-name {
   display: block;
-  font: 700 0.76rem/1.15 var(--bl-font-ui);
+  font: 700 var(--bl-fs-caption)/1.15 var(--bl-font-ui);
   color: var(--bl-text);
   text-shadow: 0 1px 3px var(--bl-night), 0 0 8px var(--bl-night);
 }
@@ -470,7 +483,7 @@
   border-radius: 999px;
   background: var(--bl-surface2);
   color: var(--bl-aurora);
-  font: 800 0.78rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-caption)/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
   border: 1px solid var(--rt-line);
 }
@@ -483,10 +496,10 @@
   opacity: 0;
 }
 .rt-node.pop .rt-tile {
-  animation: rt-pop 0.55s var(--bl-ease-standard);
+  animation: rt-pop var(--bl-t-story) var(--bl-ease-standard);
 }
 .rt-node.reveal {
-  animation: rt-reveal 0.6s var(--bl-ease-standard) both;
+  animation: rt-reveal var(--bl-t-story) var(--bl-ease-standard) both;
 }
 
 /* ───── Tools (zoom, centre) ───── */
@@ -498,7 +511,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  transition: bottom 0.25s var(--bl-ease-standard), opacity 0.2s;
+  transition: transform var(--bl-t-base) var(--bl-ease-standard), opacity var(--bl-t-base);
 }
 .rt.sheet-open .rt-tools {
   opacity: 0;
@@ -509,15 +522,12 @@
   height: 52px;
   display: grid;
   place-items: center;
-  border-radius: 16px;
+  border-radius: var(--bl-r-lg);
   border: 1px solid var(--rt-line2);
   background: color-mix(in srgb, var(--bl-surface) 90%, transparent);
   color: var(--bl-text);
-  box-shadow: 0 6px 18px var(--rt-shadow);
+  box-shadow: var(--bl-elev-2);
   cursor: pointer;
-}
-.rt-tool:active {
-  transform: scale(0.95);
 }
 .rt-hint {
   position: absolute;
@@ -531,10 +541,10 @@
   background: color-mix(in srgb, var(--bl-surface) 88%, transparent);
   border: 1px solid var(--rt-line);
   color: var(--bl-text2);
-  font: 600 0.8rem/1.2 var(--bl-font-ui);
+  font: 600 var(--bl-fs-caption)/1.2 var(--bl-font-ui);
   text-align: center;
   pointer-events: none;
-  transition: opacity 0.3s;
+  transition: opacity var(--bl-t-sheet);
 }
 .rt.sheet-open .rt-hint {
   opacity: 0;
@@ -551,12 +561,12 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 10px 16px max(16px, env(safe-area-inset-bottom));
-  border-radius: 22px 22px 0 0;
+  border-radius: var(--bl-r-lg) var(--bl-r-lg) 0 0;
   background: var(--bl-surface);
   border-top: 3px solid var(--bc, var(--rt-line2));
-  box-shadow: 0 -12px 40px var(--rt-shadow);
+  box-shadow: var(--bl-elev-3);
   transform: translateY(105%);
-  transition: transform 0.28s var(--bl-ease-standard);
+  transition: transform var(--bl-t-sheet) var(--bl-ease-standard);
   touch-action: pan-y;
   user-select: text;
 }
@@ -570,7 +580,7 @@
   width: 44px;
   height: 5px;
   margin: 0 auto 8px;
-  border-radius: 3px;
+  border-radius: var(--bl-r-sm);
   background: var(--rt-line2);
 }
 .rt-sh-head {
@@ -584,7 +594,7 @@
   height: 56px;
   display: grid;
   place-items: center;
-  border-radius: 16px;
+  border-radius: var(--bl-r-lg);
   border: 2.5px solid var(--bc);
   background: color-mix(in srgb, var(--bc) 18%, var(--rt-tile));
   color: var(--bc);
@@ -601,7 +611,7 @@
 }
 .rt-sh-tt h3 {
   margin: 2px 0 6px;
-  font: 700 1.35rem/1.1 var(--bl-font-display);
+  font: 700 var(--bl-fs-title)/1.1 var(--bl-font-display);
   letter-spacing: -0.01em;
 }
 .rt-chips {
@@ -618,7 +628,7 @@
   background: var(--bl-surface2);
   border: 1px solid var(--rt-line);
   color: var(--bl-text2);
-  font: 700 0.74rem/1 var(--bl-font-ui);
+  font: 700 var(--bl-fs-caption)/1 var(--bl-font-ui);
 }
 .rt-chip.br {
   color: var(--bc);
@@ -642,7 +652,7 @@
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--bl-r-md);
   background: var(--bl-surface2);
   color: var(--bl-text2);
   cursor: pointer;
@@ -653,7 +663,7 @@
   flex-wrap: wrap;
   gap: 8px;
   margin: 14px 0 4px;
-  font: 800 1.5rem/1.1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-title)/1.1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
@@ -662,7 +672,7 @@
 }
 .rt-eff .arrow {
   color: var(--bl-text3);
-  font-size: 1.1rem;
+  font-size: var(--bl-fs-lead);
 }
 .rt-eff .nxt {
   color: var(--bl-good);
@@ -681,21 +691,21 @@
   flex: 1 1 0;
   min-width: 0;
   padding: 9px 11px;
-  border-radius: 14px;
+  border-radius: var(--bl-r-md);
   background: var(--bl-surface2);
   border: 1.5px solid var(--rt-line2);
 }
 .rt-ba small {
   display: block;
   margin-bottom: 4px;
-  font: 800 0.68rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-caption)/1 var(--bl-font-ui);
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--bl-text2);
 }
 .rt-ba b {
   display: block;
-  font: 800 1.18rem/1.15 var(--bl-font-ui);
+  font: 800 var(--bl-fs-lead)/1.15 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
   color: var(--bl-text2);
@@ -727,15 +737,12 @@
   width: 100%;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.2s, transform 0.15s var(--bl-ease-standard);
+  transition: border-color var(--bl-t-base), transform var(--bl-t-quick) var(--bl-ease-standard);
 }
 .rt-pricebox:hover,
 .rt-pricebox:focus-visible {
   border-color: var(--bl-aurora);
   outline: none;
-}
-.rt-pricebox:active {
-  transform: scale(0.99);
 }
 .rt-box h4 .rt-tap {
   float: right;
@@ -758,7 +765,7 @@
   position: relative;
   width: 52px;
   height: 52px;
-  border-radius: 14px;
+  border-radius: var(--bl-r-md);
   display: grid;
   place-items: center;
   background: var(--bl-surface);
@@ -781,26 +788,26 @@
 }
 .rt-sp i {
   position: absolute;
-  font: 800 1rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-body)/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
   font-style: normal;
   color: var(--bl-text2);
 }
 .rt-desc {
   margin: 4px 0 12px;
-  font: 500 0.98rem/1.35 var(--bl-font-ui);
+  font: 500 var(--bl-fs-body)/1.35 var(--bl-font-ui);
   color: var(--bl-text);
 }
 .rt-box {
   margin: 10px 0;
   padding: 12px;
-  border-radius: 14px;
+  border-radius: var(--bl-r-md);
   background: var(--bl-surface2);
   border: 1px solid var(--rt-line);
 }
 .rt-box h4 {
   margin: 0 0 8px;
-  font: 800 0.72rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-caption)/1 var(--bl-font-ui);
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--bl-text2);
@@ -816,20 +823,20 @@
   flex: 1 1 0;
   min-width: 66px;
   padding: 7px 6px;
-  border-radius: 10px;
+  border-radius: var(--bl-r-md);
   background: var(--bl-surface);
   border: 1px solid var(--rt-line2);
   text-align: center;
 }
 .rt-eq .t b {
   display: block;
-  font: 800 1.05rem/1.1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-body)/1.1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
 }
 .rt-eq .t span {
   display: block;
   margin-top: 3px;
-  font: 600 0.68rem/1.15 var(--bl-font-ui);
+  font: 600 var(--bl-fs-caption)/1.15 var(--bl-font-ui);
   color: var(--bl-text2);
 }
 .rt-eq .t.total {
@@ -838,13 +845,13 @@
 }
 .rt-eq .op {
   align-self: center;
-  font: 800 1.1rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-lead)/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
   color: var(--bl-text3);
 }
 .rt-rule {
   margin: 9px 0 0;
-  font: 600 0.84rem/1.3 var(--bl-font-ui);
+  font: 600 var(--bl-fs-small)/1.3 var(--bl-font-ui);
   color: var(--bl-text);
 }
 .rt-rule small {
@@ -873,7 +880,7 @@
 .rt-bar .v {
   max-width: 100%;
   margin-bottom: 4px;
-  font: 700 0.7rem/1.1 var(--bl-font-ui);
+  font: 700 var(--bl-fs-caption)/1.1 var(--bl-font-ui);
   color: var(--bl-text2);
   text-align: center;
   overflow: hidden;
@@ -883,7 +890,7 @@
 .rt-bar .col {
   width: 100%;
   max-width: 54px;
-  border-radius: 8px 8px 3px 3px;
+  border-radius: var(--bl-r-sm) var(--bl-r-sm) var(--bl-r-sm) var(--bl-r-sm);
   background: color-mix(in srgb, var(--bl-aurora) 35%, transparent);
   border: 1.5px solid var(--bl-aurora);
   min-height: 8px;
@@ -896,13 +903,13 @@
 }
 .rt-bar .c {
   margin-top: 5px;
-  font: 800 0.78rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-caption)/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
   color: var(--bl-aurora);
 }
 .rt-bar .l {
   margin-top: 3px;
-  font: 600 0.62rem/1 var(--bl-font-ui);
+  font: 600 var(--bl-fs-caption)/1 var(--bl-font-ui);
   color: var(--bl-text3);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -917,34 +924,34 @@
   align-items: baseline;
   gap: 8px;
   margin-bottom: 6px;
-  font: 700 0.86rem/1.2 var(--bl-font-ui);
+  font: 700 var(--bl-fs-small)/1.2 var(--bl-font-ui);
 }
 .rt-have .row b {
-  font: 800 1rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-body)/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
   color: var(--bl-aurora);
 }
 .rt-have .track {
   position: relative;
-  height: 14px;
-  border-radius: 7px;
-  background: var(--bl-surface2);
-  border: 1px solid var(--rt-line2);
+  height: 10px;
+  border-radius: var(--bl-r-pill);
+  background: var(--bl-surface3);
   overflow: hidden;
 }
 .rt-have .fill {
   position: absolute;
-  inset: 0 auto 0 0;
-  border-radius: 7px;
+  inset: 0;
+  border-radius: var(--bl-r-pill);
   background: linear-gradient(90deg, color-mix(in srgb, var(--bl-aurora) 70%, transparent), var(--bl-aurora));
-  transition: width 0.5s var(--bl-ease-standard);
+  transform-origin: left center;
+  transition: transform var(--bl-t-story) var(--bl-ease-standard);
 }
 .rt-have.ok .fill {
   background: var(--bl-good);
 }
 .rt-have .why {
   margin-top: 6px;
-  font: 600 0.82rem/1.3 var(--bl-font-ui);
+  font: 600 var(--bl-fs-small)/1.3 var(--bl-font-ui);
   color: var(--bl-text2);
 }
 .rt-have.ok .why {
@@ -959,11 +966,11 @@
   min-height: 60px;
   margin-top: 10px;
   border: 0;
-  border-radius: 18px;
+  border-radius: var(--bl-r-lg);
   background: var(--bl-accent-fill);
   color: var(--bl-accent-ink) !important;
-  font: 800 1.12rem/1 var(--bl-font-ui) !important;
-  box-shadow: var(--bl-shadow-glow);
+  font: 800 var(--bl-fs-lead)/1 var(--bl-font-ui) !important;
+  box-shadow: var(--bl-glow-accent);
   cursor: pointer;
 }
 .rt-buy b {
@@ -977,16 +984,13 @@
   box-shadow: none;
   cursor: default;
 }
-.rt-buy:not(:disabled):active {
-  transform: scale(0.98);
-}
 .rt-needs {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin: 12px 0 4px;
-  font: 700 0.86rem/1.2 var(--bl-font-ui);
+  font: 700 var(--bl-fs-small)/1.2 var(--bl-font-ui);
   color: var(--bl-text2);
 }
 .rt-need {
@@ -995,11 +999,11 @@
   gap: 6px;
   min-height: 44px;
   padding: 4px 12px 4px 6px;
-  border-radius: 12px;
+  border-radius: var(--bl-r-md);
   border: 1.5px solid var(--bc);
   background: color-mix(in srgb, var(--bc) 12%, var(--bl-surface));
   color: var(--bl-text);
-  font: 700 0.86rem/1 var(--bl-font-ui);
+  font: 700 var(--bl-fs-small)/1 var(--bl-font-ui);
   cursor: pointer;
 }
 .rt-need .rt-ic {
@@ -1011,7 +1015,7 @@
 .rt-gatebar .row {
   display: flex;
   justify-content: space-between;
-  font: 700 0.84rem/1.2 var(--bl-font-ui);
+  font: 700 var(--bl-fs-small)/1.2 var(--bl-font-ui);
   margin-bottom: 5px;
 }
 .rt-gatebar .row b {
@@ -1020,19 +1024,25 @@
 }
 .rt-gatebar .track {
   height: 10px;
-  border-radius: 5px;
-  background: var(--bl-surface2);
+  border-radius: var(--bl-r-pill);
+  background: var(--bl-surface3);
   overflow: hidden;
-  border: 1px solid var(--rt-line);
 }
 .rt-gatebar .fill {
   height: 100%;
-  background: var(--bl-gold);
-  border-radius: 5px;
+  background: var(--bl-moon);
+  border-radius: var(--bl-r-pill);
+  transform-origin: left center;
+}
+.rt-gatebar.done .fill {
+  background: var(--bl-good);
+}
+.rt-gatebar.done .row b {
+  color: var(--bl-good);
 }
 .rt-note {
   margin: 10px 0 2px;
-  font: 600 0.88rem/1.35 var(--bl-font-ui);
+  font: 600 var(--bl-fs-small)/1.35 var(--bl-font-ui);
   color: var(--bl-text2);
 }
 
@@ -1051,8 +1061,8 @@
   margin: -5px 0 0 -5px;
   border-radius: 50%;
   background: var(--c, var(--bl-good));
-  box-shadow: 0 0 10px var(--c, var(--bl-good));
-  transition: transform 0.7s cubic-bezier(0.1, 0.7, 0.2, 1), opacity 0.7s ease-in;
+  box-shadow: none;
+  transition: transform var(--bl-t-celebrate) cubic-bezier(0.1, 0.7, 0.2, 1), opacity var(--bl-t-celebrate) var(--bl-ease-exit);
 }
 .rt-ringfx {
   position: absolute;
@@ -1061,16 +1071,16 @@
   margin: -35px 0 0 -35px;
   border-radius: 50%;
   border: 3px solid var(--c, var(--bl-good));
-  animation: rt-ringfx 0.7s ease-out forwards;
+  animation: rt-ringfx var(--bl-t-celebrate) var(--bl-ease-standard) forwards;
 }
 .rt-float {
   position: absolute;
   transform: translate(-50%, -50%);
-  font: 800 1.1rem/1 var(--bl-font-ui);
+  font: 800 var(--bl-fs-lead)/1 var(--bl-font-ui);
   font-variant-numeric: tabular-nums;
   color: var(--c, var(--bl-good));
   text-shadow: 0 2px 8px var(--bl-night);
-  animation: rt-float 1.1s ease-out forwards;
+  animation: rt-float var(--bl-t-celebrate) var(--bl-ease-standard) forwards;
 }
 
 /* ───── Desktop: the sheet becomes a side card ───── */
@@ -1085,7 +1095,7 @@
     backdrop-filter: none;
   }
   .rt-title h2 {
-    font: 700 1.2rem/1.15 var(--bl-font-display);
+    font: 700 var(--bl-fs-title)/1.15 var(--bl-font-display);
   }
   .rt-title h2 .long {
     display: inline;
@@ -1112,7 +1122,7 @@
     bottom: 16px;
     width: 380px;
     max-height: none;
-    border-radius: 22px;
+    border-radius: var(--bl-r-lg);
     border-top: 0;
     border-left: 4px solid var(--bc, var(--rt-line2));
     transform: translateX(calc(100% + 30px));
@@ -1127,22 +1137,14 @@
 }
 
 /* ───── Animations ───── */
-@keyframes rt-pulse {
-  0%,
+@keyframes rt-rec {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
   100% {
-    box-shadow: 0 0 0 0 rgba(var(--rt-good-rgb), 0.55), 0 4px 14px var(--rt-shadow);
-  }
-  55% {
-    box-shadow: 0 0 0 10px rgba(var(--rt-good-rgb), 0), 0 4px 14px var(--rt-shadow);
-  }
-}
-@keyframes rt-moon {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 209, 102, 0.5), 0 0 22px rgba(255, 209, 102, 0.35);
-  }
-  50% {
-    box-shadow: 0 0 0 14px rgba(255, 209, 102, 0), 0 0 30px rgba(255, 209, 102, 0.55);
+    transform: scale(1.35);
+    opacity: 0;
   }
 }
 @keyframes rt-pop {
@@ -1212,9 +1214,11 @@
     transform: translate(-50%, -260%) scale(1);
   }
 }
-.rt.rm .rt-node.can .rt-tile,
-.rt.rm .rt-node.big.ready .rt-tile {
+.rt.rm .rt-node.rec .rt-tile::after,
+.rt.rm .rt-node.big.ready .rt-tile::after {
   animation: none;
+  opacity: 0.5;
+  transform: scale(1.12);
 }
 .rt.rm .rt-node.pop .rt-tile,
 .rt.rm .rt-node.reveal,
@@ -1222,9 +1226,11 @@
   animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  .rt .rt-node.can .rt-tile,
-  .rt .rt-node.big.ready .rt-tile {
+  .rt .rt-node.rec .rt-tile::after,
+  .rt .rt-node.big.ready .rt-tile::after {
     animation: none;
+    opacity: 0.5;
+    transform: scale(1.12);
   }
 }
 
@@ -1236,10 +1242,10 @@
   z-index: 2;
   /* Room for its own shadow: the line below it ("¿Por qué cuesta esto?") is never covered (QA4 F-15). */
   margin-bottom: 18px;
-  box-shadow: var(--bl-shadow-glow), 0 12px 0 12px var(--bl-surface), 0 -12px 16px 2px var(--bl-surface);
+  box-shadow: var(--bl-glow-accent);
 }
 .rt-sheet .rt-buy:disabled {
-  box-shadow: 0 12px 0 12px var(--bl-surface), 0 -12px 16px 2px var(--bl-surface);
+  box-shadow: none;
 }
 /* "¿Por qué cuesta esto? ›": one quiet line. */
 .rt-pricebox.compact {
@@ -1253,7 +1259,7 @@
   margin: 0;
   text-transform: none;
   letter-spacing: 0;
-  font-size: 0.95rem;
+  font-size: var(--bl-fs-body);
   color: var(--bl-text2);
 }
 .rt-pricebox.compact h4 span:first-of-type {
@@ -1266,15 +1272,15 @@
 /* "Gris es ahora. Verde es lo que tendrás." under the before → after boxes, until the first buy. */
 .rt-bahint {
   margin: 6px 2px 0;
-  font: 700 0.86rem/1.3 var(--bl-font-ui);
+  font: 700 var(--bl-fs-small)/1.3 var(--bl-font-ui);
   color: var(--bl-good);
 }
 /* Right after the first purchase: "¡Es tuya para siempre!" (CLARIDAD J-120), a small celebration. */
 .rt-bahint.got {
   padding: 8px 12px;
-  border-radius: 12px;
+  border-radius: var(--bl-r-md);
   background: color-mix(in srgb, var(--bl-good) 14%, transparent);
-  animation: rt-got-in 0.35s var(--bl-ease, ease-out);
+  animation: rt-got-in var(--bl-t-card) var(--bl-ease, ease-out);
 }
 @keyframes rt-got-in {
   from {
@@ -1301,7 +1307,7 @@
 .rt-dishleg {
   display: flex;
   gap: 16px;
-  font: 700 0.72rem/1 var(--bl-font-ui);
+  font: 700 var(--bl-fs-caption)/1 var(--bl-font-ui);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--bl-text2);
@@ -1319,56 +1325,51 @@
   border-top: 2.5px dashed var(--bl-accent, #5bc0eb);
 }
 
-/* First visit, nothing bought yet (QA4 F-11): a hand taps the green node to buy, the hint grows and
-   bounces, and the node breathes bigger. Reduce motion: the hand and the hint stay, still. */
-.rt-node.guide::after {
-  content: '👈';
+/* First visit, nothing bought yet (QA4 F-11): a drawn hand (icons.ts `pointer`, not an emoji: ADR-024)
+   taps the node to buy every 1.8 s — in (−4, −4) at .9 by 120 ms, back by 240 ms, still the rest
+   (docs/ARTE-PULIDO.md B-9). Reduce motion: the hand stays, still. */
+.rt-hand {
   position: absolute;
-  left: 100%;
-  top: 50%;
-  font-size: 34px;
-  line-height: 1;
-  transform: translate(4px, -50%);
+  left: calc(100% - 6px);
+  top: calc(100% - 10px);
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  color: var(--bl-text);
   pointer-events: none;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
-  animation: rt-hand 1.1s var(--bl-ease-enter, ease-out) infinite;
   z-index: 3;
+  rotate: -40deg;
+}
+.rt-hand .bl-ic {
+  width: 34px;
+  height: 34px;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.55));
+  animation: rt-hand 1.8s var(--bl-ease-standard) infinite; /* css-lint-ok: the guide's tap gesture (B-9) */
 }
 @keyframes rt-hand {
-  0%,
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  6.7% {
+    transform: translate(0, -4px) scale(0.9);
+  }
+  13.3%,
   100% {
-    transform: translate(12px, -50%) scale(1);
+    transform: translate(0, 0) scale(1);
   }
-  45% {
-    transform: translate(-2px, -50%) scale(0.92);
-  }
-}
-.rt-node.guide .rt-tile {
-  box-shadow: 0 0 0 4px var(--bl-good, #7ee081), 0 0 26px 6px color-mix(in srgb, var(--bl-good, #7ee081) 60%, transparent);
 }
 .rt.rt-first .rt-hint {
-  font-size: 1.05rem;
+  font-size: var(--bl-fs-body);
   color: var(--bl-text);
   border-color: var(--bl-good, #7ee081);
   padding: 12px 20px;
-  animation: rt-hint-bounce 1.1s ease-in-out infinite;
 }
-@keyframes rt-hint-bounce {
-  0%,
-  100% {
-    transform: translateX(-50%) translateY(0);
-  }
-  50% {
-    transform: translateX(-50%) translateY(-6px);
-  }
-}
-.rt.rm .rt-node.guide::after,
-.rt.rm.rt-first .rt-hint {
+.rt.rm .rt-hand .bl-ic {
   animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  .rt .rt-node.guide::after,
-  .rt.rt-first .rt-hint {
+  .rt .rt-hand .bl-ic {
     animation: none;
   }
 }
@@ -1379,4 +1380,250 @@
 }
 .rt-need {
   min-height: 48px;
+}
+
+/* ───── Polish (docs/ARTE-PULIDO.md B-3, B-5, B-9, B-10) ───── */
+
+/* The sheet: in 300 ms `enter`, out in 200 ms `exit`; its top is the 24-px sheet radius. */
+.rt-sheet {
+  border-radius: var(--bl-r-xl) var(--bl-r-xl) 0 0;
+  border-top: 2px solid color-mix(in srgb, var(--bc, var(--rt-line2)) 70%, transparent);
+  transition: transform var(--bl-t-sheet-out) var(--bl-ease-exit);
+}
+.rt-sheet.show {
+  transition: transform var(--bl-t-sheet) var(--bl-ease-enter);
+}
+/* A leaving sheet never eats a tap: the node under it answers at once. */
+.rt-sheet:not(.show),
+.rt-sheet:not(.show) * {
+  pointer-events: none;
+}
+/* A purchase: the sheet sinks to a 96-px peek so the node's burst is seen, then comes back. */
+.rt-sheet.show.peek {
+  transform: translateY(calc(100% - 96px));
+  transition: transform var(--bl-t-sheet) var(--bl-ease-exit);
+}
+/* Boxes inside the sheet are groups, not boxes (≤ 2 bordered levels: B-3). */
+.rt-sheet .rt-box {
+  margin: 18px 0 10px;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+.rt-ba .col {
+  border: 0;
+  background: var(--bl-surface2);
+}
+.rt-ba .nxt {
+  outline: 1.5px solid color-mix(in srgb, var(--bl-good) 70%, transparent);
+  outline-offset: -1.5px;
+  background: color-mix(in srgb, var(--bl-good) 9%, var(--bl-surface2));
+}
+.rt-sheet .rt-buy {
+  box-shadow: var(--bl-elev-1);
+}
+/* The night's primary action: the accent, a moon, one line. */
+.rt-buy.rt-night-go span {
+  white-space: nowrap;
+}
+/* «Aún no»: a secondary, informative button (B-4) — outlined, the reason in words, tappable to explain. */
+.rt-notyet {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  margin-top: 12px;
+  padding: 8px 16px;
+  border-radius: var(--bl-r-lg);
+  border: 1.5px solid var(--bl-line2);
+  background: var(--bl-surface2);
+  color: var(--bl-text2);
+  font: 700 var(--bl-fs-body)/1.2 var(--bl-font-ui);
+  cursor: pointer;
+}
+.rt-notyet .bl-ic {
+  color: var(--bl-moon);
+  flex: none;
+}
+
+/* «¿Por qué cuesta esto?»: a quiet row that unfolds the explanation in place (B-10.5). */
+.rt-sheet .rt-pricebox {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  margin-top: 8px;
+  padding: 0 4px;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--bl-text) 8%, transparent);
+  border-radius: 0;
+  background: none;
+  color: var(--bl-text2);
+  font: 700 var(--bl-fs-small)/1.2 var(--bl-font-ui);
+}
+.rt-sheet .rt-pricebox > span:first-of-type {
+  flex: 1;
+}
+.rt-sheet .rt-pricebox .rt-tap {
+  display: inline-flex;
+  color: var(--bl-text3);
+}
+.rt-sheet .rt-pricebox[aria-expanded='true'] {
+  color: var(--bl-text);
+}
+.rt-why {
+  padding: 4px 4px 8px;
+}
+.rt-why-row {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--bl-text) 8%, transparent);
+}
+.rt-why-ic {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--bl-r-sm);
+  background: color-mix(in srgb, var(--bc, var(--bl-accent)) 14%, var(--bl-surface2));
+  color: var(--bc, var(--bl-accent));
+}
+.rt-why-row small {
+  display: block;
+  margin-bottom: 2px;
+  font: 700 var(--bl-fs-caption)/1.2 var(--bl-font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bl-text3);
+}
+.rt-why-row p {
+  margin: 0;
+  font: 500 var(--bl-fs-small)/1.4 var(--bl-font-ui);
+  color: var(--bl-text);
+}
+.rt-why .rt-eq {
+  margin: 14px 0 6px;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.rt-why .rt-eq .term {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 8px 6px;
+  border-radius: var(--bl-r-md);
+  background: var(--bl-surface2);
+  text-align: center;
+}
+.rt-why .rt-eq .term b {
+  display: block;
+  font: 800 var(--bl-fs-lead)/1.1 var(--bl-font-ui);
+  font-variant-numeric: tabular-nums;
+}
+.rt-why .rt-eq .term small {
+  display: block;
+  margin-top: 3px;
+  font: 600 var(--bl-fs-caption)/1.15 var(--bl-font-ui);
+  color: var(--bl-text2);
+}
+.rt-why .rt-eq .term.total {
+  background: color-mix(in srgb, var(--bl-aurora) 14%, var(--bl-surface2));
+  color: var(--bl-aurora);
+}
+.rt-why .rt-rule {
+  color: var(--bl-text2);
+  font-weight: 500;
+}
+.rt-nextlv {
+  margin-top: 16px;
+}
+.rt-nextlv h4 {
+  margin: 0 0 8px;
+  font: 700 var(--bl-fs-caption)/1 var(--bl-font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bl-text3);
+}
+.rt-bar .col {
+  border: 0;
+  border-radius: var(--bl-r-sm) var(--bl-r-sm) 0 0;
+}
+/* The title bar: «Árbol · Noche 2 · 10 listas» on one line; the night's chip apart (B-9). */
+.rt-title {
+  align-items: center;
+  background: color-mix(in srgb, var(--bl-surface) 92%, transparent);
+  border: 0;
+  box-shadow: var(--bl-elev-1);
+}
+.rt-title p {
+  overflow: visible;
+  text-overflow: clip;
+}
+.rt-nightchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 3px 9px 3px 6px;
+  border-radius: var(--bl-r-pill);
+  background: color-mix(in srgb, var(--bl-gold) 16%, transparent);
+  color: var(--bl-gold);
+  font: 700 var(--bl-fs-caption)/1.2 var(--bl-font-ui);
+  white-space: nowrap;
+}
+.rt-nightchip[hidden] {
+  display: none;
+}
+.rt-go {
+  box-shadow: var(--bl-elev-1);
+}
+@media (min-width: 900px) {
+  /* On a laptop the sheet is a side card: it never covers the node, so a purchase needs no peek. */
+  .rt-sheet {
+    border-radius: var(--bl-r-xl);
+    border-top: 0;
+    border-left: 3px solid color-mix(in srgb, var(--bc, var(--rt-line2)) 70%, transparent);
+  }
+  .rt-sheet.show.peek {
+    transform: none;
+  }
+}
+/* A narrow phone: the night's chip takes its own line rather than covering the count. */
+.rt-title {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+/* The hint lives left of the zoom controls (never over them or a node under them) and goes after the
+   first tap on the tree (B-9). The first visit's big green hint stays until the first purchase. */
+.rt-hint {
+  left: 12px;
+  right: 76px;
+  transform: none;
+  max-width: none;
+  width: fit-content;
+  margin: 0 auto;
+  border: 0;
+  box-shadow: var(--bl-elev-1);
+}
+.rt.touched:not(.rt-first) .rt-hint {
+  opacity: 0;
+}
+
+/* The header reads on a calm band (B-3, §3.8): the tree fades out under the Datos box and the title
+   instead of showing half-hidden nodes through them. A gradient, painted once; no blur. */
+.rt-top::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0 0 -28px;
+  background: linear-gradient(to bottom, var(--bl-night) 0%, color-mix(in srgb, var(--bl-night) 92%, transparent) 62%, transparent 100%);
+  pointer-events: none;
+}
+.rt-datos,
+.rt-title {
+  background: var(--bl-surface);
 }

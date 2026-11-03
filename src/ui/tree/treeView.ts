@@ -45,11 +45,13 @@ import {
 } from '../../game/tree';
 import { BRANCH_TEXT, DATOS_NAME, SESSION_UI, TREE_UI, VALUE_TEXT, type BranchId } from '../../game/treeText';
 import type { WorldId } from '../../game/worlds';
-import { fmt, fmtShort } from '../format';
-import { createPriceSheet, PriceTicker, type PriceExplain } from '../moments/price';
+import { datosMissingText, fmt, fmtShort, gateCount } from '../format';
+import { PriceTicker, type PriceExplain } from '../moments/price';
 import '../moments/moments.css';
-import { renderPattern } from '../portrait';
+import { mountPortrait } from '../portrait';
 import { ROUTE_ICON } from '../art/icons';
+import { DURATION, EASING, pop, staggerIn } from '../art/motion';
+import { nodeWhy, WHY_UI } from './why';
 import { treeIcon } from './icons';
 import { DISH_DIAMETERS } from '../../core/dish';
 import '../art/art.css';
@@ -158,7 +160,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     <div class="rt-vp"><div class="rt-world"></div></div>
     <header class="rt-top">
       <div class="rt-datos" role="status"><span class="rt-dic">${treeIcon('datos', 30)}</span><div><b>0</b><small></small></div><span class="rt-tick"></span></div>
-      <div class="rt-title"><h2></h2><p></p></div>
+      <div class="rt-title"><h2></h2><p></p><span class="rt-nightchip" hidden></span></div>
       <button type="button" class="rt-go">${treeIcon('play', 22)}<span></span></button>
     </header>
     <div class="rt-tools">
@@ -178,6 +180,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
   const datosLbl = datosEl.querySelector('small') as HTMLElement;
   const titleH = el.querySelector('.rt-title h2') as HTMLElement;
   const titleP = el.querySelector('.rt-title p') as HTMLElement;
+  const nightChip = el.querySelector('.rt-nightchip') as HTMLElement;
   const goBtn = el.querySelector('.rt-go') as HTMLButtonElement;
   const goLbl = goBtn.querySelector('span') as HTMLElement;
   const hint = el.querySelector('.rt-hint') as HTMLElement;
@@ -186,7 +189,6 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
   // Shared price components (Momentos): one tap on a price explains it; a chip says what it cost.
   const ticker = new PriceTicker();
   (el.querySelector('.rt-tick') as HTMLElement).appendChild(ticker.el);
-  const priceSheet = createPriceSheet(root, { reduceMotion: rm });
 
   // SVG layer: rings, night gates, fog band, edges.
   const NS = 'http://www.w3.org/2000/svg';
@@ -294,6 +296,11 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
   let camAnim = 0;
   /** The node of the very first purchase, while its sheet stays open ("¡Es tuya para siempre!"). */
   let firstBought: string | null = null;
+  /** The node whose «¿Por qué cuesta esto?» is unfolded (one at a time; folded again on another node). */
+  let whyOpenFor: string | null = null;
+  /** The node the sheet last entered for (its blocks stagger in once per node). */
+  let staggerFor: string | null = null;
+  let peekTimer = 0;
 
   const ctxOf = (d: TreeViewData): TreeCtx => ({ levels: d.levels, datos: d.datos, sessions: d.sessions, species: d.species });
   const vpSize = () => ({ w: vp.clientWidth || window.innerWidth, h: vp.clientHeight || window.innerHeight });
@@ -560,6 +567,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
   function tapNode(id: string): void {
     const st = states.get(id);
     if (!st || st.status === 'hidden') return;
+    el.classList.add('touched');
     sound('open');
     if (cam.z < 0.62) focusNode(id, 0.95);
     api.select(id);
@@ -650,11 +658,13 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     titleH.innerHTML = `<span class="long">${esc(tx(TREE_UI.title, l))}</span><span class="short">${esc(tx(TREE_UI.titleShort, l))}</span>`;
     const night = nightInfo(ctxOf(data));
     const ready = [...states.values()].filter((s) => s.affordable && s.id !== 'lab').length;
+    // One line that always fits (B-9: never "…"): «Noche 2 · 10 listas»; «¡La noche puede avanzar!» is a
+    // chip of its own, with the moon.
     const parts = [`${tx(TREE_UI.night(night.night), l)}`];
-    // The night first: on a phone the line ends in "…", and the green nodes already say what is ready.
-    if (night.ready && night.next) parts.push(`<b>${esc(tx(TREE_UI.nightReady, l))}</b>`);
-    if (ready) parts.push(`<b>${esc(tx(TREE_UI.affordable(ready), l))}</b>`);
+    if (ready) parts.push(`<b>${l === 'es' ? `${ready} ${ready === 1 ? 'lista' : 'listas'}` : `${ready} ready`}</b>`);
     titleP.innerHTML = parts.join(' · ');
+    nightChip.hidden = !(night.ready && night.next);
+    nightChip.innerHTML = `${treeIcon('moon', 16)}<span>${esc(tx(TREE_UI.nightReady, l))}</span>`;
     goLbl.textContent = tx(opts.goText?.() ?? TREE_UI.newSession, l);
     goBtn.hidden = !opts.onNewSession;
     hint.textContent = tx(TREE_UI.hint, l);
@@ -682,7 +692,8 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     }
     const t0 = performance.now();
     const step = () => {
-      const k = Math.min(1, (performance.now() - t0) / 450);
+      // Down to the new Datos in 600 ms, easing out (B-6): the price leaves the wallet you can see.
+      const k = Math.min(1, (performance.now() - t0) / 600);
       shownDatos = from + (to - from) * (1 - Math.pow(1 - k, 3));
       datosNum.textContent = fmt(Math.round(shownDatos), l);
       if (k < 1) datosTween = requestAnimationFrame(step);
@@ -697,9 +708,10 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     return `<button type="button" class="rt-need b-${branchOf(def)}" data-go="${id}">${treeIcon(def.icon, 22)}${esc(tx(nodeText(id).name, l))}</button>`;
   }
 
+  /** "Sesiones 4/4 ✓": the count stops at what the gate needs, the bar at 100 % (owner bug B-10.3). */
   function gateBar(label: string, have: number, need: number): string {
-    const k = need > 0 ? Math.min(1, have / need) : 1;
-    return `<div class="rt-gatebar"><div class="row"><span>${esc(label)}</span><b>${have}/${need}</b></div><div class="track"><div class="fill" style="width:${(k * 100).toFixed(1)}%"></div></div></div>`;
+    const g = gateCount(have, need);
+    return `<div class="rt-gatebar${g.done ? ' done' : ''}"><div class="row"><span>${esc(label)}</span><b>${g.text}</b></div><div class="track"><div class="fill" style="transform:scaleX(${g.frac.toFixed(3)})"></div></div></div>`;
   }
 
   function nightSheet(st: NodeState, l: Lang): string {
@@ -710,28 +722,55 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     }</div><p class="rt-desc">${esc(tx(nodeText('lab').desc, l))}</p>`;
     if (ni.next && ni.gate) {
       const alt = ni.gate.sessions + C.NIGHT_GATE_FALLBACK;
-      body += `<div class="rt-box"><h4>${esc(tx(TREE_UI.night(ni.next), l))}</h4><p class="rt-rule" style="margin:0 0 8px">${esc(
+      body += `<div class="rt-box rt-gate-box"><h4>${esc(tx(TREE_UI.night(ni.next), l))}</h4><p class="rt-rule" style="margin:0 0 8px">${esc(
         tx(TREE_UI.nightGate(ni.gate.sessions, ni.gate.species, alt), l),
       )}</p>${gateBar(
         l === 'es' ? 'Sesiones' : 'Sessions',
         data.sessions,
         ni.gate.sessions,
       )}${gateBar(l === 'es' ? 'Especies' : 'Species', data.species, ni.gate.species)}<p class="rt-rule">${esc(tx(TREE_UI.nightRule, l))}</p></div>`;
-      const label = ni.ready
-        ? `${treeIcon('moon', 24)}${esc(l === 'es' ? `Empezar la Noche ${ni.next}` : `Start Night ${ni.next}`)}${ni.cost > 0 ? ` · <b>${fmt(ni.cost, l)}</b>` : ''}`
-        : esc(l === 'es' ? 'Aún no' : 'Not yet');
-      body += `<button type="button" class="rt-buy" data-buy="lab"${st.affordable ? '' : ' disabled'}>${label}</button>`;
+      // The night's button (owner bug B-10.2): «Empezar la Noche N» is the primary action (accent, moon);
+      // «Aún no» is a secondary, informative button with the reason, never a ghost that looks broken.
+      if (ni.ready) {
+        body += `<button type="button" class="rt-buy rt-night-go" data-buy="lab"${st.affordable ? '' : ' disabled'}>${treeIcon('moon', 24)}<span>${esc(
+          l === 'es' ? `Empezar la Noche ${ni.next}` : `Start Night ${ni.next}`,
+        )}</span>${ni.cost > 0 ? `<b>· ${fmt(ni.cost, l)}</b>` : ''}</button>`;
+      } else {
+        const alt = ni.gate.sessions + C.NIGHT_GATE_FALLBACK;
+        const left = data.species >= ni.gate.species ? Math.max(0, ni.gate.sessions - data.sessions) : Math.max(0, alt - data.sessions);
+        body += `<button type="button" class="rt-notyet" data-notyet="1">${treeIcon('moon', 22)}<span>${esc(tx(TREE_UI.nightNotYet(Math.max(1, left)), l))}</span></button>`;
+      }
     } else body += `<p class="rt-note">${esc(tx(TREE_UI.maxed, l))}</p>`;
     void def;
     return body;
   }
 
-  /** "¿Por qué cuesta esto? ›": one line; the arithmetic is in the price sheet it opens (CLARIDAD J-90). */
-  function priceBox(def: TreeNodeDef, l: Lang): string {
-    return `<button type="button" class="rt-box rt-pricebox compact" data-price="${def.id}"><h4>${treeIcon('question', 18)}<span>${esc(tx(TREE_UI.why, l))}</span><span class="rt-tap">${treeIcon(
-      'chevronRight',
-      16,
-    )}</span></h4></button>`;
+  /**
+   * «¿Por qué cuesta esto?» unfolds INSIDE the sheet (owner bug B-10.5): what the upgrade is for, why it
+   * matters, what it opens, the price as an equation and the next levels. One sheet, never two.
+   */
+  function whyBox(def: TreeNodeDef, st: NodeState, l: Lang): string {
+    const open = whyOpenFor === def.id;
+    const btn = `<button type="button" class="rt-pricebox" data-why="${def.id}" aria-expanded="${open}" aria-controls="rt-why">${treeIcon('question', 20)}<span>${esc(
+      tx(TREE_UI.why, l),
+    )}</span><span class="rt-tap">${treeIcon(open ? 'chevronUp' : 'chevronDown', 18)}</span></button>`;
+    if (!open) return btn;
+    const w = nodeWhy(def.id, st.level, l, { ...ctxOf(data), recentDatos: data.recentDatos });
+    if (!w) return btn;
+    const br = branchOf(def);
+    const row = (ic: string, label: Text, text: string) =>
+      `<div class="rt-why-row"><span class="rt-why-ic">${treeIcon(ic, 20)}</span><div><small>${esc(tx(label, l))}</small><p>${esc(text)}</p></div></div>`;
+    const eq = w.equation;
+    return `${btn}<div class="rt-why" id="rt-why">
+      ${row(br === 'core' ? 'lab' : ROUTE_ICON[br], WHY_UI.forWhat, w.forWhat)}
+      ${row('star', WHY_UI.matters, w.matters)}
+      ${row('plus', WHY_UI.unlocks, w.unlocks)}
+      <div class="rt-eq" role="group" aria-label="${esc(tx(WHY_UI.price, l))}"><span class="term"><b>${esc(eq.start)}</b><small>${esc(eq.startLabel)}</small></span><span class="op" aria-hidden="true">×</span><span class="term"><b>${esc(
+        eq.growth,
+      )}</b><small>${esc(eq.growthLabel)}</small></span><span class="op" aria-hidden="true">=</span><span class="term total"><b>${esc(eq.total)}</b><small>${esc(eq.totalLabel)}</small></span></div>
+      <p class="rt-rule">${esc(w.rule)}</p>
+      ${barsBox(def, st, l)}
+    </div>`;
   }
 
   function barsBox(def: TreeNodeDef, st: NodeState, l: Lang): string {
@@ -747,7 +786,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
           ).toFixed(0)}px"></span><span class="c">${fmtShort(r.cost, l)}</span><span class="l">${esc(tx(TREE_UI.levelN(r.level), l))}</span></div>`,
       )
       .join('');
-    return `<div class="rt-box"><h4>${esc(tx(TREE_UI.nextLevels, l))}</h4><div class="rt-bars">${bars}</div></div>`;
+    return `<div class="rt-nextlv"><h4>${esc(tx(TREE_UI.nextLevels, l))}</h4><div class="rt-bars">${bars}</div></div>`;
   }
 
   function haveBox(st: NodeState, l: Lang): string {
@@ -755,14 +794,18 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     const k = st.cost > 0 ? Math.min(1, data.datos / st.cost) : 1;
     const missing = Math.max(0, st.cost - data.datos);
     const n = sessionsToAfford(missing, data.recentDatos);
-    const why = ok
-      ? l === 'es'
-        ? '¡Puedes comprarlo!'
-        : 'You can buy it!'
-      : tx(TREE_UI.missing(fmt(missing, l), n ? tx(TREE_UI.sessions(n), l) : null), l);
+    // A Placa level this device cannot show (RF-12): the button says why; «¡Puedes comprarlo!» would lie.
+    const why =
+      st.block === 'device'
+        ? ''
+        : ok
+          ? l === 'es'
+            ? '¡Puedes comprarlo!'
+            : 'You can buy it!'
+          : datosMissingText(missing, l, n ? tx(TREE_UI.sessions(n), l) : null);
     return `<div class="rt-have${ok ? ' ok' : ''}"><div class="row"><span>${esc(tx(DATOS_NAME, l))}</span><b>${esc(
       tx(TREE_UI.haveCost(fmt(data.datos, l), fmt(st.cost, l)), l),
-    )}</b></div><div class="track"><div class="fill" style="width:${(k * 100).toFixed(1)}%"></div></div><div class="why">${esc(why)}</div></div>`;
+    )}</b></div><div class="track"><div class="fill" style="transform:scaleX(${k.toFixed(3)})"></div></div>${why ? `<div class="why">${esc(why)}</div>` : ''}</div>`;
   }
 
   /** "Ahora → Con un nivel más", both with numbers (owner rule: always more, always visible). */
@@ -822,9 +865,10 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
 
   function renderSheet(force = false): void {
     if (!selected) {
-      sheet.classList.remove('show');
+      sheet.classList.remove('show', 'peek');
       el.classList.remove('sheet-open');
       sheetKey = '';
+      staggerFor = null;
       return;
     }
     const l = lang();
@@ -881,12 +925,14 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
               ? `${esc(tx(TREE_UI.buy, l))} · ${treeIcon('datos', 22)}<b>${fmt(st.cost, l)}</b>`
               : st.block === 'device'
                 ? esc(tx(VALUE_TEXT.deviceDishMax, l)) // RF-12: real price, not on sale on this device
-                : esc(tx(TREE_UI.missing(fmt(st.missingDatos, l), null), l))
+                : esc(datosMissingText(st.missingDatos, l))
           }</button>`;
         }
-        body += priceBox(def, l) + barsBox(def, st, l);
+        body += whyBox(def, st, l);
       }
     }
+    const fresh = staggerFor !== selected;
+    staggerFor = selected;
     sheet.innerHTML = `<div class="rt-grab"></div>
       <div class="rt-sh-head">
         <div class="rt-sh-ic${mystery ? ' mystery' : ''}">${treeIcon(mystery ? 'question' : def.icon, 34)}</div>
@@ -897,10 +943,14 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       const sp = opts.worldSpecies(def.world);
       for (const cell of sheet.querySelectorAll<HTMLElement>('.rt-sp')) {
         const x = sp.find((q) => q.code === cell.dataset.code);
-        if (x?.portrait) cell.appendChild(renderPattern(x.portrait, 44, 0.85));
-        if (!x?.found) cell.insertAdjacentHTML('beforeend', `<i>?</i>`);
+        // Found: the creature, sharp (B-1); not yet: a dashed ring with a drawn «?», never a grey blob.
+        if (x?.found && x.portrait) mountPortrait(cell, x.portrait, 44, { fill: 0.85 });
+        else cell.insertAdjacentHTML('beforeend', `<span class="qm">${treeIcon('question', 18)}</span>`);
       }
     }
+    // A sheet that opens (or turns to another node) brings its blocks in one after another: 40 ms
+    // apart after 80 ms, at most six waiting (B-5). A re-render of the same node (a buy) does not.
+    if (fresh) staggerIn(sheet.children);
   }
 
   sheet.addEventListener('click', (e) => {
@@ -917,13 +967,28 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       focusNode(go.dataset.go);
       return;
     }
-    const price = t.closest('[data-price]') as HTMLElement | null;
-    if (price?.dataset.price) {
-      const st = states.get(price.dataset.price);
-      const x = st ? nodePriceExplain(price.dataset.price, st.level, lang(), data) : null;
-      if (x) {
-        sound('open');
-        priceSheet.open(x);
+    const why = t.closest('[data-why]') as HTMLElement | null;
+    if (why?.dataset.why) {
+      // Unfold / fold the explanation in place (150-ms fade, no height animation: B-5).
+      const id = why.dataset.why;
+      whyOpenFor = whyOpenFor === id ? null : id;
+      sound(whyOpenFor ? 'open' : 'close');
+      renderSheet(true);
+      const box = sheet.querySelector('.rt-why') as HTMLElement | null;
+      if (box) {
+        if (!rm()) box.animate([{ opacity: 0 }, { opacity: 1 }], { duration: DURATION.quick, easing: EASING.standard });
+        requestAnimationFrame(() => box.scrollIntoView({ block: 'nearest', behavior: rm() ? 'auto' : 'smooth' }));
+      }
+      return;
+    }
+    const notYet = t.closest('[data-notyet]') as HTMLElement | null;
+    if (notYet) {
+      // «Aún no» explains itself: the gate's counters are what is missing.
+      sound('deny');
+      const gate = sheet.querySelector('.rt-gate-box') as HTMLElement | null;
+      if (gate) {
+        gate.scrollIntoView({ block: 'nearest', behavior: rm() ? 'auto' : 'smooth' });
+        for (const b of gate.querySelectorAll<HTMLElement>('.rt-gatebar:not(.done)')) pop(b, 1.04);
       }
       return;
     }
@@ -994,18 +1059,27 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     data = { ...data, levels: res.levels, datos: res.datos };
     recompute();
     const n = nodes.get(id);
+    // The purchase is seen (B-9, the audit's «celebration behind the sheet»): on a phone the sheet sinks
+    // until only 96 px peek out, the node pops and bursts in plain view, the Datos count down, the new
+    // lines grow; at 900 ms the sheet comes back with the new level. Reduce motion: no peek, a fade.
+    const peek = !rm() && !desktop() && selected === id;
+    if (peek) {
+      sheet.classList.add('peek');
+      window.clearTimeout(peekTimer);
+      peekTimer = window.setTimeout(() => {
+        sheet.classList.remove('peek');
+        const lv = sheet.querySelector('.rt-chip.lv, .rt-chip.done') as HTMLElement | null;
+        if (lv) pop(lv, 1.12);
+      }, DURATION.celebrate + 200);
+    }
     if (n && !rm()) {
-      n.el.classList.remove('pop');
-      void n.el.offsetWidth;
-      n.el.classList.add('pop');
+      pop(n.tile, 1.18);
     }
     burst(id);
     const p = nodeScreen(id);
     const lvl = res.levels[id] ?? 0;
     if (p && !rm()) floatText(id === 'lab' ? tx(TREE_UI.night(lvl), lang()) : `${lvl}/${TREE_BY_ID[id].maxLevel >= 99 ? '∞' : TREE_BY_ID[id].maxLevel}`, p.x, p.y - 40);
-    datosEl.classList.remove('bump');
-    void datosEl.offsetWidth;
-    datosEl.classList.add('bump');
+    pop(datosEl, 1.06);
     if (res.cost > 0) ticker.show({ text: `−${fmt(res.cost, lang())} · ${id === 'lab' ? tx(TREE_UI.night(lvl), lang()) : tx(nodeText(id).name, lang())}`, dir: -1 });
     if (res.revealed.length) {
       setTimeout(() => sound('reveal'), 220);
@@ -1013,16 +1087,14 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
         const rn = nodes.get(r);
         if (rn && !rm()) {
           rn.el.classList.remove('reveal');
-          void rn.el.offsetWidth;
-          rn.el.classList.add('reveal');
+          requestAnimationFrame(() => rn.el.classList.add('reveal'));
         }
       }
       for (const e of edgeEls) {
         if ((e.from === id && res.revealed.includes(e.to)) || (res.revealed.includes(e.to) && states.get(e.from)?.status === 'owned')) {
           e.line.style.strokeDasharray = String(Math.ceil(e.len));
           e.line.classList.remove('grow');
-          void (e.line as unknown as HTMLElement).getBoundingClientRect();
-          if (!rm()) e.line.classList.add('grow');
+          if (!rm()) requestAnimationFrame(() => e.line.classList.add('grow'));
           setTimeout(() => {
             e.line.style.strokeDasharray = '';
             e.line.classList.remove('grow');
@@ -1053,11 +1125,49 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     return best;
   }
 
-  /** The animated hand over the guide's node and the big "¡Toca el nodo verde!" (first visit only). */
+  /**
+   * The ONE node that wears the "buy me next" ring (docs/ARTE-PULIDO.md B-9): the hand's node on the first
+   * visit, else the cheapest node ready to buy; none while the night itself can move on (the centre wears
+   * the ring then). Everything else stays still: seven halos breathing at once said nothing.
+   */
+  function recommendedNode(): string | null {
+    const g = guideNode();
+    if (g) return g;
+    if (nightInfo(ctxOf(data)).ready) return null;
+    let best: string | null = null;
+    let cost = Infinity;
+    for (const [id, st] of states) {
+      if (id === 'lab' || !st.affordable || st.status === 'hidden') continue;
+      if (st.cost < cost) {
+        best = id;
+        cost = st.cost;
+      }
+    }
+    return best;
+  }
+
+  let handEl: HTMLElement | null = null;
+  /** The drawn hand over the guide's node and the big "¡Toca el nodo verde!" (first visit only). */
   function renderGuide(): void {
     const id = open ? guideNode() : null;
+    const rec = open ? recommendedNode() : null;
     el.classList.toggle('rt-first', !!id);
-    for (const n of nodes.values()) n.el.classList.toggle('guide', n.def.id === id);
+    for (const n of nodes.values()) {
+      n.el.classList.toggle('guide', n.def.id === id);
+      n.el.classList.toggle('rec', n.def.id === rec);
+    }
+    const host = id ? nodes.get(id)?.el : null;
+    if (host && handEl?.parentElement !== host) {
+      handEl?.remove();
+      handEl = document.createElement('span');
+      handEl.className = 'rt-hand';
+      handEl.setAttribute('aria-hidden', 'true');
+      handEl.innerHTML = treeIcon('pointer', 34);
+      host.appendChild(handEl);
+    } else if (!host && handEl) {
+      handEl.remove();
+      handEl = null;
+    }
     hint.textContent = tx(id ? TREE_UI.hintFirst : TREE_UI.hint, lang());
   }
 
@@ -1116,13 +1226,13 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       el.hidden = true;
       selected = null;
       firstBought = null;
-      priceSheet.close();
       renderSheet();
     },
     select(id) {
       const prev = selected;
       selected = id && TREE_BY_ID[id] && states.get(id)?.status !== 'hidden' ? id : null;
       if (selected !== firstBought) firstBought = null;
+      if (selected !== whyOpenFor) whyOpenFor = null;
       if (prev && nodes.get(prev)) nodes.get(prev)!.key = '';
       if (selected && nodes.get(selected)) nodes.get(selected)!.key = '';
       renderNodes();
@@ -1145,7 +1255,6 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       cancelAnimationFrame(datosTween);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('bl-story-dock', onDock);
-      priceSheet.dispose();
       el.remove();
     },
   };
@@ -1182,7 +1291,7 @@ export function nodePriceExplain(
   if (have) {
     const missing = Math.max(0, cost - have.datos);
     const n = sessionsToAfford(missing, have.recentDatos);
-    advice = missing > 0 ? tx(TREE_UI.missing(fmt(missing, lang), n ? tx(TREE_UI.sessions(n), lang) : null), lang) : lang === 'es' ? '¡Puedes comprarlo!' : 'You can buy it!';
+    advice = missing > 0 ? datosMissingText(missing, lang, n ? tx(TREE_UI.sessions(n), lang) : null) : lang === 'es' ? '¡Puedes comprarlo!' : 'You can buy it!';
   }
   return {
     title: tx(nodeText(id).name, lang),
