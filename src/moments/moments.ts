@@ -230,8 +230,15 @@ export function createMoments(deps: MomentsDeps): Moments {
 
   // ───────────── context ─────────────
 
+  /**
+   * One GameView per poll: game.view() rebuilds the whole view on every call, and a poll asked for it
+   * once per deferred card, once per poll trigger and once more for `prev` (≈ 20 full views a second).
+   * Only while a poll runs (it changes nothing in the game): events and the scheduler read it fresh.
+   */
+  let polling = false;
+  let pollView: GameView | null = null;
   const ctx: TriggerCtx = {
-    view: () => deps.getView(),
+    view: () => (polling ? (pollView ??= deps.getView()) : deps.getView()),
     seen: (id) => seen.has(id),
     prev,
     since: (e) => {
@@ -381,7 +388,7 @@ export function createMoments(deps: MomentsDeps): Moments {
     if (!deferred.size || mode !== 'full') return;
     let v: GameView;
     try {
-      v = deps.getView();
+      v = ctx.view();
     } catch {
       return;
     }
@@ -407,6 +414,16 @@ export function createMoments(deps: MomentsDeps): Moments {
   }
 
   function poll(): void {
+    polling = true;
+    try {
+      pollOnce();
+    } finally {
+      polling = false;
+      pollView = null;
+    }
+  }
+
+  function pollOnce(): void {
     pollDeferred();
     if (mode !== 'off') {
       for (const def of MOMENTS) {
@@ -423,7 +440,7 @@ export function createMoments(deps: MomentsDeps): Moments {
     }
     // Remember the view for the next "went up/down" checks.
     try {
-      const v = deps.getView();
+      const v = ctx.view();
       prev.seedCost = v.seedCost;
       const c = v.calibration;
       prev.calib = { mu: c.mu, sigma: c.sigma, R: c.R, dt: c.dt };

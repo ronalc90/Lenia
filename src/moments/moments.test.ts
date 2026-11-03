@@ -556,3 +556,29 @@ describe('moments: a clock card that waited past its moment is dropped (QA4 F-08
     expect(h.m.seen('clock')).toBe(false);
   });
 });
+
+describe('moments: the poll is cheap (perf)', () => {
+  it('a poll builds the game view once, however many poll triggers it checks', () => {
+    let views = 0;
+    const h = harness({
+      getView: () => {
+        views++;
+        return h.view;
+      },
+    });
+    views = 0;
+    h.m.tick();
+    expect(views).toBe(1);
+  });
+
+  it('an event still reads a fresh view (the poll memo does not outlive the poll)', () => {
+    const h = harness();
+    h.m.tick();
+    // The next poll sees a change made between polls.
+    h.view = { ...h.view, essence: h.view.essence + 1 };
+    let seen = -1;
+    const m = createMoments({ bus: h.bus, getView: () => ((seen = h.view.essence), h.view), storage: null, now: () => h.now(), pollMs: 0 });
+    m.tick();
+    expect(seen).toBe(h.view.essence);
+  });
+});
