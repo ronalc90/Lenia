@@ -409,7 +409,7 @@ describe('Datos preview before the clock runs out', () => {
     noteEssence(session, 9.5 * C.DATOS_ESSENCE_DIV);
     p = sessionPreview(r, session, fx, 0);
     expect(p.datos).toBe(9);
-    const rich = { ...r, levels: { lab: 1, clock: C.TIME_CLOCK_LEVELS, dropper: 3, dish: 3, culture: 5, notebook: 3, worldCold: 1, spark: 3 } };
+    const rich = { ...r, levels: { lab: 1, clock: C.TIME_CLOCK_LEVELS, dropper: 3, dish: 3, culture: 5, notebook: 3, worldCold: 1, spark: 3, pipette: 3 } };
     p = sessionPreview(rich, session, fx, 0);
     expect(p.goal!.cost).toBe(C.TREE_RING_START[2]);
     expect(p.goal!.missing).toBe(Math.max(0, C.TREE_RING_START[2] - 1 - 9));

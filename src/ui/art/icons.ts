@@ -113,6 +113,7 @@ function spikes(cx: number, cy: number, r0: number, r1: number, count: number, o
 }
 
 const dropper = pipette(1, -1);
+const labPipette = pipette(0, 0);
 const swimmerGlyph = (dx = 0, dy = 0, s = 1): string =>
   C(7.5 * s + dx, 12 * s + dy, 3.25 * s) + P(`M${n(11.75 * s + dx)} ${n(12 * s + dy)}h${n(8 * s)}`) + P(head(20 * s + dx, 12 * s + dy, 0, 3.6 * s));
 
@@ -168,6 +169,13 @@ export const ICONS: Record<string, IconDef> = {
   autoSeeder: { f: 'M8 8.5h8a3.25 3.25 0 0 1 3.25 3.25v4a3.25 3.25 0 0 1-3.25 3.25H8a3.25 3.25 0 0 1-3.25-3.25v-4A3.25 3.25 0 0 1 8 8.5z', s: R(4.75, 8.5, 14.5, 10.5, 3.25) + D(9.5, 13.25, 1.3) + D(14.5, 13.25, 1.3) + P('M12 8.5V6.75M2.75 12.5v2.5M21.25 12.5v2.5M10.5 16.25h3') + SP(drop(12, 1.75, 1.7)) },
   cheapSeeds: { f: drop(9.25, 3.25, 5.5), s: P(drop(9.25, 3.25, 5.5)) + P('M18.75 9.5v10.25') + P(head(18.75, 19.75, 90, 3.1)) },
   dropperMax: { f: dropper.f, s: dropper.s + SP(star4(5.25, 18.5, 3.4, 0.2)) },
+  // ↓ Recoger (ADR-030): a lab micropipette and its drop of light (simple glyphs until the route's art lands).
+  pipette: { f: labPipette.f, s: labPipette.s + C(18, 18, 2.6) + D(18, 18, 1) },
+  pipetteFast: { f: labPipette.f, s: labPipette.s + P('M2.5 9.25h4.5M3.75 12.25h3.25') },
+  dropBig: { f: drop(12, 2.75, 6.25), s: P(drop(12, 2.75, 6.25)) + P('M12 12.75v5M9.5 15.25h5') },
+  pipetteMore: { f: labPipette.f, s: labPipette.s + P('M4.5 3.25v5M2 5.75h5') },
+  pipetteMagnet: { f: labPipette.f, s: labPipette.s + P('M2.25 14.5a5 5 0 0 0 5 6.25') + D(18, 18, 1.2) },
+  pipetteMaster: { f: labPipette.f, s: labPipette.s + SP(star4(5.25, 6, 3.4, 0.2)) },
 
   // ══════════ 🧫 Placa ══════════
   dish: { f: 'M4.25 13.25a7.75 3.75 0 1 0 15.5 0a7.75 3.75 0 1 0-15.5 0', s: E(12, 13.25, 7.75, 3.75) + P('M4.25 13.25v2.25c0 2.07 3.47 3.75 7.75 3.75s7.75-1.68 7.75-3.75v-2.25') + P('M3 7.25V3h4.25M3 3l4 4M21 7.25V3h-4.25M21 3l-4 4') },
@@ -396,8 +404,8 @@ export const ROUTE_ICON = {
   discovery: 'discovery',
   worlds: 'world',
   spark: 'sparkRoute',
-  /** ↓ Recoger (ADR-030): the drop of light until its pipette icon is drawn. */
-  collect: 'essence',
+  /** ↓ Recoger (ADR-030). */
+  collect: 'pipette',
 } as const;
 
 /** World → icon (start card, node, Bestiary filters). */
@@ -422,6 +430,7 @@ export const ICON_GROUPS: Record<string, string[]> = {
   discovery: ['notebook', 'print', 'cataloguing', 'archive', 'microscope', 'discoBonus', 'rareSpores', 'mutations', 'encyclopedia'],
   worlds: ['worldClassic', 'worldCold', 'worldGyro', 'worldShields', 'worldHelix', 'worldLegs', 'worldGiants'],
   spark: ['spark', 'sparkLife', 'sparkTime', 'sparkFirst', 'sparkGift', 'sparkDatos', 'sparkMutagen'],
+  collect: ['pipette', 'pipetteFast', 'dropBig', 'pipetteMore', 'pipetteMagnet', 'pipetteMaster'],
   behaviours: ['still', 'pulsing', 'swimmer', 'spinner', 'divider', 'colony', 'behavior'],
   moments: ['sow', 'fade', 'burst', 'split', 'upgrade', 'robot', 'sliders', 'tag', 'slot', 'gift', 'eye', 'up', 'down'],
   hud: ['settings', 'sound', 'mute', 'music', 'vibrate', 'motion', 'contrast', 'textsize', 'globe', 'pause', 'play', 'speed', 'stop', 'journal', 'trophy', 'leaderboard', 'help', 'info', 'warning', 'question', 'menu', 'share'],

@@ -3,8 +3,9 @@
  * Pure data + pure functions (no DOM, no state of its own): the game keeps the levels
  * (`Record<nodeId, level>`) and asks this module what they mean.
  *
- *  - TREE_NODES        54 nodes: the centre ("Nueva noche", level = night) and 7 STRAIGHT routes
- *                      (⏱ Reloj, 💧 Gotero, 🧫 Placa, 🌱 Vida, 🔬 Descubrir, 🌍 Mundos, ✨ Destello).
+ *  - TREE_NODES        60 nodes: the centre ("Nueva noche", level = night) and 8 STRAIGHT routes
+ *                      (⏱ Reloj, 💧 Gotero, 🧫 Placa, 🌱 Vida, ↓ Recoger, 🔬 Descubrir, 🌍 Mundos,
+ *                      ✨ Destello). ↓ Recoger (ADR-030) closes the star in the free ↓ direction.
  *                      Node k of a route needs only node k − 1 (level ≥ 1); the first needs the centre.
  *                      No crossings, no trade-offs: every level makes one number better.
  *  - beforeAfter()     "antes → después" of the next level, from the real effects (owner rule).
@@ -30,8 +31,8 @@ import { BASE_WORLD, WORLD_BY_ID, WORLDS, worldSpeciesCount, type WorldId } from
 
 export type { BranchId } from './treeText';
 
-/** Route order around the centre, clockwise from the top (index × 360/7 degrees). */
-export const BRANCHES: BranchId[] = ['time', 'dropper', 'dish', 'life', 'discovery', 'worlds', 'spark'];
+/** Route order around the centre, clockwise from the top (index × 45 degrees: ↑ ↗ → ↘ ↓ ↙ ← ↖). */
+export const BRANCHES: BranchId[] = ['time', 'dropper', 'dish', 'life', 'collect', 'discovery', 'worlds', 'spark'];
 /** Degrees between two neighbouring routes. */
 export const BRANCH_STEP = 360 / BRANCHES.length;
 
@@ -331,6 +332,16 @@ export const TREE_NODES: TreeNodeDef[] = [
     { id: 'symbiosis', ring: 4, icon: 'symbiosis', maxLevel: 1, apply: (fx) => void (fx.symbiosis = true), measure: (fx) => (fx.symbiosis ? 1 : 0), show: (fx) => (fx.symbiosis ? V.pairs(multText(C.SYMBIOSIS_TREE_MULT)) : V.no) },
     { id: 'abundance', ring: 4, icon: 'abundance', maxLevel: 1, apply: (fx) => void (fx.prodMult *= C.ABUNDANCE_MULT), measure: (_fx, l) => (l ? C.ABUNDANCE_MULT : 1), show: (_fx, l) => V.allEssence(multText(l ? C.ABUNDANCE_MULT : 1)) },
     { id: 'eternalLife', ring: 5, icon: 'eternalLife', maxLevel: C.ETERNAL_LIFE_MAX, growth: C.ETERNAL_LIFE_GROWTH, start: C.ETERNAL_LIFE_START, apply: (fx, l) => void (fx.prodMult *= Math.pow(C.ETERNAL_LIFE_MULT, l)), measure: (_fx, l) => Math.pow(C.ETERNAL_LIFE_MULT, l), show: (_fx, l) => V.essenceMult(multText(Math.pow(C.ETERNAL_LIFE_MULT, l))) },
+  ]),
+
+  // ───── ↓ Recoger (ADR-030): lab pipettes collect the drops of light; instruments, never living things ─────
+  ...route('collect', [
+    { id: 'pipette', ring: 1, icon: 'pipette', maxLevel: C.PIPETTES_BY_LEVEL.length - 1, apply: (fx, l) => void (fx.pipettes += C.PIPETTES_BY_LEVEL[l] ?? 0), measure: (fx) => fx.pipettes, show: (fx) => V.pipettes(fx.pipettes) },
+    { id: 'pipetteFast', ring: 2, icon: 'pipetteFast', maxLevel: C.PIPETTE_CYCLE_S.length - 1, lower: true, apply: (fx, l) => void (fx.pipetteCycle = C.PIPETTE_CYCLE_S[l] ?? fx.pipetteCycle), measure: (fx) => fx.pipetteCycle, show: (fx) => V.pipetteTrip(loc(String(fx.pipetteCycle))) },
+    { id: 'dropBig', ring: 2, icon: 'dropBig', maxLevel: C.LIGHT_CAP_BY_LEVEL.length - 1, apply: (fx, l) => void (fx.dropCapSeconds = C.LIGHT_CAP_BY_LEVEL[l] ?? fx.dropCapSeconds), measure: (fx) => fx.dropCapSeconds, show: (fx) => V.dropHolds(fx.dropCapSeconds) },
+    { id: 'pipetteMore', ring: 3, icon: 'pipetteMore', maxLevel: 5, apply: (fx, l) => void (fx.pipettes += l * C.PIPETTES_MORE_PER_LEVEL), measure: (fx) => fx.pipettes, show: (fx) => V.pipettes(fx.pipettes) },
+    { id: 'pipetteMagnet', ring: 3, icon: 'pipetteMagnet', maxLevel: C.PIPETTE_MAGNET_R.length - 1, apply: (fx, l) => void (fx.magnetR = C.PIPETTE_MAGNET_R[l] ?? fx.magnetR), measure: (fx) => fx.magnetR, show: (fx) => V.magnet(fx.magnetR / 2) },
+    { id: 'pipetteMaster', ring: 4, icon: 'pipetteMaster', maxLevel: 1, apply: (fx) => void (fx.pipetteInstant = true), measure: (fx) => (fx.pipetteInstant ? 1 : 0), show: (fx) => (fx.pipetteInstant ? V.instant : V.tripTakes(loc(String(fx.pipetteCycle)))) },
   ]),
 
   // ───── 🔬 Descubrir ─────

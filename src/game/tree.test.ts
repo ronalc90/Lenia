@@ -59,11 +59,16 @@ const PLAN: Record<string, [string, number, number, number][]> = {
   // Plan rings and node count; the world order follows the measured yield (docs/CICLO.md §4.3).
   worlds: [['worldCold', 1, 1, 2], ['worldGyro', 2, 1, 2], ['worldShields', 3, 1, 2], ['worldHelix', 3, 1, 2], ['worldLegs', 4, 1, 2], ['worldGiants', 5, 1, 2]],
   spark: [['spark', 1, 3, 2], ['sparkLife', 2, 2, 2], ['sparkTime', 2, 2, 2], ['sparkFirst', 3, 1, 2], ['sparkGift', 3, 3, 2], ['sparkDatos', 3, 2, 2], ['sparkMutagen', 4, 1, 2]],
+  // ↓ Recoger (ADR-030, docs/CLARIDAD2.md §2.2.4): the pipettes.
+  collect: [['pipette', 1, 3, 2], ['pipetteFast', 2, 3, 2], ['dropBig', 2, 3, 2], ['pipetteMore', 3, 5, 1.5], ['pipetteMagnet', 3, 2, 2], ['pipetteMaster', 4, 1, 2]],
 };
 
-describe('research tree data: 7 straight routes', () => {
+describe('research tree data: 8 straight routes', () => {
   it('matches the published plan node for node (order, ring, levels, price factor)', () => {
-    expect(BRANCHES).toEqual(['time', 'dropper', 'dish', 'life', 'discovery', 'worlds', 'spark']);
+    // ↓ Recoger closes the star in the free direction (docs/CLARIDAD2.md §2.2.4): straight down.
+    expect(BRANCHES).toEqual(['time', 'dropper', 'dish', 'life', 'collect', 'discovery', 'worlds', 'spark']);
+    expect(branchAngle('collect')).toBe(90);
+    expect(TREE_NODES.filter((n) => n.id !== 'lab')).toHaveLength(59);
     for (const b of BRANCHES) {
       const got = routeNodes(b).map((n) => [n.id, n.ring, n.maxLevel, n.growth]);
       expect(got, b).toEqual(PLAN[b]);
@@ -123,6 +128,20 @@ describe('always more: "antes → después"', () => {
         }
       }
     }
+  });
+
+  it('every Recoger level shows a better number, in words a child reads', () => {
+    expect(beforeAfter({}, 'pipette')).toMatchObject({ before: { es: 'Recoges tú' }, after: { es: '1 pipeta', en: '1 pipette' }, better: true });
+    expect(beforeAfter({ pipette: 1 }, 'pipetteFast')).toMatchObject({ before: { es: 'Una gota cada 2,5 s' }, after: { es: 'Una gota cada 2 s', en: 'One drop every 2 s' } });
+    expect(beforeAfter(ownPath('pipetteFast'), 'dropBig')).toMatchObject({ before: { es: 'La gota guarda 4 s de luz' }, after: { es: 'La gota guarda 6 s de luz' } });
+    expect(beforeAfter({ ...ownPath('dropBig'), pipette: 3 }, 'pipetteMore')).toMatchObject({ before: { es: '3 pipetas' }, after: { es: '4 pipetas' } });
+    expect(beforeAfter(ownPath('pipetteMore'), 'pipetteMagnet')).toMatchObject({ before: { es: 'Una gota por viaje' }, after: { es: 'Y las gotas a 1 criatura de distancia' } });
+    expect(beforeAfter({ ...ownPath('pipetteMagnet'), pipetteFast: 3 }, 'pipetteMaster')).toMatchObject({ before: { es: 'Las pipetas tardan 1,3 s' }, after: { es: 'La luz llega sola, al momento' } });
+    const fx = treeEffects({ pipette: 3, pipetteMore: 5, pipetteFast: 3, dropBig: 3, pipetteMagnet: 2, pipetteMaster: 1 });
+    expect(fx).toMatchObject({ pipettes: 8, pipetteCycle: C.PIPETTE_CYCLE_S[3], dropCapSeconds: 10, magnetR: 4, pipetteInstant: true });
+    expect([0, 1, 2].map((l) => nodeCost('pipette', l))).toEqual([2, 4, 8]);
+    expect([0, 1, 2, 3, 4].map((l) => nodeCost('pipetteMore', l))).toEqual([400, 600, 900, 1400, 2000]);
+    expect(nodeCost('pipetteMaster', 0)).toBe(12000);
   });
 
   it('reads like the plan', () => {
@@ -202,12 +221,13 @@ describe('prices: one rule, nothing hidden', () => {
 
   it('the first night is cheap: everything of rings 1–2 costs a few sessions of a beginner', () => {
     const night1 = TREE_NODES.filter((n) => n.id !== 'lab' && C.TREE_RING_NIGHT[n.ring] === 1).reduce((a, n) => a + nodeTotalCost(n.id), 0);
-    expect(night1).toBeLessThan(1000);
+    // 886 on 7 routes; ↓ Recoger (ADR-030) adds its rings 1–2 (Pipeta, Pipetas rápidas, Gotas grandes: 224).
+    expect(night1).toBeLessThan(1200);
   });
 });
 
 describe('reveal rules', () => {
-  it('a new save sees the centre, the 7 first steps and "?" right behind them', () => {
+  it('a new save sees the centre, the 8 first steps and "?" right behind them', () => {
     const st = treeStates(ctx());
     expect(st.get('lab')!.status).toBe('owned');
     for (const b of BRANCHES) {
