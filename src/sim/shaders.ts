@@ -79,6 +79,10 @@ function fmt(w: number): string {
 
 /** Lysis discs in the dish step (deflect.ts LYSIS.maxDiscs). */
 export const MAX_LYSIS = 8;
+/** Life pulses drawn at once (ARTE-PULIDO A-4: uPulse[4]); a fifth replaces the oldest. */
+export const MAX_PULSES = 4;
+/** Forming creatures whose matter beats at once (A-4 heartbeat). */
+export const MAX_FORMING = 4;
 
 /**
  * The Lenia step, fully unrolled with the kernel weights as constants
@@ -408,33 +412,80 @@ void main() {
   float a = cellAt(c);
   float gx = (cellAt(c + ivec2(1, 0)) - cellAt(c - ivec2(1, 0))) * 0.5;
   float gy = (cellAt(c + ivec2(0, 1)) - cellAt(c - ivec2(0, 1))) * 0.5;
-  o = vec4(a, vec2(gx, gy) + ${fmt(bias)}, smoothstep(0.25, 0.95, a));
+  // Glow source (A-1): most of a body glows, its hot core most; a soft knee, no hard threshold (L1).
+  o = vec4(a, vec2(gx, gy) + ${fmt(bias)}, smoothstep(0.04, 0.8, a));
 }
 `;
 }
 
-/** Half-resolution downsample of the glow source (one bilinear tap = 2×2 box). */
-export const GLOW_DOWN = `${HEADER}
+/**
+ * Bloom chain (docs/ARTE-PULIDO.md A-1, after LearnOpenGL "Physically Based Bloom"): a 13-tap
+ * downsample per mip (Jimenez' filter; Karis-weighted groups on the first pass against fireflies),
+ * reading the field's glow source (alpha) on the first pass and the previous mip's red after it.
+ * Scalar: the colour comes at composition, from the species tint.
+ */
+export const BLOOM_DOWN = `${HEADER}
 uniform sampler2D uSrc;
-uniform vec2 uInvDst;
+uniform vec2 uSrcTexel;  // 1 / source size
+uniform vec2 uInvDst;    // 1 / destination size
+uniform int uFirst;      // 1: source is the field (glow in .a), Karis average
 out vec4 o;
+float tap(vec2 uv) {
+  vec4 t = texture(uSrc, uv);
+  return uFirst == 1 ? t.a : t.r;
+}
 void main() {
-  o = vec4(texture(uSrc, gl_FragCoord.xy * uInvDst).a, 0.0, 0.0, 1.0);
+  vec2 uv = gl_FragCoord.xy * uInvDst;
+  vec2 t = uSrcTexel;
+  float a = tap(uv + vec2(-2.0, 2.0) * t);
+  float b = tap(uv + vec2(0.0, 2.0) * t);
+  float c = tap(uv + vec2(2.0, 2.0) * t);
+  float d = tap(uv + vec2(-2.0, 0.0) * t);
+  float e = tap(uv);
+  float f = tap(uv + vec2(2.0, 0.0) * t);
+  float g = tap(uv + vec2(-2.0, -2.0) * t);
+  float h = tap(uv + vec2(0.0, -2.0) * t);
+  float i = tap(uv + vec2(2.0, -2.0) * t);
+  float j = tap(uv + vec2(-1.0, 1.0) * t);
+  float k = tap(uv + vec2(1.0, 1.0) * t);
+  float l = tap(uv + vec2(-1.0, -1.0) * t);
+  float m = tap(uv + vec2(1.0, -1.0) * t);
+  float v;
+  if (uFirst == 1) {
+    // Karis average: each group weighted by 1 / (1 + its mean), so one hot texel cannot flicker.
+    vec4 g4 = vec4(a + b + d + e, b + c + e + f, d + e + g + h, e + f + h + i) * 0.25;
+    float g0 = (j + k + l + m) * 0.25;
+    vec4 w4 = 0.125 / (1.0 + g4);
+    float w0 = 0.5 / (1.0 + g0);
+    v = (dot(g4, w4) + g0 * w0) / (w4.x + w4.y + w4.z + w4.w + w0);
+  } else {
+    v = e * 0.125 + (a + c + g + i) * 0.03125 + (b + d + f + h) * 0.0625 + (j + k + l + m) * 0.125;
+  }
+  o = vec4(v, 0.0, 0.0, 1.0);
 }
 `;
 
-/** Separable 9-tap Gaussian using 5 bilinear fetches. */
-export const GLOW_BLUR = `${HEADER}
-uniform sampler2D uSrc;
+/**
+ * Bloom upsample: a 3×3 tent of the coarser accumulated mip (radius one destination texel) added to
+ * this mip, kept as a running mean (uKeep = 1 / levels from here down) so an RGBA8 target never clips.
+ */
+export const BLOOM_UP = `${HEADER}
+uniform sampler2D uSrc;     // coarser accumulated mip
+uniform sampler2D uSame;    // this level's downsample
 uniform vec2 uInvDst;
-uniform vec2 uDir;  // texel step in uv
+uniform float uKeep;
 out vec4 o;
 void main() {
   vec2 uv = gl_FragCoord.xy * uInvDst;
-  float s = texture(uSrc, uv).r * 0.2270270270;
-  s += (texture(uSrc, uv + uDir * 1.3846153846).r + texture(uSrc, uv - uDir * 1.3846153846).r) * 0.3162162162;
-  s += (texture(uSrc, uv + uDir * 3.2307692308).r + texture(uSrc, uv - uDir * 3.2307692308).r) * 0.0702702703;
-  o = vec4(s, 0.0, 0.0, 1.0);
+  vec2 t = uInvDst;
+  float s = texture(uSrc, uv).r * 4.0;
+  s += (texture(uSrc, uv + vec2(0.0, t.y)).r + texture(uSrc, uv - vec2(0.0, t.y)).r
+      + texture(uSrc, uv + vec2(t.x, 0.0)).r + texture(uSrc, uv - vec2(t.x, 0.0)).r) * 2.0;
+  s += texture(uSrc, uv + t).r + texture(uSrc, uv - t).r
+     + texture(uSrc, uv + vec2(t.x, -t.y)).r + texture(uSrc, uv + vec2(-t.x, t.y)).r;
+  float up = s / 16.0;
+  float here = texture(uSame, uv).r;
+  o = vec4(mix(up, here, uKeep), 0.0, 0.0, 1.0);
 }
 `;
 
@@ -447,7 +498,8 @@ void main() {
  */
 export const RENDER = `${HEADER}
 uniform sampler2D uField;   // grid res, REPEAT + LINEAR: (A, ∇A + bias, glow source)
-uniform sampler2D uGlow;    // half res, REPEAT + LINEAR
+uniform sampler2D uBloomCore; // bloom chain (A-1): mip ½, LINEAR
+uniform sampler2D uBloomHalo; // bloom chain: running mean of every mip, upsampled to ½
 uniform sampler2D uLut;     // 256×1 matter colormap
 uniform vec2 uView;         // backing-store pixels
 uniform vec2 uGrid;
@@ -455,8 +507,22 @@ uniform vec2 uCenter;
 uniform float uScale;       // device pixels per cell
 uniform float uDpr;
 uniform float uTime;
-uniform float uGlowAmt;
+uniform vec2 uBloom;        // core, halo strength (0, 0 = no bloom)
 uniform float uGradBias;
+// Dish effects (docs/ARTE-PULIDO.md §4; all purely visual, the simulation never sees them).
+uniform float uMatterFade;  // A-6: 0 = the culture is not lit (agar and glass only), 1 = drawn
+uniform vec4 uPulse[${MAX_PULSES}];    // A-4 light pulses: x, y (cells), t0 (fx s), kind (0 sow, 1 birth, 2 dissolve)
+uniform vec4 uPulseB[${MAX_PULSES}];   // radius (cells), amount, duration (s), 0
+uniform int uPulseCount;
+uniform float uFxTime;      // fx clock (s) of the pulses
+uniform vec4 uForm[${MAX_FORMING}];    // forming creatures' heartbeat: x, y, r (cells), brightness offset
+uniform int uFormCount;
+uniform float uFreeze;      // A-12: 0..1 time's up (desaturate 35 %, darken 20 %)
+uniform vec3 uCamFx;        // A-9: shake x, y (backing px), zoom punch
+uniform vec2 uBreath;       // A-9: bench / vignette parallax (backing px)
+uniform vec3 uPost;         // A-3: vignette, grain, grade strengths (style, 1 = spec)
+uniform float uGrainSeed;   // A-3: changes at 24 Hz (12 on low; fixed with Reduce motion)
+uniform vec2 uGlint;        // A-11 (high): position 0..1 along its 15° sweep, strength (0 = off)
 uniform int uCubic;
 // Render style (src/sim/style.ts DEFAULT_RENDER_STYLE; cosmetics may change it). Defaults are the
 // former constants: background (11,14,18)/255, agar (20,27,34)/255 → (14,19,25)/255, rim
@@ -640,7 +706,8 @@ vec3 glassDish(vec3 col, float inside, vec2 g, vec2 px) {
   vec3 bench = uBg * mix(mix(1.0, 1.8, dark), mix(0.91, 0.88, dark), sp.y);
   float row = sp.y * 40.0 + 0.12 * sp.x * (hash12(vec2(floor(sp.y * 40.0), 7.0)) - 0.5);
   float streak = 1.0 - smoothstep(0.0, 1.2 * uDpr, abs(fract(row + 0.5) - 0.5) * uView.y / 40.0);
-  bench += mix(vec3(1.0) * 0.05, vec3(0.62, 0.71, 0.78) * 0.025, dark) * streak;
+  // Light steel: the streaks lose 60 % of their contrast (A-11: they read as scanlines).
+  bench += mix(vec3(1.0) * 0.05 * 0.4, vec3(0.62, 0.71, 0.78) * 0.025, dark) * streak;
   float vd = length(px - 0.5 * uView);
   bench *= 1.0 - mix(0.18, 0.55, dark) * smoothstep(0.3 * min(uView.x, uView.y), 0.75 * max(uView.x, uView.y), vd);
   bench *= 0.985 + 0.03 * hash12(floor(px / (2.0 * uDpr)));
@@ -670,6 +737,16 @@ vec3 glassDish(vec3 col, float inside, vec2 g, vec2 px) {
   c = mix(c, vec3(1.0), 0.45 * stroke(arcDist(d, r, a, Rr + 0.2 * wall, 1.36 * 3.14159, 1.42 * 3.14159), max(1.0 * uDpr, 0.2 * wall)));
   c = mix(c, WARM, 0.45 * clamp(1.0 - length(d - vec2(0.62, -0.78) * Rr) / (0.09 * Rr), 0.0, 1.0));
   c = mix(c, vec3(1.0, 0.839, 0.627), 0.9 * stroke(arcDist(d, r, a, Rr + 0.15 * wall, 1.69 * 3.14159, 1.75 * 3.14159), max(1.2 * uDpr, 0.25 * wall)));
+  // Fresnel (A-11): the last 6 px of the glass catch +10 % light, most on the side of the room light.
+  float fromOuter = Rr + 0.5 * wall - r;
+  float fres = (1.0 - smoothstep(0.0, 6.0 * uDpr, fromOuter)) * step(0.0, fromOuter) * smoothstep(R - uDpr, R + uDpr, r);
+  c *= 1.0 + 0.10 * fres * mix(1.5, 0.5, diag);
+  // A specular glint (A-11, high profile) runs 15° along the upper crescent once every 20 s.
+  if (uGlint.y > 0.0) {
+    float ga = 1.13 * 3.14159 + uGlint.x * 0.0833 * 3.14159;
+    float gl = stroke(arcDist(d, r, a, Rr + 0.2 * wall, ga - 0.025, ga + 0.025), max(1.6 * uDpr, 0.4 * wall));
+    c = mix(c, vec3(1.0), 0.75 * uGlint.y * gl);
+  }
   // Frost (polar night) on two arcs of the rim.
   if (uFrost > 0.0 && r > 0.85 * Rr && r < Rr + 2.0 * wall) {
     float fr = 0.0;
@@ -694,11 +771,73 @@ vec3 glassDish(vec3 col, float inside, vec2 g, vec2 px) {
   return c;
 }
 
+/** Ease-out cubic (≈ Material 'standard' decelerate) for the pulse envelopes. */
+float easeOut(float u) {
+  u = clamp(u, 0.0, 1.0);
+  float v = 1.0 - u;
+  return 1.0 - v * v * v;
+}
+
+/**
+ * Life pulses (A-4) at grid point g: 'bright' multiplies the matter (a birth's inhale, a forming
+ * creature's heartbeat), 'grey' greys and dims a dissolving one, 'agar' lights the agar where a seed
+ * landed.
+ */
+void lifePulses(vec2 g, out float bright, out float grey, out float agar) {
+  bright = 1.0;
+  grey = 0.0;
+  agar = 0.0;
+  for (int i = 0; i < ${MAX_PULSES}; i++) {
+    if (i >= uPulseCount) break;
+    vec4 p = uPulse[i];
+    vec4 b = uPulseB[i];
+    float t = uFxTime - p.z;
+    if (t < 0.0 || t > b.z + 0.2) continue;
+    float d = length(g - p.xy) / max(b.x, 1.0);
+    if (d >= 1.0) continue;
+    float disc = 1.0 - smoothstep(0.45, 1.0, d);
+    float u = t / max(b.z, 1e-3);
+    if (p.w < 0.5) {
+      agar += b.y * disc * (1.0 - easeOut(u));
+    } else if (p.w < 1.5) {
+      // Inhale: a quick rise (60 ms) and a standard fall over the duration.
+      bright += b.y * disc * smoothstep(0.0, 0.06, t) * (1.0 - easeOut(u));
+    } else {
+      // Dissolve: greys in (exit curve), lets go after its duration (the matter is gone by then).
+      grey = max(grey, b.y * disc * u * u * (1.0 - smoothstep(1.0, 1.0 + 0.2 / max(b.z, 1e-3), u)));
+    }
+  }
+  for (int i = 0; i < ${MAX_FORMING}; i++) {
+    if (i >= uFormCount) break;
+    vec4 f = uForm[i];
+    float d = length(g - f.xy) / max(f.z, 1.0);
+    bright += f.w * (1.0 - smoothstep(0.5, 1.0, d));
+  }
+}
+
+/** Soft highlight shoulder (A-2, after L2): above k = 0.78 the colour rolls off, keeping its hue. */
+vec3 shoulder(vec3 c) {
+  const float k = 0.78;
+  float m = max(c.r, max(c.g, c.b));
+  if (m <= k) return c;
+  float f = k + (1.0 - k) * (1.0 - exp(-(m - k) / (1.0 - k)));
+  return c * (f / m);
+}
+
+const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
+/** 1 on a dark theme's bench, 0 on the light theme's pale steel (set once in main). */
+float gDark = 1.0;
+
 void main() {
-  vec2 px = vec2(gl_FragCoord.x, uView.y - gl_FragCoord.y);
+  vec2 px0 = vec2(gl_FragCoord.x, uView.y - gl_FragCoord.y);
+  // Camera micro-motion (A-9): the whole image shifts and punches about the dish centre; the grid
+  // camera never moves (touches map exactly). With no motion uCamFx = (0, 0, 1).
+  vec2 dc = 0.5 * uView + (uDishMode == 1 ? (uDish.xy - uCenter) * uScale : vec2(0.0));
+  vec2 px = dc + (px0 - uCamFx.xy - dc) / max(uCamFx.z, 0.5);
   vec2 rel = px - 0.5 * uView;
   vec2 halfSize = 0.5 * uGrid * uScale;
   vec2 g = uCenter + rel / uScale;
+  gDark = step(dot(uBg, vec3(0.299, 0.587, 0.114)), 0.5);
   float inside;   // px to the dish edge, > 0 inside
   vec2 e;         // position relative to the dish, ~1 at the edge (vignette)
   if (uDishMode == 1) {
@@ -730,6 +869,13 @@ void main() {
   // Inner shadow near the rim, like a glass dish wall (torus; the round dish has a lit meniscus).
   if (uDishMode == 0) col *= 0.78 + 0.22 * smoothstep(0.0, 14.0 * uDpr, inside);
 
+  float bright;
+  float grey;
+  float agarLight;
+  lifePulses(g, bright, grey, agarLight);
+  // A seed's light in the agar (cold, the colour of life), under the matter.
+  col += ACCENT * agarLight;
+
   vec4 lut = texture(uLut, vec2((v * 255.0 + 0.5) / 256.0, 0.5));
   vec3 mat = lut.rgb;
   // Species tint (round dish): matter near a creature takes its species' tinted colormap, and its
@@ -738,41 +884,54 @@ void main() {
   vec3 tintBody = uContour;
   float tw = uTintCount > 0 ? tintAt(g, v, tintV, tintBody) : 0.0;
   mat = mix(mat, tintV, tw);
-  vec3 contourC = mix(uContour, tintBody * 1.15, tw);
-  // Soft relief: the field as a gel surface lit from the top-left, so bodies
-  // read as volumes and saturated cores do not go flat.
+  vec3 contourC = mix(uContour, tintBody, tw);
+  // Soft relief: the field as a gel surface lit from the top-left, so bodies read as volumes and
+  // saturated cores do not go flat. Tinted species get a deeper relief (A-2): their colour flattens
+  // a body more than the cyan ramp does.
   vec3 n = normalize(vec3(-grad * 5.0, 1.0));
   vec3 l = normalize(LIGHT);
   float shade = dot(n, l) - l.z;                  // 0 on flat matter
-  // Shadows sink into deep cyan/indigo instead of grey (stays luminous).
-  // (a tinted creature's shadows stay its own colour: a neutral shade instead of the cyan one)
-  mat = mix(mat, mat * mix(uShadow, vec3(0.62), tw), clamp(-shade * 1.4, 0.0, 0.85));
-  mat *= 1.0 + 0.35 * max(shade, 0.0);
+  // Shadows sink into deep cyan/indigo instead of grey (stays luminous); a tinted creature's
+  // shadows stay its own colour (a neutral shade instead of the cyan one).
+  mat = mix(mat, mat * mix(uShadow, vec3(0.62), tw), clamp(-shade * mix(1.4, 1.8, tw), 0.0, 0.85));
+  mat *= 1.0 + mix(0.35, 0.45, tw) * max(shade, 0.0);
   float spec = pow(max(dot(n, normalize(l + vec3(0.0, 0.0, 1.0))), 0.0), 48.0);
-  mat += vec3(0.9, 0.97, 1.0) * spec * 0.35 * smoothstep(0.15, 0.45, v);
-  col = mix(col, mat, lut.a);
+  mat += vec3(0.9, 0.97, 1.0) * spec * mix(0.35, 0.5, tw) * smoothstep(0.15, 0.45, v);
+  // Life on the matter: a forming creature's heartbeat, a birth's inhale, a dissolve's grey.
+  mat *= bright;
+  float lit = uMatterFade * (1.0 - 0.4 * grey);
+  mat = mix(mat, vec3(dot(mat, LUMA)) * vec3(0.9, 0.95, 1.0), 0.85 * grey);
+  col = mix(col, mat, lut.a * uMatterFade);
 
-  // "This produces": luminous cyan sheen on steep edges + a thin iso-contour.
+  // "This produces": luminous sheen on steep edges + a light iso-contour (A-2: 0.55, thinner, the
+  // body's own colour; at 0.85 it read as a sticker's cut line).
   float edge = smoothstep(0.02, 0.16, gm);
-  col += contourC * 0.14 * edge * (1.0 - smoothstep(0.25, 0.65, v));
+  col += contourC * 0.14 * edge * (1.0 - smoothstep(0.25, 0.65, v)) * lit;
   float fw = max(fwidth(v), 1e-5);
   float dist = abs(v - 0.13) / fw;
-  float hw = 0.55 * uDpr;
+  float hw = 0.45 * uDpr;
   float line = 1.0 - smoothstep(hw - 0.5, hw + 0.75, dist);
-  col += contourC * line * (0.25 + 0.75 * edge) * 0.85;
+  col += contourC * line * (0.25 + 0.75 * edge) * 0.55 * lit;
 
-  // Bloom from the half-res blurred bright matter: wide indigo, cyan core (a tinted creature glows
-  // in its own colour).
-  if (uGlowAmt > 0.0) {
-    float gl = texture(uGlow, g / uGrid).r;
-    vec3 gw = mix(uGlowWide, tintBody * 0.8, tw);
+  // Bloom (A-1): a tight core from the ½ mip and a wide halo from the whole chain, in the species'
+  // colour (cyan core / indigo halo untinted). Light, not stickers.
+  if (uBloom.x + uBloom.y > 0.0) {
+    vec2 bu = g / uGrid;
+    float bc = texture(uBloomCore, bu).r;
+    float bh = texture(uBloomHalo, bu).r;
+    vec3 gw = mix(uGlowWide, tintBody * 0.85, tw);
     vec3 gc = mix(uGlowCore, tintBody, tw);
-    col += (gw * gl + gc * gl * gl * 1.4) * uGlowAmt;
+    col += (gc * bc * uBloom.x + gw * bh * uBloom.y) * lit * bright;
   }
+  // Highlights roll off instead of burning (A-2): white-candle cores keep their detail.
+  col = shoulder(col);
+  // Time's up (A-12): the dish freezes grey and dims under the stamp.
+  if (uFreeze > 0.0) col = mix(col, vec3(dot(col, LUMA)), 0.35 * uFreeze) * (1.0 - 0.2 * uFreeze);
 
   vec3 outCol;
   if (uDishMode == 1) {
-    outCol = glassDish(col, inside, g, px);
+    // The bench breathes with the camera (A-9 parallax); the dish itself never does.
+    outCol = glassDish(col, inside, g, px - uBreath);
   } else {
     // Dish edge: antialiased cut to the background plus a subtle rim line.
     float aa = clamp(inside + 0.5, 0.0, 1.0);
@@ -787,7 +946,24 @@ void main() {
     outCol += uRim * halo * uRimHalo;
   }
 
-  // Dither to kill banding in the dark gradients.
+  // Camera (A-3), over everything the GL draws and never over the UI (the UI is DOM above):
+  // a vignette centred on the dish and breathing with the bench, colour grading, animated grain.
+  {
+    float Rv = uDishMode == 1 ? dishWall().x : min(halfSize.x, halfSize.y);
+    float aspect = uView.x / max(uView.y, 1.0);
+    vec2 vq = (px0 - uBreath - dc) / (1.15 * Rv * vec2(max(1.0, aspect), max(1.0, 1.0 / aspect)));
+    outCol *= 1.0 - mix(0.12, 0.28, gDark) * uPost.x * smoothstep(0.55, 1.25, length(vq));
+    float L = dot(outCol, LUMA);
+    // Shadows lift towards indigo; highlights warm a touch (VELA's candle on what shines).
+    outCol.b += 1.5 / 255.0 * uPost.z * (1.0 - smoothstep(0.0, 0.08, L));
+    outCol *= mix(vec3(1.0), vec3(1.02, 1.0, 0.97), uPost.z * smoothstep(0.55, 0.95, L));
+    // Triangular grain (L3), stronger in the dark, none on pure black or white.
+    float gn = hash12(gl_FragCoord.xy + uGrainSeed * 61.7) + hash12(gl_FragCoord.yx * 1.37 + uGrainSeed * 17.3 + 9.1) - 1.0;
+    float amp = mix(2.5, 0.8, smoothstep(0.1, 0.6, L)) / 255.0 * uPost.y * mix(0.5, 1.0, gDark);
+    outCol += gn * amp * smoothstep(0.0, 0.015, L) * (1.0 - smoothstep(0.985, 1.0, L));
+  }
+
+  // Dither to kill banding in the dark gradients (last, 1 LSB).
   outCol += (hash12(gl_FragCoord.xy + fract(uTime) * 61.0) - 0.5) / 255.0;
   o = vec4(outCol, 1.0);
 }

@@ -12,9 +12,11 @@ import {
   eraseSource,
   extractSource,
   fieldSource,
-  GLOW_BLUR,
-  GLOW_DOWN,
+  BLOOM_DOWN,
+  BLOOM_UP,
+  MAX_FORMING,
   MAX_LYSIS,
+  MAX_PULSES,
   RENDER,
   rotateSource,
   seedSource,
@@ -34,9 +36,10 @@ import { DEFAULT_RENDER_STYLE, RIM_HALO, normalizeRenderStyle, type SimRenderSty
  *   weights baked in as constants (regenerated only when R / rings change), rows
  *   ±dy summed before the multiply-adds, zero weights dropped. Same rule as
  *   cpu.ts: A = clip(A + dt·G(K*A)), Chan kn=1 kernel / gn=1 growth, torus.
- * - Render: grid-res "field" pass (A, ∇A, glow source) → optional half-res
- *   blur → one screen pass (bicubic upsampling, LUT, gel relief, cyan contour,
- *   bloom, dish). Quality: low = no bloom; medium = bloom; high = wider bloom.
+ * - Render: grid-res "field" pass (A, ∇A, glow source) → a bloom mip chain at grid resolution
+ *   (13-tap downsample with a Karis first pass, 3×3 tent upsample; ARTE-PULIDO A-1: low 3 mips,
+ *   medium 4, high 5) → one screen pass (bicubic upsampling, LUT, gel relief, contour, bloom,
+ *   highlight shoulder, dish, vignette, grading, grain). No other pass runs per screen pixel.
  *   For weak devices the big saver is a smaller backing store (cap the DPR you
  *   pass to resizeCanvas), since the screen pass is per device pixel.
  *
@@ -59,6 +62,11 @@ import { DEFAULT_RENDER_STYLE, RIM_HALO, normalizeRenderStyle, type SimRenderSty
  *  - applyTurns(turns): glass deflection (deflect.ts Deflector), rigid rotations of matter.
  *  - setLysis(discs): growth penalty discs (deflect.ts LysisPlanner).
  *  - setDishFx({ grow, next, frost }), setCreatureTints(list, amount?): purely visual.
+ *
+ * Dish life effects (docs/ARTE-PULIDO.md §4, purely visual): setMatterFade (A-6 the culture is lit
+ * after its hidden incubation), setPulses (A-4 light pulses: sowing, birth, dissolve), setForming
+ * (A-4 heartbeat of forming creatures), setFreeze (A-12 time's up), setCameraFx (A-9 shake, zoom
+ * punch and bench parallax), setGrain / setGlint (A-3 grain clock, A-11 glass glint).
  */
 
 export type StateFormat = 'auto' | 'half' | 'float' | 'u8';
@@ -126,11 +134,24 @@ export interface SimInfo {
 /** Compiled step programs kept (one per kernel R / rings); each is a few hundred KB of driver memory. */
 const STEP_CACHE_MAX = 18;
 
-const QUALITY_GLOW: Record<Quality, { amount: number; passes: number; cubic: boolean }> = {
-  low: { amount: 0, passes: 0, cubic: true },
-  medium: { amount: 0.55, passes: 1, cubic: true },
-  high: { amount: 0.65, passes: 2, cubic: true },
+/**
+ * Bloom per effects profile (docs/ARTE-PULIDO.md A-1, §6.1): mips of the chain below the grid (½,
+ * ¼ … at most ¹⁄₃₂, ≤ 116² at its largest) and the core / halo strengths. Every profile glows: the
+ * game's identity is bio-luminescence, and low (SwiftShader, modest phones) used to get none.
+ */
+export const QUALITY_BLOOM: Record<Quality, { mips: number; core: number; halo: number; cubic: boolean }> = {
+  low: { mips: 3, core: 0.45, halo: 0.3, cubic: true },
+  medium: { mips: 4, core: 0.55, halo: 0.35, cubic: true },
+  high: { mips: 5, core: 0.6, halo: 0.4, cubic: true },
 };
+/** Bloom mips allocated (the high profile's chain). */
+const BLOOM_MAX_MIPS = 5;
+/**
+ * The halo is a running mean over the chain; this gain makes the spec's strengths read as light (the
+ * mean spreads one creature's glow over ~1.5 R). Calibrated on screenshots (A-1 acceptance: at 0.6 R
+ * outside the contour the added light is ≥ 25 % of the contour's).
+ */
+const BLOOM_HALO_GAIN = 4.5;
 
 export class WebGLSimulation implements Simulation {
   readonly gridW: number;
@@ -150,8 +171,9 @@ export class WebGLSimulation implements Simulation {
   private state!: [Target, Target];
   private cur = 0;
   private field!: Target;
-  private glowA!: Target;
-  private glowB!: Target;
+  /** Bloom chain: downsampled mips (½ … ¹⁄₃₂) and the accumulated upsampled ones (½ … ¹⁄₁₆). */
+  private bloomDown: Target[] = [];
+  private bloomUp: Target[] = [];
   private snapT!: Target;
   private extractTargets = new Map<string, Target>();
   private lut!: WebGLTexture;
@@ -167,7 +189,7 @@ export class WebGLSimulation implements Simulation {
   private stepKey = '';
   private stepCache = new Map<string, Prog>();
   private progs!: Record<
-    'seed' | 'erase' | 'snapshot' | 'extract' | 'field' | 'glowDown' | 'glowBlur' | 'render' | 'rotate',
+    'seed' | 'erase' | 'snapshot' | 'extract' | 'field' | 'bloomDown' | 'bloomUp' | 'render' | 'rotate',
     Prog
   >;
   /** Round dish (null = torus). */
@@ -193,7 +215,20 @@ export class WebGLSimulation implements Simulation {
   /** Backing-store pixels per CSS pixel (line widths); refreshed on resizeCanvas, not per frame. */
   private pxRatio = 1;
   private fieldDirty = true;
-  private glowBuiltPasses = -1;
+  private bloomBuiltMips = -1;
+  // Dish life effects (purely visual; see the class comment).
+  private matterFade = 1;
+  private pulseA = new Float32Array(MAX_PULSES * 4);
+  private pulseB = new Float32Array(MAX_PULSES * 4);
+  private pulseCount = 0;
+  private fxTime = 0;
+  private formData = new Float32Array(MAX_FORMING * 4);
+  private formCount = 0;
+  private freeze = 0;
+  private camFx = { x: 0, y: 0, zoom: 1, bx: 0, by: 0 };
+  private grainSeed = 0;
+  private glint = { at: 0, amount: 0 };
+  private bloomOn = true;
   private camera: Camera;
   private lost = false;
   private disposed = false;
@@ -468,6 +503,76 @@ export class WebGLSimulation implements Simulation {
     if (amount !== undefined) this.tintAmt = Math.min(1, Math.max(0, amount));
   }
 
+  // ───────────────────────────── Dish life effects (purely visual) ─────────────────────────────
+
+  /**
+   * A-6: how much of the matter is drawn, 0..1 (0 = the culture is not lit yet: agar and glass are
+   * drawn exactly as on an empty dish, the matter, its contour and its glow are not).
+   */
+  setMatterFade(v: number): void {
+    this.matterFade = Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1;
+  }
+
+  get matterFadeValue(): number {
+    return this.matterFade;
+  }
+
+  /**
+   * A-4 light pulses: `a` = (x, y, t0, kind) per pulse (kind 0 sow, 1 birth, 2 dissolve; grid cells,
+   * t0 on the fx clock), `b` = (radius in cells, amount, duration s, 0); at most MAX_PULSES. `time` =
+   * the fx clock now. The arrays are copied.
+   */
+  setPulses(a: ArrayLike<number>, b: ArrayLike<number>, count: number, time: number): void {
+    const n = Math.max(0, Math.min(MAX_PULSES, Math.floor(count)));
+    for (let i = 0; i < n * 4; i++) {
+      this.pulseA[i] = a[i];
+      this.pulseB[i] = b[i];
+    }
+    this.pulseCount = n;
+    this.fxTime = Number.isFinite(time) ? time : 0;
+  }
+
+  /** A-4 heartbeat: (x, y, r in cells, brightness offset) per forming creature; at most MAX_FORMING. */
+  setForming(data: ArrayLike<number>, count: number): void {
+    const n = Math.max(0, Math.min(MAX_FORMING, Math.floor(count)));
+    for (let i = 0; i < n * 4; i++) this.formData[i] = data[i];
+    this.formCount = n;
+  }
+
+  /** A-12: 0..1 time's up (the dish greys 35 % and darkens 20 %). */
+  setFreeze(v: number): void {
+    this.freeze = Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0;
+  }
+
+  /**
+   * A-9 camera micro-motion in CSS px: the image's shake offset and zoom punch (about the dish
+   * centre), and the bench / vignette parallax. The grid camera is never moved.
+   */
+  setCameraFx(dx: number, dy: number, zoom: number, breathX = 0, breathY = 0): void {
+    const c = this.camFx;
+    c.x = Number.isFinite(dx) ? dx : 0;
+    c.y = Number.isFinite(dy) ? dy : 0;
+    c.zoom = Number.isFinite(zoom) && zoom > 0.5 ? zoom : 1;
+    c.bx = Number.isFinite(breathX) ? breathX : 0;
+    c.by = Number.isFinite(breathY) ? breathY : 0;
+  }
+
+  /** Bloom on (default) or off (measurements: the light it adds is the difference). */
+  setBloomEnabled(on: boolean): void {
+    this.bloomOn = on;
+  }
+
+  /** A-3: grain seed (the caller steps it at 24 Hz, 12 on low; fixed with Reduce motion). */
+  setGrain(seed: number): void {
+    this.grainSeed = Number.isFinite(seed) ? seed % 1024 : 0;
+  }
+
+  /** A-11 (high): glass glint position 0..1 along its 15° sweep and strength (0 = none). */
+  setGlint(at: number, amount: number): void {
+    this.glint.at = Math.min(1, Math.max(0, at || 0));
+    this.glint.amount = Math.min(1, Math.max(0, amount || 0));
+  }
+
   /** Clears every cell outside the rim (a zero-density seed: max(cur, 0) × inside). */
   private maskPass(): void {
     const p = this.progs.seed;
@@ -654,15 +759,16 @@ export class WebGLSimulation implements Simulation {
   render(view: RenderView): void {
     if (this.lost || this.disposed) return;
     const gl = this.gl;
-    const q = QUALITY_GLOW[view.quality] ?? QUALITY_GLOW.medium;
+    const q = QUALITY_BLOOM[view.quality] ?? QUALITY_BLOOM.medium;
     if (this.fieldDirty) {
       this.buildField();
       this.fieldDirty = false;
-      this.glowBuiltPasses = -1;
+      this.bloomBuiltMips = -1;
     }
-    if (q.passes > 0 && this.glowBuiltPasses !== q.passes) {
-      this.buildGlow(q.passes);
-      this.glowBuiltPasses = q.passes;
+    const mips = this.bloomOn ? Math.min(q.mips, this.bloomDown.length) : 0;
+    if (mips > 0 && this.bloomBuiltMips !== mips) {
+      this.buildBloom(mips);
+      this.bloomBuiltMips = mips;
     }
     const W = this.canvas.width;
     const H = this.canvas.height;
@@ -685,19 +791,37 @@ export class WebGLSimulation implements Simulation {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.field.tex);
     gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.glowA.tex);
+    gl.bindTexture(gl.TEXTURE_2D, this.bloomDown[0].tex);
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, this.lut);
+    gl.activeTexture(gl.TEXTURE4);
+    gl.bindTexture(gl.TEXTURE_2D, mips > 1 ? this.bloomUp[0].tex : this.bloomDown[0].tex);
     gl.uniform1i(p.u('uField'), 0);
-    gl.uniform1i(p.u('uGlow'), 1);
+    gl.uniform1i(p.u('uBloomCore'), 1);
     gl.uniform1i(p.u('uLut'), 2);
+    gl.uniform1i(p.u('uBloomHalo'), 4);
     gl.uniform2f(p.u('uView'), W, H);
     gl.uniform2f(p.u('uGrid'), this.gridW, this.gridH);
     gl.uniform2f(p.u('uCenter'), cam.cx, cam.cy);
     gl.uniform1f(p.u('uScale'), cam.scale);
     gl.uniform1f(p.u('uDpr'), dpr);
     gl.uniform1f(p.u('uTime'), view.time);
-    gl.uniform1f(p.u('uGlowAmt'), q.amount);
+    gl.uniform2f(p.u('uBloom'), mips > 0 ? q.core : 0, mips > 0 ? q.halo * BLOOM_HALO_GAIN : 0);
+    gl.uniform1f(p.u('uMatterFade'), this.matterFade);
+    gl.uniform1i(p.u('uPulseCount'), this.pulseCount);
+    if (this.pulseCount) {
+      gl.uniform4fv(p.u('uPulse[0]'), this.pulseA);
+      gl.uniform4fv(p.u('uPulseB[0]'), this.pulseB);
+    }
+    gl.uniform1f(p.u('uFxTime'), this.fxTime);
+    gl.uniform1i(p.u('uFormCount'), this.formCount);
+    if (this.formCount) gl.uniform4fv(p.u('uForm[0]'), this.formData);
+    gl.uniform1f(p.u('uFreeze'), this.freeze);
+    const cf = this.camFx;
+    gl.uniform3f(p.u('uCamFx'), cf.x * dpr, cf.y * dpr, cf.zoom);
+    gl.uniform2f(p.u('uBreath'), cf.bx * dpr, cf.by * dpr);
+    gl.uniform1f(p.u('uGrainSeed'), this.grainSeed);
+    gl.uniform2f(p.u('uGlint'), this.glint.at, this.glint.amount);
     gl.uniform1i(p.u('uCubic'), q.cubic ? 1 : 0);
     gl.uniform1f(p.u('uGradBias'), this.floatField ? 0 : 0.5);
     gl.uniform1i(p.u('uDishMode'), d ? 1 : 0);
@@ -743,6 +867,7 @@ export class WebGLSimulation implements Simulation {
     gl.uniform1f(p.u('uRimHalo'), st.rimStyle === 'glow' ? RIM_HALO.glow : RIM_HALO.normal);
     gl.uniform1f(p.u('uRimDouble'), st.rimStyle === 'double' ? 1 : 0);
     gl.uniform4fv(p.u('uLabGrid'), st.grid);
+    gl.uniform3f(p.u('uPost'), st.vignette ?? 1, st.grain ?? 1, st.grade ?? 1);
     this.styleDirty = false;
   }
 
@@ -856,7 +981,7 @@ export class WebGLSimulation implements Simulation {
     this.stepKey = '';
     this.tmplRef = null;
     this.fieldDirty = true;
-    this.glowBuiltPasses = -1;
+    this.bloomBuiltMips = -1;
     gl.disable(gl.BLEND);
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.CULL_FACE);
@@ -908,10 +1033,17 @@ export class WebGLSimulation implements Simulation {
       } else this.deleteTarget(t);
     }
     if (!this.floatField) this.field = this.makeTarget(this.gridW, this.gridH, gl.RGBA8, gl.LINEAR, gl.REPEAT);
-    const gw = Math.ceil(this.gridW / 2);
-    const gh = Math.ceil(this.gridH / 2);
-    this.glowA = this.makeTarget(gw, gh, gl.RGBA8, gl.LINEAR, gl.REPEAT);
-    this.glowB = this.makeTarget(gw, gh, gl.RGBA8, gl.LINEAR, gl.REPEAT);
+    // Bloom chain at grid resolution (½ … ¹⁄₃₂): half float when renderable, else RGBA8 (the glow
+    // is soft and kept as a mean in 0..1; the final dither hides 8-bit steps).
+    const bloomFmt = this.floatField ? gl.RGBA16F : gl.RGBA8;
+    this.bloomDown = [];
+    this.bloomUp = [];
+    for (let i = 0; i < BLOOM_MAX_MIPS; i++) {
+      const w = Math.max(1, Math.ceil(this.gridW / 2 ** (i + 1)));
+      const h = Math.max(1, Math.ceil(this.gridH / 2 ** (i + 1)));
+      this.bloomDown.push(this.makeTarget(w, h, bloomFmt, gl.LINEAR, gl.CLAMP_TO_EDGE));
+      if (i < BLOOM_MAX_MIPS - 1) this.bloomUp.push(this.makeTarget(w, h, bloomFmt, gl.LINEAR, gl.CLAMP_TO_EDGE));
+    }
     const ss = snapshotSize(this.gridW, this.gridH, this.snapScale);
     this.snapT = this.makeTarget(ss.w, ss.h, gl.RGBA8, gl.NEAREST, gl.CLAMP_TO_EDGE);
 
@@ -926,8 +1058,8 @@ export class WebGLSimulation implements Simulation {
       ...this.progs,
       field: this.program(fieldSource(this.fm.lanes, this.fm.enc, this.floatField ? 0 : 0.5)),
       render: this.program(RENDER),
-      glowDown: this.program(GLOW_DOWN),
-      glowBlur: this.program(GLOW_BLUR),
+      bloomDown: this.program(BLOOM_DOWN),
+      bloomUp: this.program(BLOOM_UP),
     };
     this.styleDirty = true; // new render program: its style uniforms start at zero
     this.ensureStepProgram();
@@ -1192,34 +1324,49 @@ export class WebGLSimulation implements Simulation {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
-  private buildGlow(passes: number): void {
+  /**
+   * The bloom chain (A-1): 13-tap downsamples from the field's glow source to mip `mips` (Karis on
+   * the first), then 3×3 tent upsamples back to ½ keeping a running mean of every level. A few tiny
+   * passes at grid resolution (low: 84², 42², 21² + 2 up), only when the field changed.
+   */
+  private buildBloom(mips: number): void {
     const gl = this.gl;
-    const a = this.glowA;
-    const b = this.glowB;
     gl.bindVertexArray(this.vao);
     gl.activeTexture(gl.TEXTURE0);
-    gl.viewport(0, 0, a.w, a.h);
-    let p = this.progs.glowDown;
+    let p = this.progs.bloomDown;
     gl.useProgram(p.p);
     gl.uniform1i(p.u('uSrc'), 0);
-    gl.uniform2f(p.u('uInvDst'), 1 / a.w, 1 / a.h);
-    gl.bindTexture(gl.TEXTURE_2D, this.field.tex);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, a.fbo);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-    p = this.progs.glowBlur;
+    let src: Target = this.field;
+    for (let i = 0; i < mips; i++) {
+      const dst = this.bloomDown[i];
+      gl.uniform2f(p.u('uSrcTexel'), 1 / src.w, 1 / src.h);
+      gl.uniform2f(p.u('uInvDst'), 1 / dst.w, 1 / dst.h);
+      gl.uniform1i(p.u('uFirst'), i === 0 ? 1 : 0);
+      gl.bindTexture(gl.TEXTURE_2D, src.tex);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fbo);
+      gl.viewport(0, 0, dst.w, dst.h);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      src = dst;
+    }
+    if (mips < 2) return;
+    p = this.progs.bloomUp;
     gl.useProgram(p.p);
     gl.uniform1i(p.u('uSrc'), 0);
-    gl.uniform2f(p.u('uInvDst'), 1 / a.w, 1 / a.h);
-    for (let i = 0; i < passes; i++) {
-      const spread = 1 + i; // second pass is wider
-      gl.uniform2f(p.u('uDir'), spread / a.w, 0);
-      gl.bindTexture(gl.TEXTURE_2D, a.tex);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, b.fbo);
+    gl.uniform1i(p.u('uSame'), 1);
+    let coarse: Target = this.bloomDown[mips - 1];
+    for (let i = mips - 2; i >= 0; i--) {
+      const dst = this.bloomUp[i];
+      gl.uniform2f(p.u('uInvDst'), 1 / dst.w, 1 / dst.h);
+      // Running mean over the levels i .. mips-1: this level weighs 1 / (levels from here).
+      gl.uniform1f(p.u('uKeep'), 1 / (mips - i));
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this.bloomDown[i].tex);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, coarse.tex);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fbo);
+      gl.viewport(0, 0, dst.w, dst.h);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
-      gl.uniform2f(p.u('uDir'), 0, spread / a.h);
-      gl.bindTexture(gl.TEXTURE_2D, b.tex);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, a.fbo);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      coarse = dst;
     }
   }
 
@@ -1304,7 +1451,7 @@ export class WebGLSimulation implements Simulation {
 
   private deleteResources(): void {
     const gl = this.gl;
-    for (const t of [...(this.state ?? []), this.field, this.glowA, this.glowB, this.snapT]) if (t) this.deleteTarget(t);
+    for (const t of [...(this.state ?? []), this.field, ...this.bloomDown, ...this.bloomUp, this.snapT]) if (t) this.deleteTarget(t);
     for (const t of this.extractTargets.values()) this.deleteTarget(t);
     this.extractTargets.clear();
     for (const p of Object.values(this.progs ?? {})) if (p) gl.deleteProgram(p.p);

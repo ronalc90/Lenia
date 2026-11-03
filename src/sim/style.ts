@@ -26,6 +26,13 @@ export interface SimRenderStyle {
   shadow: Vec3;
   /** Optional lab grid over the agar, rgba 0..1; a = 0 disables it. */
   grid: readonly [number, number, number, number];
+  /**
+   * Camera post-process strengths (docs/ARTE-PULIDO.md A-3), 0..2 × the spec's values (1 = as
+   * specified, 0 = off); cosmetics may change them. Optional: absent means 1.
+   */
+  vignette?: number;
+  grain?: number;
+  grade?: number;
 }
 
 /** Exactly the constants the RENDER shader had before styles existed (today's look). */
@@ -41,6 +48,9 @@ export const DEFAULT_RENDER_STYLE: SimRenderStyle = Object.freeze({
   glowWide: [0.28, 0.36, 0.95],
   shadow: [0.42, 0.7, 1.0],
   grid: [0, 0, 0, 0],
+  vignette: 1,
+  grain: 1,
+  grade: 1,
 } as SimRenderStyle);
 
 /** Rim halo factor outside the dish (shader `uRimHalo`): 'glow' rims are wider. */
@@ -60,6 +70,8 @@ function snap(v: Vec3, def: Vec3): Vec3 {
 }
 
 const clamp01 = (x: number) => (Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : 0);
+/** A post-process strength: 0..2, absent or invalid = 1 (the spec's value). */
+const post = (x: number | undefined): number => (typeof x === 'number' && Number.isFinite(x) ? Math.min(2, Math.max(0, x)) : 1);
 const clamp3 = (v: Vec3): Vec3 => [clamp01(v[0]), clamp01(v[1]), clamp01(v[2])];
 
 /** Validated copy of a style: clamped values, defaults snapped exactly (see SNAP). */
@@ -79,5 +91,8 @@ export function normalizeRenderStyle(s: SimRenderStyle): SimRenderStyle {
     glowWide: snap(s.glowWide, d.glowWide),
     shadow: snap(s.shadow, d.shadow),
     grid: [clamp01(g[0]), clamp01(g[1]), clamp01(g[2]), clamp01(g[3])],
+    vignette: post(s.vignette),
+    grain: post(s.grain),
+    grade: post(s.grade),
   };
 }
