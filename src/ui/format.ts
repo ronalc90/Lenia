@@ -146,3 +146,27 @@ export function fmtParam(v: number, step: number): string {
   const digits = Math.max(0, Math.min(5, Math.ceil(-Math.log10(step) - 1e-9)));
   return v.toFixed(digits);
 }
+
+// ───────────── words that agree with their number (docs/ARTE-PULIDO.md B-16) ─────────────
+
+/** "1 vez" / "3 veces", "once" / "3 times" (the species sheet's "La viste N veces"). */
+export function timesText(n: number, lang: Lang): string {
+  if (lang === 'es') return n === 1 ? '1 vez' : `${fmt(n, lang)} veces`;
+  return n === 1 ? 'once' : `${fmt(n, lang)} times`;
+}
+
+/** "Te falta 1 Dato" / "Te faltan 12 Datos — unas 2 sesiones" (the Tree's have/need line). */
+export function datosMissingText(n: number, lang: Lang, sessions: string | null = null): string {
+  const base = lang === 'es' ? (n === 1 ? 'Te falta 1 Dato' : `Te faltan ${fmt(n, lang)} Datos`) : `You need ${fmt(n, lang)} more Data`;
+  return sessions ? `${base} — ${sessions}` : base;
+}
+
+/**
+ * A gate counter that never overflows (owner bug, docs/ARTE-PULIDO.md B-10.3): "Sesiones 4/4 ✓", not
+ * "5/4"; the bar stops at 100 %.
+ */
+export function gateCount(have: number, need: number): { text: string; done: boolean; frac: number } {
+  const done = have >= need;
+  const shown = Math.max(0, Math.min(have, need));
+  return { text: done ? `${need}/${need} ✓` : `${shown}/${need}`, done, frac: need > 0 ? Math.min(1, Math.max(0, have / need)) : 1 };
+}

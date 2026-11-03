@@ -9,7 +9,7 @@ import { h, ic, reconcile, setAttr, setText, show, toggle } from './dom';
 import { fmtFixed } from './format';
 import { BEHAVIORS, behaviorName, getLang, RARITIES, rarityName, t } from './i18n';
 import { icon } from './icons';
-import { portraitURL } from './portrait';
+import { mountPortrait } from './portrait';
 import { TOTAL_WORLD_SPECIES } from '../game/worlds';
 
 /** Species cards per page in the grid. */
@@ -157,7 +157,7 @@ export class BestiaryPanel implements Panel {
       const el = h(
         'div',
         { class: 'sp unknown', 'aria-hidden': 'true' },
-        h('div', { class: 'portrait unknown' }, '?'),
+        h('div', { class: 'portrait unknown', html: icon('question', 26) }),
         h('div', { class: 'sp-name' }, t('unknownSpecies')),
         h('div', { class: 'sp-sci' }, ' '),
         h('div', { class: 'sp-meta' }, ' '),
@@ -165,7 +165,7 @@ export class BestiaryPanel implements Panel {
       return { el };
     }
     const portrait = h('div', { class: 'portrait' });
-    const img = h('img', { alt: '', draggable: 'false' });
+    const img = h('img', { alt: '', draggable: 'false' }); // kept in Card for its type; portraits are canvases now
     const name = h('div', { class: 'sp-name' });
     // Always present (a blank line until there is a Latin name): every card keeps the same height.
     const sci = h('div', { class: 'sp-sci' }, ' ');
@@ -182,14 +182,12 @@ export class BestiaryPanel implements Panel {
     const s = it.s;
     c.sp = s;
     const p = c.portrait!;
-    p.className = `portrait r-${s.rarity}`;
+    p.classList.remove('r-common', 'r-uncommon', 'r-rare', 'r-veryRare');
+    p.classList.add('portrait', `r-${s.rarity}`);
+    // Sharp, at the card's size × DPR, in the species' colour (B-1); a glow of that colour meanwhile.
     if (s.portrait) {
-      const url = portraitURL(s.portrait, s.hue);
-      if (c.img!.getAttribute('src') !== url) c.img!.src = url;
-      if (c.img!.parentElement !== p) {
-        p.textContent = '';
-        p.appendChild(c.img!);
-      }
+      p.querySelector('.noimg')?.remove();
+      mountPortrait(p, s.portrait, 72, { hue: s.hue });
     } else if (!p.querySelector('.noimg')) {
       p.textContent = '';
       p.appendChild(h('span', { class: 'noimg' }));
@@ -212,6 +210,7 @@ export class BestiaryPanel implements Panel {
       c.meta!.innerHTML = `<span class="icw" style="color:${col}">${icon(s.behavior ?? 'unknown', 14)}</span>×${fmtFixed(s.mult, 1, getLang())}`;
     }
     show(c.dot!, s.isNew);
+    toggle(c.el, 'is-new', s.isNew);
     setAttr(c.el, 'aria-label', `${display}, ${rarityName(s.rarity)}, ${behaviorName(s.behavior)}`);
   }
 }

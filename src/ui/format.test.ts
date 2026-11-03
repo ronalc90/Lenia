@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fmt, fmtClock, fmtDuration, fmtParam, fmtRate, fmtShort } from './format';
+import { datosMissingText, fmt, fmtClock, fmtDuration, fmtParam, fmtRate, fmtShort, gateCount, timesText } from './format';
 
 describe('fmt (currency)', () => {
   it('uses thousands separators up to 999,999', () => {
@@ -100,5 +100,31 @@ describe('durations', () => {
     expect(fmtParam(0.0155, 0.0001)).toBe('0.0155');
     expect(fmtParam(13, 1)).toBe('13');
     expect(fmtParam(0.1, 0.01)).toBe('0.10');
+  });
+});
+
+describe('words that agree with their number (B-16)', () => {
+  it('says "1 vez", "3 veces", "once", "3 times"', () => {
+    expect(timesText(1, 'es')).toBe('1 vez');
+    expect(timesText(3, 'es')).toBe('3 veces');
+    expect(timesText(1, 'en')).toBe('once');
+    expect(timesText(3, 'en')).toBe('3 times');
+  });
+
+  it('says "Te falta 1 Dato" and "Te faltan 12 Datos"', () => {
+    expect(datosMissingText(1, 'es')).toBe('Te falta 1 Dato');
+    expect(datosMissingText(12, 'es', 'unas 2 sesiones')).toBe('Te faltan 12 Datos — unas 2 sesiones');
+    expect(datosMissingText(1, 'en')).toBe('You need 1 more Data');
+  });
+});
+
+describe('gate counters never overflow (owner bug B-10.3)', () => {
+  it('"Sesiones 5/4" reads 4/4 ✓ and its bar stops at 100 %', () => {
+    expect(gateCount(5, 4)).toEqual({ text: '4/4 ✓', done: true, frac: 1 });
+    expect(gateCount(6, 2)).toEqual({ text: '2/2 ✓', done: true, frac: 1 });
+  });
+
+  it('a counter on its way stays a plain fraction', () => {
+    expect(gateCount(1, 4)).toEqual({ text: '1/4', done: false, frac: 0.25 });
   });
 });

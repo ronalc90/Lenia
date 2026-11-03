@@ -35,6 +35,7 @@ import { Toasts } from './toasts';
 import { SESSION_UI } from '../game/treeText';
 import { MOMENT_MIN_RUN_SECONDS, SESSION_TOAST_MAX_MS, SIM_STEPS_PER_SEC } from '../game/cycleBalance';
 import { earningNow } from './moments/status';
+import { installPressFeedback, pop, setReduceMotion, springEasing, DURATION, EASING, SPRING } from './art/motion';
 
 /**
  * The Esencia counter in whole drops (QA4: "3.7", "1.7" next to "16" read as two kinds of number). Seeds
@@ -191,6 +192,13 @@ export interface UI {
   openBestiary(open?: boolean): void;
   /** The Bestiary drawer is open (bubbles that hang from the top of the dish wait: they would cover its head). */
   readonly drawerOpen: boolean;
+  /**
+   * Where a HUD counter sits (viewport CSS px), for things that fly to it (Esencia motes, docs/ARTE-PULIDO.md
+   * A-5): the Esencia drop, the Datos preview, the session clock's dial; null when it is not on screen.
+   */
+  hudAnchor?(id: 'essence' | 'datos' | 'clock'): DOMRect | null;
+  /** Something landed on a HUD counter (B-6): it pulses (arrivals within 80 ms are one pulse) and ticks. */
+  pulseHud?(id: 'essence' | 'datos', amount: number): void;
 }
 
 export function createUI(root: HTMLElement, deps: UIDeps): UI {
@@ -253,11 +261,18 @@ function multText(x: number, lang: Lang): string {
   return String(v).replace('.', lang === 'es' ? ',' : '.');
 }
 
-/** Restart a one-shot CSS animation class. */
+/** Restart a one-shot CSS animation class (next frame, never a forced reflow: P3). */
 function retriggerClass(el: HTMLElement, cls: string): void {
   el.classList.remove(cls);
-  void el.offsetWidth;
-  el.classList.add(cls);
+  requestAnimationFrame(() => el.classList.add(cls));
+}
+
+/** One press gesture for the whole document (B-4): installed once, whoever creates a UI first. */
+let pressInstalled = false;
+export function ensurePressFeedback(): void {
+  if (pressInstalled || typeof document === 'undefined') return;
+  pressInstalled = true;
+  installPressFeedback(document);
 }
 
 class BiolumaUI implements UI {
@@ -266,6 +281,7 @@ class BiolumaUI implements UI {
   private actions: GameActions;
   // HUD
   private essVal!: HTMLElement;
+  private essGlow!: HTMLElement;
   private essRate!: HTMLElement;
   /** Centre of the HUD: the session clock is mounted here (src/ui/session/flow.ts). */
   readonly clockSlot = h('div', { class: 'hud-clock' });
@@ -382,6 +398,9 @@ class BiolumaUI implements UI {
   private themeLocal: ThemePref | null = null;
   private themeApplied = '';
   private themeMq: MediaQueryList | null = null;
+  private rmApplied: boolean | null = null;
+  /** HUD pulse grouping (B-6): arrivals within 80 ms are one pulse. */
+  private pulseAt = { essence: 0, datos: 0 };
 
   constructor(
     private root: HTMLElement,
@@ -404,6 +423,7 @@ class BiolumaUI implements UI {
     this.bindResize();
     this.bindGesture();
     this.bindTheme();
+    ensurePressFeedback();
     if (deps.splash !== false) {
       this.splash = createSplash(this.el, {
         reduceMotion: () => !!this.v?.settings.reduceMotion,
@@ -484,12 +504,14 @@ class BiolumaUI implements UI {
   private build(): void {
     // HUD
     this.essVal = h('span', { class: 'ess-val mono' }, '0');
+    // The +8 % brightness of a pulse is a light layer over the number (opacity only, never a filter).
+    this.essGlow = h('span', { class: 'ess-glow', 'aria-hidden': 'true' });
     this.essRate = h('span', { class: 'ess-rate mono zero' }, '+0/s');
     const essBtn = h(
       'button',
       { type: 'button', class: 'hud-ess' },
       ic('essence', 24, 'ess-ic'),
-      h('span', { class: 'ess-col' }, this.essVal, this.essRate),
+      h('span', { class: 'ess-col' }, h('span', { class: 'ess-numwrap' }, this.essVal, this.essGlow), this.essRate),
     );
     this.essBtn = essBtn;
     // A long press is something else (a secret): only a short tap opens the stats.
@@ -753,6 +775,12 @@ class BiolumaUI implements UI {
       this.splash?.relabel();
     }
     toggle(this.el, 'rm', view.settings.reduceMotion);
+    // The game's Reduce motion reaches every layer (tokens shorten under .bl-rm, motion.ts helpers fade).
+    if (this.rmApplied !== view.settings.reduceMotion) {
+      this.rmApplied = view.settings.reduceMotion;
+      setReduceMotion(view.settings.reduceMotion ? true : null);
+      document.documentElement.classList.toggle('bl-rm', view.settings.reduceMotion);
+    }
     this.applyTheme();
     const bestiary = this.ensureBestiary();
 
@@ -820,6 +848,9 @@ class BiolumaUI implements UI {
     if (id.startsWith('tree.node.')) return q(`.rt-node[data-id="${CSS.escape(id.slice(10))}"]`, document);
     if (id === 'seed') return q('.mode-pill');
     if (id === 'objective') return q('.bl-objective');
+    // The Bestiary's dock button is under the open drawer (owner bug B-10.1): its visible equivalent is
+    // the new species' card in the drawer (else the first species card).
+    if (id === 'tab.bestiary' && this.bestiaryOpen) return q('.bl-drawer .sp.is-new') ?? q('.bl-drawer .sp:not(.unknown)');
     if (id.startsWith('tab.')) return q(`.bl-dock [data-tab="${id.slice(4)}"]`);
     if (id.startsWith('upgrade.')) return q(`[data-up="${id.slice(8)}"] .buy`);
     if (id === 'creature') {
@@ -839,7 +870,50 @@ class BiolumaUI implements UI {
 
   reveal(id: string): void {
     // The Bestiary is the only drawer; upgrades live in the research tree (the session flow opens it).
-    if (id === 'tab.bestiary') this.openBestiary(true);
+    if (id !== 'tab.bestiary') return;
+    // Asked to open it while it is already open: that IS done (owner bug B-10.1). Said again, a moment
+    // later (never inside the story's own event), so a scene waiting for it can end.
+    if (this.bestiaryOpen) queueMicrotask(() => this.deps.onTabOpen?.('bestiary'));
+    else this.openBestiary(true);
+  }
+
+  hudAnchor(id: 'essence' | 'datos' | 'clock'): DOMRect | null {
+    const el =
+      id === 'essence'
+        ? (this.essBtn.querySelector('.ess-ic') as HTMLElement | null)
+        : id === 'datos'
+          ? (document.querySelector('.ss-prev:not([hidden])') as HTMLElement | null)
+          : (this.clockSlot.querySelector('.ss-dial') as HTMLElement | null);
+    if (!el || !el.offsetParent) return null;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 ? r : null;
+  }
+
+  /**
+   * A mote (or a group) landed on a counter (B-6): the drop icon springs 1 → 1.18 → 1 (fast spring), the
+   * number brightens 8 % for 200 ms through an opacity layer (no filter) and ticks up a hair. Arrivals
+   * within 80 ms are one pulse. Reduce motion: nothing moves (the number already counts).
+   */
+  pulseHud(id: 'essence' | 'datos', amount: number): void {
+    if (!(amount > 0) || !!this.v?.settings.reduceMotion) return;
+    const now = performance.now();
+    if (now - this.pulseAt[id] < 80) return;
+    this.pulseAt[id] = now;
+    if (id === 'datos') {
+      const prev = document.querySelector('.ss-prev:not([hidden])') as HTMLElement | null;
+      if (prev) pop(prev, 1.08);
+      return;
+    }
+    const icon = this.essBtn.querySelector('.ess-ic') as HTMLElement | null;
+    if (icon && typeof icon.animate === 'function')
+      icon.animate([{ scale: '1' }, { scale: '1.18', offset: 0.3 }, { scale: '1' }], { duration: SPRING.fast.ms, easing: springEasing('fast') });
+    if (typeof this.essVal.animate === 'function') {
+      this.essVal.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-2px)', offset: 0.35 }, { transform: 'translateY(0)' }], {
+        duration: DURATION.base,
+        easing: EASING.standard,
+      });
+      this.essGlow.animate([{ opacity: 0 }, { opacity: 1, offset: 0.25 }, { opacity: 0 }], { duration: DURATION.base, easing: EASING.standard });
+    }
   }
 
   get drawerOpen(): boolean {
@@ -852,18 +926,55 @@ class BiolumaUI implements UI {
     if (open && !v) return;
     this.bestiaryOpen = open;
     const p = this.ensureBestiary();
-    show(this.drawer, open);
-    show(this.drawerScrim, open);
     toggle(this.bestiaryBtn, 'active', open);
     setAttr(this.bestiaryBtn, 'aria-expanded', open ? 'true' : 'false');
     toggle(this.el, 'drawer-open', open);
-    if (open && v) {
-      retriggerClass(this.drawer, 'enter');
-      p.update(v);
-      p.onShow?.();
-      this.deps.onTabOpen?.('bestiary');
+    // In 300 ms `enter` from its edge (bottom on a phone, right on a laptop), out in 200 ms `exit`;
+    // the scrim fades 200 / 160 ms (B-5). Reduce motion: an 80-ms fade.
+    const rm = !!v?.settings.reduceMotion || typeof this.drawer.animate !== 'function';
+    const off = this.wide ? 'translateX(100%)' : 'translateY(100%)';
+    this.drawerAnim?.cancel();
+    if (open) {
+      show(this.drawer, true);
+      show(this.drawerScrim, true);
+      if (typeof this.drawer.animate === 'function') {
+        this.drawerAnim = this.drawer.animate(rm ? [{ opacity: 0 }, { opacity: 1 }] : [{ transform: off }, { transform: 'none' }], {
+          duration: rm ? 80 : DURATION.sheet,
+          easing: EASING.enter,
+        });
+        this.drawerScrim.animate([{ opacity: 0 }, { opacity: 1 }], { duration: rm ? 80 : DURATION.base, easing: EASING.standard });
+      }
+      if (v) {
+        p.update(v);
+        p.onShow?.();
+        this.deps.onTabOpen?.('bestiary');
+      }
+      return;
     }
+    if (typeof this.drawer.animate !== 'function') {
+      show(this.drawer, false);
+      show(this.drawerScrim, false);
+      return;
+    }
+    const a = this.drawer.animate(rm ? [{ opacity: 1 }, { opacity: 0 }] : [{ transform: 'none' }, { transform: off }], {
+      duration: rm ? 80 : DURATION.sheetOut,
+      easing: EASING.exit,
+      fill: 'forwards',
+    });
+    this.drawerScrim.animate([{ opacity: 1 }, { opacity: 0 }], { duration: rm ? 80 : DURATION.exit, easing: EASING.exit, fill: 'forwards' });
+    this.drawerAnim = a;
+    // Hidden when the exit ends, or by the clock if a slow frame holds the animation's finish event.
+    const hide = () => {
+      if (this.bestiaryOpen || this.drawerAnim !== a) return;
+      show(this.drawer, false);
+      show(this.drawerScrim, false);
+      a.cancel();
+      for (const x of this.drawerScrim.getAnimations()) x.cancel();
+    };
+    a.onfinish = hide;
+    window.setTimeout(hide, (rm ? 80 : DURATION.sheetOut) + 40);
   }
+  private drawerAnim: Animation | null = null;
 
   restartTutorial(): void {
     this.modals.closeAll();
@@ -950,16 +1061,23 @@ class BiolumaUI implements UI {
       setText(this.essVal, essenceText(v.essence, lang));
     }
     const buffMult = v.buffs.reduce((m, b) => (b.mult > 1 ? m * b.mult : m), 1);
-    // Honest HUD (QA4 F-20): before the first seed the clock and the Esencia wait, so nothing is earned.
+    // Honest HUD (QA4 F-20, B-7): before the first seed the clock and the Esencia wait. The HUD says the
+    // rate it WILL charge ("+2,0/s al empezar", quiet), so it never contradicts a creature's label.
+    const waiting = !!v.session && v.session.phase === 'ready';
     const eps = v.session && v.session.phase !== 'running' ? 0 : v.essencePerSec;
-    const rateHTML = `+${fmtRate(eps, lang)}${t('perSec')}` + (buffMult > 1 && eps > 0 ? `<span class="buffx">×${fmtShort(buffMult, lang)}</span>` : '');
+    // Before the clock runs: the rate it WILL pay, greyed, «al empezar» beside it where there is room
+    // (a phone keeps the words for the screen reader: the line never runs under the clock, B-7).
+    const rateHTML =
+      waiting && v.essencePerSec > 0
+        ? `+${fmtRate(v.essencePerSec, lang)}${t('perSec')}<span class="when"> ${t('atStart')}</span>`
+        : `+${fmtRate(eps, lang)}${t('perSec')}` + (buffMult > 1 && eps > 0 ? `<span class="buffx">×${fmtShort(buffMult, lang)}</span>` : '');
     setHTML(this.essRate, rateHTML);
     toggle(this.essRate, 'zero', eps <= 0);
-    setAttr(this.essVal.parentElement!.parentElement!, 'aria-label', t('essAria', { n: fmt(v.essence, lang), r: fmtRate(v.essencePerSec, lang) }));
+    setAttr(this.essBtn, 'aria-label', t('essAria', { n: fmt(v.essence, lang), r: fmtRate(v.essencePerSec, lang) }));
     // Multiplier breakdown (QA3 F13), when the game exposes it: tooltip on the essence counter.
     const mu = v.multipliers;
     setAttr(
-      this.essVal.parentElement!.parentElement!,
+      this.essBtn,
       'title',
       mu ? `${t('multGlobal')} ×${fmtShort(mu.global, lang)} · ${t('multBuffs')} ×${fmtShort(mu.buffs, lang)}` : null,
     );
@@ -971,10 +1089,9 @@ class BiolumaUI implements UI {
     setAttr(this.muteBtn, 'title', v.settings.muted ? t('unmute') : t('mute'));
   }
 
+  /** A pop with el.animate() (the old class restart forced a reflow: P3). */
   private bump(el: HTMLElement): void {
-    el.classList.remove('bump');
-    void el.offsetWidth;
-    el.classList.add('bump');
+    if (!this.v?.settings.reduceMotion) pop(el, 1.12);
   }
 
   private tweenEssence(dt: number): void {
@@ -989,9 +1106,8 @@ class BiolumaUI implements UI {
       if (jump > Math.max(25, this.dispEssence * 0.06) && now - this.essGlowAt > 700) {
         this.essGlowAt = now;
         this.bump(this.essVal);
-        this.essVal.classList.remove('gain');
-        void this.essVal.offsetWidth;
-        this.essVal.classList.add('gain');
+        if (!this.v?.settings.reduceMotion && typeof this.essGlow.animate === 'function')
+          this.essGlow.animate([{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 0 }], { duration: DURATION.celebrate, easing: EASING.standard });
       }
       const k = 1 - Math.exp(-Math.min(dt, 0.1) * 9);
       this.dispEssence += (target - this.dispEssence) * k;
@@ -1017,7 +1133,7 @@ class BiolumaUI implements UI {
     }
     if (!this.objTimer) {
       show(this.objBar, prog !== undefined && text !== null);
-      if (prog !== undefined) setStyle(this.objFill, 'width', `${(Math.min(1, Math.max(0, prog)) * 100).toFixed(1)}%`);
+      if (prog !== undefined) setStyle(this.objFill, 'transform', `scaleX(${Math.min(1, Math.max(0, prog)).toFixed(3)})`);
     }
     if (text === this.objShown && !this.objTimer) return;
     if (this.objTimer) {
@@ -1027,7 +1143,7 @@ class BiolumaUI implements UI {
     if (this.objShown !== null && text !== this.objShown && this.objShown !== '') {
       // Celebrate the completed objective before showing the next one.
       this.objEl.classList.add('done');
-      setStyle(this.objFill, 'width', '100%');
+      setStyle(this.objFill, 'transform', 'scaleX(1)');
       setHTML(this.objIcon, icon('check'));
       setText(this.objText, t('objectiveDone'));
       this.objPending = text;
@@ -1107,9 +1223,7 @@ class BiolumaUI implements UI {
     toggle(this.el, 'no-objective', text === null);
     if (text !== null) {
       setText(this.objText, text);
-      this.objEl.classList.remove('enter');
-      void this.objEl.offsetWidth;
-      this.objEl.classList.add('enter');
+      retriggerClass(this.objEl, 'enter');
     }
   }
 
@@ -1766,7 +1880,8 @@ class BiolumaUI implements UI {
     const col = cr.behavior ? BEHAVIOR_COLOR[cr.behavior] : '#8B98A5';
     setHTML(c.beh, `<span class="icw" style="color:${col}">${icon(cr.behavior ?? 'unknown', 16)}</span>${behaviorName(cr.behavior)}`);
     // The same rate as its pill and the HUD: 0 while the clock waits for the first seed (RF-10).
-    setText(c.eps, t('yieldsValue', { v: fmtRate(earningNow(v) ? cr.eps : 0, lang) }));
+    // Before the clock runs it says what it will give, like the HUD (B-7).
+    setText(c.eps, !earningNow(v) && v.session?.phase === 'ready' && cr.eps > 0 ? t('rateAtStart', { r: fmtRate(cr.eps, lang) }) : t('yieldsValue', { v: fmtRate(earningNow(v) ? cr.eps : 0, lang) }));
     // Age is counted in simulation steps; on screen it is seconds at ×1 (CLARIDAD J-28).
     setText(c.age, fmtDuration(cr.age / AGE_STEPS_PER_SEC, lang));
   }
@@ -1893,9 +2008,7 @@ class BiolumaUI implements UI {
       const short = v ? Math.max(1, Math.ceil(e.cost - v.essence)) : 0;
       const waiting = !!v?.creatures.some((c) => c.state === 'stable');
       ov.denied(e.x, e.y, fmtShort(e.cost, this.lang), short > 0 ? { text: t('deniedShort', { n: fmt(short, this.lang) }), sub: waiting ? t('deniedWait') : '' } : undefined);
-      this.modePill.classList.remove('shake');
-      void this.modePill.offsetWidth;
-      this.modePill.classList.add('shake');
+      retriggerClass(this.modePill, 'shake');
       this.vibrate([10, 30, 10]);
     });
     // A refused tap always shows why, where it happened; nothing was charged (no toast, no layout shift).
@@ -1913,9 +2026,7 @@ class BiolumaUI implements UI {
         for (const c of this.v.creatures) if (c.state !== 'dead' && n++ < 16) ov.bornRing(c.x, c.y);
       }
       // 'growing': the pill already says "Espera…"; a shake points at it (the meter's chip says why).
-      this.modePill.classList.remove('shake');
-      void this.modePill.offsetWidth;
-      this.modePill.classList.add('shake');
+      retriggerClass(this.modePill, 'shake');
       this.sound('deny');
       this.vibrate([10, 30, 10]);
     });

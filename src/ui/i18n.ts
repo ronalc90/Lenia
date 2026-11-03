@@ -95,6 +95,10 @@ const S = {
   multiplierValue: { es: '×{v} Esencia', en: '×{v} Essence' },
   timesSeen: { es: 'La viste', en: 'Seen' },
   timesSeenValue: { es: '{n} veces', en: '{n} times' },
+  /** Before the clock runs (B-7): the rate it will charge, never a contradicting +0/s. */
+  rateAtStart: { es: '+{r}/s al empezar', en: '+{r}/s at start' },
+  /** The HUD's «+2,0/s» before the clock runs: these words beside it on a laptop, for the screen reader on a phone. */
+  atStart: { es: 'al empezar', en: 'at start' },
   spcEarnsNow: { es: 'Da ahora', en: 'Earns now' },
   spcAliveNow: { es: 'Vivas ahora', en: 'Alive now' },
   spcBoostedBy: { es: 'Le ayudan:', en: 'Boosted by:' },

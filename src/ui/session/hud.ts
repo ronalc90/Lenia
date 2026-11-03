@@ -3,10 +3,13 @@
  *
  *  - A pill with a dial (ring = time used) and the minutes "2:41"; before the first seed it waits
  *    ("3:00 · Siembra para empezar").
- *  - Amber and pulsing in the last 30 s; the last 10 s bounce one by one (sound hook every second).
- *  - "¡Último minuto!" banner once, a gold "¡Sprint! ×2" chip during the sprint, a green "+5 s"
- *    chip whenever the clock is extended (new species, Encargo, Spark).
- *  - timesUp(): the "¡Tiempo!" stamp over the dish while it freezes, before the summary.
+ *  - Amber in the last 30 s (colour and ring, no endless pulse); the last 10 s tick one by one, growing
+ *    away from the dial (scale 1.12 from the left, B-7; sound hook every second).
+ *  - "¡Último minuto!" banner once (slides down 300 ms, stays 1.6 s, leaves in 200 ms), a gold
+ *    "¡Sprint! ×2" chip during the sprint, a green "+5 s" chip whenever the clock is extended (new
+ *    species, Encargo, Spark): it rises into the clock in 450 ms and melts there.
+ *  - timesUp(): the "¡Tiempo!" stamp over the dish while it freezes, before the summary: it lands with
+ *    anticipation (1.6 → 0.94 → 1, fast spring, −8°) over a ripple.
  *  - preview(): under the clock, "+12 Datos al terminar · Más tiempo: faltan 4" (prestige line:
  *    what this session is worth BEFORE it ends and the next node it reaches); a tap opens the Datos
  *    sum (summary.ts datosExplain in the shared price sheet).
@@ -19,6 +22,7 @@ import { countdownSeconds, warnSeconds, type SessionState } from '../../game/ses
 import { SESSION_UI } from '../../game/treeText';
 import { fmt, fmtClock } from '../format';
 import { treeIcon } from '../tree/icons';
+import { DURATION, EASING, SPRING, pop, springEasing } from '../art/motion';
 import '../art/art.css';
 import './session.css';
 
@@ -137,11 +141,9 @@ export function createSessionHud(container: HTMLElement, opts: SessionHudOptions
       }
       if (st === 'count' && sec !== lastSec && lastSec !== -1) {
         opts.onSound?.('tick');
-        if (!rm()) {
-          num.classList.remove('tick');
-          void num.offsetWidth;
-          num.classList.add('tick');
-        }
+        // One tick per second, from the left edge so the digits never cover the dial (no reflow: WAAPI).
+        if (!rm() && typeof num.animate === 'function')
+          num.animate([{ transform: 'scale(1.12)' }, { transform: 'scale(1)' }], { duration: DURATION.story, easing: EASING.standard });
       }
       lastSec = sec;
       const used = v.total > 0 ? 1 - v.remaining / v.total : 0;
@@ -167,27 +169,96 @@ export function createSessionHud(container: HTMLElement, opts: SessionHudOptions
         chip.textContent = SESSION_UI.newSpeciesTime(Math.round(seconds))[l];
       } else chip.innerHTML = `${SESSION_UI.plusTime(Math.round(seconds))[l]}${why ? `<small>${why}</small>` : ''}`;
       el.appendChild(chip);
-      setTimeout(() => chip.remove(), first ? 3200 : 1700);
+      // The time travels INTO the clock (B-7): it rises 450 ms `enter` from under the clock and docks on
+      // the clock's own lower edge (its place: never over the Datos preview or VELA's task below), holds,
+      // then melts up into the digits, which pop.
+      const hold = first ? 2400 : 900;
+      if (rm() || typeof chip.animate !== 'function') {
+        window.setTimeout(() => chip.remove(), hold + 600);
+        return;
+      }
+      const docked = 'translate(-50%, calc(-50% - 4px)) scale(1)';
+      chip.animate(
+        [
+          { opacity: 0, transform: 'translate(-50%, 18px) scale(.9)' },
+          { opacity: 1, transform: docked },
+        ],
+        { duration: 450, easing: EASING.enter, fill: 'both' },
+      );
+      window.setTimeout(() => {
+        const out = chip.animate(
+          [
+            { opacity: 1, transform: docked },
+            { opacity: 0, transform: 'translate(-50%, -160%) scale(.7)' },
+          ],
+          { duration: DURATION.card, easing: EASING.exit, fill: 'forwards' },
+        );
+        out.onfinish = () => chip.remove();
+        pop(num, 1.1);
+      }, 450 + hold);
     },
     lastMinute(over) {
       opts.onSound?.('lastMinute');
       const b = document.createElement('div');
-      b.className = `ss-banner${rm() ? ' rm' : ''}`;
+      b.className = 'ss-banner';
       b.textContent = SESSION_UI.lastMinute[opts.lang()];
       b.setAttribute('role', 'status');
       over.appendChild(b);
-      setTimeout(() => b.remove(), rm() ? 1800 : 2300);
+      // In from the top 300 ms `enter`, 1.6 s on screen, out 200 ms `exit`; no loops (B-7).
+      const reduce = rm() || typeof b.animate !== 'function';
+      const inMs = reduce ? 80 : DURATION.sheet;
+      const outMs = reduce ? 80 : DURATION.sheetOut;
+      if (typeof b.animate === 'function')
+        b.animate(reduce ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, transform: 'translate(-50%, -160%)' }, { opacity: 1, transform: 'translate(-50%, -50%)' }], {
+          duration: inMs,
+          easing: EASING.enter,
+          fill: 'both',
+        });
+      window.setTimeout(() => {
+        if (typeof b.animate !== 'function') return b.remove();
+        const a = b.animate(reduce ? [{ opacity: 1 }, { opacity: 0 }] : [{ opacity: 1, transform: 'translate(-50%, -50%)' }, { opacity: 0, transform: 'translate(-50%, -120%)' }], {
+          duration: outMs,
+          easing: EASING.exit,
+          fill: 'forwards',
+        });
+        a.onfinish = () => b.remove();
+      }, inMs + 1600);
     },
     timesUp(over) {
       opts.onSound?.('timesUp');
       const s = document.createElement('div');
-      s.className = `ss-stamp${rm() ? ' rm' : ''}`;
+      s.className = 'ss-stamp';
       s.textContent = SESSION_UI.timesUp[opts.lang()];
       s.setAttribute('role', 'status');
-      over.appendChild(s);
+      const ripple = document.createElement('div');
+      ripple.className = 'ss-stamp-ripple';
+      over.append(ripple, s);
+      if (typeof s.animate === 'function') {
+        if (rm()) s.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 80, fill: 'both' });
+        else {
+          // Anticipation (M9): it comes in big and tilted, overshoots a little under, settles.
+          s.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: EASING.standard, fill: 'both' });
+          s.animate(
+            [
+              { transform: 'translate(-50%, -50%) rotate(-8deg) scale(1.6)' },
+              { transform: 'translate(-50%, -50%) rotate(-8deg) scale(.94)', offset: 0.55 },
+              { transform: 'translate(-50%, -50%) rotate(-8deg) scale(1)' },
+            ],
+            { duration: SPRING.fast.ms, easing: springEasing('fast'), fill: 'both' },
+          );
+          ripple.animate(
+            [
+              { opacity: 0.55, transform: 'translate(-50%, -50%) scale(0)' },
+              { opacity: 0, transform: 'translate(-50%, -50%) scale(1)' },
+            ],
+            { duration: DURATION.celebrate, delay: 120, easing: EASING.enter, fill: 'both' },
+          );
+        }
+      }
       return new Promise((resolve) =>
         setTimeout(() => {
           s.remove();
+          ripple.remove();
           resolve();
         }, C.SESSION_TIMESUP_HOLD * 1000),
       );
@@ -210,11 +281,7 @@ export function createSessionHud(container: HTMLElement, opts: SessionHudOptions
       prevG.textContent = g ? (g.missing > 0 ? SESSION_UI.previewNext(g.name[l], fmt(g.missing, l))[l] : SESSION_UI.previewReady(g.name[l])[l]) : '';
       prevG.hidden = !g;
       prev.classList.toggle('ready', !!g && g.missing <= 0);
-      if (prevDatos >= 0 && p.datos > prevDatos && !rm()) {
-        prev.classList.remove('bump');
-        void prev.offsetWidth;
-        prev.classList.add('bump');
-      }
+      if (prevDatos >= 0 && p.datos > prevDatos && !rm()) pop(prev, 1.06);
       prevDatos = p.datos;
       prev.setAttribute('aria-label', `${SESSION_UI.previewDatos(fmt(p.datos, l))[l]}${g ? ` · ${prevG.textContent}` : ''}`);
     },

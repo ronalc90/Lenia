@@ -8,10 +8,16 @@ import { BEHAVIOR_COLOR } from '../core/palette';
 import type { Ctx } from './ctx';
 import type { UISound } from './ui';
 import { h, ic, setAttr, setText, toggle } from './dom';
-import { fmt, fmtDuration, fmtFixed, fmtRate, fmtShort } from './format';
+import { fmt, fmtDuration, fmtFixed, fmtRate, fmtShort, timesText } from './format';
 import { behaviorName, getLang, rarityName, t, tx } from './i18n';
 import { icon, logo } from './icons';
-import { portraitURL } from './portrait';
+import { mountPortrait, type PortraitTheme } from './portrait';
+import { DURATION, staggerIn } from './art/motion';
+
+/** The page theme (the sheet is mounted after the portrait is built, so the element cannot say). */
+function themeHere(): PortraitTheme {
+  return typeof document !== 'undefined' && document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+}
 import { EXPORT_PREFIX } from '../game/balance';
 import { BUNDLE_PREFIX, decodeSaveText } from '../app/saveBundle';
 import { WORLD_TEXT } from '../game/treeText';
@@ -87,7 +93,8 @@ export class ModalHost {
         this.sound('close');
         this.stack = this.stack.filter((m) => m !== handle);
         wrap.classList.add('out');
-        setTimeout(() => wrap.remove(), 190);
+        // Out in 200 ms (a sheet) / 160 ms (a centred card), shorter than it came in (B-5).
+        setTimeout(() => wrap.remove(), DURATION.sheetOut + 20);
         opts.onClose?.();
       },
     };
@@ -95,8 +102,12 @@ export class ModalHost {
     this.layer.appendChild(wrap);
     this.stack.push(handle);
     this.sound('open');
-    // Move focus into the dialog (keyboard users) without showing a ring on a button.
-    requestAnimationFrame(() => modal.focus({ preventScroll: true }));
+    // Move focus into the dialog (keyboard users) without showing a ring on a button; its blocks come in
+    // one after another (40 ms apart after 80 ms, B-5) — the caller fills `body` right after show().
+    requestAnimationFrame(() => {
+      modal.focus({ preventScroll: true });
+      staggerIn(opts.center ? [] : body.children);
+    });
     return handle;
   }
 
@@ -127,6 +138,10 @@ export function openAchievementCard(host: ModalHost, ctx: Ctx, id: string, openL
   all.addEventListener('click', () => {
     m.close();
     openList();
+  });
+  // A tap anywhere on the card closes it (owner: non-essential cards close when tapped), except «Ver todos».
+  m.body.addEventListener('click', (e) => {
+    if (!(e.target as Element).closest('.btn.primary')) m.close();
   });
   m.body.append(
     h(
@@ -713,7 +728,7 @@ function speciesBody(
   /** Species identity is on (the game sends a scientific line): plain name as the title. */
   const named = s.scientificName !== undefined;
   const portrait = h('div', { class: `portrait r-${s.rarity}` });
-  if (s.portrait) portrait.appendChild(h('img', { src: portraitURL(s.portrait, s.hue), alt: '' }));
+  if (s.portrait) mountPortrait(portrait, s.portrait, 132, { hue: s.hue, theme: themeHere() });
   else portrait.appendChild(h('span', { class: 'noimg' }));
 
   let title: HTMLElement;
@@ -772,7 +787,7 @@ function speciesBody(
     'div',
     { class: 'spc-grid' },
     stat(t('multiplier'), t('multiplierValue', { v: fmtShort(s.mult, lang) })),
-    stat(t('timesSeen'), t('timesSeenValue', { n: fmt(s.timesSeen, lang) })),
+    stat(t('timesSeen'), timesText(s.timesSeen, lang)),
     // What it earns right now, all of its living members together (game: SpeciesView.production).
     s.production ? stat(t('spcEarnsNow'), `+${fmtRate(s.production.eps, lang)}${t('perSec')}`) : null,
     s.production ? stat(t('spcAliveNow'), fmt(s.production.members, lang)) : null,
