@@ -10,7 +10,8 @@ import { buyBurst, countUp, ease, pop, pressable } from './motion';
 import { FAMILY_HUES, MATTER_ART, familyAccent, tintedStops, type Stop } from './matter';
 import { renderSpecimen } from './specimen';
 import { artIcon, WORLD_ICON } from './icons';
-import { ART_MOODS, Portrait, type ArtMood } from './portraits';
+import { ART_MOODS, Portrait, type ArtMood, type VelaFraming } from './portraits';
+import { VELA_PATHS } from './vela';
 import { WORLD_ART_IDS, worldArt, worldColors } from './worlds';
 
 function el(html: string): HTMLElement {
@@ -24,13 +25,39 @@ function sec(id: string, title: string, sub: string): HTMLElement {
 }
 
 const MOOD_TEXT: Record<ArtMood, { es: string; en: string }> = {
-  neutral: { es: 'Neutral', en: 'Neutral' },
+  neutral: { es: 'Reposo', en: 'Idle' },
   happy: { es: 'Contenta', en: 'Happy' },
   worried: { es: 'Preocupada', en: 'Worried' },
-  awed: { es: 'Asombrada', en: 'Awed' },
-  sleepy: { es: 'Con sueño', en: 'Sleepy' },
+  awed: { es: 'Sorprendida', en: 'Surprised' },
+  sleepy: { es: 'Dormida', en: 'Sleeping' },
   proud: { es: 'Orgullosa', en: 'Proud' },
+  alarm: { es: 'Alarma', en: 'Alarm' },
+  thinking: { es: 'Pensando', en: 'Thinking' },
 };
+
+/** A line per state for the dialogue mock-ups (what she might say in it). */
+const MOOD_LINE: Record<ArtMood, { es: string; en: string }> = {
+  neutral: { es: 'Soy VELA. Vigilo la placa toda la noche.', en: 'I am VELA. I watch the dish all night.' },
+  happy: { es: '¡Estable! Tu criatura se queda.', en: 'Stable! Your creature is staying.' },
+  worried: { es: 'Cuidado: algo no cuadra en la placa.', en: 'Careful: something is off in the dish.' },
+  awed: { es: '¡Una especie nueva! Nunca la había visto.', en: 'A new species! I have never seen it.' },
+  sleepy: { es: 'Mmm… sigo aquí. Solo ahorro lámpara.', en: 'Mmm… still here. Just saving my lamp.' },
+  proud: { es: 'Récord de la noche. Lo dejo registrado.', en: 'Record of the night. Logged.' },
+  alarm: { es: '¡Alarma! La placa está llena.', en: 'Alarm! The dish is full.' },
+  thinking: { es: 'Déjame analizarlo un momento…', en: 'Let me analyse that for a moment…' },
+};
+
+const LETTER = /[\p{L}\p{N}]/u;
+const VOWEL = /[aeiouáéíóúAEIOUÁÉÍÓÚ]/;
+/** The typewriter of the story UI (28 letters/s, then a pause), as a function of the clock: what is typed and the talk target. */
+function typed(text: string, t: number, cycle: number): { n: number; target: number; talking: boolean } {
+  const ph = t % cycle;
+  const n = Math.min(text.length, Math.floor(ph * 28));
+  const talking = n < text.length;
+  const ch = n > 0 ? text[n - 1] : ' ';
+  const target = talking && LETTER.test(ch) ? (VOWEL.test(ch) ? 1 : 0.5) * (0.75 + 0.25 * Math.sin(t * 30)) : 0;
+  return { n, target, talking };
+}
 
 /** A portrait card driven by the page clock. */
 function portraitCard(
@@ -47,76 +74,251 @@ function portraitCard(
   p.canvas.style.height = `${size}px`;
   p.state.reduceMotion = ctx.reduceMotion;
   setup(p);
+  // A settled state (a frozen page clock never ages it); ?age= shows a transition instead.
+  p.state.moodAge = Number(new URLSearchParams(location.search).get('age') ?? 10);
   card.prepend(p.canvas);
+  const line = MOOD_LINE.neutral[ctx.lang];
   ctx.onFrame((t, dt) => {
-    const talking = !!opts.talk;
-    const target = talking ? 0.35 + 0.65 * Math.abs(Math.sin(t * 11)) : 0;
-    if (talking && dt === 0) {
-      p.state.talk = 0.75;
-    }
-    p.frame(t, dt, target, talking);
+    if (!opts.talk) return p.frame(t, dt, 0, false);
+    const k = typed(line, t + 1.6, 3.2);
+    if (k.talking && dt === 0) p.state.talk = 0.75;
+    p.frame(t, dt, k.target, k.talking);
   });
   return card;
 }
 
+/** Styles of the VELA section's dialogue mock-ups (the story box is P4's; this is a stand-in with its sizes). */
+const VELA_CSS = `
+.ad-dlg { position: relative; box-sizing: border-box; width: min(560px, 100%); min-height: 120px; padding: 12px 14px 14px 128px;
+  border-radius: 16px; border: 1px solid var(--bl-line2); color: var(--bl-text);
+  background: radial-gradient(120% 140% at 0% 100%, rgba(255,184,123,.08), transparent 60%), linear-gradient(180deg, var(--bl-surface2), var(--bl-surface));
+  box-shadow: var(--bl-elev-3); }
+.ad-dlg canvas { position: absolute; left: 6px; bottom: 2px; }
+.ad-dlg .ad-dlg-who { font: 700 13px/18px var(--bl-font-mono); letter-spacing: .12em; color: var(--bl-candle); }
+.ad-dlg .ad-dlg-who small { margin-left: 8px; font: 600 11px var(--bl-font-ui); letter-spacing: .06em; color: var(--bl-text3); }
+.ad-dlg p { margin: 4px 0 0; font: 500 17px/24px var(--bl-font-ui); }
+.ad-dlg p .rest { opacity: 0; }
+.ad-dlgs { display: grid; gap: 12px; }
+.ad-calco { position: relative; width: 240px; height: 240px; border-radius: 12px; overflow: hidden; background: #06090d; }
+.ad-calco img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .35; pointer-events: none; user-select: none; }
+.ad-calco canvas, .ad-calco svg { position: absolute; inset: 0; width: 240px; height: 240px; }
+.ad-calco svg { fill: none; stroke: #5ee6c8; stroke-width: .25; vector-effect: non-scaling-stroke; }
+.ad-calco.wire canvas { opacity: 0; }
+.ad-calco:not(.wire) svg { display: none; }
+.ad-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.ad-tools label { display: inline-flex; gap: 6px; align-items: center; min-height: 48px; padding: 0 12px; border-radius: 12px;
+  border: 1px solid var(--bl-line2); background: var(--bl-surface); font: 600 14px var(--bl-font-ui); }
+.ad-tools select { min-height: 40px; font: 500 14px var(--bl-font-ui); }
+.ad-mini { display: grid; justify-items: center; gap: 4px; }
+.ad-mini small { font: 500 10px var(--bl-font-mono); color: #a7b3bf; }
+`;
+let velaCssAdded = false;
+function addVelaCss(): void {
+  if (velaCssAdded) return;
+  velaCssAdded = true;
+  const st = document.createElement('style');
+  st.textContent = VELA_CSS;
+  document.head.append(st);
+}
+
+/** One dialogue box with VELA in a state (116 px portrait, the story UI's size), typing its line on a loop when `talk`. */
+function dialogueMock(ctx: DevCtx, mood: ArtMood, talk: boolean, framing: VelaFraming, size = 116): HTMLElement {
+  const es = ctx.lang === 'es';
+  const box = el(
+    `<div class="ad-dlg" data-mood="${mood}"><div class="ad-dlg-who">VELA · MC-7<small>${MOOD_TEXT[mood][ctx.lang]}${talk ? (es ? ' · hablando' : ' · talking') : ''}</small></div><p><span class="shown"></span><span class="rest"></span></p></div>`,
+  );
+  box.style.paddingLeft = `${size + 12}px`;
+  box.style.minHeight = `${size + 4}px`;
+  const p = new Portrait('ad-cv');
+  p.canvas.style.width = `${size}px`;
+  p.canvas.style.height = `${size}px`;
+  p.framing = framing;
+  p.set('vela', mood);
+  p.state.moodAge = Number(new URLSearchParams(location.search).get('age') ?? 10);
+  p.state.reduceMotion = ctx.reduceMotion;
+  box.prepend(p.canvas);
+  const line = MOOD_LINE[mood][ctx.lang];
+  const shown = box.querySelector<HTMLElement>('.shown')!;
+  const rest = box.querySelector<HTMLElement>('.rest')!;
+  let lastN = -1;
+  ctx.onFrame((t, dt) => {
+    const k = talk && !ctx.reduceMotion ? typed(line, t + 1.2 + ART_MOODS.indexOf(mood) * 0.37, 4.2) : { n: line.length, target: 0, talking: false };
+    if (k.n !== lastN) {
+      lastN = k.n;
+      shown.textContent = line.slice(0, k.n);
+      rest.textContent = line.slice(k.n);
+    }
+    if (k.talking && dt === 0) p.state.talk = Math.max(0.6, k.target);
+    p.frame(t, dt, k.target, k.talking);
+  });
+  return box;
+}
+
 function velaSection(ctx: DevCtx): HTMLElement {
+  addVelaCss();
+  const es = ctx.lang === 'es';
+  const q = new URLSearchParams(location.search);
   const s = sec(
     'vela',
-    'VELA',
-    ctx.lang === 'es'
-      ? 'Matraz de vidrio con líquido bioluminoso, corcho y una vela de llama cálida: su humor se ve en la cara, las manos y la llama.'
-      : 'A glass flask of bioluminescent liquid, a cork and a warm candle: her mood shows in face, hands and flame.',
+    'VELA · MC-7',
+    es
+      ? 'Monitor de cultivo de sobremesa: chasis de pintura en polvo, pantalla de fósforo (la traza es su voz), lámpara piloto de filamento, LED de alarma, placa grabada, asa cromada y cable de sonda. Expresa sus nueve estados con la traza, la etiqueta, la lámpara y el LED.'
+      : 'A bench-top culture monitor: powder-coat chassis, phosphor screen (the trace is her voice), filament pilot lamp, alarm LED, engraved plate, chrome handle and probe cable. Her nine states show in the trace, the label, the lamp and the LED.',
   );
-  const row = el('<div class="ad-row"></div>');
-  const size = Number(new URLSearchParams(location.search).get('size') ?? 200);
+  const size = Number(q.get('size') ?? 200);
+  s.append(el(`<h3>${es ? 'Los nueve estados' : 'The nine states'} <small>${size} px</small></h3>`));
+  const row = el('<div class="ad-row" data-shot="states"></div>');
   for (const m of ART_MOODS) row.append(portraitCard(ctx, size, (p) => p.set('vela', m), MOOD_TEXT[m][ctx.lang], m));
+  row.append(portraitCard(ctx, size, (p) => p.set('vela', 'neutral'), es ? 'Hablando' : 'Talking', 'talking', { talk: true }));
   s.append(row);
-  s.append(el('<h3>Hablando · vestuario · reducir movimiento</h3>'));
-  const row2 = el('<div class="ad-row"></div>');
-  row2.append(portraitCard(ctx, 160, (p) => p.set('vela', 'happy'), ctx.lang === 'es' ? 'Hablando' : 'Talking', 'talk', { talk: true }));
+
+  const framing = (q.get('framing') ?? 'auto') as VelaFraming;
+  const talkAll = q.get('talk') === '1';
+  s.append(el(`<h3>${es ? 'Caja de diálogo' : 'Dialogue box'} <small>116 px · ${framing}${talkAll ? (es ? ' · hablando' : ' · talking') : ''}</small></h3>`));
+  const dl = el('<div class="ad-dlgs" data-shot="dialogue"></div>');
+  for (const m of ART_MOODS) dl.append(dialogueMock(ctx, m, talkAll, framing));
+  dl.append(dialogueMock(ctx, 'neutral', true, framing));
+  s.append(dl);
+
+  s.append(el(`<h3>${es ? 'Encuadres: instrumento entero y primer plano' : 'Framings: whole instrument and close-up'} <small>116 · 140</small></h3>`));
+  const fr = el('<div class="ad-row" data-shot="framings"></div>');
+  for (const sz of [116, 140])
+    for (const f of ['full', 'close'] as const)
+      fr.append(
+        portraitCard(
+          ctx,
+          sz,
+          (p) => {
+            p.framing = f;
+            p.set('vela', 'happy');
+          },
+          `${f} · ${sz}`,
+          '',
+          { talk: true },
+        ),
+      );
+  s.append(fr);
+
+  s.append(el(`<h3>${es ? 'Vestuario · reducir movimiento · panel claro' : 'Wardrobe · reduced motion · light panel'}</h3>`));
+  const row2 = el('<div class="ad-row" data-shot="wear"></div>');
+  const wears: [string, string[]][] = [
+    [es ? 'Bufanda' : 'Scarf', ['scarf']],
+    [es ? 'Medalla' : 'Medal', ['medal']],
+    [es ? 'Flor' : 'Flower', ['flower']],
+    [es ? 'Las tres' : 'All three', ['scarf', 'medal', 'flower']],
+  ];
+  for (const [label, wear] of wears)
+    row2.append(
+      portraitCard(
+        ctx,
+        200,
+        (p) => {
+          p.set('vela', 'proud');
+          p.state.wear = wear;
+        },
+        label,
+        wear.join(' · '),
+      ),
+    );
   row2.append(
     portraitCard(
       ctx,
-      160,
+      200,
       (p) => {
-        p.set('vela', 'proud');
-        p.state.wear = ['scarf', 'medal', 'flower'];
-      },
-      ctx.lang === 'es' ? 'Bufanda · medalla · flor' : 'Scarf · medal · flower',
-      'wear',
-    ),
-  );
-  row2.append(
-    portraitCard(
-      ctx,
-      160,
-      (p) => {
-        p.set('vela', 'neutral');
+        p.set('vela', 'alarm');
         p.state.reduceMotion = true;
       },
-      ctx.lang === 'es' ? 'Reducir movimiento' : 'Reduced motion',
-      'rm',
+      es ? 'Reducir movimiento' : 'Reduced motion',
+      'rm · alarm',
     ),
   );
-  row2.append(portraitCard(ctx, 160, (p) => p.set('vela', 'happy'), ctx.lang === 'es' ? 'Sobre panel claro' : 'On a light panel', 'surface', { night: false, cls: 'ad-on-surface' }));
+  row2.append(portraitCard(ctx, 200, (p) => p.set('vela', 'happy'), es ? 'Sobre panel claro' : 'On a light panel', 'surface', { night: false, cls: 'ad-on-surface' }));
   s.append(row2);
-  s.append(el('<h3>Mini (avatar) 28 · 40 · 64</h3>'));
-  const row3 = el('<div class="ad-row ad-minis"></div>');
-  for (const size of [28, 40, 64]) {
-    for (const m of ['neutral', 'happy', 'worried'] as ArtMood[]) {
-      const card = el(`<div class="ad-mini"></div>`);
+
+  s.append(el(`<h3>Mini (avatar) 28 · 40 · 48</h3>`));
+  for (const sz of [28, 40, 48]) {
+    const r = el(`<div class="ad-row ad-minis" data-shot="mini-${sz}"></div>`);
+    for (const m of ART_MOODS) {
+      const card = el(`<div class="ad-mini"><small>${m}</small></div>`);
       const p = new Portrait('ad-cv');
-      p.canvas.style.width = `${size}px`;
-      p.canvas.style.height = `${size}px`;
+      p.canvas.style.width = `${sz}px`;
+      p.canvas.style.height = `${sz}px`;
       p.set('vela', m);
+      p.state.moodAge = 10;
       p.state.reduceMotion = ctx.reduceMotion;
-      // Mini mode: draw through drawVela with opts.mini by overriding frame's draw.
-      card.append(p.canvas);
+      card.prepend(p.canvas);
       ctx.onFrame((t, dt) => p.frame(t, dt, 0, false));
-      row3.append(card);
+      r.append(card);
     }
+    const card = el(`<div class="ad-mini"><small>talking</small></div>`);
+    const p = new Portrait('ad-cv');
+    p.canvas.style.width = `${sz}px`;
+    p.canvas.style.height = `${sz}px`;
+    p.set('vela', 'neutral');
+    p.state.reduceMotion = ctx.reduceMotion;
+    card.prepend(p.canvas);
+    const line = MOOD_LINE.neutral[ctx.lang];
+    ctx.onFrame((t, dt) => {
+      const k = typed(line, t + 1.6, 3.2);
+      if (k.talking && dt === 0) p.state.talk = 0.75;
+      p.frame(t, dt, k.target, k.talking);
+    });
+    r.append(card);
+    s.append(r);
   }
-  s.append(row3);
+  return s;
+}
+
+/** Reference photos of docs/arte-realista/referencias (development only: never bundled, never in the game). */
+const CALCO_REFS = [
+  'ref-panel-incubadora-co2.jpg',
+  'ref-incubadora-co2-binder.jpg',
+  'ref-incubadora-guantes-cdc-1978.jpg',
+  'ref-guante-nitrilo.jpg',
+  'ref-cuaderno-lbnl-1941.jpg',
+];
+
+/**
+ * «Calco» (docs/ARTE-REALISTA.md §3.3): a reference photo locked at 35 % under the vector, and a switch to see
+ * the silhouette as wire (the hand-written path data), the «locked layer» workflow of the vector tutorials.
+ */
+function calcoSection(ctx: DevCtx): HTMLElement {
+  addVelaCss();
+  const es = ctx.lang === 'es';
+  const s = sec(
+    'calco',
+    es ? 'Calco' : 'Tracing',
+    es
+      ? 'Foto de referencia bloqueada al 35 % debajo del vector y la silueta en alambre. Solo en desarrollo: las referencias viven en docs/arte-realista/referencias y nunca se empaquetan.'
+      : 'A reference photo locked at 35 % under the vector, and the silhouette as wire. Development only: the references live in docs/arte-realista/referencias and are never bundled.',
+  );
+  const tools = el(
+    `<div class="ad-tools"><select aria-label="${es ? 'Referencia' : 'Reference'}">${CALCO_REFS.map((r) => `<option>${r}</option>`).join('')}</select>` +
+      `<label><input type="checkbox" data-k="photo" checked> ${es ? 'Foto' : 'Photo'}</label>` +
+      `<label><input type="checkbox" data-k="wire"> ${es ? 'Alambre' : 'Wire'}</label></div>`,
+  );
+  const wire = Object.values(VELA_PATHS)
+    .map((d) => `<path d="${d}"/>`)
+    .join('');
+  const stage = el(`<div class="ad-calco"><img alt="" draggable="false"><svg viewBox="0 0 100 100" aria-hidden="true">${wire}</svg></div>`);
+  const img = stage.querySelector('img')!;
+  const setRef = (name: string) => (img.src = `/docs/arte-realista/referencias/${name}`);
+  setRef(CALCO_REFS[0]);
+  const p = new Portrait('ad-cv');
+  p.canvas.style.width = '240px';
+  p.canvas.style.height = '240px';
+  p.set('vela', 'neutral');
+  p.state.reduceMotion = true;
+  stage.insertBefore(p.canvas, stage.querySelector('svg'));
+  ctx.onFrame((t, dt) => p.frame(t, dt, 0, false));
+  tools.querySelector('select')!.addEventListener('change', (e) => setRef((e.target as HTMLSelectElement).value));
+  tools.querySelectorAll<HTMLInputElement>('input').forEach((i) =>
+    i.addEventListener('change', () => {
+      if (i.dataset.k === 'photo') img.hidden = !i.checked;
+      else stage.classList.toggle('wire', i.checked);
+    }),
+  );
+  s.append(tools, stage);
   return s;
 }
 
@@ -457,6 +659,7 @@ export const sections: Record<string, (ctx: DevCtx) => HTMLElement> = {
   emblems: emblemsSection,
   components: componentsSection,
   vela: velaSection,
+  calco: calcoSection,
   cast: castSection,
   worlds: worldsSection,
   matter: matterSection,
