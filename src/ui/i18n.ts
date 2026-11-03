@@ -174,6 +174,8 @@ const S = {
     es: 'El toque largo pasa a ser doble toque.',
     en: 'Long press becomes double tap.',
   },
+  autoCollect: { es: 'Recoger la luz sola', en: 'Collect glow for me' },
+  autoCollectHint: { es: 'Una pipeta recoge las gotas por ti desde la primera sesión.', en: 'A pipette collects the drops for you from the first session.' },
   graphics: { es: 'Gráficos', en: 'Graphics' },
   appearance: { es: 'Apariencia', en: 'Appearance' },
   customize: { es: 'Personalización', en: 'Customise' },

@@ -308,7 +308,7 @@ export function openSettings(host: ModalHost, ctx: Ctx): ModalHandle {
       r.classList.add('wrap');
       return r;
     };
-    const sw = (key: 'muted' | 'vibration' | 'reduceMotion' | 'oneTouch', label: string) => {
+    const sw = (key: 'muted' | 'vibration' | 'reduceMotion' | 'oneTouch' | 'autoCollect', label: string) => {
       const b = h('button', { type: 'button', class: 'switch', role: 'switch', 'aria-label': label });
       b.setAttribute('aria-checked', String(!!s0[key]));
       b.addEventListener('click', () => {
@@ -467,6 +467,8 @@ export function openSettings(host: ModalHost, ctx: Ctx): ModalHandle {
         row('vibrate', t('vibration'), sw('vibration', t('vibration'))),
         row('motion', t('reduceMotion'), sw('reduceMotion', t('reduceMotion'))),
         row('hand', t('oneTouch'), sw('oneTouch', t('oneTouch')), t('oneTouchHint')),
+        // ADR-030 §2.2.2: for players who cannot tap often, a free level-1 Pipeta collects the light.
+        ...(ctx.view.cycle === 'sessions' ? [row('pipette', t('autoCollect'), sw('autoCollect', t('autoCollect')), t('autoCollectHint'))] : []),
         row(
           'info',
           t('tutRestart'),

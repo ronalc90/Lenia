@@ -3030,7 +3030,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
     setSetting<K extends keyof Settings>(key: K, value: Settings[K]) {
       const cur = s.settings[key];
-      if (typeof value !== typeof cur) return;
+      // Optional switches (ADR-030 «Recoger la luz sola») are absent until first set: booleans only.
+      if (key === 'autoCollect' ? typeof value !== 'boolean' : typeof value !== typeof cur) return;
       if (typeof value === 'number' && !(value >= 0 && value <= 1)) return;
       if (key === 'lang' && value !== 'es' && value !== 'en') return;
       if (key === 'quality' && !['auto', 'low', 'medium', 'high'].includes(value as string)) return;

@@ -169,6 +169,17 @@ describe('sessions cycle: gifts and boosts are proportional', () => {
     expect(g.session!.goldens).toBe(1);
   });
 
+  it('Settings can turn on «Recoger la luz sola» (ADR-030 §2.2.2): a free level-1 Pipeta from session 1', () => {
+    const { g } = sessionsGame();
+    expect(g.view().pipettes ?? []).toHaveLength(0);
+    g.actions.setSetting('autoCollect', true);
+    expect(g.state.settings.autoCollect).toBe(true);
+    g.tick(0.25, report(stable(3)));
+    expect(g.view().pipettes ?? []).toHaveLength(1);
+    g.actions.setSetting('autoCollect', false);
+    expect(g.state.settings.autoCollect).toBe(false);
+  });
+
   it('the Spark VELA points at can be caught while only her line holds the dish, never in another pause', () => {
     const { g } = sessionsGame(3);
     const rep = report(stable(3));
