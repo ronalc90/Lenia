@@ -23,9 +23,10 @@
  */
 import type { Lang, Pattern, Text } from '../../core/types';
 import * as C from '../../game/cycleBalance';
-import type { DatosBreakdown, RecordHit, SessionSummary } from '../../game/session';
+import { BEHAVIOR_NAMES } from '../../game/content';
+import type { DatosBreakdown, RecordHit, SessionGoal, SessionSummary } from '../../game/session';
 import { velaLine } from '../../game/session';
-import { DATOS_NAME, NODE_TEXT, SESSION_UI, TREE_UI } from '../../game/treeText';
+import { DATOS_NAME, NODE_TEXT, SESSION_UI, TREE_UI, WORLD_TEXT } from '../../game/treeText';
 import { fmt, fmtClock, fmtMult, fmtPerSec } from '../format';
 import type { PriceExplain } from '../moments/price';
 import { plateLabel, plateOf, scaleBar, scaleText } from '../moments/plates';
@@ -78,6 +79,23 @@ export interface ReportData {
   collection?: { have: number; total: number; nextWorld?: Text | null; nextCost?: number | null } | null;
   /** Merges today: VELA's tip («Hoy se juntaron 2. Siembra más lejos…»). */
   merged?: number;
+  /** (PA) Every goal met by name, first steps and Encargos: one row each when their Datos match the term. */
+  goals?: SessionGoal[];
+  /** (PA) What to do about a smaller payout, already worded («compra Mundo 2 en el Árbol» / «juega en…»). */
+  lessAction?: Text | null;
+}
+
+/**
+ * PA's SessionSummary (game/session.ts, ADR-030) as the report's data: the goals by name, the final sweep,
+ * the session before, what to do about a smaller payout and the collection with the next species' World.
+ */
+export function reportDataOf(sum: SessionSummary): ReportData {
+  const next = sum.collection?.next ?? null;
+  const out: ReportData = { goals: sum.goals, previous: sum.previous ?? null, lessAction: sum.lessAction ?? null };
+  if ((sum.light?.sweep ?? 0) > 0) out.swept = Math.round(sum.light!.sweep);
+  if (sum.behaviors?.length) out.behaviorNames = sum.behaviors.map((b) => BEHAVIOR_NAMES[b]);
+  if (sum.collection) out.collection = { have: sum.collection.have, total: sum.collection.total, nextWorld: next ? (WORLD_TEXT[next.world]?.name ?? null) : null, nextCost: next?.cost ?? null };
+  return out;
 }
 
 export interface SummaryExtras extends ReportData {
@@ -254,7 +272,21 @@ export function reportRows(sum: SessionSummary, data: ReportData, l: Lang, ctx: 
   }
   // Requests by name; session 1 counts its silent goals as the first steps (QA-CLARIDAD #9).
   const en = term(d, 'encargos');
-  if (en) {
+  // PA's goals by name (first steps and Encargos), when they are exactly what the term paid; a step that paid
+  // nothing of its own (collecting: its light already counts) is a ✓ row that adds 0.
+  const goals = data.goals ?? [];
+  const paid = goals.filter((g) => g.datos > 0);
+  const goalsMatch = goals.length > 0 && (en ? paid.length === en.count && paid.reduce((a, g) => a + g.datos, 0) === en.value : paid.length === 0);
+  if (goalsMatch) {
+    const goalRows = (kind: 'step' | 'encargo', sec: 'steps' | 'encargos', title: string) => {
+      const mine = goals.filter((g) => g.kind === kind);
+      if (!mine.length) return;
+      section(sec, title);
+      for (const g of mine) rows.push({ kind, label: `✓ ${g.name[l]}`, value: g.datos > 0 ? plus(g.datos) : '', adds: g.datos, tone: g.datos > 0 ? 'gain' : 'off', section: sec });
+    };
+    goalRows('step', 'steps', REPORT_TEXT.firstSteps[l]);
+    goalRows('encargo', 'encargos', REPORT_TEXT.encargos[l]);
+  } else if (en) {
     if (sum.n === 1) {
       section('steps', REPORT_TEXT.firstSteps[l]);
       const steps = (data.firstSteps ?? FIRST_STEPS.slice(0, en.count)).map((k) => `✓ ${SESSION_UI.firstStepNames[k][l]}`);
@@ -283,7 +315,7 @@ export function reportRows(sum: SessionSummary, data: ReportData, l: Lang, ctx: 
       label: SESSION_UI.lessReason({ prize: prev.prize, before: fmt(prev.fromLight, l), now: fmt(d.fromEssence, l), grew: d.fromEssence > prev.fromLight })[l],
       value: '',
       adds: 0,
-      note: data.lessWorld ? SESSION_UI.lessAction(data.lessWorld)[l] : undefined,
+      note: data.lessAction ? data.lessAction[l] : data.lessWorld ? SESSION_UI.lessAction(data.lessWorld)[l] : undefined,
       tone: 'info',
     });
   }
@@ -512,7 +544,7 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
     show(sum, extras) {
       clearTimers();
       const l = opts.lang();
-      const data: ReportData = { ...(sum as SessionSummary & ReportData), ...extras };
+      const data: ReportData = { ...reportDataOf(sum), ...extras };
       plates = extras.plates ?? [];
       const night = Math.max(1, Math.round((sum.datos.nightMult - 1) / C.DATOS_NIGHT_BONUS) + 1);
       const ctx: ReportCtx = { speciesName: (id) => opts.speciesInfo(id)?.name ?? '?', night };

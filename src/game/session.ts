@@ -593,6 +593,13 @@ export interface SessionSummary {
   collection?: { have: number; total: number; next: { world: WorldId; cost: number | null } | null };
   /** (ADR-030) Filled by the game with lessReason: what to do about it ("compra Mundo 2 en el Árbol"). */
   lessAction?: Text | null;
+  /**
+   * (ADR-030, §2.9) The session before, for the report's "↑ ayer 20": its total, the Datos its light gave and
+   * its one-time prizes. Null on the first session or for an old history entry that did not keep its light.
+   */
+  previous?: { total: number; fromLight: number; prize: number } | null;
+  /** (ADR-030, §2.9) New ways of moving of this session, so the report names them («Manera de moverse nueva · gira»). */
+  behaviors?: Behavior[];
 }
 
 /** Datos of the one-time discovery terms of a breakdown. */
@@ -691,7 +698,14 @@ export function summarize(s: SessionState, r: ResearchState, fx: TreeEffects, sp
     fromLight: datos.fromEssence,
     discovery: discoveryOf(datos),
     lessReason: lessReasonOf(r, datos),
+    previous: previousOf(r),
+    behaviors: s.newBehaviors.slice(),
   };
+}
+
+function previousOf(r: ResearchState): SessionSummary['previous'] {
+  const prev = r.history[r.history.length - 1];
+  return prev && prev.light !== undefined ? { total: prev.datos, fromLight: prev.light, prize: prev.prize ?? 0 } : null;
 }
 
 function lessReasonOf(r: ResearchState, d: DatosBreakdown): SessionSummary['lessReason'] {

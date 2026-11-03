@@ -6,7 +6,7 @@ import { nodePriceExplain } from '../tree/treeView';
 import { fmt } from '../format';
 import { NEEDLE, dialTarget, hudSub, stepNeedle } from './hud';
 import { hudState } from './hud';
-import { datosExplain, reportHeadline, reportRows, type ReportData } from './summary';
+import { datosExplain, reportDataOf, reportHeadline, reportRows, type ReportData } from './summary';
 import type { SessionSummary } from '../../game/session';
 
 const NAMES: Record<string, string> = { a: 'Remolino violeta', b: 'Nadadora celeste' };
@@ -130,6 +130,41 @@ describe('the session report tells a story (docs/CLARIDAD2.md §2.9)', () => {
     noteEssence(session, 5000);
     const sum = summaryOf({ datos: computeDatos(session, fx, 0) });
     for (const lang of ['es', 'en'] as const) for (const r of reportRows(sum, {}, lang, ctxOf(3))) expect(`${r.label} ${r.value} ${r.note ?? ''}`).not.toMatch(/×\d+[.,]\d/);
+  });
+});
+
+describe('the report reads the game\'s own summary (ADR-030 integration)', () => {
+  it('goals become one named row each, the sweep is told and the collection names the next World', () => {
+    const fx = treeEffects({});
+    const { session } = beginSession(freshResearch(), fx);
+    noteEssence(session, 3 * C.DATOS_ESSENCE_DIV);
+    noteEncargo(session, fx, { kind: 'step', name: { es: 'sembrar', en: 'sow' } });
+    noteEncargo(session, fx, { kind: 'encargo', name: { es: 'Ten 3 criaturas a la vez', en: 'Have 3 creatures at once' } });
+    const d = computeDatos(session, fx, 0);
+    const goals = [...session.goals!, { kind: 'step' as const, name: { es: 'recoger luz', en: 'collect glow' }, datos: 0 }];
+    const sum = summaryOf({
+      n: 2,
+      datos: d,
+      goals,
+      light: { made: 75, gifts: 0, hand: 50, pipette: 0, sweep: 25, capped: 0 },
+      collection: { have: 3, total: 7, next: { world: 'gyro', cost: 400 } },
+      previous: { total: 30, fromLight: 2, prize: 10 },
+      lessReason: { prize: 10, before: 2, now: 3, grew: true },
+      lessAction: { es: 'Para descubrir otra: compra Mundo 3 en el Árbol.', en: 'To discover another: buy World 3 in the Tree.' },
+      behaviors: ['spinner'],
+    });
+    const data = reportDataOf(sum);
+    expect(data.swept).toBe(25);
+    expect(data.collection).toMatchObject({ have: 3, total: 7, nextCost: 400 });
+    expect(data.collection?.nextWorld?.es).toBeTruthy();
+    const rows = reportRows(sum, data, 'es', ctxOf(1));
+    const label = (k: string) => rows.filter((r) => r.kind === k).map((r) => r.label);
+    expect(label('step')).toEqual(['✓ sembrar', '✓ recoger luz']);
+    expect(label('encargo')).toEqual(['✓ Ten 3 criaturas a la vez']);
+    // Rows still add up: the collect step adds nothing of its own.
+    expect(rows.filter((r) => r.kind !== 'total').reduce((a, r) => a + r.adds, 0)).toBe(d.total);
+    expect(rows.find((r) => r.kind === 'less')?.note).toBe('Para descubrir otra: compra Mundo 3 en el Árbol.');
+    expect(rows.find((r) => r.kind === 'swept')?.value).toBe('+25 luz');
   });
 });
 
