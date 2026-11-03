@@ -124,11 +124,23 @@ export class Portrait {
   private seed = 0x9e3779b9;
   private lens: LeniaLens | null = null;
 
+  /**
+   * CSS width as the layout last reported it (ResizeObserver): fit() runs every frame, and reading
+   * clientWidth there forced a synchronous layout whenever the page had changed since the last one.
+   */
+  private cssW = -1;
+
   constructor(className = 'sty-portrait') {
     this.canvas = document.createElement('canvas');
     this.canvas.className = className;
     this.canvas.setAttribute('aria-hidden', 'true');
     this.ctx = this.canvas.getContext('2d');
+    if (typeof ResizeObserver === 'function') {
+      new ResizeObserver((entries) => {
+        const e = entries[entries.length - 1];
+        if (e) this.cssW = e.contentRect.width;
+      }).observe(this.canvas);
+    }
   }
 
   set(speaker: PortraitState['speaker'], mood: ArtMood | Mood, live = false): void {
@@ -162,7 +174,9 @@ export class Portrait {
   }
 
   private fit(): void {
-    const css = this.canvas.clientWidth || 100;
+    // Before the first observation (or without ResizeObserver) the layout is read, once a frame at most.
+    if (this.cssW < 0 || typeof ResizeObserver !== 'function') this.cssW = this.canvas.clientWidth;
+    const css = this.cssW || 100;
     const dpr = Math.min(3, (globalThis.devicePixelRatio as number | undefined) ?? 1);
     if (css !== this.sizePx || dpr !== this.dpr) {
       this.sizePx = css;
