@@ -1150,7 +1150,7 @@ function boot(): void {
    */
   if (!dishRestored && game.session?.phase === 'ready') culture.incubate(PREINCUBATE_STEPS);
   // What frame() hands on every frame: one object each, filled in place (nothing allocated per frame).
-  const revealCtx: RevealContext = { ready: false, momentPaused: false, hidden: false, stepping: false };
+  const revealCtx: RevealContext = { ready: false, running: false, momentPaused: false, hidden: false, stepping: false };
   const dishFxArg = { grow: 0 };
   const clockArg = { stepped: 0, speed: 1, wallDt: 0, paused: false };
   const renderArg: Parameters<NonNullable<typeof sim>['render']>[0] = { camera, time: 0, quality: fxQuality };
@@ -1394,7 +1394,8 @@ function boot(): void {
   let paceWall = 0;
   let paceTold = false;
   function noteDishPace(dishDt: number, wallDt: number): void {
-    if (paceTold || game.session?.phase !== 'running' || isPaused() || document.hidden) return;
+    // (The clock waiting for the starter's incubation is not a slow device.)
+    if (paceTold || game.session?.phase !== 'running' || isPaused() || document.hidden || culture.incubating) return;
     paceDish += dishDt;
     paceWall += wallDt;
     if (paceWall < SLOW_DISH_WINDOW_S) return;
@@ -1487,6 +1488,9 @@ function boot(): void {
     // is paid while the run waits). Then the culture is lit and the pace climbs from rest.
     if (s.contextLost) culture.cancel();
     revealCtx.ready = game.session?.phase === 'ready';
+    // A first seed does not cut the incubation short (ADR-027 v0.020): the clock counts dish time and the
+    // regular steps wait for the starter's last hidden ones.
+    revealCtx.running = game.session?.phase === 'running';
     revealCtx.momentPaused = pauseSources.has('moment');
     revealCtx.hidden = document.hidden;
     revealCtx.stepping = !isPaused() && !document.hidden;

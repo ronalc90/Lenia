@@ -543,6 +543,20 @@ ADR that supersedes the old one.
   the time-lapse ramps from rest to `SESSION_SIM_PACE` over `SESSION_PACE_RAMP_S` = 1 s of dish stepping
   (`src/sim/reveal.ts`, `src/sim/reveal.test.ts`). The clock counts dish time, so a run is never shorter in dish life;
   the detector gates and "only stable pays" are unchanged. Session bot before/after: identical (it models whole steps).
+- **Amendment v0.020 (performance pass; QA review of v0.019):** (a) the ~8 ms a frame now includes the GPU wait: a
+  frame reads first (the GPU had a frame for the previous steps), queues steps up to the next 10-step boundary and
+  reads again in the frame only when such a read is measured cheap; the steps a frame queues follow the readback
+  wait (AIMD, `src/sim/incubate.ts`). The v0.019 loop checked its budget only before each read and ran 18–29 ms
+  frames at 30 fps on a mid-range phone model (1.75 ms a step); the pacer runs ≤ 3.3 ms (p95) at 60 fps, and
+  1250 steps take 4.2 s there instead of 2.9 s (0.8 s on a desktop GPU). The effects watchdog ignores incubation
+  frames. (b) **A first seed no longer cuts the incubation short:** on a slow GPU, or when the player sows at
+  once, the starter was lit with a fraction of its steps and the World 1 species missed the run (QA4 F-04 again;
+  e2e session-play on software GL). The run starts, the culture stays unlit with its progress arc, the regular
+  steps and the clock (dish time) wait for the starter's remaining hidden steps, then the culture is lit and
+  the pace ramps as before. The wait is the incubation still left: none when the start card or the title covered
+  it (the usual case), at most the whole incubation for a player who sows the instant a run opens (≈ 4 s on the
+  mid-range model). Seeds sown in that wait incubate with the starter; nothing pays before the light. Lockstep
+  e2e builds run 4 boundaries a frame (a software-rendered browser spends most of a frame drawing).
 
 
 ## ADR-028: Contract removals of the sessions cycle (d9da2ef) and the retired classic loop

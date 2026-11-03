@@ -703,7 +703,8 @@ async function runCase(c) {
       }
       // Species colours: checked once a species is on the dish, again when two different ones are.
       if (tintHues < 2) {
-        const n = await page.evaluate(() => new Set(window.bioluma.game.view().creatures.filter((x) => x.hue !== undefined && x.state === 'stable').map((x) => x.hue)).size);
+        // Only on a lit culture: a starter still incubating unlit after the first seed shows no matter yet (ADR-027 v0.020).
+        const n = await page.evaluate(() => (window.bioluma.culture?.lit === false ? 0 : new Set(window.bioluma.game.view().creatures.filter((x) => x.hue !== undefined && x.state === 'stable').map((x) => x.hue)).size));
         if (n > tintHues) tintHues = Math.max(tintHues, await checkSpeciesTints(`s${k}-tints${n}`));
       }
       if (!shotHalf && v.session.remaining <= v.session.total * 0.8) {

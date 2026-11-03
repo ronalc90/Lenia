@@ -37,6 +37,12 @@ export const REVEAL = {
 export interface RevealContext {
   /** The run still waits for its first seed (session phase 'ready'): incubation may continue. */
   ready: boolean;
+  /**
+   * The run's clock has started (the first seed) and the run is not over. The incubation still
+   * finishes: the starter gets all its steps however soon the player sows (ADR-027 v0.020), and the
+   * clock, which counts dish time, waits for it.
+   */
+  running?: boolean;
   /** A Momento has paused the dish: the incubation waits (it would run under a "PAUSA" card). */
   momentPaused: boolean;
   /** The tab is hidden (no steps at all). */
@@ -117,8 +123,9 @@ export class CultureReveal {
     const o = this.out;
     o.lit = false;
     o.incubateBudget = 0;
-    // The clock started (first seed) or the run is over: what incubated so far is the culture.
-    if (this.steps > 0 && !c.ready) this.steps = 0;
+    // The run is over (or there is none): what incubated so far is the culture. A first seed does not
+    // stop it (ADR-027 v0.020: a slow GPU, or a player who sows at once, lit an under-incubated starter).
+    if (this.steps > 0 && !c.ready && !c.running) this.steps = 0;
     if (this.steps > 0) {
       o.incubateBudget = c.momentPaused || c.hidden ? 0 : Math.min(this.steps, this.budget);
       o.fade = 0;

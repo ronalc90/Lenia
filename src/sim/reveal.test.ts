@@ -29,11 +29,32 @@ describe('culture reveal (calm start)', () => {
     expect(fr.fade).toBe(0);
   });
 
-  it('stops incubating (and lights the culture) when the clock starts', () => {
+  it('a first seed during the incubation does not cut it short: the starter gets every step (ADR-027 v0.020)', () => {
+    // A slow GPU, or a player who sows at once: the run starts with the starter still incubating. It
+    // used to be lit there with what it had (the World 1 swimmer then missed the Bestiary, QA4 F-04).
+    const r = new CultureReveal();
+    r.incubate(1250);
+    let fr = r.frame(1 / 60, ready);
+    r.ran(100);
+    const running = { ...ready, ready: false, running: true };
+    let steps = 100;
+    for (let f = 0; f < 400 && r.incubating; f++) {
+      fr = r.frame(1 / 60, running);
+      expect(fr.fade).toBe(0);
+      const k = Math.min(fr.incubateBudget, r.left);
+      r.ran(k);
+      steps += k;
+    }
+    expect(steps).toBe(1250);
+    fr = r.frame(1 / 60, running);
+    expect(fr.lit).toBe(true);
+  });
+
+  it('stops incubating (and lights the culture) when the run ends', () => {
     const r = new CultureReveal();
     r.incubate(1250);
     r.frame(1 / 60, ready);
-    const fr = r.frame(1 / 60, { ...ready, ready: false });
+    const fr = r.frame(1 / 60, { ...ready, ready: false, running: false });
     expect(fr.incubateBudget).toBe(0);
     expect(r.incubating).toBe(false);
     expect(fr.lit).toBe(true);
