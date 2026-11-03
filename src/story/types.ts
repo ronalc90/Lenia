@@ -47,7 +47,9 @@ export type TargetId =
   /** The first tree node the player can buy now (it glows green). */
   | 'tree.next'
   /** The world picker on the session start card. */
-  | 'world.picker';
+  | 'world.picker'
+  /** (ADR-030) The ripest drop of Luz on the dish (fallbacks: 'creature', 'dish'). */
+  | 'drop';
 
 export const TARGET_IDS: readonly TargetId[] = [
   'dish',
@@ -66,6 +68,7 @@ export const TARGET_IDS: readonly TargetId[] = [
   'tree.center',
   'tree.next',
   'world.picker',
+  'drop',
 ];
 
 /** Environmental hints: overlay effects drawn over the dish, never changes to the simulation (pillar 1). */
@@ -116,7 +119,9 @@ export type CounterKey =
   | 'extStart'
   | 'extDone'
   | 'prints'
-  | 'offline';
+  | 'offline'
+  /** (ADR-030) Drops of Luz collected by the player's own hand (tap or swipe). */
+  | 'collected';
 
 export const COUNTER_KEYS: readonly CounterKey[] = [
   'seeds',
@@ -139,6 +144,7 @@ export const COUNTER_KEYS: readonly CounterKey[] = [
   'extDone',
   'prints',
   'offline',
+  'collected',
 ];
 
 /** Read-only context handed to scene conditions. */
@@ -178,6 +184,8 @@ export interface LineDef {
   hint?: HintKind;
   /** (albor) Live voice instead of a tape recording. */
   live?: boolean;
+  /** The line moves on by itself this many seconds after it is fully typed (a tap still advances it). */
+  auto?: number;
 }
 
 export interface WaitDef {
@@ -240,6 +248,11 @@ export interface SceneDef {
   sets?: string[];
   /** Can play again (e.g. the re-armed final question). Default false. */
   repeatable?: boolean;
+  /**
+   * May start while a lab session's clock runs (ADR-030, docs/CLARIDAD2.md §2.8: only the session-1 tutorial
+   * and the first Spark; the clock waits while VELA talks). Every other scene waits for the clock to stop.
+   */
+  duringRun?: boolean;
 }
 
 export interface JournalDef {
@@ -286,6 +299,8 @@ export interface LineView {
   target: TargetId[] | null;
   live: boolean;
   index: number;
+  /** Seconds after typing before the line moves on by itself (LineDef.auto). */
+  auto: number | null;
 }
 
 export interface ChoiceOptionView {

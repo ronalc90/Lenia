@@ -18,9 +18,22 @@ import { MOMENT_BY_ID } from './catalog';
 import type { Moments } from './moments';
 import type { MomentId } from './types';
 
+/**
+ * Session-1 tutorial scenes (docs/CLARIDAD2.md §2.4) that tell a basic in VELA's own words, with the clock
+ * waiting: when one starts, its Momentos are explained (no label after her line: one thing per event).
+ */
+export const TOLD_BY_SCENE: Readonly<Record<string, readonly MomentId[]>> = {
+  t_born: ['seed'],
+  t_stable: ['stable'],
+  t_clock: ['income'],
+  t_collect: ['collect', 'income'],
+};
+
 /** The slice of the story API the bridge needs (src/story/story.ts `Story` satisfies it). */
 export interface StoryLike {
   current(): { phase: string } | null;
+  /** Scene starts (optional): the tutorial's own lines mark their Momentos told. */
+  on?(type: 'sceneStart', fn: (p: { scene: { id: string; replay: boolean } }) => void): () => void;
   play(sceneId: string): boolean;
   skip(): void;
   archive(): { scenes: { id: string; seen: boolean }[] };
@@ -102,6 +115,10 @@ export function linkStory(moments: Moments, story: StoryLike): StoryBridge {
     flush();
   });
   const timer = typeof setInterval === 'function' ? setInterval(flush, RETRY_MS) : null;
+  const offStart = story.on?.('sceneStart', ({ scene }) => {
+    const told = TOLD_BY_SCENE[scene.id];
+    if (told && !scene.replay) moments.markTold(told);
+  });
 
   return {
     storyShowing() {
@@ -127,6 +144,7 @@ export function linkStory(moments: Moments, story: StoryLike): StoryBridge {
     pending: () => [...pending],
     dispose() {
       off();
+      offStart?.();
       if (timer !== null) clearInterval(timer);
     },
   };

@@ -10,15 +10,17 @@
  * skippable. Tests enforce both limits.
  *
  * Voices
- *  - VELA (lab assistant, a little flask robot with a candle flame): cheerful,
- *    precise, a bit anxious; counts things; catchphrase «Anotado» / "Noted".
+ *  - VELA (the MC-7 culture monitor on the bench, docs/ARTE-REALISTA.md §4: a screen
+ *    with a trace, a pilot lamp and a handle): cheerful, precise, a bit anxious;
+ *    counts things; catchphrase «Anotado» / "Noted".
  *  - Dr. Albor (tapes): warm, tired, poetic; "Day N of the night".
  *  - The Committee (telex): CAPITALS, bureaucratic, always ends with FIN / END.
  *  - The Choir (the creatures): dots first, later three small words at a time.
  *  - You (journal voice): terse first person.
  *
  * Tokens resolved at runtime: {first} first species, {best} best-yield species,
- * {rhythm} the player's own recent seeding rhythm drawn as dots.
+ * {rhythm} the player's own recent seeding rhythm drawn as dots, {clock} the
+ * session's seconds, {seed} what a seed costs.
  */
 import type { Text } from '../core/types';
 import { REACHABLE_BEHAVIORS, WORLD_BY_ID } from '../game/worlds';
@@ -123,6 +125,12 @@ const dropperBought = (c: StoryCtx): boolean => (c.v.upgrades.find((u) => u.id =
 const goldenVisible = (c: StoryCtx, life = 0.35): boolean => !!c.v.golden && c.v.golden.life > life;
 /** The sessions cycle runs (lab sessions + research tree + worlds). */
 const sessions = (c: StoryCtx): boolean => c.v.cycle === 'sessions';
+/** The first lab session of the game (session 1 tutorial, docs/CLARIDAD2.md §2.4). */
+const firstSession = (c: StoryCtx): boolean => sessions(c) && !!c.v.session && (c.v.session.first ?? c.v.session.n <= 1);
+/** The session's clock waits for the player (before the first seed, or held by the tutorial). */
+const clockWaits = (c: StoryCtx): boolean => c.v.session?.phase === 'ready';
+/** A drop of Luz on the dish is ripe enough to point at (75 %, §2.4 step 6). */
+const ripeDrop = (c: StoryCtx): boolean => (c.v.drops ?? []).some((d) => d.fill >= 0.75);
 /** "The dish is ripe": a new night is ready (sessions) or the Extinction is available (classic). */
 const ripe = (c: StoryCtx): boolean => (sessions(c) ? !!c.v.research?.nightReady : c.v.extinction.available);
 const extinctionProgress = (c: StoryCtx): number =>
@@ -166,18 +174,27 @@ export const CLASSIC_ONLY_SCENES: readonly string[] = ['t_lab', 't_calibrate', '
 /** Set by the integrator (story.setFlag) when the opening intro (src/ui/intro) finishes or is skipped. */
 export const INTRO_SEEN_FLAG = 'introSeen';
 
+/** The tap VELA asks for on an empty dish: the player plants the first creature (§2.4 step 2). */
+const SOW_LINE = vela('happy', 'Toca la placa para poner una semilla de luz.', 'Tap the dish to drop a seed of light.', at('dish'));
 /** VELA's hello (t_intro) for a player who did not watch the intro. */
 export const T_INTRO_LINES: LineDef[] = [
   vela('awed', '¡Oh! ¡Hola, hola! Esto es la Estación Vigilia.', 'Oh! Hello, hello! This is Vigil Station.'),
   vela('happy', 'Soy VELA. Es un acrónimo. Nadie sabe de qué.', 'I\'m VELA. It\'s an acronym. Nobody knows for what.'),
-  vela('neutral', 'Aquí la noche dura meses. La luz crece en la placa.', 'Here the night lasts months. Light grows in the dish.', at('dish')),
-  vela('happy', '¡Toca la placa! A ver qué pasa.', 'Tap the dish! Let\'s see what happens.', at('dish')),
+  vela('neutral', 'Soy el monitor de esta placa. Aquí la noche dura meses.', 'I\'m this dish\'s monitor. Here the night lasts months.', at('dish')),
+  SOW_LINE,
 ];
-/** t_intro after the intro: the station, VELA and the dish were already introduced; straight to the task. */
-export const T_INTRO_AFTER_INTRO: LineDef[] = [
-  vela('happy', '¡Ya estamos! Tu primera semilla, colega.', 'Here we are! Your first seed, colleague.', at('dish')),
-  vela('happy', '¡Toca la placa! A ver qué pasa.', 'Tap the dish! Let\'s see what happens.', at('dish')),
+/**
+ * t_intro after the intro: the station and the dish were already introduced. The dish is empty and the
+ * first creature is the player's own (QA-CLARIDAD #4: «Tu primera semilla» was said over a starter).
+ */
+export const T_INTRO_AFTER_INTRO: LineDef[] = [vela('happy', 'Hola. Soy VELA, el monitor de esta placa.', 'Hello. I\'m VELA, this dish\'s monitor.'), SOW_LINE];
+/** The first creature holds its shape (classic loop): no «Espera… ¡mira!» before it (§2.4). */
+export const T_STABLE_LINES: LineDef[] = [
+  vela('awed', '¡Vive! Tiene borde. Tiene forma. ¡Se queda!', 'It\'s alive! It has an edge. A shape. It stays!', at('creature', 'dish')),
+  vela('happy', 'Es una criatura. Tu primera. Hola, pequeña.', 'It\'s a creature. Your first one. Hello, little one.', at('creature', 'dish')),
 ];
+/** Session 1 (§2.4 step 4): the creature the player planted is alive; the clock still waits. */
+export const T_STABLE_SESSIONS: LineDef[] = [vela('awed', '¡Vive! Es tu primera criatura.', 'It\'s alive! Your first creature.', at('creature', 'dish'))];
 
 /** The Choir's question (final choice). */
 const QUESTION = coro('¿qué  ·  somos  ·  para  ·  ti  ?', 'what  ·  are  ·  we  ·  to  ·  you  ?', { hint: 'echo' });
@@ -203,7 +220,8 @@ export const SCENES: SceneDef[] = [
     tutorial: true,
     after: ['t_intro'],
     title: t('Paciencia', 'Patience'),
-    when: (c) => c.n('seeds') >= 1 && c.n('stables') === 0 && c.n('deaths') === 0 && c.n('explosions') === 0 && c.since('t_intro') >= 9,
+    // Sessions: t_born says it the moment the player sows (§2.4 step 3).
+    when: (c) => !sessions(c) && c.n('seeds') >= 1 && c.n('stables') === 0 && c.n('deaths') === 0 && c.n('explosions') === 0 && c.since('t_intro') >= 9,
     lines: [
       vela('neutral', 'Espera un poquito. Está decidiendo si vive.', 'Wait a moment. It\'s deciding if it lives.', at('dish')),
       vela('happy', 'Si se queda con forma, ¡es una criatura!', 'If it keeps its shape, it\'s a creature!'),
@@ -217,7 +235,8 @@ export const SCENES: SceneDef[] = [
     priority: 50,
     after: ['t_intro'],
     title: t('Muy poquito', 'Too little'),
-    when: (c) => c.n('deaths') >= 1 && c.n('stables') === 0 && c.stablesNow() === 0,
+    // Sessions: a seed that goes dark says why in a label at the spot (§2.5), never a bubble.
+    when: (c) => !sessions(c) && c.n('deaths') >= 1 && c.n('stables') === 0 && c.stablesNow() === 0,
     lines: [
       vela('worried', 'Oh… se apagó. Era muy poquito.', 'Oh… it faded. Too little.'),
       vela('neutral', 'Pasa mucho. ¡Sembrar es barato!', 'That happens a lot. Sowing is cheap!'),
@@ -232,10 +251,11 @@ export const SCENES: SceneDef[] = [
     priority: 55,
     after: ['t_intro'],
     title: t('Demasiado', 'Too much'),
-    when: (c) => c.n('explosions') >= 1,
+    // Sessions: the first fusion is the run's one card «¡Se juntaron!» (§2.5).
+    when: (c) => !sessions(c) && c.n('explosions') >= 1,
     lines: [
       vela('worried', '¡Uy! Dos semillas se tocaron y se fundieron: ya no tienen forma.', 'Whoa! Two seeds touched and melted together: no shape any more.', at('dish')),
-      vela('neutral', 'La materia sin forma no da Esencia. Se come la placa.', 'Shapeless matter gives no Essence. It eats the dish.'),
+      vela('neutral', 'La materia sin forma no da luz. Se come la placa.', 'Shapeless matter gives no glow. It eats the dish.'),
       vela('happy', 'Por eso la disolví. Siembra lejos de las demás.', 'So I dissolved it. Sow away from the others.', at('dish')),
       vela('happy', '¡Lo apunto bien grande en mi libreta!', 'I\'m writing that down, nice and big!'),
     ],
@@ -248,11 +268,58 @@ export const SCENES: SceneDef[] = [
     after: ['t_intro'],
     title: t('Algo se quedó', 'Something stayed'),
     when: (c) => c.n('stables') >= 1 || c.stablesNow() >= 1,
-    lines: [
-      vela('awed', 'Espera… ¡mira!', 'Wait… look!', at('creature', 'dish')),
-      vela('awed', 'Tiene borde. Tiene forma. ¡Se queda!', 'It has an edge. A shape. It stays!', at('creature', 'dish')),
-      vela('happy', 'Es una criatura. Tu primera. Hola, pequeña.', 'It\'s a creature. Your first one. Hello, little one.', at('creature', 'dish')),
-    ],
+    lines: (c) => (sessions(c) ? T_STABLE_SESSIONS : T_STABLE_LINES),
+  },
+  // ── Session 1 (ADR-030, docs/CLARIDAD2.md §2.4): the player sows first; the clock starts after VELA. ──
+  {
+    id: 't_born',
+    act: 1,
+    tutorial: true,
+    chain: true,
+    priority: 85,
+    after: ['t_intro'],
+    title: t('Naciendo', 'Being born'),
+    // The tap planted the sure creature; it incubates in the dark and the clock still waits (step 3).
+    when: (c) => firstSession(c) && clockWaits(c) && (c.n('seeds') >= 1 || c.v.creatures.length > 0) && !c.done('t_stable'),
+    lines: [vela('neutral', 'Está naciendo… un momento.', 'It\'s being born… one moment.', { target: ['creature', 'dish'], auto: 1.6 })],
+  },
+  {
+    id: 't_clock',
+    act: 1,
+    tutorial: true,
+    chain: true,
+    priority: 84,
+    after: ['t_stable'],
+    title: t('Tu reloj', 'Your clock'),
+    // Step 5: when this line goes, the session flow starts the clock (story.holdsClock, flow.ts).
+    when: (c) => firstSession(c) && clockWaits(c),
+    lines: [vela('happy', 'Tu reloj empieza ahora: tienes {clock} segundos.', 'Your clock starts now: you have {clock} seconds.', { target: ['hud.clock'], auto: 2.5 })],
+  },
+  {
+    id: 't_collect',
+    act: 1,
+    tutorial: true,
+    duringRun: true,
+    priority: 83,
+    after: ['t_clock'],
+    title: t('Recoger la luz', 'Collecting glow'),
+    // Step 6: the first drop at 75 %. The dish waits while she says it; the drop can be tapped meanwhile.
+    when: (c) => firstSession(c) && c.v.session?.phase === 'running' && ripeDrop(c) && c.n('collected') === 0,
+    lines: [vela('awed', '¡Hizo luz! Tócala para recogerla.', 'It made glow! Tap it to collect it.', at('drop', 'creature', 'dish'))],
+    wait: { event: 'collected', text: t('Toca la gota de luz.', 'Tap the drop of glow.'), target: ['drop', 'creature', 'dish'], timeoutSec: 6 },
+  },
+  {
+    id: 't_seedcost',
+    act: 1,
+    tutorial: true,
+    duringRun: true,
+    chain: true,
+    priority: 82,
+    after: ['t_clock'],
+    title: t('Otra semilla', 'Another seed'),
+    // Step 7, after the first collection (or a while into the clock if no drop came).
+    when: (c) => firstSession(c) && c.v.session?.phase === 'running' && (c.done('t_collect') || c.n('collected') > 0 || c.since('t_clock') >= 10),
+    lines: [vela('happy', 'Con {seed} de luz pones otra semilla.', '{seed} glow buys another seed.', at('hud.essence'))],
   },
   {
     id: 't_essence',
@@ -261,14 +328,15 @@ export const SCENES: SceneDef[] = [
     chain: true,
     priority: 79,
     after: ['t_stable'],
-    title: t('Esencia', 'Essence'),
-    when: () => true,
+    title: t('Luz', 'Glow'),
+    // Sessions: t_clock, t_collect and t_seedcost teach it with the clock waiting (§2.4).
+    when: (c) => !sessions(c),
     lines: [
-      vela('neutral', '¿Ves este número? Es tu Esencia.', 'See this number? That\'s your Essence.', at('hud.essence')),
-      vela('happy', 'Cada criatura con forma te da Esencia cada segundo.', 'Every creature with a shape gives Essence every second.', at('creature', 'dish')),
-      vela('neutral', 'Debajo ves cuánto ganas por segundo: «+1/s».', 'Below it: how much you earn per second, "+1/s".', at('hud.essence')),
+      vela('neutral', '¿Ves este número? Es tu luz.', 'See this number? That\'s your glow.', at('hud.essence')),
+      vela('happy', 'Cada criatura con forma te da luz cada segundo.', 'Every creature with a shape gives glow every second.', at('creature', 'dish')),
+      vela('neutral', 'Debajo ves cuánto ganas por segundo: «+1 luz/s».', 'Below it: how much you earn per second, "+1 glow/s".', at('hud.essence')),
       vela('worried', 'Lo que no tiene forma no da nada.', 'Anything without a shape gives nothing.'),
-      vela('happy', 'Gástala en semillas. Más criaturas, más Esencia.', 'Spend it on seeds. More creatures, more Essence.', at('hud.essence')),
+      vela('happy', 'Gástala en semillas. Más criaturas, más luz.', 'Spend it on seeds. More creatures, more glow.', at('hud.essence')),
     ],
   },
   {
@@ -316,11 +384,14 @@ export const SCENES: SceneDef[] = [
     act: 1,
     tutorial: true,
     urgent: true,
+    // The one VELA bubble allowed with the clock running from session 2 on (§2.8); the dish waits meanwhile.
+    duringRun: true,
     priority: 90,
     after: ['t_intro'],
     title: t('El Destello', 'The Spark'),
     when: (c) => goldenVisible(c),
-    lines: [vela('awed', '¡Ahí! ¡Un Destello! ¡Tócalo, rápido!', 'There! A Spark! Tap it, quick!', at('golden', 'dish'))],
+    // Short: the Spark waits while she talks, then her task pill points at it with the dish running.
+    lines: [vela('awed', '¡Ahí! ¡Un Destello! ¡Tócalo, rápido!', 'There! A Spark! Tap it, quick!', { target: ['golden', 'dish'], auto: 1.4 })],
     wait: {
       event: 'goldenCaught',
       until: (c) => !c.v.golden,
@@ -334,6 +405,8 @@ export const SCENES: SceneDef[] = [
     act: 1,
     tutorial: true,
     chain: true,
+    // The reply of the first Spark's beat (the same pause, §2.8).
+    duringRun: true,
     after: ['t_golden'],
     title: t('Un regalo', 'A gift'),
     when: (c) => c.n('goldenCaught') >= 1,
@@ -347,6 +420,7 @@ export const SCENES: SceneDef[] = [
     act: 1,
     tutorial: true,
     chain: true,
+    duringRun: true,
     after: ['t_golden'],
     title: t('Se fue', 'Gone'),
     when: (c) => c.n('goldenMissed') >= 1 && c.n('goldenCaught') === 0,

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Bus, type GameEvents } from '../core/bus';
 import type { GameView } from '../core/types';
 import { computeLeanings, finalOptions, secretUnlocked } from './endings';
-import { SCENES, SEED_SPECIES } from './script';
+import { SCENES, SEED_SPECIES, T_INTRO_AFTER_INTRO, T_INTRO_LINES, T_STABLE_LINES, T_STABLE_SESSIONS } from './script';
 import { STORY_STORAGE_KEY, createStory, type Story } from './story';
 import { ALL_BEHAVIORS, creature, makeView, memoryStorage, node, species } from './testUtil';
 import type { HintView, StorageLike, StoryEvents } from './types';
@@ -440,5 +440,140 @@ describe('story: the tutorial follows the player (QA4 F-03)', () => {
     h.playLines();
     h.wait(1);
     expect(h.story.serialize().done).toContain('t_intro');
+  });
+});
+
+// ───────────── the clock waits while VELA talks (ADR-030, docs/CLARIDAD2.md §2.3, §2.4, §2.8) ─────────────
+
+/** A sessions-loop view with run `n` in `phase`. */
+function sessionView(n: number, phase: 'ready' | 'running' | 'over', over: Partial<GameView> = {}): Partial<GameView> {
+  return {
+    cycle: 'sessions',
+    research: { sessions: n - 1 } as GameView['research'],
+    session: {
+      n,
+      world: 'classic',
+      phase,
+      limit: 15,
+      bonus: 0,
+      elapsed: 0,
+      remaining: 15,
+      progress: 0,
+      essence: 0,
+      seeds: 0,
+      sprint: null,
+      newSpecies: 0,
+      endedEarly: false,
+      first: n === 1,
+    },
+    ...over,
+  };
+}
+
+describe('story: session 1, the player sows first and the clock starts after VELA (§2.4)', () => {
+  it('QA#7: session-1 tutorial lines never run with the clock running', async () => {
+    const h = harness(sessionView(1, 'ready'));
+    h.story.setFlag('introSeen');
+    // The game's clock as main.ts drives it: it runs only in a running session while VELA is not talking.
+    let clock = 0;
+    const lines: { id: string; phase: string; ran: boolean }[] = [];
+    const step = (sec: number) => {
+      for (let i = 0; i < sec * 4; i++) {
+        // A tutorial line on screen: the clock must be held (not running, or VELA counted as talking).
+        const cur = h.story.current();
+        const runs = h.v.session!.phase === 'running' && !h.story.talking;
+        if (cur?.phase === 'lines' && cur.scene.tutorial) lines.push({ id: cur.scene.id, phase: h.v.session!.phase, ran: runs });
+        if (runs) clock += 0.25;
+        h.wait(0.25);
+        // The session flow starts the clock once the tutorial lets it (flow.ts clockHold).
+        if (h.v.session!.phase === 'ready' && h.v.session!.tutorialHold && !h.story.holdsClock()) h.set({ session: { ...h.v.session!, phase: 'running' } });
+      }
+    };
+    step(2);
+    expect(h.id()).toBe('t_intro');
+    expect(h.story.current()!.line!.text.es).toBe('Hola. Soy VELA, el monitor de esta placa.');
+    h.playLines();
+    // The first tap plants the sure creature: still 'ready', the clock waits (tutorialHold).
+    seed(h);
+    h.set({ session: { ...h.v.session!, tutorialHold: true }, creatures: [creature(1, 'born')] });
+    await Promise.resolve();
+    step(1);
+    expect(h.id()).toBe('t_born');
+    expect(h.v.session!.phase).toBe('ready');
+    h.playLines();
+    h.set({ creatures: [creature(1)] });
+    h.bus.emit('creatureStable', { id: 1, x: 50, y: 50 });
+    step(2);
+    expect(h.id()).toBe('t_stable');
+    expect(h.story.current()!.line!.text.es).toBe('¡Vive! Es tu primera criatura.');
+    h.playLines();
+    step(1);
+    expect(h.id()).toBe('t_clock');
+    expect(h.story.current()!.line!.text.es).toBe('Tu reloj empieza ahora: tienes 15 segundos.');
+    expect(h.story.holdsClock()).toBe(true);
+    h.playLines();
+    step(1);
+    expect(h.v.session!.phase).toBe('running');
+    // The first ripe drop: VELA stops the dish and points at it; a tap on it ends her line.
+    h.set({ drops: [{ id: 9, x: 50, y: 50, amount: 6, fill: 0.8, owner: 1 }] });
+    step(2);
+    expect(h.id()).toBe('t_collect');
+    expect(h.story.talking).toBe(true);
+    h.bus.emit('lightCollected', { x: 50, y: 50, amount: 6, by: 'hand' });
+    step(1);
+    expect(h.story.serialize().done).toContain('t_collect');
+    step(2);
+    expect(h.id()).toBe('t_seedcost');
+    h.playLines();
+    step(2);
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.filter((l) => l.ran)).toEqual([]);
+    for (const l of lines) if (['t_intro', 't_born', 't_stable', 't_clock'].includes(l.id)) expect(l.phase, l.id).toBe('ready');
+    expect(clock).toBeGreaterThan(0);
+  });
+
+  it('the old lines are gone: no «Tu primera semilla, colega», no «Espera… ¡mira!»', () => {
+    const all = SCENES.flatMap((s) => (typeof s.lines === 'function' ? [] : s.lines)).map((l) => l.text.es);
+    for (const s of [T_INTRO_LINES, T_INTRO_AFTER_INTRO, T_STABLE_LINES, T_STABLE_SESSIONS]) all.push(...s.map((l) => l.text.es));
+    expect(all.join('\n')).not.toMatch(/primera semilla, colega|Espera… ¡mira!/);
+  });
+
+  it('with the tutorial skipped the clock is never held by VELA', () => {
+    const h = harness(sessionView(1, 'ready'));
+    h.story.tick();
+    h.story.skipTutorial();
+    expect(h.story.holdsClock()).toBe(false);
+  });
+});
+
+describe('story: one voice while the clock runs (§2.8)', () => {
+  it('no dialogue scene starts in a running session after session 1, except the first Spark', () => {
+    const h = veteran(['t_intro', 't_stable', 't_born', 't_clock'], { tutorialSkipped: false });
+    h.set(sessionView(3, 'running', { species: [species('a'), species('b'), species('c')], essencePerSec: 20 }));
+    h.wait(30);
+    expect(h.id()).toBeNull();
+    h.set({ golden: { x: 20, y: 20, life: 0.9 } });
+    h.wait(1);
+    expect(h.id()).toBe('t_golden');
+    expect(h.story.talking).toBe(true);
+    h.playLines();
+    h.set({ golden: null });
+    h.wait(1);
+    // Off the clock VELA may talk again (the start card, the report, the Tree, before the first seed).
+    h.set(sessionView(4, 'ready', { species: [species('a'), species('b'), species('c')], golden: null }));
+    h.wait(30);
+    expect(h.id()).toBe('a1_committee');
+  });
+
+  it('QA#16: opening the Bestiary is never blocked by a tutorial scene', () => {
+    const h = veteran(['t_intro', 't_stable'], { tutorialSkipped: false });
+    h.set(sessionView(2, 'ready', { species: [species('Orbium')], tabs: { lab: false, bestiary: true, calibrate: false, genome: false } }));
+    h.wait(5);
+    expect(h.id()).toBe('t_bestiary');
+    expect(h.story.current()!.phase).toBe('lines');
+    // The player opens the Bestiary while VELA is still talking about it: that is what she asked.
+    h.story.signal('tab:bestiary');
+    expect(h.id()).toBeNull();
+    expect(h.story.serialize().done).toContain('t_bestiary');
   });
 });

@@ -73,7 +73,7 @@ export interface Moments {
   /** Should status pills show on every creature (not only the tapped one) in this era? */
   labelsOnAll(era: number): boolean;
   seen(id: MomentId): boolean;
-  /** Queued or on screen right now. */
+  /** Queued to open, or on screen right now (not while the run holds it: no clock, §2.8). */
   isActive(id: MomentId): boolean;
   /** Explained moments, in help-sheet order. */
   help(): HelpEntry[];
@@ -655,7 +655,7 @@ export function createMoments(deps: MomentsDeps): Moments {
       return labels === 'always' || (labels === 'auto' && era <= 1);
     },
     seen: (id) => seen.has(id),
-    isActive: (id) => (!!open && open.id === id && !open.replay) || queue.some((q) => q.def.id === id),
+    isActive: (id) => (!!open && open.id === id && !open.replay) || queue.some((q) => q.def.id === id && verdictOf(id) !== 'hold'),
     help() {
       return HELP_ORDER.map((id) => ({ id, seen: seen.has(id), def: MOMENT_BY_ID.get(id)! }));
     },

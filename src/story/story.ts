@@ -104,6 +104,16 @@ export interface Story {
   endingDone(): void;
   /** UI signal, e.g. 'tab:bestiary' when the player opens that tab. */
   signal(name: string): void;
+  /**
+   * VELA is talking right now (lines, a choice or an ending on screen; a task pill is not talking). The
+   * integrator stops a running session's clock meanwhile (ADR-030, docs/CLARIDAD2.md §2.3).
+   */
+  readonly talking: boolean;
+  /**
+   * The session-1 tutorial still holds the clock (§2.4: it starts when VELA's «Tu reloj empieza ahora»
+   * goes). False when the story is off or the tutorial was skipped: the clock starts with the first seed.
+   */
+  holdsClock(): boolean;
   /** Re-watch a seen scene (archive): no waits, no choices, no state changes. */
   replay(sceneId: string): boolean;
   /** Start any scene for real, ignoring its conditions (dev tools). */
@@ -376,7 +386,15 @@ export function createStory(deps: StoryDeps): Story {
         .replace(/\{first\}/g, speciesName(v, 'first'))
         .replace(/\{best\}/g, speciesName(v, 'best'))
         .replace(/\{rhythm\}/g, rhythm());
-    return { es: rep(text.es), en: rep(text.en) };
+    return { es: sessionTokens(rep(text.es), v), en: sessionTokens(rep(text.en), v) };
+  }
+
+  /** {clock}: the session's seconds; {seed}: what a seed costs (whole numbers, as the HUD says them). */
+  function sessionTokens(s: string, v: GameView): string {
+    if (!s.includes('{clock}') && !s.includes('{seed}')) return s;
+    const se = v.session;
+    const secs = se ? Math.max(0, Math.round(se.limit + se.bonus - se.elapsed)) : 0;
+    return s.replace(/\{clock\}/g, String(secs)).replace(/\{seed\}/g, String(Math.max(0, Math.round(v.seedCost))));
   }
 
   function lineView(a: Active, v: GameView): LineView {
@@ -392,6 +410,7 @@ export function createStory(deps: StoryDeps): Story {
       target: l.target ?? null,
       live: !!l.live,
       index: a.index,
+      auto: l.auto ?? null,
     };
   }
 
@@ -449,6 +468,8 @@ export function createStory(deps: StoryDeps): Story {
       if (picked?.reply) a.lines.push(...picked.reply);
     }
     active = a;
+    // A signal from before this scene is not its answer (an old 'tab:bestiary' would end it unseen).
+    if (!replay) signals = new Set();
     events.emit('sceneStart', { scene: a.view });
     if (a.lines.length) showLine(a, v);
     else afterLines(a);
@@ -511,8 +532,10 @@ export function createStory(deps: StoryDeps): Story {
     const a = active;
     if (!a) return;
     // The player already did what the scene's task asks while VELA was still talking: the scene is over.
+    // A signal too (QA#16: opening the Bestiary while she talks about it is what she asked).
     const w = a.def.wait;
-    if (a.phase === 'lines' && !a.replay && !a.def.choice && w?.event && st.counters[w.event] - a.base[w.event] >= (w.count ?? 1)) {
+    const doneEarly = !!w && ((!!w.event && st.counters[w.event] - a.base[w.event] >= (w.count ?? 1)) || (!!w.signal && signals.has(w.signal)));
+    if (a.phase === 'lines' && !a.replay && !a.def.choice && doneEarly) {
       finish(a, false);
       return;
     }
@@ -554,6 +577,8 @@ export function createStory(deps: StoryDeps): Story {
 
   function eligible(def: SceneDef, c: StoryCtx, t: number): boolean {
     if (!def.repeatable && st.done.has(def.id)) return false;
+    // While a lab session's clock runs only the tutorial and the first Spark talk (§2.8).
+    if (!def.duringRun && c.v.cycle === 'sessions' && c.v.session?.phase === 'running') return false;
     if (def.tutorial && st.tutorialSkipped) return false;
     if ((st.deferUntil[def.id] ?? 0) > t) return false;
     if (def.after && !def.after.every((id) => st.done.has(id))) return false;
@@ -694,6 +719,9 @@ export function createStory(deps: StoryDeps): Story {
     st.lastEra = night;
   });
   on('offlineReturn', () => bump('offline'));
+  on('lightCollected', ({ by }) => {
+    if (by === 'hand') bump('collected');
+  });
 
   // ───────────── boot ─────────────
 
@@ -837,6 +865,12 @@ export function createStory(deps: StoryDeps): Story {
     signal(name) {
       signals.add(name);
       checkWait();
+    },
+    get talking() {
+      return !!active && active.phase !== 'wait';
+    },
+    holdsClock() {
+      return st.enabled && !st.tutorialSkipped && !st.done.has('t_clock');
     },
     replay(sceneId) {
       const def = SCENE_BY_ID.get(sceneId);

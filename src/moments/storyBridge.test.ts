@@ -148,3 +148,21 @@ describe('story bridge: one thing per event', () => {
     expect(s.moments.current()?.mode).toBe('brief');
   });
 });
+
+describe('story bridge: the session-1 tutorial tells its basics (CLARIDAD2 §2.4)', () => {
+  it('a seed held by the waiting clock never blocks VELA, and her line marks it told', () => {
+    const s = setup(false);
+    const session = { n: 1, world: 'classic', phase: 'ready' as const, limit: 15, bonus: 0, elapsed: 0, remaining: 15, progress: 0, essence: 0, seeds: 0, sprint: null, newSpecies: 0, endedEarly: false, first: true };
+    s.setView({ cycle: 'sessions', session, stats: { playTime: 1, totalEssence: 0, eraEssence: 0, seeds: 0, creaturesBorn: 0 } });
+    s.story.setFlag('introSeen');
+    s.advance(6000);
+    expect(s.story.current()?.scene.id).toBe('t_intro');
+    for (let i = 0; i < 5 && s.story.current()?.phase === 'lines'; i++) s.story.advance();
+    s.bus.emit('seed', { x: 50, y: 50, cost: 0, manual: true });
+    s.setView({ creatures: [creature(1, 'born')], session: { ...session, tutorialHold: true } });
+    s.advance(2000);
+    expect(s.story.current()?.scene.id).toBe('t_born');
+    expect(s.moments.seen('seed')).toBe(true);
+    expect(s.moments.current()).toBeNull();
+  });
+});

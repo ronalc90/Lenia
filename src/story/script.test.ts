@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import scriptSource from './script.ts?raw';
 import type { Text } from '../core/types';
 import { ENDINGS } from './endings';
-import { MAX_WORDS, MAX_WORDS_TUTORIAL, SCENES, SCENE_BY_ID, STORY_JOURNAL, T_INTRO_AFTER_INTRO, T_INTRO_LINES } from './script';
+import { MAX_WORDS, MAX_WORDS_TUTORIAL, SCENES, SCENE_BY_ID, STORY_JOURNAL, T_INTRO_AFTER_INTRO, T_INTRO_LINES, T_STABLE_LINES, T_STABLE_SESSIONS } from './script';
 import { ENDING_IDS, HINT_KINDS, TARGET_IDS, type LineDef, type SceneDef } from './types';
 
 /** Words that carry letters or digits (the Choir's dots don't count). */
@@ -15,7 +15,7 @@ function words(s: string): number {
 
 function staticLines(s: SceneDef): LineDef[] {
   // Scenes whose lines vary with state list every variant here (t_intro: with / without the opening intro).
-  const variants: Record<string, LineDef[]> = { t_intro: [...T_INTRO_LINES, ...T_INTRO_AFTER_INTRO] };
+  const variants: Record<string, LineDef[]> = { t_intro: [...T_INTRO_LINES, ...T_INTRO_AFTER_INTRO], t_stable: [...T_STABLE_LINES, ...T_STABLE_SESSIONS] };
   const lines = typeof s.lines === 'function' ? [...(variants[s.id] ?? [])] : [...s.lines];
   if (s.choice && s.choice.options !== 'final') for (const o of s.choice.options) lines.push(...(o.reply ?? []));
   return lines;

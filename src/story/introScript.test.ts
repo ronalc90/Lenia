@@ -42,7 +42,7 @@ describe('opening intro script', () => {
 });
 
 describe('t_intro after the intro', () => {
-  it('does not repeat the hello: after the intro VELA goes straight to the tap', () => {
+  it('does not repeat the station: after the intro VELA says who she is and asks for the tap (§2.4)', () => {
     for (const l of [...T_INTRO_LINES, ...T_INTRO_AFTER_INTRO]) {
       expect(words(l.text.es)).toBeLessThanOrEqual(MAX_WORDS_TUTORIAL);
       expect(words(l.text.en)).toBeLessThanOrEqual(MAX_WORDS_TUTORIAL);
@@ -64,7 +64,9 @@ describe('t_intro after the intro', () => {
     expect(after.id).toBe('t_intro');
     expect(plain.said).toHaveLength(T_INTRO_LINES.length);
     expect(after.said).toHaveLength(T_INTRO_AFTER_INTRO.length);
-    expect(after.said.join(' ')).not.toContain('Soy VELA');
+    expect(after.said.join(' ')).not.toContain('Estación Vigilia');
+    expect(after.said[0]).toBe('Hola. Soy VELA, el monitor de esta placa.');
+    expect(after.said[after.said.length - 1]).toBe('Toca la placa para poner una semilla de luz.');
     // Both still end on the "tap the dish" task.
     expect(plain.phase).toBe('wait');
     expect(after.phase).toBe('wait');

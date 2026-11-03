@@ -164,6 +164,8 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
   let clock = 0;
   let frozen: number | null = null;
   let revealed = '';
+  /** Clock time the current line finished typing (-1 = still typing): LineView.auto counts from here. */
+  let typedAt = -1;
 
   const typing = () => !!line && typed < fullText.length;
   /** The Choir's dots read better as bullets. */
@@ -177,6 +179,7 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
     acc = 0;
     pause = 0.12;
     lastShown = -1;
+    typedAt = -1;
     portrait.set(l.who, l.mood, l.live);
     for (const c of [...box.classList]) if (c.startsWith('who-')) box.classList.remove(c);
     box.classList.add(`who-${l.who}`);
@@ -542,6 +545,14 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
         }
       }
       renderText();
+    }
+    // A line that moves on by itself (LineDef.auto: «Tu reloj empieza ahora», §2.4 step 5), never while held.
+    if (line && typed >= fullText.length && !box.hidden && held !== 'hide') {
+      if (typedAt < 0) typedAt = t;
+      else if (line.auto !== null && !options && t - typedAt >= line.auto) {
+        typedAt = Infinity;
+        story.advance();
+      }
     }
     if (!box.hidden && line) {
       const ch = typed > 0 ? fullText[typed - 1] : ' ';
