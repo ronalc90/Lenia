@@ -1200,7 +1200,11 @@ function boot(): void {
   let momentCardShown = false;
   let kernelWantSince = 0;
   let kernelWantKey = '';
-  const sameRings = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+  const sameRings = (a: readonly number[], b: readonly number[]): boolean => {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  };
   /** Push calibration to the GPU: growth params at once, kernel changes debounced. Runs every frame: builds nothing unless something changed. */
   function syncParams(now: number): void {
     const want = game.simParams;
