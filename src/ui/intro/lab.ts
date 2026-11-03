@@ -4,11 +4,12 @@
  * bounce from the bench. Pieces: the sky (stars, an aurora curtain, fine snow), the window with its
  * reveal, aluminium frame, refraction and frost, the black epoxy bench, contact shadows and lamp
  * pools, the petri dish (top-down and in three-quarter view), the pipette tip, the probe cable, and
- * VELA standing on the bench through her kept `drawVelaArt` signature (P1 draws her).
+ * VELA standing on the bench through P1's `drawVelaArt`.
  *
  * Everything is deterministic (hashes and sines), without ctx.filter or shadowBlur, and draws without
  * the archive photo: a window or a sky with `img = null` falls back to the vector night.
  */
+import type { Lang } from '../../core/types';
 import { drawVelaArt, type ArtMood } from '../art/vela';
 import { cylinderRamp, hash01, kelvin, type Ctx2D } from '../art/vector';
 import { MATERIAL, PLATE, SCREEN } from '../art/tokens';
@@ -418,6 +419,7 @@ export function velaOnBench(
   rm: boolean,
   lit = 1,
   wear: readonly string[] = [],
+  draw: { dpr?: number; lang?: Lang } = {},
 ): void {
   const { K, b } = lampState(mood, t, rm);
   const warm = kelvin(K);
@@ -428,7 +430,8 @@ export function velaOnBench(
   ctx.save();
   ctx.translate(v.cx - 50 * v.k, v.foot - VELA_FOOT_Y * v.k);
   ctx.scale(v.k, v.k);
-  drawVelaArt(ctx, { mood, moodAge, talk: 0, talking: false, blink: 0, reduceMotion: rm, wear }, t);
+  // Her box size and the DPR, so P1's kit does not read the transform on every call.
+  drawVelaArt(ctx, { mood, moodAge, talk: 0, talking: false, blink: 0, reduceMotion: rm, wear }, t, { size: 100 * v.k, dpr: draw.dpr, lang: draw.lang });
   ctx.restore();
 }
 

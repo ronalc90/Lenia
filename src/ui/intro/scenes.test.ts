@@ -113,6 +113,16 @@ describe('intro scenes as a realistic lab night (docs/ARTE-REALISTA.md §6.6)', 
     expect(paint('essence', DESKTOP, 2.2).texts).toContain('5 mm');
   });
 
+  it('the coat you pick comes off its hook and your hand enters the frame (the arrive panel moves with the pick)', () => {
+    const at = (pickAge: number) => {
+      const r = recorder();
+      paintScene(r.ctx, 'arrive', { ...PHONE, t: 5, rm: false, look: 'beanie', lang: 'es', pickAge });
+      return r.log.join('\n');
+    };
+    expect(at(0)).not.toBe(at(0.3));
+    expect(at(3)).toBe(at(3));
+  });
+
   it('the dish carries its true size: Ø 90 mm (Ø128 cells at 0.7 mm per cell)', () => {
     expect(paint('dish', PHONE, 2.6).texts).toContain('Ø 90 mm');
   });

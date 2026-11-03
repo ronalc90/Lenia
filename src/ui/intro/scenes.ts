@@ -24,7 +24,7 @@
  * and `drawAlborPolaroid`, §7.2).
  */
 import type { Lang } from '../../core/types';
-import type { PlayerLookId } from '../art/characters';
+import { COAT_IDS, drawAlborPolaroid, drawBataCard, drawGlovedHand, type PlayerLookId } from '../art/characters';
 import { LayerCache, kelvin, type Ctx2D } from '../art/vector';
 import { MATERIAL, PLATE, PLATE_MM_PER_CELL, ROUTE_COLOR, type RouteId } from '../art/tokens';
 import { type ArtMood } from '../art/vela';
@@ -89,6 +89,8 @@ export interface SceneEnv {
   lang?: Lang;
   /** Device pixel ratio of the canvas (hairlines, grain). Default 1. */
   dpr?: number;
+  /** Seconds since the player picked a coat on this panel (the coat comes off its hook, the hand enters). */
+  pickAge?: number;
 }
 
 type Painter = (ctx: CanvasRenderingContext2D, e: SceneEnv) => void;
@@ -115,6 +117,8 @@ function unit(e: SceneEnv): number {
 const wide = (e: SceneEnv) => e.w > e.h * 1.05;
 const tr = (e: SceneEnv, es: string, en: string) => (e.lang === 'en' ? en : es);
 const dprOf = (e: SceneEnv) => (e.dpr && e.dpr > 0 ? e.dpr : 1);
+/** How P1's VELA is told the DPR and the language of her screen. */
+const draw = (e: SceneEnv) => ({ dpr: dprOf(e), lang: e.lang ?? 'es' });
 
 /** A photo if it has loaded (it starts loading on the first ask), else null: the vector fallback draws. */
 function photo(id: PhotoId): HTMLImageElement | null {
@@ -589,46 +593,6 @@ function pushPin(c: Ctx2D, x: number, y: number, r: number): void {
   c.fill();
 }
 
-/**
- * The Polaroid pinned on the cork (§5.6). Until P2's `drawAlborPolaroid` lands it holds the same window
- * view, aged (the photo, or a dark print without it), and Albor's note in blue ink under it.
- */
-function polaroid(c: Ctx2D, x: number, y: number, pw: number, rot: number, img: HTMLImageElement | null, note: string): void {
-  const ph = pw * 1.2;
-  c.save();
-  c.translate(x, y);
-  c.rotate(rot);
-  contactShadow(c, pw * 0.04, ph * 0.06, pw * 0.62, ph * 0.56, 0.55);
-  const pg = c.createLinearGradient(-pw / 2, -ph / 2, pw / 2, ph / 2);
-  pg.addColorStop(0, '#a9a396');
-  pg.addColorStop(1, '#7c776d');
-  c.fillStyle = pg;
-  c.fillRect(-pw / 2, -ph / 2, pw, ph);
-  const iw = pw * 0.86;
-  const ix = -iw / 2;
-  const iy = -ph / 2 + pw * 0.07;
-  c.save();
-  c.beginPath();
-  c.rect(ix, iy, iw, iw);
-  c.clip();
-  c.fillStyle = '#1b1712';
-  c.fillRect(ix, iy, iw, iw);
-  if (img) {
-    const P = PHOTOS['estacion-aurora-noaa'];
-    const cr = coverCrop(P.w, P.h, iw, iw, 0.55, 0.55, 1.15);
-    c.drawImage(img, cr.sx, cr.sy, cr.sw, cr.sh, ix, iy, iw, iw);
-    sepia(c, ix, iy, iw, iw, 0.7);
-    grade(c, ix, iy, iw, iw, { desat: 0, tint: '#8f8a80', tintA: 0.5, dark: 0.25 });
-  }
-  c.restore();
-  c.strokeStyle = 'rgba(0,0,0,0.6)';
-  c.lineWidth = 0.75;
-  c.strokeRect(ix, iy, iw, iw);
-  c.globalAlpha = 0.92;
-  plateText(c, note, 0, iy + iw + (ph / 2 - iy - iw) * 0.5 + 4.5, 13, { italic: true, weight: 500, color: '#23406e', align: 'center' });
-  c.restore();
-}
-
 // ───────────────────────────── 2 · Albor's farewell tape ─────────────────────────────
 
 const tape: Painter = (ctx, e) => {
@@ -640,7 +604,6 @@ const tape: Painter = (ctx, e) => {
     : { win: { x: w * 0.06, y: h * 0.15, w: w * 0.32, h: h * 0.38 }, panes: 1, benchY: h * 0.64 };
   const cork: Rect = wd ? { x: w * 0.5, y: h * 0.14, w: w * 0.3, h: h * 0.42 } : { x: w * 0.45, y: h * 0.14, w: w * 0.5, h: h * 0.4 };
   const img = photo('estacion-aurora-noaa');
-  const note = tr(e, 'Día 1 de la noche · A.', 'Day 1 of the night · A.');
   room(ctx, e, `tape${wd ? 'w' : 'n'}`, r, (c) => {
     corkBoard(c, cork);
     // An old shift rota pinned beside the photo (ruled paper, no words).
@@ -655,16 +618,14 @@ const tape: Painter = (ctx, e) => {
     for (let i = 0; i < 6; i++) c.fillRect(-cork.w * 0.1, -cork.h * 0.1 + i * cork.h * 0.045, cork.w * (0.12 + hash(i, 61) * 0.07), 0.75);
     c.restore();
     pushPin(c, nx, ny - cork.h * 0.14, 2.6 * u);
-    const pw = Math.min(cork.w * (wd ? 0.6 : 0.76), cork.h * 0.68);
-    const pcx = cork.x + cork.w * (wd ? 0.36 : 0.44);
-    const pcy = cork.y + cork.h * 0.5;
-    polaroid(c, pcx, pcy, pw, -0.05, img, note);
-    pushPin(c, pcx + pw * 0.02, pcy - pw * 0.56, 3 * u);
   });
+  // Albor's Polaroid (P2, §5.6): her from behind at this same window, the aurora outside, her note.
+  const pw = Math.min(cork.w * (wd ? 0.6 : 0.74), cork.h * 0.66);
+  drawAlborPolaroid(ctx, cork.x + cork.w * (wd ? 0.36 : 0.42) - pw / 2, cork.y + cork.h * 0.5 - pw * 0.6, pw, t, rm, img, { lang: e.lang ?? 'es', tilt: -0.05 });
   // VELA asleep at the end of the bench (her lamp breathes: she is waiting).
   if (wd) {
-    const v = velaSpot(w * 0.93, r.benchY + h * 0.1, w * 0.2);
-    velaOnBench(ctx, v, 'sleepy', 10, t, rm);
+    const v = velaSpot(w * 0.88, r.benchY + h * 0.1, w * 0.2);
+    velaOnBench(ctx, v, 'sleepy', 10, t, rm, 1, [], draw(e));
   }
   const W = wd ? Math.min(w * 0.3, 260) : Math.min(w * 0.56, 220);
   recorder(ctx, wd ? w * 0.56 : w * 0.5, r.benchY + (h - r.benchY) * (wd ? 0.55 : 0.72), W, t, rm, tr(e, 'Cinta 3 · A.', 'Tape 3 · A.'));
@@ -679,7 +640,8 @@ const arrive: Painter = (ctx, e) => {
   const u = unit(e);
   const wd = wide(e);
   const floorY = h * (wd ? 0.84 : 0.8);
-  const door: Rect = wd ? { x: w * 0.54, y: h * 0.12, w: w * 0.24, h: floorY - h * 0.12 } : { x: w * 0.54, y: h * 0.17, w: w * 0.34, h: floorY - h * 0.17 };
+  const door: Rect = wd ? { x: w * 0.6, y: h * 0.12, w: w * 0.22, h: floorY - h * 0.12 } : { x: w * 0.64, y: h * 0.17, w: w * 0.3, h: floorY - h * 0.17 };
+  const rack = arriveRack(e, door);
   const img = photo('cupula-aurora-nsf');
   const P = PHOTOS['cupula-aurora-nsf'];
   cached(ctx, `arrive${wd ? 'w' : 'n'}|${img ? 'p' : 'v'}`, e, (c) => {
@@ -776,31 +738,15 @@ const arrive: Painter = (ctx, e) => {
     c.stroke();
     c.fillStyle = cylinderRamp(c, 0, door.y + door.h * 0.55, 0, door.y + door.h * 0.55 + 4 * u);
     c.fillRect(lx + lw * 0.62, door.y + door.h * 0.55, lw * 0.3, 3.2 * u);
-    // The coat rack on the left wall: an anodised rail with three chrome double hooks (the coats are P2's).
-    const rx0 = w * (wd ? 0.1 : 0.06);
-    const rx1 = w * (wd ? 0.44 : 0.48);
-    const ry = h * (wd ? 0.26 : 0.3);
-    contactShadow(c, (rx0 + rx1) / 2, ry + 9 * u, (rx1 - rx0) * 0.55, 5 * u, 0.5);
-    c.fillStyle = cylinderRamp(c, 0, ry - 3 * u, 0, ry + 3 * u, MATERIAL.anod, [0, 0.08, 0.55, 1]);
-    c.fillRect(rx0, ry - 3 * u, rx1 - rx0, 6 * u);
+    // The coat rack on the left wall: an anodised rail (the hooks and the coats are P2's drawBataCard).
+    const { x0, x1, y: ry } = rack;
+    const rh = Math.max(4, 4 * u);
+    contactShadow(c, (x0 + x1) / 2, ry + rh, (x1 - x0) * 0.55, 4 * u, 0.5);
+    c.fillStyle = cylinderRamp(c, 0, ry - rh / 2, 0, ry + rh / 2, MATERIAL.anod, [0, 0.08, 0.55, 1]);
+    c.fillRect(x0, ry - rh / 2, x1 - x0, rh);
     c.strokeStyle = 'rgba(0,0,0,0.85)';
     c.lineWidth = 1.25;
-    c.strokeRect(rx0, ry - 3 * u, rx1 - rx0, 6 * u);
-    for (let i = 0; i < 3; i++) {
-      const hx = rx0 + ((i + 0.5) / 3) * (rx1 - rx0);
-      c.save();
-      c.lineCap = 'round';
-      c.strokeStyle = '#0a0c0e';
-      c.lineWidth = 3.4 * u;
-      c.beginPath();
-      c.moveTo(hx, ry);
-      c.quadraticCurveTo(hx + 1 * u, ry + 16 * u, hx + 8 * u, ry + 13 * u);
-      c.stroke();
-      c.strokeStyle = cylinderRamp(c, hx - 2 * u, 0, hx + 2 * u, 0);
-      c.lineWidth = 2.4 * u;
-      c.stroke();
-      c.restore();
-    }
+    c.strokeRect(x0, ry - rh / 2, x1 - x0, rh);
   });
   // Snow blowing in through the doorway, spreading into the room.
   ctx.save();
@@ -820,8 +766,54 @@ const arrive: Painter = (ctx, e) => {
   }
   ctx.restore();
   snowfall(ctx, door.x, door.y, door.w, door.h, t, rm, 40, -6, 9, 0.9);
+  // The three coats on their hooks (§5.5): the one you pick comes off its hook, its ID card swings.
+  // `pickAge` counts from the player's pick; on arrival the current coat is taken a moment in.
+  const age = e.pickAge ?? t - 0.8;
+  const lift = rm ? 1 : drawer(clamp01((age - 0.15) / 0.22));
+  COAT_IDS.forEach((id, i) => {
+    const x = rack.x0 + rack.step * i;
+    ctx.save();
+    ctx.translate(x, rack.y - rack.hook);
+    drawBataCard(ctx, id, rack.tw, rack.th, t, rm, id === e.look ? lift : 0, { wall: false, ring: false, lang: e.lang ?? 'es', age: id === e.look ? age - 0.15 : Infinity });
+    ctx.restore();
+  });
+  // Your gloved hand comes into the frame from below and reaches for it (P2's drawGlovedHand, §3.7).
+  const pick = COAT_IDS.indexOf(e.look);
+  const target = { x: rack.x0 + rack.step * Math.max(0, pick) + rack.tw / 2, y: rack.y + rack.th * 0.5 };
+  // It enters from the bottom right (§3.7), the wrist low, the fingers towards the coat.
+  const handLen = h * 0.3;
+  const k = handLen / 62;
+  const wx = Math.min(w - handLen * 0.18, target.x + w * 0.3);
+  const wy = h - handLen * 0.08;
+  const angle = Math.round(Math.atan2(target.x - wx, wy - target.y) * 50) / 50;
+  const inK = rm ? 1 : drawer(clamp01(age / 0.45));
+  if (inK > 0.001) drawGlovedHand(ctx, 'reach', wx, wy + (1 - inK) * handLen * 1.3, k, e.look, { angle });
   finish(ctx, e, 0.42);
 };
+
+/** The 220-ms drawer of §6.4 (ease-out, no overshoot) as a function of progress. */
+function drawer(p: number): number {
+  const q = 1 - clamp01(p);
+  return 1 - q * q * q;
+}
+
+/**
+ * Where the coat rack sits in the vestibule: its rail (x0 → x1 at y) left of the door, the coat tiles
+ * (`tw` × `th`, a coat about half the door's height) overlapping a little, and how far the hook sits
+ * below a tile's top (drawBataCard hangs the coat at its rail line: 3.5 % + 1.5 % of the tile).
+ */
+function arriveRack(e: SceneEnv, door: Rect): { x0: number; x1: number; y: number; tw: number; th: number; step: number; hook: number } {
+  const wd = wide(e);
+  const x0 = e.w * (wd ? 0.07 : 0.04);
+  const x1 = door.x - e.w * (wd ? 0.06 : 0.05);
+  const y = e.h * (wd ? 0.2 : 0.24);
+  const th = Math.min(door.h * 0.56, ((x1 - x0) / 2.5) * 1.5);
+  const tw = th / 1.5;
+  const step = (x1 - x0 - tw) / 2;
+  const railY = Math.max(3, th * 0.035);
+  const railH = Math.max(3, th * 0.03);
+  return { x0, x1, y, tw, th, step, hook: railY + railH * 0.5 };
+}
 
 // ───────────────────────────── 4 · VELA switches on ─────────────────────────────
 
@@ -844,7 +836,7 @@ const candle: Painter = (ctx, e) => {
   const [cx0, cy0] = velaCableAt(v);
   probeCable(ctx, cx0, cy0, dx + drx * 0.95, dy + drx * 0.12, 6 * u, Math.max(2, 2.2 * u));
   dish3q(ctx, dx, dy, drx, 0.36, 0.5 + 0.5 * warm, (c, rr) => culture(c, rr, [{ code: 'O2u', x: -0.2, y: 0.05, size: trueSize('O2u'), rot: 0.6, alpha: 0.6 + 0.4 * warm }]), warm);
-  velaOnBench(ctx, v, mood, rm ? 10 : t < 0.5 ? t : t < 2.2 ? t - 0.5 : t - 2.2, t, rm, warm);
+  velaOnBench(ctx, v, mood, rm ? 10 : t < 0.5 ? t : t < 2.2 ? t - 0.5 : t - 2.2, t, rm, warm, [], draw(e));
   // The room before the lamp: dark, lifting as the filament heats.
   const [lx, ly] = velaLampAt(v);
   darkness(ctx, w, h, lx, ly, Math.max(w, h) * (0.25 + warm * 1.1), 0.82 - warm * 0.5);
@@ -1370,10 +1362,11 @@ const go: Painter = (ctx, e) => {
   room(ctx, e, `go${wd ? 'w' : 'n'}`, r, (c) => {
     if (!cork) return;
     corkBoard(c, cork);
-    const pw = Math.min(cork.w * 0.62, cork.h * 0.7);
-    polaroid(c, cork.x + cork.w * 0.5, cork.y + cork.h * 0.5, pw, 0.04, img, tr(e, 'Día 1 de la noche · A.', 'Day 1 of the night · A.'));
-    pushPin(c, cork.x + cork.w * 0.5, cork.y + cork.h * 0.5 - pw * 0.56, 3 * u);
   });
+  if (cork) {
+    const pw = Math.min(cork.w * 0.62, cork.h * 0.68);
+    drawAlborPolaroid(ctx, cork.x + cork.w * 0.5 - pw / 2, cork.y + cork.h * 0.5 - pw * 0.6, pw, t, rm, img, { lang: e.lang ?? 'es', tilt: 0.04 });
+  }
   const mood: ArtMood = rm ? 'proud' : t < 1.2 ? 'happy' : 'proud';
   const v = velaSpot(wd ? w * 0.78 : w * 0.7, r.benchY + (h - r.benchY) * 0.42, wd ? Math.min(w * 0.3, h * 0.46) : w * 0.5);
   const dx = wd ? w * 0.42 : w * 0.3;
@@ -1382,7 +1375,7 @@ const go: Painter = (ctx, e) => {
   const [cx0, cy0] = velaCableAt(v);
   probeCable(ctx, cx0, cy0, dx + drx * 0.95, dy + drx * 0.1, 5 * u, Math.max(2, 2.2 * u));
   dish3q(ctx, dx, dy, drx, 0.38, 1, (c, rr) => culture(c, rr, [{ code: 'O2u', x: -0.1, y: 0, size: trueSize('O2u') * 1.4, rot: rm ? 0.5 : 0.5 + t * 0.2, alpha: 1 }]), 1);
-  velaOnBench(ctx, v, mood, rm ? 10 : t < 1.2 ? 10 : t - 1.2, t, rm);
+  velaOnBench(ctx, v, mood, rm ? 10 : t < 1.2 ? 10 : t - 1.2, t, rm, 1, [], draw(e));
   finish(ctx, e, 0.5);
 };
 
