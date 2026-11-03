@@ -668,7 +668,7 @@ const tape: Painter = (ctx, e) => {
   }
   const W = wd ? Math.min(w * 0.3, 260) : Math.min(w * 0.56, 220);
   recorder(ctx, wd ? w * 0.56 : w * 0.5, r.benchY + (h - r.benchY) * (wd ? 0.55 : 0.72), W, t, rm, tr(e, 'Cinta 3 · A.', 'Tape 3 · A.'));
-  finish(ctx, e, 0.55);
+  finish(ctx, e, 0.42);
 };
 
 // ───────────────────────────── 3 · you arrive ─────────────────────────────
@@ -820,7 +820,7 @@ const arrive: Painter = (ctx, e) => {
   }
   ctx.restore();
   snowfall(ctx, door.x, door.y, door.w, door.h, t, rm, 40, -6, 9, 0.9);
-  finish(ctx, e, 0.55);
+  finish(ctx, e, 0.42);
 };
 
 // ───────────────────────────── 4 · VELA switches on ─────────────────────────────
@@ -1144,7 +1144,7 @@ const essence: Painter = (ctx, e) => {
   const cells = 5 / PLATE_MM_PER_CELL;
   scaleBar(ctx, A.x + 12, A.y + A.h - 12, cells * cellPx('O2u', cpx), '5 mm');
   // b · the Essence meter: the creature's reading rises with a damped needle; the smear reads 0.
-  const R = Math.min(B.w * 0.36, B.h * 0.5 - 22, 150);
+  const R = Math.min(B.w * 0.4, B.h * 0.5 - 22, 150);
   const mx = B.x + B.w / 2;
   const my = B.y + B.h * 0.5 + R * 0.45;
   const target = 12;
@@ -1287,8 +1287,8 @@ const tree: Painter = (ctx, e) => {
     const a = -Math.PI / 2 + (i - 3) * step;
     const col = ROUTE_COLOR.dark[rid];
     ctx.strokeStyle = col;
-    ctx.globalAlpha = 0.55;
-    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.8;
+    ctx.lineWidth = 1.25;
     ctx.beginPath();
     ctx.moveTo(root.x, root.y);
     ctx.lineTo(root.x + Math.cos(a) * len, root.y + Math.sin(a) * len);
@@ -1303,7 +1303,7 @@ const tree: Painter = (ctx, e) => {
       ctx.strokeStyle = col;
       ctx.lineWidth = 1.25;
       ctx.beginPath();
-      ctx.arc(x, y, n === 3 ? 5.5 : 4.5, 0, TAU);
+      ctx.arc(x, y, n === 3 ? 6 : 5, 0, TAU);
       ctx.fill();
       ctx.stroke();
     }
