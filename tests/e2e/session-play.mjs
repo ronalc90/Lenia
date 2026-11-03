@@ -878,9 +878,9 @@ async function runCase(c) {
     await shot(`s${k}-tree`);
     await overlapCheck(`tree ${k}`);
     // Session 2's tree buys «Placa más grande» first: the round dish must grow with it (ADR-025).
-    // Session 1's tree buys a Pipeta too (the helper the player then watches work, docs/CLARIDAD2.md §1.3);
-    // session 2's, the Copiadora (QA#3: its «Copiar» must show by the seed in session 3).
-    const want = k === 1 ? ['worldCold', 'pipette', 'clock', 'dropper'] : ['dish', 'notebook', 'print', 'clock', 'dropper', 'culture', 'startEssence', 'worldGyro', 'fridge'];
+    // Session 1's tree buys a Pipeta (the helper the player then watches work, docs/CLARIDAD2.md §1.3) and the
+    // Cuaderno, so session 2's opens on the Copiadora (QA#3: its «Copiar» must show by the seed in session 3).
+    const want = k === 1 ? ['worldCold', 'notebook', 'pipette', 'clock', 'dropper'] : ['print', 'dish', 'clock', 'dropper', 'culture', 'startEssence', 'worldGyro', 'fridge'];
     const dishBefore = await page.evaluate(() => Math.round(2 * (window.bioluma.dishAnim?.target.radius ?? 0)));
     let bought = 0;
     for (let tries = 0; tries < 6 && bought < 3; tries++) {
