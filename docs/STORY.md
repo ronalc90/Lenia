@@ -542,15 +542,15 @@ the title screen and before `t_intro`; replayable from Settings («Ver la introd
 | # | Panel | Lines (es) | What the picture does |
 |---|---|---|---|
 | 1 | `station` | «Muy al norte, en una isla de hielo, está la Estación Vigilia.» · «Allí la noche dura cuatro meses. El sol no sale.» | aurora, moon, snowfall, the station on its island (warm window = VELA, cyan window = the dish), signpost VIGILIA 78°N |
-| 2 | `tape` | «La doctora Albor cuidaba el laboratorio. Se fue antes de la noche.» · Albor (tape): «Te dejo mi luz. Cuídalas mucho, ¿vale?» | a sepia memory over the recorder: Albor waves goodbye, lantern in hand; reels spin, sound waves |
-| 3 | `arrive` | «Y llegas tú, para cuidar el turno de noche.» · «¿Cómo eres? Elige tu bata.» + **look picker** | you walk through the snow with a suitcase to the lit door where VELA waits, then wave |
-| 4 | `candle` | VELA: «¡Hola! Soy VELA, la ayudante del laboratorio.» · «Mi vela da calor. ¡Y la placa da luz!» | the dark lab; a spark lights VELA's wick and warm light spreads; you go from surprised to happy |
+| 2 | `tape` | «La doctora Albor cuidaba el laboratorio. Se fue antes de la noche.» · Albor (tape): «Te dejo mi luz y mis criaturas. Cuídalas mucho.» | a sepia memory over the recorder: Albor waves goodbye, lantern in hand; reels spin, sound waves |
+| 3 | `arrive` | «Y llegas tú, para cuidar el turno de noche.» · «¿Qué bata te pones? Elige una.» + **look picker** | you walk through the snow with a suitcase to the lit door where VELA waits, then wave |
+| 4 | `candle` | VELA: «¡Hola! Soy VELA, la ayudante del laboratorio.» · «Mi lámpara nunca se apaga. ¡Y la placa da luz!» | the dark lab; VELA, the MC-7 monitor on the bench, lights her amber pilot lamp and warm light spreads; you go from surprised to happy *(the panel id `candle` is kept, ADR-029)* |
 | 5 | `dish` | VELA: «En esta placa crece vida de verdad. ¡Y brilla!» · «Las llamamos criaturas. Las cuidaremos juntos.» | the glowing dish with real catalog creatures swimming, light rays; you and VELA amazed |
-| 6 | `sow` (how to 1/4) | «Toca la placa para sembrar una semilla de vida.» · «Algunas se apagan. ¡No pasa nada! Prueba otra vez.» | a finger taps: one seed becomes a creature (✓), another fades in a grey puff |
-| 7 | `essence` (2/4) | «Si se queda con forma, ¡es una criatura!» · «Las criaturas te dan Esencia. Las manchas sin forma, no.» | drops rise from the creature into a counter; the shapeless smear shows 0 and ✕ |
-| 8 | `clock` (3/4) | «Tu tiempo de laboratorio es corto. ¡Mira el reloj!» · «Al terminar, tu Esencia se convierte en Datos.» | the lab clock drains 2:00 → 0:00, drops fly into the Datos card (+12) |
-| 9 | `tree` (4/4) | «Con Datos, haz crecer el Árbol: mejoras para todo.» · «Y abre Mundos nuevos, con otras criaturas.» | seven coloured routes light node by node; seven world dishes with their creatures pop in |
-| 10 | `go` | VELA: «Albor dejó un secreto en la placa. ¿Lo buscamos?» · Tú: «¡Vamos a sembrar!» → **¡Empezar!** | the lab: Albor's Polaroid and lantern on the wall, the dish, VELA and you waving |
+| 6 | `sow` (how to 1/4) | «Toca la placa para poner una semilla de luz.» | a finger taps: one seed becomes a creature (✓), another fades in a grey puff |
+| 7 | `essence` (2/4) | «Una criatura con forma hace luz. ¡Tócala y recógela!» | drops rise from the creature into a counter; the shapeless smear shows 0 and ✕ |
+| 8 | `clock` (3/4) | «Mira el reloj: al acabar, tu luz se hace Datos.» | the lab clock drains 2:00 → 0:00, drops fly into the Datos card (+12) |
+| 9 | `tree` (4/4) | «Con Datos, el Árbol te da mejoras y Mundos nuevos.» | seven coloured routes light node by node; seven world dishes with their creatures pop in |
+| 10 | `go` | VELA: «Siembra criaturas de luz y recoge la luz que hacen.» · «Úsala para descubrir las 7 especies de la doctora Albor.» → **¡Empezar!** *(Corrección v1.4, ADR-030: the game in one sentence, docs/CLARIDAD2.md §1.1)* | the lab: Albor's Polaroid and lantern on the wall, the dish, VELA and you waving |
 
 Rules (tested in `src/story/introScript.test.ts` and `tests/e2e/intro-shots.mjs`): every line ≤ 12 words, es + en,
 ≤ 2 lines per panel, 30–45 s in total; each panel has **Siguiente** (primary, ≥ 52 px) and **Saltar intro**; tapping

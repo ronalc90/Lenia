@@ -28,6 +28,7 @@
 > | [ADR-026](../DECISIONS.md#adr-026-lab-sessions-with-a-clock-a-research-tree-of-7-straight-routes-and-worlds) | **(v1.3)** Se juega en **sesiones de laboratorio** con reloj (0:15 → 2:30); la Esencia de cada sesión se vuelve **Datos** (÷ 25 + descubrimientos) que compran un **Árbol** de 7 rutas rectas; las reglas de la vida son 7 **Mundos**; la **noche** avanza gratis. Se retiran Calibrar, Muestras, Genoma, Extinción y el progreso offline. Detalle en [`CICLO.md`](CICLO.md) y [`RITMO.md`](RITMO.md). | §2, §4, §5, §6, §8, §10, §11, §12, §23 |
 > | [ADR-027](../DECISIONS.md#adr-027-time-lapse-in-the-session-runs-and-incubation-under-the-start-card) | **(v1.3)** Cámara rápida en las sesiones (×1,5 pasos por segundo) e incubación de la criatura inicial bajo la tarjeta de inicio; el reloj de la sesión cuenta tiempo de placa. | §4, §6, §17 |
 > | [ADR-029](../DECISIONS.md#adr-029-realismo-científico-vela-the-mc-7-instrument-documentary-doctors-archive-photographs) | **(v1.4)** **Realismo científico**: VELA es el monitor de cultivo MC-7, los doctores van en encuadre documental sin caras, se permiten fotografías de archivo humanas en planos fijos y el arte se dibuja con el método vectorial de 8 capas. Detalle en [`ARTE-REALISTA.md`](ARTE-REALISTA.md). | §14 |
+> | [ADR-030](../DECISIONS.md#adr-030-collected-light-a-clock-that-waits-for-the-player-and-explained-accidents-clarity-pass-2) | **(v1.4)** **Claridad**: la Esencia se llama **Luz** en pantalla y el Abono **Nutrientes**; la luz se **recoge** tocando las gotas (o con las **pipetas** de la ruta nueva **↓ Recoger**) y nada se pierde; el **reloj espera** mientras VELA habla o hay una hoja abierta; la sesión 1 empieza vacía y el primer toque planta la primera criatura; las muertes y fusiones avisan antes y dicen su causa. Detalle en [`CLARIDAD2.md`](CLARIDAD2.md). | §1, §2, §3, §5, §6, §7, §8, §9, §13, §20, §23.5 |
 
 ## Índice
 
@@ -60,6 +61,8 @@
 ## 1. Visión, pilares y público
 
 Bioluma (nombre de trabajo) es un juego incremental donde la vida artificial de una placa de Lenia produce el recurso, y el jugador progresa descubriendo y estabilizando criaturas, no tocando más rápido. En una frase: **siembra materia, descubre especies, provoca una extinción y vuelve con mejores genes.**
+
+> **(Corrección v1.4, [ADR-030](../DECISIONS.md#adr-030-collected-light-a-clock-that-waits-for-the-player-and-explained-accidents-clarity-pass-2))** La frase vigente, para una niña de 9 años: **«Siembra criaturas de luz, recoge la luz que hacen y úsala para descubrir las 7 especies de la doctora Albor.»** La meta visible es la colección («3/7»). El pilar 4 («un pulgar basta… sin precisión fina») se cumple con un toque de 64 px sobre cada gota y con el barrido; el pilar 5 («idle honesto») lo cumplen las pipetas, que recogen por ti pero más despacio que tu dedo.
 
 > **Principio rector añadido en v1.1.** El dueño del proyecto lo resume así: *"es un juego, tiene que ser un incremental DIVERTIDO; no tiene que ser 100 % químicamente exacto"*. Cuando la fidelidad científica y la diversión choquen, gana la diversión: feedback claro y jugoso, y progresión legible, antes que pureza. Ver [§23](#23-capa-de-diversión-añadida-en-v11).
 
@@ -96,6 +99,8 @@ Hipótesis a validar con jugadores reales.
 
 > **(Corrección v1.3, ADR-026)** El glosario vigente es el de [`CLARIDAD.md`](CLARIDAD.md): **Sesión**, **Datos**, **Árbol**, **Mundo**, **Noche** (antes «Era»), **Nevera**, **Abono**, **Encargo**. **Muestras**, **Genoma**, **Calibración**, **Régimen** y **Extinción** se retiraron; la **Placa** es redonda y crece (ADR-025). La tabla de abajo es la de la v1.1.
 
+> **(Corrección v1.4, [ADR-030](../DECISIONS.md#adr-030-collected-light-a-clock-that-waits-for-the-player-and-explained-accidents-clarity-pass-2))** **Luz** (*glow*; antes «Esencia», solo en pantalla: el código y el guardado siguen diciendo `essence`): la moneda de la sesión. **Gota de luz**: lo que llena cada criatura estable con su producción; se recoge con un toque. **Pipeta**: instrumento del borde de la placa que recoge gotas por ti (ruta ↓ Recoger). **Nutrientes** (*nutrients*; antes «Abono»): la mejora de producción que se compra durante la sesión.
+
 Los términos de abajo se usan igual en el juego, en el código y en este documento; el código los nombra en inglés entre paréntesis.
 
 | Término | Qué es |
@@ -128,6 +133,8 @@ Los términos de abajo se usan igual en el juego, en el código y en este docume
 Eres una científica o científico con una sola placa de Petri y una regla que no entiendes del todo: a veces, al sembrar materia, algo se mueve. La narrativa existe para dar sentido a las mecánicas, nunca para interrumpirlas: nada de cinemáticas ni diálogos, solo la Bitácora.
 
 > **(Corrección v1.2, ADR-022)** El dueño pidió un tutorial animado con historia, personajes y varios finales. Se añade una capa de historia ([`docs/STORY.md`](STORY.md)): escenas cortas de diálogo con VELA y otros personajes (líneas de ≤ 12 palabras en el tutorial, ≤ 20 en el resto, siempre saltables), el tutorial contado como historia (reemplaza al tutorial de marcas), dos opciones en momentos clave y cinemáticas de final que nunca detienen el juego ("Continuar el experimento"). El juego no se pausa por la historia, las decisiones no tocan la economía, se respeta "reducir movimiento" y toda la historia se puede apagar. La Bitácora sigue siendo el hilo principal y recibe también las entradas de la historia.
+
+> **(Corrección v1.4, [ADR-030](../DECISIONS.md#adr-030-collected-light-a-clock-that-waits-for-the-player-and-explained-accidents-clarity-pass-2))** «El juego no se pausa por la historia» se corrige en el ciclo de sesiones: **el reloj y la placa se paran mientras VELA habla** y mientras hay una hoja o tarjeta abierta (Bestiario, Bitácora, Ajustes, «?», precio, ficha); el reloj dice «⏸ en pausa» y una sesión nunca termina detrás de una hoja. Con la sesión en marcha VELA solo habla en el tutorial de la sesión 1 y con el primer Destello.
 
 **Tono.** Curiosidad serena, ligeramente melancólica. El humor es seco y escaso. Se habla de las criaturas con respeto y nombres en latín inventado (Orbium, Gyrorbium), como en el catálogo real de Lenia. Nunca se antropomorfiza más allá de un "parece que busca algo".
 
@@ -254,8 +261,11 @@ P = M_global · Σ_{i ∈ estables}  ( Σ_{c ∈ i} ‖∇A_c‖ / C_Orbium ) ·
 - **(Corrección v1.1, ADR-008) Rendimientos decrecientes por especie repetida.** La criatura número *k* (k = 0, 1, 2, …) de la **misma especie** presente en la placa rinde `×0.85^k`: la primera paga completa, la segunda ×0.85, la tercera ×0.72, etc. Llenar la placa de clones del mismo bicho deja de ser la estrategia óptima y mezclar especies se vuelve rentable.
 - `M_global` agrupa mejoras globales y Genoma. Arranca en 1.
 - Una placa con sopa uniforme tiene gradiente ≈ 0 y, además, el detector la marca como "explotó" (por masa/relleno, ya no por borde): doble seguro para el pilar 2.
+- **(Corrección v1.4, [ADR-030](../DECISIONS.md#adr-030-collected-light-a-clock-that-waits-for-the-player-and-explained-accidents-clarity-pass-2))** La producción (la fórmula de arriba, sin cambios) **llena la gota de luz** de cada criatura estable, hasta un tope de `LIGHT_CAP_SECONDS` = 4 s de su producción (6, 8 o 10 s con Gotas grandes). Una gota llena **espera**: nada se resta. La luz entra en la cartera **al recogerla** (toque, barrido, pipeta o la recogida final de VELA al «¡Tiempo!»); la gota de una criatura que se apaga se queda en la placa. Los Datos cuentan la **luz hecha**, no la guardada. Sin criaturas estables no hay gotas: la sopa uniforme sigue dando 0.
 
 ### Esencia: gasto
+
+> **(Corrección v1.4, [ADR-030](../DECISIONS.md#adr-030-collected-light-a-clock-that-waits-for-the-player-and-explained-accidents-clarity-pass-2))** En las sesiones **un solo precio**: «Una semilla cuesta 4 de luz. Siempre.» (`SEED_PRICE_STEP` = 1; «Semillas baratas» del Árbol lo rebaja). Las criaturas vivas nunca suben el precio: la fórmula de abajo (`n_vivas`) es del ciclo clásico retirado.
 
 Sembrar cuesta según el tamaño de la semilla, en relación al radio R del kernel:
 
@@ -306,6 +316,8 @@ Hasta 999 999 con separador de miles; después sufijos K, M, B, T, Qa, Qi; despu
 
 > **(Corrección v1.3, ADR-026, ADR-027)** El loop continuo de abajo (sembrar, comprar en el Laboratorio, calibrar, extinguir) se sustituyó por: **tarjeta de inicio** (Mundo, criatura de la Nevera incubada) → **sesión con reloj** (el reloj empieza con la primera gota; sembrar y mirar, Abono, Destello) → **resumen** (Esencia → Datos) → **Árbol** → siguiente sesión, y cada pocas sesiones una **noche** nueva de la historia. La primera sesión dura 15 s. Ver [`CICLO.md`](CICLO.md) §2–3 y [`RITMO.md`](RITMO.md).
 
+> **(Corrección v1.4, [ADR-030](../DECISIONS.md#adr-030-collected-light-a-clock-that-waits-for-the-player-and-explained-accidents-clarity-pass-2))** El bucle sesión a sesión es el de [`CLARIDAD2.md`](CLARIDAD2.md) §1.3: sembrar, **recoger la luz** que hacen las criaturas, Nutrientes y Destello; las pipetas recogen cada vez más. En la **primera sesión** la placa empieza **vacía**: el primer toque del jugador planta su primera criatura (nace segura e incuba a oscuras) y **el reloj arranca cuando VELA termina** su frase («Tu reloj empieza ahora»); la lección de recoger va con el reloj en pausa.
+
 El juego tiene tres loops anidados: el de segundos (sembrar y mirar), el de minutos (comprar y calibrar) y el de días (descubrir y extinguir). Los tres desembocan en la misma acción, sembrar, que es la única que no se puede automatizar del todo.
 
 ```mermaid
@@ -331,6 +343,8 @@ flowchart LR
 
 ### Primera sesión, minuto a minuto
 
+> **(Corrección v1.4, [ADR-030](../DECISIONS.md#adr-030-collected-light-a-clock-that-waits-for-the-player-and-explained-accidents-clarity-pass-2))** La tabla de abajo es la del ciclo clásico. La sesión 1 vigente: placa vacía → «Toca la placa para poner una semilla de luz» → el toque planta la criatura → «Está naciendo…» → «¡Vive! Es tu primera criatura.» → «Tu reloj empieza ahora» → primera gota madura: «¡Hizo luz! Tócala para recogerla.» → 15 s de juego → «¡Tiempo!» y VELA recoge lo que quedó ([`CLARIDAD2.md`](CLARIDAD2.md) §2.4).
+
 El objetivo es que nadie necesite leer nada: el primer Orbium debe aparecer antes del minuto 3 con la calibración inicial fija en μ = 0.15, σ = 0.015.
 
 | Minuto | Qué pasa | Qué aprende el jugador |
@@ -354,12 +368,14 @@ Si un jugador llega al minuto 3 sin criatura estable, el Gotero sube solo el ses
 
 Todo se controla con un pulgar sobre la placa y un panel inferior; no hay gestos ocultos ni combinaciones. Cada gesto tiene una sola función y se enseña la primera vez que está disponible, con una animación de 2 s sobre la placa.
 
+> **(Corrección v1.4, [ADR-030](../DECISIONS.md#adr-030-collected-light-a-clock-that-waits-for-the-player-and-explained-accidents-clarity-pass-2))** Gestos nuevos en las sesiones: **toque en una gota o en una criatura con luz → recoge** (nunca siembra; radio de 32 px a cualquier zoom); **arrastre que empieza en un hueco vacío → barrido** (recoge las gotas del camino); **mantener 400 ms sobre una criatura → su ficha** (sustituye a «Toque sobre criatura»); **arrastrar desde una nadadora → guiarla** (gira con el mismo giro rígido del desviador del cristal, nunca hacia el cristal). El toque en un hueco vacío sigue sembrando.
+
 | Gesto | Dónde | Acción | Desde cuándo |
 |---|---|---|---|
 | Toque corto | Placa | Siembra con la semilla actual del Gotero en ese punto (cuesta Esencia). | Inicio |
 | Toque largo (400 ms) | Placa | Siembra grande: radio ×1.5, costo ×2.25. Vibración leve al activarse. | Gotero II |
 | Arrastre | Placa | Pincel: deposita materia a lo largo del trazo, costo por longitud. | Gotero III |
-| Toque sobre criatura | Placa | Abre su ficha flotante: especie, comportamiento, Esencia/s, edad. No la mueve. | Inicio |
+| Toque sobre criatura | Placa | Abre su ficha flotante: especie, comportamiento, Esencia/s, edad. No la mueve. **(Corrección v1.4, ADR-030: hoy es «mantener»; el toque recoge su luz.)** | Inicio |
 | Dos dedos: pellizco | Placa | Zoom ×1 a ×3 y paneo; la simulación no cambia. | Inicio |
 | Botón Borrar + toque | Barra de herramientas | Borra un disco de materia (gratis, radio fijo). | Inicio |
 | Botón Pausa | Barra de herramientas | Congela la simulación; la producción también se detiene. | Inicio |
@@ -384,6 +400,8 @@ Todo se controla con un pulgar sobre la placa y un panel inferior; no hay gestos
 ## 8. Catálogo de mejoras
 
 > **(Corrección v1.3, ADR-026)** El Laboratorio y el Bestiario de mejoras se sustituyeron por el **Árbol de investigación**: 7 rutas rectas (Reloj, Gotero, Placa, Vida, Descubrimiento, Mundos, Destello) que se pagan con Datos; cada nivel enseña «antes → después» y su precio sigue una sola regla. Lista y cifras en [`CICLO.md`](CICLO.md) §6 y `src/game/tree.ts`. Las tablas siguientes quedan como historia del diseño.
+
+> **(Corrección v1.4, [ADR-030](../DECISIONS.md#adr-030-collected-light-a-clock-that-waits-for-the-player-and-explained-accidents-clarity-pass-2))** El Árbol tiene **8 rutas**: la octava, **↓ Recoger**, cierra la estrella en la dirección que estaba libre, con 6 nodos (Pipeta 1 → 3, Pipetas rápidas, Gotas grandes, Más pipetas → 8, Pipetas con imán, Pipeta maestra). Lista en [`CLARIDAD2.md`](CLARIDAD2.md) §2.2.4 y `src/game/tree.ts`.
 
 Las mejoras se compran con Esencia en la pestaña Laboratorio y con Muestras en el Bestiario; ninguna se compra con dinero real. Toda mejora se desbloquea por un hito de juego, no por tiempo, y la lista completa es visible desde el inicio con las no desbloqueadas en gris y su condición escrita.
 
@@ -433,6 +451,8 @@ Cada 10 pasos de simulación un pase de reducción en GPU devuelve, para toda la
 **(Corrección v1.2, ADR-025)** La placa es redonda y no se envuelve: centroides, desplazamientos y distancias son **rectos**, dentro del disco. El pase sigue sin penalizar el cristal (el desviador aparta a las nadadoras y el detector no lee esos giros como «girar»). *(v1.1, superado: «la placa es un toro… distancias sobre el toro».)*
 
 ### Estados de una criatura
+
+> **(Corrección v1.4, [ADR-030](../DECISIONS.md#adr-030-collected-light-a-clock-that-waits-for-the-player-and-explained-accidents-clarity-pass-2))** Cada accidente se explica con su causa: un **aviso previo** («¡Cuidado! Se van a tocar», con un enlace rojo) antes de que dos criaturas choquen; la **fusión** y la **placa desbordada** abren su tarjeta con pausa la primera vez de la partida y después una etiqueta breve en el sitio; una semilla que se **apaga** dice por qué («muy pegada al cristal», «muy cerca de otra», «no prendió») y se funde en gris.
 
 El orden importa: se evalúa de arriba hacia abajo y el primer estado que aplica gana.
 
@@ -611,6 +631,8 @@ La simulación no corre cuando la app está cerrada; el juego extrapola la produ
 ## 13. UI/UX, pantallas y accesibilidad
 
 > **(Corrección v1.3, ADR-026)** Ya no hay pestañas de Laboratorio, Calibrar ni Genoma: la pantalla es la placa con su reloj, la barra de semilla y el muelle (Bestiario, Árbol); entre sesiones, la tarjeta de resumen, el Árbol y la tarjeta de inicio. Los objetivos táctiles miden 48 × 48 px como mínimo (RF-06).
+
+> **(Corrección v1.4, [ADR-030](../DECISIONS.md#adr-030-collected-light-a-clock-that-waits-for-the-player-and-explained-accidents-clarity-pass-2))** **Elementos flotantes** nuevos: las gotas de luz pegadas a cada criatura, las pipetas en el borde de la placa y el enlace rojo del aviso de choque. **Pausa automática con hojas**: con el Bestiario, la Bitácora, Ajustes, una ficha o un «?» abiertos, el reloj espera. **Presupuesto de interrupciones**: desde la sesión 2, como mucho **una** tarjeta con pausa por partida, solo para un accidente visto por primera vez y nunca en los primeros 5 s; lo demás va a una etiqueta breve y a las **láminas** del informe ([`CLARIDAD2.md`](CLARIDAD2.md) §2.8).
 
 Una sola pantalla: la placa ocupa la mitad superior y un panel con cuatro pestañas la inferior; no hay menús anidados ni pantallas de carga. Todo lo que el jugador necesita ver mientras juega cabe en un vistazo.
 
@@ -862,6 +884,8 @@ La primera versión es gratis, **sin anuncios y sin compras**: eso es lo que per
 
 > **(Corrección v1.3, ADR-026)** El bot vigente es el de sesiones (`scripts/session-bot.ts`, motor `scripts/sessionBotCore.ts`), con la regla DURA de que la mediana nunca gana menos Esencia que en la sesión anterior; las cifras de equilibrio viven en `src/game/cycleBalance.ts`.
 
+> **(Corrección v1.4, [ADR-030](../DECISIONS.md#adr-030-collected-light-a-clock-that-waits-for-the-player-and-explained-accidents-clarity-pass-2))** El bot modela las gotas y las pipetas y añade la política **`idle`** (no toca nunca una gota: solo recogen sus pipetas y la recogida final). Las puertas de la recogida están en [`CLARIDAD2.md`](CLARIDAD2.md) §3.3 (regla dura sin bajones en el planner, producción perdida por gotas llenas ≤ 10 % en S1–S5, el idle nunca bajo `DATOS_MIN`) y el informe B0–B4, en [`RITMO.md`](RITMO.md) §9.
+
 Todos los números del juego viven en un solo archivo (`src/game/balance.ts`, antes `src/balance.ts`) con comentario de origen por valor, y un bot juega el juego acelerado cada noche para verificar que la curva de la §11 se cumple. Ningún número se cambia a mano sin una corrida del bot antes y después.
 
 **El bot de progresión.** Corre la simulación en CPU a 64 × 64 (misma regla, misma economía, misma rareza empírica medida antes; **128 × 128 si intervienen especies de R = 18, Corrección v1.1, ADR-011**) a 50 veces la velocidad real, con tres políticas: `greedy` (compra siempre lo más barato), `explorer` (prioriza Calibrador y mueve μ cada 2 min), `idle` (siembra lo mínimo, deja el Sembrador). Registra Esencia/s, especies, compras y Eras por minuto simulado durante 8 horas de juego y escribe `reports/balance/YYYY-MM-DD.json` con gráficos.
@@ -1031,3 +1055,12 @@ Cada acción debe sentirse física y legible:
 - **Vibración** leve en móviles para destructivas y logros (apagable en ajustes).
 
 **Límites.** Las partículas y números son decoración *alrededor* de las criaturas, nunca las sustituyen (pilar 1). **Reducir movimiento** apaga estelas, partículas, zoom automático y la animación de los números flotantes (el valor sigue mostrándose). Toda recompensa de esta capa respeta las compuertas del Balanceador: se mide en el bot y en `golden_collected` / `objective_done` (§18).
+
+### 23.5 Recoger la luz **(Corrección v1.4, [ADR-030](../DECISIONS.md#adr-030-collected-light-a-clock-that-waits-for-the-player-and-explained-accidents-clarity-pass-2))**
+
+- Cada criatura **estable** llena **una gota de luz** con su producción, pegada a ella y con su color. Al 75 % está madura («¡Lista!» la primera vez); llena, espera: nada se pierde.
+- **Tocarla** (o pasar el dedo por encima) la recoge entera aunque no esté llena: *pop* y «+N LUZ» vuela al contador. Tocar pronto nunca es peor.
+- La gota de una criatura que se apaga se queda en la placa, suelta; al «¡Tiempo!» VELA recoge todas las que queden («Recogida final» en el informe), y al cargar una partida a medias también.
+- Las **pipetas** (ruta ↓ Recoger) van a la gota más madura (≥ 50 %), la sorben y vuelven; si el jugador toca antes la gota, la pipeta elige otra. Son instrumentos, no seres vivos (pilar 1).
+- Accesibilidad: «Recoger la luz sola» equivale a una pipeta de nivel 1 gratis desde la sesión 1.
+- *Hard gates* (ADR-030): ninguna gota se llena en una criatura que no es estable; la luz hecha nunca se pierde.

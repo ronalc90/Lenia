@@ -5,7 +5,7 @@
  * Layers, bottom to top: the steel lab bench in the polar night (frost in the corners), the dish's
  * soft shadow and the cool light it throws on the bench, the agar (bluer at the centre, a lit
  * meniscus at the wall), the creatures (real patterns through MATTER_ART + family tints), the glass
- * wall (frost-white rim, thicker at the bottom), frost crystals on the glass, a warm candle
+ * wall (frost-white rim, thicker at the bottom), frost crystals on the glass, a warm pilot-lamp
  * reflection (VELA is nearby), and the growth ring (dashed, the next dish size).
  */
 import { MATTER_ART, tintedStops, type Stop } from './matter';
@@ -136,7 +136,7 @@ export function drawDishReference(ctx: CanvasRenderingContext2D, w: number, h: n
   ctx.restore();
 
   // 5. Glass: two walls with clear glass between them (thickness), a lid sheen across the agar,
-  //    frost-white highlights top-left (room light) and a warm glint top-right (VELA's candle).
+  //    frost-white highlights top-left (room light) and a warm glint top-right (VELA's pilot lamp).
   ctx.save();
   ctx.fillStyle = 'rgba(200,232,255,0.07)';
   ctx.beginPath();

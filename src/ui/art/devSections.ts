@@ -511,7 +511,7 @@ function dishSection(ctx: DevCtx): HTMLElement {
     es ? 'Placa' : 'Dish',
     es
       ? 'Referencia para el shader: mesa de acero en la noche polar, agar azulado, borde de vidrio blanco escarcha (el cian es de la vida), escarcha, reflejo cálido de la vela y anillo de crecimiento.'
-      : 'Shader reference: steel bench in the polar night, bluish agar, frost-white glass rim (cyan belongs to life), frost, the candle’s warm glint and the growth ring.',
+      : 'Shader reference: steel bench in the polar night, bluish agar, frost-white glass rim (cyan belongs to life), frost, the warm glint of VELA’s pilot lamp and the growth ring.',
   );
   const wrap = el('<div class="ad-dishwrap"></div>');
   const cv = document.createElement('canvas');
