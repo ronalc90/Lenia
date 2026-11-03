@@ -57,7 +57,7 @@ import { attachSecretInputs, createSecretsUI, createStrokeRecorder, mountBasemen
 import { createSessionFlow, createWelcomeCard, datosExplain, type SessionFlow, type SessionFlowSound } from './ui/session';
 import { computeDatos } from './game/session';
 import { PREINCUBATE_STEPS, SESSION_PACE_RAMP_S, SIM_STEPS_PER_SEC } from './game/cycleBalance';
-import { CultureReveal, REVEAL } from './sim/reveal';
+import { CultureReveal, REVEAL, type RevealContext } from './sim/reveal';
 import { IncubationPacer, type IncubationIO } from './sim/incubate';
 import { dishFx, PULSE } from './ui/fx/stage';
 import { FLY, FlyLayer } from './ui/fx/fly';
@@ -205,8 +205,17 @@ function boot(): void {
   const gridH = dishQ.grid;
   // Placa levels past this device's largest dish give no room (and cost nothing): RF-04.
   game.setDeviceDish(dishQ.maxDiameter);
-  /** The dish the tree has bought (TreeEffects.dishLevel → Ø96…224, capped by quality). */
-  const boughtDish = (): DishShape => dishForGrid(gridW, gridH, dishDiameterFor(game.effects?.dishLevel ?? 0, dishQ.maxDiameter));
+  /** The dish the tree has bought (TreeEffects.dishLevel → Ø96…224, capped by quality); asked every frame, built once per level. */
+  let boughtLevel = NaN;
+  let boughtShape: DishShape | null = null;
+  const boughtDish = (): DishShape => {
+    const lv = game.effects?.dishLevel ?? 0;
+    if (lv !== boughtLevel || !boughtShape) {
+      boughtLevel = lv;
+      boughtShape = dishForGrid(gridW, gridH, dishDiameterFor(lv, dishQ.maxDiameter));
+    }
+    return boughtShape;
+  };
   /** Rim, camera fit and growth glow, animated when a bigger dish is bought (each session starts at that size). */
   const dishAnim = new DishAnimator(boughtDish());
   /** The screen pass runs per device pixel; cap the ratio to keep phones cool. */
@@ -1114,6 +1123,11 @@ function boot(): void {
    * alive when the run starts, and nobody watched them race. Never ahead of the detector.
    */
   if (!dishRestored && game.session?.phase === 'ready') culture.incubate(PREINCUBATE_STEPS);
+  // What frame() hands on every frame: one object each, filled in place (nothing allocated per frame).
+  const revealCtx: RevealContext = { ready: false, momentPaused: false, hidden: false, stepping: false };
+  const dishFxArg = { grow: 0 };
+  const clockArg = { stepped: 0, speed: 1, wallDt: 0, paused: false };
+  const renderArg: Parameters<NonNullable<typeof sim>['render']>[0] = { camera, time: 0, quality: fxQuality };
   /**
    * Pacing of the unlit incubation's synchronous reads (src/sim/incubate.ts). Lockstep e2e builds keep
    * one whole boundary a frame (a software-rendered test browser would otherwise incubate for minutes).
@@ -1164,16 +1178,20 @@ function boot(): void {
   let momentCardShown = false;
   let kernelWantSince = 0;
   let kernelWantKey = '';
-  /** Push calibration to the GPU: growth params at once, kernel changes debounced. */
+  const sameRings = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+  /** Push calibration to the GPU: growth params at once, kernel changes debounced. Runs every frame: builds nothing unless something changed. */
   function syncParams(now: number): void {
     const want = game.simParams;
     const have = sim!.params;
+    const growth = want.mu !== have.mu || want.sigma !== have.sigma || want.dt !== have.dt;
+    const kernel = want.R !== have.R || !sameRings(want.rings, have.rings);
+    if (!growth && !kernel) return;
     const patch: Partial<LeniaParams> = {};
     if (want.mu !== have.mu) patch.mu = want.mu;
     if (want.sigma !== have.sigma) patch.sigma = want.sigma;
     if (want.dt !== have.dt) patch.dt = want.dt;
-    const kernelKey = `${want.R}|${want.rings.join(',')}`;
-    if (kernelKey !== `${have.R}|${have.rings.join(',')}`) {
+    if (kernel) {
+      const kernelKey = `${want.R}|${want.rings.join(',')}`;
       if (kernelKey !== kernelWantKey) {
         kernelWantKey = kernelKey;
         kernelWantSince = now;
@@ -1417,7 +1435,8 @@ function boot(): void {
     const want = boughtDish();
     if (want.radius !== dishAnim.target.radius && !flowBusy()) dishAnim.setTarget(want, !game.view().settings.reduceMotion);
     if (dishAnim.update(dt)) applyDish();
-    s.setDishFx({ grow: dishAnim.glow });
+    dishFxArg.grow = dishAnim.glow;
+    s.setDishFx(dishFxArg);
     pushTints();
     // A Momento eases the dish to a stop (1 → 0 in ~0.45 s) and back; at 0 it holds setPause('moment').
     const ts = momentsUI.timeScale();
@@ -1426,12 +1445,11 @@ function boot(): void {
     // still sees every 10th step it can (one readback in flight), and the game ticks with dt 0 (nothing
     // is paid while the run waits). Then the culture is lit and the pace climbs from rest.
     if (s.contextLost) culture.cancel();
-    const rv = culture.frame(dt, {
-      ready: game.session?.phase === 'ready',
-      momentPaused: pauseSources.has('moment'),
-      hidden: document.hidden,
-      stepping: !isPaused() && !document.hidden,
-    });
+    revealCtx.ready = game.session?.phase === 'ready';
+    revealCtx.momentPaused = pauseSources.has('moment');
+    revealCtx.hidden = document.hidden;
+    revealCtx.stepping = !isPaused() && !document.hidden;
+    const rv = culture.frame(dt, revealCtx);
     // Unlit, the detector reads each 10th step synchronously (nothing on screen waits for it), paced so
     // a read never waits for steps queued in the same frame (src/sim/incubate.ts); an asynchronous read
     // still in flight is waited for, so reports never arrive out of order.
@@ -1457,7 +1475,11 @@ function boot(): void {
     for (let i = 0; i < n - 1; i++) game.tick(0, reports[i]);
     // Game time is DISH time (QA4 F-02): the steps the dish really ran this frame, so a slow phone gets a
     // slower clock instead of a starved dish (a 15 s run is always 15 s of dish life).
-    const gameDt = dishSeconds({ stepped, speed: game.speed, wallDt: dt * ts * debugTime.scale, paused: isPaused() });
+    clockArg.stepped = stepped;
+    clockArg.speed = game.speed;
+    clockArg.wallDt = dt * ts * debugTime.scale;
+    clockArg.paused = isPaused();
+    const gameDt = dishSeconds(clockArg);
     game.tick(gameDt, n ? reports[n - 1] : null);
     noteDishPace(gameDt, dt * ts * debugTime.scale);
     reports.length = 0;
@@ -1474,7 +1496,9 @@ function boot(): void {
       lastDraw = now;
       const uiDt = Math.min(0.25, (now - lastUiFrame) / 1000);
       dishEffects(s, uiDt * debugTime.fx, now);
-      s.render({ camera, time: (now - start) / 1000, quality: fxQuality });
+      renderArg.time = (now - start) / 1000;
+      renderArg.quality = fxQuality;
+      s.render(renderArg);
       ui.frame(debugTime.fx === 1 ? (now - start) / 1000 : dishFx.time, uiDt * debugTime.fx);
       lastUiFrame = now;
       fly.frame(now);
