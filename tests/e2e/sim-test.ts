@@ -914,12 +914,204 @@ function dishVisual(quality: Quality = 'medium', cssW = 300, cssH = 375) {
   return out;
 }
 
+// ───────────────────────────── Dish life effects (docs/ARTE-PULIDO.md §4) ─────────────────────────────
+
+/** Backing-store pixels of a canvas right after a render (row 0 = top). */
+function readCanvas(c: HTMLCanvasElement): Uint8Array {
+  const gl = c.getContext('webgl2')!;
+  const W = c.width;
+  const H = c.height;
+  const raw = new Uint8Array(W * H * 4);
+  gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, raw);
+  const out = new Uint8Array(W * H * 4);
+  for (let y = 0; y < H; y++) out.set(raw.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4);
+  return out;
+}
+
+/**
+ * A-1, A-2, A-3, A-6 acceptance on the GPU path, phone canvas (390×844 CSS, DPR of the page):
+ *  - halo: added light at 0.6 R outside the contour vs at the contour (bloom on − off), 8 directions;
+ *  - highlights: share of a dense forming blob's pixels with all channels ≥ 250 (≤ 15 %);
+ *  - matter fade 0: the dish with creatures draws like the empty dish (≤ 4/255);
+ *  - a sowing pulse lights the agar; time's up greys the dish;
+ *  - bloom cost per rebuilt frame (SwiftShader ms, for the ratio).
+ */
+function fxChecks(quality: Quality = 'low', cssW = 390, cssH = 844) {
+  const N = QUALITY_DISH.low.grid;
+  const P = species('O2u');
+  const d = dishForGrid(N, N, 128);
+  const make = () => {
+    const c = makeCanvas(cssW, cssH);
+    const sim = createSimulation(c, { gridW: N, gridH: N, params: P });
+    sim.setMatterLUT(lutFromStops(MATTER_ART.night));
+    sim.setRenderStyle(ART_RENDER_STYLE as unknown as SimRenderStyle);
+    sim.setDish(d);
+    sim.setGrain(0);
+    return { c, sim };
+  };
+  const cam = new Camera(N, N, cssW, cssH);
+  cam.setDish(d);
+  const view = { camera: cam, time: 1, quality };
+  const dpr = window.devicePixelRatio || 1;
+  const lum = (px: Uint8Array, W: number, x: number, y: number) => {
+    const k = (Math.round(y) * W + Math.round(x)) * 4;
+    return 0.2126 * px[k] + 0.7152 * px[k + 1] + 0.0722 * px[k + 2];
+  };
+
+  // Empty dish (baseline) and the same dish with an Orbium.
+  const empty = make();
+  empty.sim.render(view);
+  const base = readCanvas(empty.c);
+  const W = empty.c.width;
+  const H = empty.c.height;
+  const { c, sim } = make();
+  sim.seed({ x: N / 2, y: N / 2 - 10, radius: 26, density: 1, noise: 0, shape: 'pattern', pattern: catalogPattern('O2u'), rotation: 0.4 });
+  sim.advance(60);
+  const A = sim.readState();
+  const cc = centroidPlain(A, N, N);
+  // Matter fade 0: nothing of the culture is drawn.
+  sim.setMatterFade(0);
+  sim.render(view);
+  const hidden = readCanvas(c);
+  let fadeDiff = 0;
+  for (let i = 0; i < hidden.length; i += 4) {
+    for (let k = 0; k < 3; k++) fadeDiff = Math.max(fadeDiff, Math.abs(hidden[i + k] - base[i + k]));
+  }
+  sim.setMatterFade(1);
+  // Halo: bloom on − off along 8 rays from the centroid.
+  sim.setBloomEnabled(false);
+  sim.render(view);
+  const off = readCanvas(c);
+  sim.setBloomEnabled(true);
+  sim.render(view);
+  const on = readCanvas(c);
+  const ratios: number[] = [];
+  const outs: number[] = [];
+  const at = (x: number, y: number) => A[Math.floor(y) * N + Math.floor(x)] ?? 0;
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2;
+    const ux = Math.cos(a);
+    const uy = Math.sin(a);
+    let r = 0;
+    while (r < 40 && at(cc.x + ux * r, cc.y + uy * r) >= 0.13) r += 0.25;
+    while (r < 40 && at(cc.x + ux * (r + 0.25), cc.y + uy * (r + 0.25)) >= 0.13) r += 0.25;
+    const pb = cam.gridToScreen(cc.x + ux * r, cc.y + uy * r);
+    const po = cam.gridToScreen(cc.x + ux * (r + 0.6 * P.R), cc.y + uy * (r + 0.6 * P.R));
+    const addB = lum(on, W, pb.x * dpr, pb.y * dpr) - lum(off, W, pb.x * dpr, pb.y * dpr);
+    const addO = lum(on, W, po.x * dpr, po.y * dpr) - lum(off, W, po.x * dpr, po.y * dpr);
+    outs.push(addO);
+    if (addB > 0.5) ratios.push(addO / addB);
+  }
+  ratios.sort((x, y) => x - y);
+  outs.sort((x, y) => x - y);
+  // Bloom cost: frames that rebuild the field and the chain, bloom on vs off.
+  const time = (onB: boolean, frames: number) => {
+    sim.setBloomEnabled(onB);
+    sim.render(view);
+    sim.finish();
+    const t0 = performance.now();
+    for (let i = 0; i < frames; i++) {
+      sim.advance(1);
+      sim.render(view);
+    }
+    sim.finish();
+    return (performance.now() - t0) / frames;
+  };
+  const msOff = time(false, 8);
+  const msOn = time(true, 8);
+  sim.setBloomEnabled(true);
+
+  // Highlights: a dense forming blob (the "Naciendo" look).
+  const blob = make();
+  blob.sim.seed({ x: N / 2, y: N / 2, radius: 16, density: 1, noise: 0.3, shape: 'blob', rngSeed: 5 });
+  blob.sim.advance(12);
+  const B = blob.sim.readState();
+  blob.sim.render(view);
+  const bpx = readCanvas(blob.c);
+  let area = 0;
+  let burnt = 0;
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      if (B[y * N + x] < 0.13) continue;
+      const p = cam.gridToScreen(x + 0.5, y + 0.5);
+      const k = (Math.round(p.y * dpr) * W + Math.round(p.x * dpr)) * 4;
+      area++;
+      if (bpx[k] >= 250 && bpx[k + 1] >= 250 && bpx[k + 2] >= 250) burnt++;
+    }
+
+  // A sowing pulse lights the agar; time's up greys the dish.
+  const spot = { x: N / 2 + 30, y: N / 2 + 30 };
+  empty.sim.setPulses([spot.x, spot.y, 0.9, 0], [12 * 1.2, 0.12, 0.5, 0], 1, 1.0);
+  empty.sim.render(view);
+  const lit = readCanvas(empty.c);
+  const ps = cam.gridToScreen(spot.x, spot.y);
+  const sowGain = lum(lit, W, ps.x * dpr, ps.y * dpr) - lum(base, W, ps.x * dpr, ps.y * dpr);
+  empty.sim.setPulses([], [], 0, 0);
+  sim.render(view);
+  const live1 = readCanvas(c);
+  sim.setFreeze(1);
+  sim.render(view);
+  const frozen = readCanvas(c);
+  sim.setFreeze(0);
+  const pc = cam.gridToScreen(cc.x, cc.y);
+  const kc = (Math.round(pc.y * dpr) * W + Math.round(pc.x * dpr)) * 4;
+  const chroma = (px: Uint8Array) => Math.max(px[kc], px[kc + 1], px[kc + 2]) - Math.min(px[kc], px[kc + 1], px[kc + 2]);
+  const freezeChroma = chroma(frozen) / Math.max(1, chroma(live1));
+  for (const x of [empty, blob, { sim }]) x.sim.dispose();
+  return {
+    quality,
+    fadeDiff,
+    haloRatio: ratios.length ? ratios[Math.floor(ratios.length / 2)] : 0,
+    haloOut: outs[Math.floor(outs.length / 2)],
+    burntShare: area ? burnt / area : 0,
+    sowGain,
+    freezeChroma,
+    bloomMs: msOn - msOff,
+    frameMs: msOn,
+    canvas: [W, H],
+  };
+}
+
+/** One live panel per quality for a quick look at the bloom (screenshots while tuning). */
+function bloomPanels(cssW = 300, cssH = 375) {
+  const N = QUALITY_DISH.low.grid;
+  const out: string[] = [];
+  for (const quality of ['low', 'medium', 'high'] as Quality[]) {
+    for (const tinted of [false, true]) {
+      const P = species('O2u');
+      const c = makeCanvas(cssW, cssH, true, `${quality}${tinted ? ' tinted' : ''}`);
+      const sim = createSimulation(c, { gridW: N, gridH: N, params: P });
+      sim.setMatterLUT(lutFromStops(MATTER_ART.night));
+      sim.setRenderStyle(ART_RENDER_STYLE as unknown as SimRenderStyle);
+      const d = dishForGrid(N, N, 128);
+      sim.setDish(d);
+      const seeds = [
+        { x: 60, y: 66, rot: 0.3, hue: 198 },
+        { x: 110, y: 72, rot: 2.2, hue: 145 },
+        { x: 84, y: 112, rot: 4.0, hue: 330 },
+      ];
+      for (const s of seeds) sim.seed({ x: s.x, y: s.y, radius: 26, density: 1, noise: 0, shape: 'pattern', pattern: catalogPattern('O2u'), rotation: s.rot });
+      const bodies = deflectRun(sim, d, 120);
+      if (tinted) sim.setCreatureTints(bodies.map((b, i) => ({ x: b.x, y: b.y, r: Math.max(P.R, b.radius * 2), hue: seeds[i % 3].hue })));
+      const cam = new Camera(N, N, cssW, cssH);
+      cam.setDish(d);
+      const view = { camera: cam, time: 1, quality };
+      sim.render(view);
+      live.push({ sim, view });
+      out.push(c.id);
+    }
+  }
+  return out.length;
+}
+
 (window as unknown as { simTest: unknown }).simTest = {
   dishChecks,
   bounce,
   dishPerf,
   dishRenderCost,
   dishVisual,
+  fxChecks,
+  bloomPanels,
   accuracy,
   laneConsistency,
   seedChecks,

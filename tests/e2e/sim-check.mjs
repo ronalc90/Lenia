@@ -1,5 +1,5 @@
 // GPU simulation check in headless Chromium (SwiftShader).
-// Usage: node tests/e2e/sim-check.mjs [--shot <png>] [--quick] [--visual-only] [--quality low|medium|high]
+// Usage: node tests/e2e/sim-check.mjs [--shot <png>] [--quick] [--visual-only] [--fx-only] [--quality low|medium|high]
 //        [--looks palette.id:dish.id,palette.id:dish.id]  (extra screenshots <shot>-<palette>-<dish>.png)
 //
 // Starts a Vite dev server on the repo, opens tests/e2e/sim-test.html and runs:
@@ -10,6 +10,9 @@
 //  - steps/s at 192×240, R=13 and render cost
 //  - round walled dish (ADR-025): GPU vs CPU at the glass, seeds/erase without wrap, deflection
 //    turns, lysis, rim growth/shrink, a swimmer bouncing off the glass in the real GPU dish
+//  - dish life effects (docs/ARTE-PULIDO.md §4): bloom halo on every profile, no burnt highlights,
+//    an unlit culture (matter fade 0) draws like the empty dish, sowing light, time's up, bloom cost
+//    (--fx-only runs just these, plus a panel per profile: <shot>-bloom.png)
 //  - screenshot of several species after 300 steps, and of round dishes (--dish-shot <png>)
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -23,6 +26,7 @@ const args = process.argv.slice(2);
 const quick = args.includes('--quick');
 const visQuality = args.includes('--quality') ? args[args.indexOf('--quality') + 1] : 'medium';
 const visualOnly = args.includes('--visual-only');
+const fxOnly = args.includes('--fx-only');
 const looks = args.includes('--looks')
   ? args[args.indexOf('--looks') + 1].split(',').filter(Boolean).map((x) => x.split(':'))
   : [];
@@ -36,8 +40,11 @@ const shot = args.includes('--shot')
 function findChromium() {
   const base = '/opt/pw-browsers';
   for (const d of readdirSync(base).filter((d) => d.startsWith('chromium-')).sort().reverse()) {
-    const p = `${base}/${d}/chrome-linux/chrome`;
-    if (existsSync(p)) return p;
+    // Playwright's layout changed: chrome-linux/ in older builds, chrome-linux64/ in newer ones.
+    for (const sub of ['chrome-linux', 'chrome-linux64']) {
+      const p = `${base}/${d}/${sub}/chrome`;
+      if (existsSync(p)) return p;
+    }
   }
   throw new Error('chromium not found under /opt/pw-browsers');
 }
@@ -46,7 +53,8 @@ const server = await createServer({
   root,
   configFile: resolve(root, 'vite.config.ts'),
   logLevel: 'error',
-  server: { port: 5300 + Math.floor(Math.random() * 400), strictPort: false, host: '127.0.0.1' },
+  // No file watcher and no HMR: an edit elsewhere in the repo must not reload a page mid-check.
+  server: { port: 5300 + Math.floor(Math.random() * 400), strictPort: false, host: '127.0.0.1', hmr: false, watch: null },
 });
 await server.listen();
 const url = `${server.resolvedUrls.local[0]}tests/e2e/sim-test.html`;
@@ -75,7 +83,72 @@ try {
   const run = (fn, ...a) =>
     page.evaluate(([f, a]) => window.simTest[f](...a), [fn, a]);
 
+  // ── calm start in the real game (owner bug, ARTE-PULIDO A-6): the starter incubates unlit and its
+  // first visible second starts from rest ──
+  if (!visualOnly && !fxOnly) {
+    const g = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true, locale: 'es-CO' });
+    await g.addInitScript(() => localStorage.setItem('bioluma.intro', '1'));
+    const gp = await g.newPage();
+    gp.on('pageerror', (e) => consoleErrors.push(String(e)));
+    await gp.goto(`${server.resolvedUrls.local[0]}index.html`);
+    await gp.waitForFunction(() => !!window.bioluma, null, { timeout: 60000 });
+    await gp.evaluate(() => {
+      window.bioluma.moments.setMode('off');
+      window.bioluma.story.skipTutorial();
+    });
+    const sp = gp.locator('[data-testid="splash"]');
+    if (await sp.isVisible().catch(() => false)) await sp.click();
+    const samples = [];
+    const t0 = Date.now();
+    let litAt = -1;
+    while (Date.now() - t0 < 90000) {
+      const s = await gp.evaluate(() => {
+        const b = window.bioluma;
+        const c = b.game.view().creatures[0];
+        // Where its matter is at the step on screen (the deflector-corrected body the overlay anchors to).
+        const m = c ? b.dishFx.tracks.at(c.id, b.sim.stepCount) : null;
+        return { t: performance.now(), fade: b.dishFx.matterFade, phase: b.game.session?.phase ?? null, step: b.sim.stepCount, x: m?.x ?? null, y: m?.y ?? null, R: b.sim.params.R };
+      });
+      samples.push(s);
+      if (s.fade > 0 && litAt < 0) litAt = s.t;
+      if (litAt >= 0 && s.t - litAt > 1300) break;
+      await gp.waitForTimeout(60);
+    }
+    await g.close();
+    const hidden = samples.filter((s) => s.fade === 0);
+    const first = samples.find((s) => s.fade > 0 && s.x !== null);
+    const later = first ? samples.filter((s) => s.t - first.t <= 1000 && s.x !== null).pop() : null;
+    const moved = first && later ? Math.hypot(later.x - first.x, later.y - first.y) : Infinity;
+    check(
+      'calm start: the starter incubates unlit (the dish shows no matter until it is done)',
+      hidden.length > 0 && hidden.every((s) => s.phase === 'ready') && hidden[hidden.length - 1].step > hidden[0].step,
+      `${hidden.length} unlit samples, steps ${hidden[0]?.step} → ${hidden[hidden.length - 1]?.step}`,
+    );
+    check('calm start: in its first visible second the starter moves ≤ 0.5 R', moved <= 0.5 * (first?.R ?? 13), `moved ${fmt(moved, 3)} cells (R ${first?.R})`);
+  }
+
+  // ── dish life effects (ARTE-PULIDO A-1, A-2, A-3, A-6, A-12) ──
   if (!visualOnly) {
+    for (const q of fxOnly || !quick ? ['low', 'medium', 'high'] : ['low']) {
+      const fx = await run('fxChecks', q);
+      console.log(`INFO  fx ${q}: ${JSON.stringify(Object.fromEntries(Object.entries(fx).map(([k, v]) => [k, fmt(v, 3)])))}`);
+      check(`fx ${q}: bloom halo — at 0.6 R outside the contour ≥ 25 % of the contour's added light`, fx.haloRatio >= 0.25 && fx.haloOut >= 3, `ratio ${fmt(fx.haloRatio, 3)}, +${fmt(fx.haloOut, 3)}/255`);
+      check(`fx ${q}: highlights do not burn (≤ 15 % of a dense blob at ≥ 250 on every channel)`, fx.burntShare <= 0.15, `${fmt(fx.burntShare * 100, 3)} %`);
+      check(`fx ${q}: an unlit culture draws like the empty dish (≤ 4/255)`, fx.fadeDiff <= 4, `max Δ ${fx.fadeDiff}`);
+      check(`fx ${q}: a sowing pulse lights the agar, time's up greys the dish`, fx.sowGain >= 3 && fx.freezeChroma < 0.8, `sow +${fmt(fx.sowGain, 3)}, chroma ×${fmt(fx.freezeChroma, 3)}`);
+      console.log(`PERF  bloom ${q}: ${fmt(fx.bloomMs, 3)} ms of a ${fmt(fx.frameMs, 3)} ms frame (field + chain rebuilt, ${fx.canvas.join('×')}; SwiftShader: the ratio is what matters)`);
+    }
+    if (fxOnly) {
+      await page.evaluate(() => (document.getElementById('panels').innerHTML = ''));
+      await run('bloomPanels');
+      const out = shot.replace(/\.png$/, '-bloom.png');
+      mkdirSync(dirname(out), { recursive: true });
+      await page.screenshot({ path: out, fullPage: true });
+      console.log(`screenshot → ${out}`);
+    }
+  }
+
+  if (!visualOnly && !fxOnly) {
     // ── accuracy vs CPU ──
     const acc = await run('accuracy', {});
     console.log('backend', JSON.stringify(acc.info));
@@ -207,6 +280,7 @@ try {
   }
 
   // ── visuals ──
+  if (fxOnly) throw new Error('__fx_only_done__');
   const vis = await run('visual', visQuality);
   console.log('visual', JSON.stringify(vis.map((v) => [v.label, fmt(v.mass, 4)])));
   for (const v of vis) check(`visual dish alive: ${v.label}`, v.mass > 20);
@@ -238,8 +312,11 @@ try {
   console.log(`screenshot → ${dishShot}`);
   check('no console errors', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
 } catch (err) {
-  console.error(err);
-  failures.push(String(err));
+  if (String(err).includes('__fx_only_done__')) check('no console errors', true);
+  else {
+    console.error(err);
+    failures.push(String(err));
+  }
 } finally {
   await browser.close();
   await server.close();
