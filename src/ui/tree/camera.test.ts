@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TREE_LAYOUT, TREE_NODES, treeStates, type TreeCtx } from '../../game/tree';
-import { D, NODE_EXTENT, TAP_QUIET_MS, buyableIds, nodeRect, openingCam, revealCam, tapAllowed, type Area, type Cam, freeTop } from './camera';
+import { D, NODE_EXTENT, TAP_QUIET_MS, buyableIds, nodeRect, openingCam, revealCam, tapAllowed, type Area, type Cam, freeTop, gateLabelAngle, LABEL_EDGE } from './camera';
 
 /** A 390 × 844 phone: the top bar and VELA take 150 px, the "Puedes comprar" strip 96 px. */
 const PHONE: Area = { left: 0, top: 150, right: 390, bottom: 844 - 96 };
@@ -102,5 +102,40 @@ describe('the free area of the Tree under VELA\'s docked bubble', () => {
   });
   it('without a bar the frame starts below the minimum inset', () => {
     expect(freeTop(0, null, 844)).toBe(78);
+  });
+});
+
+// Integrator review v0.023 (shot 49): the «Noche 2» label sat on its dashed circle beyond the left edge and
+// read «ne 2». A label slides along its circle until the whole of it is inside the free area.
+describe('night labels on their dashed circles', () => {
+  const PREFER = ((-90 + 5.5 * (360 / 7)) * Math.PI) / 180;
+  const half = { w: 40, h: 12 };
+  const box = (cam: Cam, r: number, a: number) => {
+    const x = cam.x + Math.cos(a) * r * cam.z;
+    const y = cam.y + Math.sin(a) * r * cam.z;
+    return { l: x - half.w, r: x + half.w, t: y - half.h, b: y + half.h };
+  };
+  const inside = (b: { l: number; r: number; t: number; b: number }, a: Area) =>
+    b.l >= a.left + LABEL_EDGE && b.r <= a.right - LABEL_EDGE && b.t >= a.top + LABEL_EDGE && b.b <= a.bottom - LABEL_EDGE;
+
+  it('a label whose spot is off screen slides along its circle into view', () => {
+    // Shot 49: the circle of night 2 is wider than the phone; its preferred spot is past the left edge.
+    const cam: Cam = { x: 195, y: 450, z: 0.62 };
+    const r = 3.2 * D;
+    expect(inside(box(cam, r, PREFER), PHONE)).toBe(false);
+    const a = gateLabelAngle(cam, r, half, PHONE, PREFER);
+    expect(a).not.toBeNull();
+    expect(inside(box(cam, r, a!), PHONE)).toBe(true);
+  });
+
+  it('a label that fits keeps its spot', () => {
+    const cam: Cam = { x: 195, y: 450, z: 0.3 };
+    const r = 3.2 * D;
+    expect(gateLabelAngle(cam, r, half, PHONE, PREFER)).toBeCloseTo(PREFER, 6);
+  });
+
+  it('a circle with no point on screen hides its label instead of showing it cut', () => {
+    const cam: Cam = { x: 195, y: 450, z: 1.9 };
+    expect(gateLabelAngle(cam, 6 * D, half, PHONE, PREFER)).toBeNull();
   });
 });

@@ -143,6 +143,38 @@ export function freeTop(barBottom: number, dock: { top: number; bottom: number }
   return top;
 }
 
+/** Air between a night label and the edge of the free area (px). */
+export const LABEL_EDGE = 8;
+/** Step of the search along a night circle (radians, 3°). */
+const LABEL_STEP = Math.PI / 60;
+
+/**
+ * Where a night label sits on its dashed circle (radians), so that all of it is inside the free area: its
+ * preferred angle when it fits there, else the nearest angle (either way round) that does, or null when no
+ * point of the circle has room. A label is never shown cut by the screen's edge (integrator review v0.023,
+ * shot 49: «Noche 2» read «ne 2»). `r` is the circle's radius in world px, `half` the label's on-screen
+ * half-size.
+ */
+export function gateLabelAngle(cam: Cam, r: number, half: { w: number; h: number }, area: Area, prefer: number): number | null {
+  const R = r * cam.z;
+  const l = area.left + LABEL_EDGE + half.w;
+  const rt = area.right - LABEL_EDGE - half.w;
+  const t = area.top + LABEL_EDGE + half.h;
+  const b = area.bottom - LABEL_EDGE - half.h;
+  if (l > rt || t > b) return null;
+  const fits = (a: number): boolean => {
+    const x = cam.x + Math.cos(a) * R;
+    const y = cam.y + Math.sin(a) * R;
+    return x >= l && x <= rt && y >= t && y <= b;
+  };
+  const n = Math.ceil(Math.PI / LABEL_STEP);
+  for (let i = 0; i <= n; i++) {
+    if (fits(prefer + i * LABEL_STEP)) return prefer + i * LABEL_STEP;
+    if (i && fits(prefer - i * LABEL_STEP)) return prefer - i * LABEL_STEP;
+  }
+  return null;
+}
+
 /** A tap counts only when the camera has been still for TAP_QUIET_MS. */
 export function tapAllowed(now: number, lastMoveAt: number): boolean {
   return now - lastMoveAt >= TAP_QUIET_MS;

@@ -56,7 +56,7 @@ import { mountPortrait } from '../portrait';
 import { ROUTE_ICON } from '../art/icons';
 import { DURATION, EASING, pop, staggerIn } from '../art/motion';
 import { nodeWhy, WHY_UI } from './why';
-import { D, FAR_Z, Z_MAX, Z_MIN, freeTop, openingCam, revealCam, tapAllowed, type Area, type Cam } from './camera';
+import { D, FAR_Z, Z_MAX, Z_MIN, freeTop, gateLabelAngle, openingCam, revealCam, tapAllowed, type Area, type Cam } from './camera';
 import { treeIcon } from './icons';
 import { DISH_DIAMETERS } from '../../core/dish';
 import '../art/art.css';
@@ -221,7 +221,8 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     label.style.left = `${Math.cos(GATE_LABEL_ANGLE) * g.r * D}px`;
     label.style.top = `${Math.sin(GATE_LABEL_ANGLE) * g.r * D}px`;
     world.appendChild(label);
-    return { g, c, label };
+    // w, h: the label's own size (measured once per text); a: the angle it sits at now.
+    return { g, c, label, text: '', w: 0, h: 0, a: GATE_LABEL_ANGLE };
   });
 
   // Edges.
@@ -292,6 +293,8 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
   /** When the camera last moved (a tap within TAP_QUIET_MS of it is ignored). */
   let lastCamMove = -Infinity;
   let lastCamKey = '';
+  /** The night labels' texts or the free area changed: place them again at the next camera apply. */
+  let gatesDirty = true;
   /** Where the camera was when the sheet opened: it goes back there when the sheet closes (if the player did not pan). */
   let homeCam: Cam | null = null;
   /** The World bought this visit: «Nueva sesión» pulses with «¡Juega en el Mundo 2!». */
@@ -314,9 +317,10 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
   // ───────────── camera ─────────────
   function applyCam(): void {
     const key = `${cam.x.toFixed(1)}|${cam.y.toFixed(1)}|${cam.z.toFixed(4)}`;
-    if (key !== lastCamKey) {
+    if (key !== lastCamKey || gatesDirty) {
+      if (key !== lastCamKey) lastCamMove = performance.now();
       lastCamKey = key;
-      lastCamMove = performance.now();
+      placeGateLabels();
     }
     world.style.transform = `translate(${cam.x}px, ${cam.y}px) scale(${cam.z})`;
     el.classList.toggle('far', cam.z < FAR_Z);
@@ -325,6 +329,34 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     world.style.setProperty('--rt-izg', String(Math.min(4, Math.max(1, 0.8 / cam.z))));
     // …and the buyable nodes' prices too: the opening frame of a big tree can be far out (./camera openingCam).
     world.style.setProperty('--rt-ic', String(Math.min(2.6, Math.max(1, 0.62 / cam.z))));
+  }
+  /**
+   * Night labels slide along their dashed circles so all of each stays inside the free area, or hide when
+   * none of the circle is on screen (./camera gateLabelAngle; integrator review v0.023: «ne 2»).
+   */
+  function placeGateLabels(): void {
+    if (!open) return;
+    gatesDirty = false;
+    let area: Area | null = null;
+    // On-screen scale of a label: the world's zoom times its own counter-scale (--rt-izg above).
+    const k = (cam.z * Math.min(4, Math.max(1, 0.8 / cam.z))) / 2;
+    for (const ge of gateEls) {
+      if (ge.label.hidden) continue;
+      if (!ge.w) {
+        ge.w = ge.label.offsetWidth;
+        ge.h = ge.label.offsetHeight;
+        if (!ge.w) continue;
+      }
+      area ??= freeArea(false);
+      const a = gateLabelAngle(cam, ge.g.r * D, { w: ge.w * k, h: ge.h * k }, area, GATE_LABEL_ANGLE);
+      const vis = a === null ? 'hidden' : '';
+      if (ge.label.style.visibility !== vis) ge.label.style.visibility = vis;
+      if (a !== null && a !== ge.a) {
+        ge.a = a;
+        ge.label.style.left = `${Math.cos(a) * ge.g.r * D}px`;
+        ge.label.style.top = `${Math.sin(a) * ge.g.r * D}px`;
+      }
+    }
   }
   function clampCam(): void {
     const { w, h } = vpSize();
@@ -624,12 +656,25 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     const l = lang();
     const night = nightInfo(ctxOf(data)).night;
     const closed = GATES.filter((g) => g.night > night);
-    for (const { g, c, label } of gateEls) {
+    let moved = false;
+    for (const ge of gateEls) {
+      const { g, c, label } = ge;
       const isClosed = g.night > night;
       c.style.display = isClosed ? '' : 'none';
-      label.hidden = !isClosed;
-      label.innerHTML = `${treeIcon('moon', 13)}${esc(tx(TREE_UI.night(g.night), l))}`;
+      if (label.hidden !== !isClosed) {
+        label.hidden = !isClosed;
+        moved = true;
+      }
+      const text = tx(TREE_UI.night(g.night), l);
+      if (ge.text !== text) {
+        ge.text = text;
+        label.innerHTML = `${treeIcon('moon', 13)}${esc(text)}`;
+        ge.w = ge.h = 0;
+        moved = true;
+      }
     }
+    if (moved) gatesDirty = true;
+    if (open && gatesDirty) applyCam();
     // Fog over everything the night has not opened yet (an annulus from the first closed gate out).
     if (closed.length) {
       const r0 = closed[0].r * D;
