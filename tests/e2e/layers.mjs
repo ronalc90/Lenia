@@ -525,6 +525,30 @@ async function runCase(c) {
     b.ui.openBestiary(false);
   });
   await page.waitForTimeout(600);
+  // Reopening the Bestiary while it slides out keeps its backdrop (integrator review of v0.019).
+  await page.evaluate(() => window.bioluma.ui.openBestiary(true));
+  await page.waitForTimeout(500);
+  await page.evaluate(() => window.bioluma.ui.openBestiary(false));
+  await page.waitForTimeout(60);
+  await page.evaluate(() => window.bioluma.ui.openBestiary(true));
+  // Measure once its fades are over (a slow software-GL frame can hold the timeline for a while).
+  for (let i = 0; i < 40; i++) {
+    await page.waitForTimeout(150);
+    const busy = await page.evaluate(() => {
+      const el = document.querySelector('.bl-drawer-scrim');
+      return !!el && el.getAnimations().some((a) => a.playState === 'running' || a.pending);
+    });
+    if (!busy) break;
+  }
+  await page.waitForTimeout(150);
+  const scrimOpacity = await page.evaluate(() => {
+    const el = document.querySelector('.bl-drawer-scrim');
+    return el && !el.hidden ? Number(getComputedStyle(el).opacity) : -1;
+  });
+  if (scrimOpacity < 0.5) problems.push(`[${c.name}] reopened Bestiary without its backdrop (opacity ${scrimOpacity})`);
+  else say(`reopened Bestiary keeps its backdrop (opacity ${scrimOpacity.toFixed(2)})`);
+  await page.evaluate(() => window.bioluma.ui.openBestiary(false));
+  await page.waitForTimeout(600);
   // B-10.4: any toast closes when tapped (≤ 200 ms), with or without an action.
   // (a warning: it shows even while something else talks)
   await page.evaluate(() => window.bioluma.bus.emit('toast', { text: { es: 'Prueba de aviso', en: 'Toast test' }, kind: 'warn' }));

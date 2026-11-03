@@ -35,7 +35,7 @@ import { Toasts } from './toasts';
 import { SESSION_UI } from '../game/treeText';
 import { MOMENT_MIN_RUN_SECONDS, SESSION_TOAST_MAX_MS, SIM_STEPS_PER_SEC } from '../game/cycleBalance';
 import { earningNow } from './moments/status';
-import { installPressFeedback, pop, setReduceMotion, springEasing, DURATION, EASING, SPRING } from './art/motion';
+import { installPressFeedback, pop, restartClass, setReduceMotion, springEasing, DURATION, EASING, SPRING } from './art/motion';
 
 /**
  * The Esencia counter in whole drops (QA4: "3.7", "1.7" next to "16" read as two kinds of number). Seeds
@@ -261,10 +261,13 @@ function multText(x: number, lang: Lang): string {
   return String(v).replace('.', lang === 'es' ? ',' : '.');
 }
 
-/** Restart a one-shot CSS animation class (next frame, never a forced reflow: P3). */
+/**
+ * Restart a one-shot CSS animation class now (a style read, never a forced layout: P3). Re-adding the
+ * class on the next frame lost the restart when called from a tap: no style recalc came between the
+ * remove and the add, so a second refused tap never shook (integrator review of v0.019).
+ */
 function retriggerClass(el: HTMLElement, cls: string): void {
-  el.classList.remove(cls);
-  requestAnimationFrame(() => el.classList.add(cls));
+  restartClass(el, cls);
 }
 
 /** One press gesture for the whole document (B-4): installed once, whoever creates a UI first. */
@@ -934,6 +937,9 @@ class BiolumaUI implements UI {
     const rm = !!v?.settings.reduceMotion || typeof this.drawer.animate !== 'function';
     const off = this.wide ? 'translateX(100%)' : 'translateY(100%)';
     this.drawerAnim?.cancel();
+    // A scrim still fading out (fill: forwards) would hold opacity 0 under the new fade-in once it ends:
+    // reopening within the exit left the Bestiary without its backdrop (integrator review of v0.019).
+    if (typeof this.drawerScrim.getAnimations === 'function') for (const x of this.drawerScrim.getAnimations()) x.cancel();
     if (open) {
       show(this.drawer, true);
       show(this.drawerScrim, true);
