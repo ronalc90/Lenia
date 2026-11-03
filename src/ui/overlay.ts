@@ -14,6 +14,9 @@
 import { wrapDelta, type Camera } from '../core/camera';
 import { BEHAVIOR_COLOR, UI as C } from '../core/palette';
 import type { Behavior, CreatureState, CreatureView, GameView, Lang } from '../core/types';
+import type { TapCreature, TapScene } from './dishTap';
+import { DROP_FX, DropLayer, type CreatureResolver } from './fx/drops';
+import { PipetteLayer } from './fx/pipettes';
 import { behaviorName, stateName } from './i18n';
 import { earningNow, StatusLayer } from './moments/status';
 import { DISSOLVE_MS, STABLE_AGE_STEPS } from '../game/cycleBalance';
@@ -375,6 +378,38 @@ export class Overlay {
     return o;
   };
 
+  // ── Collected light (ADR-030): drops, pipettes, the collision warning and the finger guide ──
+  /** Drops of light on the dish (src/ui/fx/drops.ts). */
+  readonly drops = new DropLayer();
+  /** The collecting pipettes on the rim (src/ui/fx/pipettes.ts). */
+  readonly pipettes = new PipetteLayer();
+  /** GameView.dangers as last seen (the red link between two creatures about to touch). */
+  private dangers: readonly { a: number; b: number; inS: number }[] = [];
+  /** Pairs already labelled "¡Cuidado! Se van a tocar" (once per pair, docs/CLARIDAD2.md §2.5). */
+  private dangerSeen = new Set<number>();
+  /**
+   * Text of the contact label for a pair (`steer`: one of them is a swimmer the finger can guide), or
+   * null when a Momento already says it (then only the red link is drawn). Set by the UI.
+   */
+  dangerText: ((steer: boolean) => string | null) | null = null;
+  /** The finger guide (§2.5): a 1 px line from the guided swimmer to the finger (overlay px). */
+  private guide = { on: false, id: -1, x: 0, y: 0, t0: 0, out: -1 };
+  /** Creatures as drawn this frame, for the tap router (reused objects). */
+  private readonly tapCreatures: TapCreature[] = [];
+  private readonly scene: TapScene = { drops: this.drops.tap, dropCount: 0, creatures: this.tapCreatures, creatureCount: 0, collecting: false, dropPx: DROP_FX.tapPx, creaturePadPx: 16 };
+  /** Places an owned drop on its creature (no allocation: writes the caller's object). */
+  private readonly resolveCreature: CreatureResolver = (id, out) => {
+    const s = this.creatures.get(id);
+    if (!s || s.state !== 'stable') return false;
+    const e = this.exactPos(s, id, this.frameMs);
+    out.x = this.map.px(e ? e.x : s.x);
+    out.y = this.map.py(e ? e.y : s.y);
+    out.r = this.outlineRadius(s);
+    out.hue = s.hue;
+    return true;
+  };
+  private frameMs = 0;
+
   // ── This frame's grid → screen mapping (no allocation; refreshed at the start of draw()) ──
   private ms = 1;
   private mcx = 0;
@@ -597,6 +632,24 @@ export class Overlay {
       this.golden = null;
       this.goldenTrail = [];
     }
+
+    // Collected light (ADR-030). Pipettes first: a drop that vanishes under a pipette's tip was sipped.
+    const nowMs = performance.now();
+    this.pipettes.setView(view.pipettes, nowMs, (id) => this.drops.posOf(id), (id) => this.drops.hueOf(id));
+    this.drops.setView(view.drops, (owner) => this.creatures.get(owner)?.hue, this.now, (id) => this.pipettes.sipping(id));
+    this.scene.collecting = this.drops.active;
+    this.dangers = view.dangers ?? NO_DANGERS;
+    for (const d of this.dangers) {
+      const key = Math.min(d.a, d.b) * 65536 + Math.max(d.a, d.b);
+      if (this.dangerSeen.has(key)) continue;
+      this.dangerSeen.add(key);
+      if (this.dangerSeen.size > 256) this.dangerSeen.clear();
+      const a = this.creatures.get(d.a);
+      const b = this.creatures.get(d.b);
+      if (!a || !b) continue;
+      const text = this.dangerText?.(a.behavior === 'swimmer' || b.behavior === 'swimmer') ?? null;
+      if (text) this.pushLabel({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, t0: this.now, dur: 2.2, text, sub: '', color: C.danger, glyph: null, follow: d.a });
+    }
   }
 
   // ───────────────────────────── queries (hit testing) ─────────────────────────────
@@ -794,7 +847,7 @@ export class Overlay {
     let best = Infinity;
     let live = 0;
     for (const f of this.floats) {
-      if (!f.on || f.cid === undefined || this.now - f.t0 > f.dur * 0.7) continue;
+      if (!f.on || f.cid === undefined || f.cid === COLLECT_FLOAT || this.now - f.t0 > f.dur * 0.7) continue;
       live++;
       const d = Math.hypot(this.map.px(f.x) - p.x, this.map.py(f.y) - p.y);
       if (d < best) {
@@ -1042,6 +1095,11 @@ export class Overlay {
     return Math.max(7, s.r * 1.9) * this.camera.scale + 3;
   }
 
+  /** The creature's outline on screen (CSS px): the extent of its matter (deflector extentK 1.9). */
+  private outlineRadius(s: Smoothed): number {
+    return Math.max(7, s.r * 1.9) * this.camera.scale;
+  }
+
   /** The visible body's radius on screen (CSS px): the forming halo and the birth light hug it. */
   private bodyRadius(s: Smoothed): number {
     return Math.max(8, s.r * 1.7 * this.camera.scale);
@@ -1121,6 +1179,7 @@ export class Overlay {
     const k = 1 - Math.exp(-Math.min(dt, 0.1) * 10);
     const kGlide = 1 - Math.pow(0.75, Math.min(dt, 0.1) * 60);
     const nowMs = performance.now();
+    this.frameMs = nowMs;
     const rate = this.paused ? 0 : this.simRate;
     for (const s of this.creatures.values()) {
       const id = s.id;
@@ -1164,6 +1223,9 @@ export class Overlay {
     this.drawSpots();
     this.drawCreatures(rect, rm, dt);
     this.runLayers('creatures', this.now, dt, rect, scale);
+    if (this.dangers.length) this.drawDangers(rm);
+    this.drops.draw(ctx, this.atlas, this.now, dt, rm, dishFx.matterFade, this.map.px, this.map.py, this.resolveCreature);
+    this.fillTapScene();
     this.drawFlashes();
     this.drawSows(rm);
     this.drawRipples();
@@ -1185,6 +1247,9 @@ export class Overlay {
     }
     this.drawFloats();
     ctx.restore();
+    // Pipettes rest on the rim, half over the glass: drawn unclipped, above the dish's own light.
+    if (round && this.pipettes.count) this.pipettes.draw(ctx, this.atlas, nowMs, rm, dcx, dcy, round.radius * scale, this.dpr, dishFx.matterFade);
+    if (this.guide.on || this.guide.out >= 0) this.drawGuide(rm);
     // Status pills: unclipped (like the labels) so a creature at the dish edge keeps its pill.
     if (this.pillsShown()) this.drawStatusPills(this.now, dt, rm);
     // Labels are drawn unclipped and kept on screen, so a creature at the dish edge never cuts them.
@@ -1196,6 +1261,216 @@ export class Overlay {
     this.drawCharge();
     this.runLayers('top', this.now, dt, rect, scale);
     ctx.globalAlpha = 1;
+  }
+
+  /** Creatures as drawn this frame for the tap router (stable and forming ones; no allocation once warm). */
+  private fillTapScene(): void {
+    const list = this.tapCreatures;
+    let n = 0;
+    for (const s of this.creatures.values()) {
+      if (s.state === 'dead') continue;
+      let c = list[n];
+      if (!c) {
+        c = { id: 0, x: 0, y: 0, r: 0, state: 'stable', behavior: null };
+        list.push(c);
+      }
+      const e = this.exactPos(s, s.id, this.frameMs);
+      c.id = s.id;
+      c.x = this.map.px(e ? e.x : s.x);
+      c.y = this.map.py(e ? e.y : s.y);
+      c.r = this.outlineRadius(s);
+      c.state = s.state;
+      c.behavior = s.behavior;
+      n++;
+    }
+    this.scene.creatureCount = n;
+    this.scene.dropCount = this.drops.tapCount;
+  }
+
+  /** What is under a finger, as drawn in the latest frame (src/ui/dishTap.ts reads it). Reused object. */
+  tapScene(): TapScene {
+    return this.scene;
+  }
+
+  /** The red link between two creatures about to touch (GameView.dangers): it beats at 2 Hz, steady with Reduce motion. */
+  private drawDangers(rm: boolean): void {
+    const ctx = this.ctx;
+    const beat = rm ? 1 : 0.6 + 0.4 * (0.5 + 0.5 * Math.cos(this.now * Math.PI * 4));
+    ctx.strokeStyle = C.danger;
+    for (const d of this.dangers) {
+      const a = this.creatures.get(d.a);
+      const b = this.creatures.get(d.b);
+      if (!a || !b) continue;
+      const ea = this.exactPos(a, a.id, this.frameMs);
+      const ax = this.map.px(ea ? ea.x : a.x);
+      const ay = this.map.py(ea ? ea.y : a.y);
+      const eb = this.exactPos(b, b.id, this.frameMs);
+      const bx = this.map.px(eb ? eb.x : b.x);
+      const by = this.map.py(eb ? eb.y : b.y);
+      const dx = bx - ax;
+      const dy = by - ay;
+      const L = Math.hypot(dx, dy) || 1;
+      const ux = dx / L;
+      const uy = dy / L;
+      const ra = this.outlineRadius(a);
+      const rb = this.outlineRadius(b);
+      const urgent = clamp01(1 - d.inS / 2);
+      // From outline to outline, with a caliper's end ticks; rings on both bodies.
+      const x0 = ax + ux * ra;
+      const y0 = ay + uy * ra;
+      const x1 = bx - ux * rb;
+      const y1 = by - uy * rb;
+      ctx.globalAlpha = (0.55 + 0.45 * urgent) * beat;
+      ctx.lineWidth = 1.5 + urgent;
+      ctx.beginPath();
+      if (L > ra + rb) {
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.moveTo(x0 - uy * 5, y0 + ux * 5);
+        ctx.lineTo(x0 + uy * 5, y0 - ux * 5);
+        ctx.moveTo(x1 - uy * 5, y1 + ux * 5);
+        ctx.lineTo(x1 + uy * 5, y1 - ux * 5);
+      }
+      ctx.stroke();
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.45 * beat;
+      ctx.beginPath();
+      ctx.arc(ax, ay, ra + 2, 0, TAU);
+      ctx.moveTo(bx + rb + 2, by);
+      ctx.arc(bx, by, rb + 2, 0, TAU);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /** The finger guide: start (or move) the 1 px line from swimmer `id` to the finger (overlay px). */
+  steerGuide(id: number, x: number, y: number): void {
+    const g = this.guide;
+    if (!g.on) g.t0 = this.now;
+    g.on = true;
+    g.id = id;
+    g.x = x;
+    g.y = y;
+    g.out = -1;
+  }
+
+  /** The finger of the guide while it is down (overlay px), or null. */
+  guidePoint(): { x: number; y: number } | null {
+    return this.guide.on ? this.guide : null;
+  }
+
+  /** The effect clock (s): effects started from outside line up with the overlay's own. */
+  get clock(): number {
+    return this.now;
+  }
+
+  /** The finger lifted: the guide line fades out (it keeps the heading the swimmer is turning to). */
+  steerGuideEnd(): void {
+    if (!this.guide.on) return;
+    this.guide.on = false;
+    this.guide.out = this.now;
+  }
+
+  /** Where a creature is drawn (overlay px), for the guide's heading; null when it is gone. Reused object. */
+  creatureDrawn(id: number): { x: number; y: number } | null {
+    const s = this.creatures.get(id);
+    if (!s) return null;
+    const e = this.exactPos(s, id, performance.now());
+    this.pos2.x = this.map.px(e ? e.x : s.x);
+    this.pos2.y = this.map.py(e ? e.y : s.y);
+    return this.pos2;
+  }
+  private readonly pos2 = { x: 0, y: 0 };
+
+  private drawGuide(rm: boolean): void {
+    const g = this.guide;
+    const s = this.creatures.get(g.id);
+    const fade = g.on ? 1 : 1 - (this.now - g.out) / 0.3;
+    if (!s || fade <= 0) {
+      g.on = false;
+      g.out = -1;
+      return;
+    }
+    const e = this.exactPos(s, s.id, this.frameMs);
+    const x0 = this.map.px(e ? e.x : s.x);
+    const y0 = this.map.py(e ? e.y : s.y);
+    const dx = g.x - x0;
+    const dy = g.y - y0;
+    const L = Math.hypot(dx, dy);
+    if (L < 2) return;
+    const r = this.outlineRadius(s) + 3;
+    const ctx = this.ctx;
+    ctx.globalAlpha = 0.85 * fade;
+    ctx.strokeStyle = '#eaf4fb';
+    ctx.fillStyle = '#eaf4fb';
+    ctx.lineWidth = 1;
+    ctx.setLineDash(rm ? NO_DASH : ARROW_DASH);
+    ctx.lineDashOffset = rm ? 0 : -this.now * 14;
+    ctx.beginPath();
+    ctx.moveTo(x0 + (dx / L) * r, y0 + (dy / L) * r);
+    ctx.lineTo(g.x, g.y);
+    ctx.stroke();
+    ctx.setLineDash(NO_DASH);
+    // The leader's dot at the finger (2.5 px, ARTE-REALISTA §3.8) and the heading tick on the outline.
+    ctx.beginPath();
+    ctx.arc(g.x, g.y, 2.5, 0, TAU);
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(x0, y0, r, Math.atan2(dy, dx) - 0.35, Math.atan2(dy, dx) + 0.35);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  /**
+   * Light collected at overlay point (x, y): a "+N" that rises from the drop (merged with one a moment
+   * old nearby, so a swipe shows one running total, never a wall of numbers).
+   */
+  collected(x: number, y: number, amount: number, hue: number, format: (n: number) => string): void {
+    const gx = this.mcx + (x - this.mhw) / (this.ms || 1);
+    const gy = this.mcy + (y - this.mhh) / (this.ms || 1);
+    for (const f of this.floats) {
+      if (!f.on || f.cid !== COLLECT_FLOAT || this.now - f.t0 > 0.5) continue;
+      if (Math.hypot(this.map.px(f.x) - x, this.map.py(f.y) - y) > 60) continue;
+      f.amount = (f.amount ?? 0) + amount;
+      this.setFloatText(f, '+' + format(f.amount));
+      f.t0 = this.now - 0.02;
+      f.x = gx;
+      f.y = gy;
+      return;
+    }
+    const f = this.pushFloat(gx, gy, 0.9, '+' + format(amount), hueHex(hue, 82), INCOME_PX + 1, this.reduceMotion ? 0 : 26, false, 0);
+    f.cid = COLLECT_FLOAT;
+    f.amount = amount;
+    f.lift = 6;
+  }
+
+  /**
+   * A seed that never became stable went dark (docs/CLARIDAD2.md §2.5, QA 071): a grey fade of the
+   * matter (600 ms), one grey ring, no particles of any colour, and why, in a 2 s label on the spot.
+   * `fade` false: only the label (a living creature already dissolves through `puff`).
+   */
+  wentDark(x: number, y: number, text: string, fade = true): void {
+    if (fade) {
+      dishFx.pulse(x, y, this.kernelR * 1.6, PULSE.dissolve, 1, 0.6);
+      this.addRipple(x, y, 0.6, '#8e99a4', 22, 1, 1);
+    }
+    if (text && this.now - this.lastBlockedLabel >= BLOCKED_LABEL_GAP_S * 0.5) {
+      this.lastBlockedLabel = this.now;
+      this.pushLabel({ x, y, t0: this.now, dur: 2, text, sub: '', color: '#C3CBD3', glyph: null });
+    }
+  }
+
+  /** A drop got ripe for the first time: "¡Lista!" beside it (1.4 s). */
+  ripeLabel(x: number, y: number, text: string): void {
+    const gx = this.mcx + (x - this.mhw) / (this.ms || 1);
+    const gy = this.mcy + (y - this.mhh) / (this.ms || 1);
+    this.pushLabel({ x: gx, y: gy, t0: this.now, dur: 1.4, text, sub: '', color: '#BFE9FA', glyph: null });
+  }
+
+  /** The state a creature had when last seen (a death tells a seed from a living creature). */
+  stateOf(id: number): CreatureState | null {
+    return this.creatures.get(id)?.state ?? null;
   }
 
   private drawStatusPills(time: number, dt: number, rm: boolean): void {
@@ -2004,9 +2279,10 @@ export class Overlay {
         f.on = false;
         continue;
       }
+      // Income and collected light share the look (no outline, a long fade); only income follows a creature.
       const income = f.cid !== undefined;
       // A-5: "+N" stays over its creature while it rises (a swimmer does not leave it behind).
-      const owner = income ? this.creatures.get(f.cid!) : undefined;
+      const owner = income && f.cid !== COLLECT_FLOAT ? this.creatures.get(f.cid!) : undefined;
       if (owner) {
         f.x = owner.x;
         f.y = owner.y;
@@ -2017,7 +2293,7 @@ export class Overlay {
       const x = fx + f.jitter;
       const fadeAt = income ? 1 - INCOME_FADE : 0.6;
       const a = t < 0.08 ? t / 0.08 : t > fadeAt ? 1 - (t - fadeAt) / (1 - fadeAt) : 1;
-      const pop = this.reduceMotion ? 1 : 1 + 0.25 * Math.max(0, 1 - t / 0.12);
+      const pop = this.reduceMotion || f.cid === COLLECT_FLOAT ? 1 : 1 + 0.25 * Math.max(0, 1 - t / 0.12);
       const size = f.size;
       ctx.font = this.floatFont(size);
       const tw = f.tw;
@@ -2135,6 +2411,10 @@ export class Overlay {
     }
   }
 }
+
+/** `Float.cid` of a collected-light number (never a creature id: those are ≥ 0). */
+const COLLECT_FLOAT = -7;
+const NO_DANGERS: readonly { a: number; b: number; inS: number }[] = [];
 
 const NAME_FONT = `600 12px ${SANS}`;
 const LABEL_FONT = `700 14px ${SANS}`;
