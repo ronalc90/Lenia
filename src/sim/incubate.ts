@@ -10,12 +10,13 @@
  *
  * Here a frame:
  *  1. reads first, when a read is due (the GPU had a whole frame for what the last one queued);
- *  2. then queues steps up to its allowance, stopping at the next 10-step boundary;
+ *  2. then queues steps up to its credit, stopping at the next 10-step boundary;
  *  3. reads again in the same frame only when the measured cost of such a read (it waits for the
  *     steps just queued) fits what is left of the budget: a fast GPU still incubates in a few frames,
  *     a phone's GPU is never waited on twice a frame;
- *  4. adapts the allowance to the wait of its first read (AIMD): a GPU that did not finish last
- *     frame's steps within the frame gets fewer, one that idled gets more.
+ *  4. adapts its pace (steps a frame, fractional, the unused part carried to the next frame) to its
+ *     first read (AIMD): a frame whose read and detector passed the budget backs off, one whose read
+ *     found the GPU idle speeds up. A GPU near its limit settles near the steps it can run a frame.
  *
  * Pure (no GL, no DOM): src/main.ts passes the dish and the read; tests drive a model GPU.
  */
@@ -40,18 +41,20 @@ export interface IncubationIO {
 }
 
 export const INCUBATE = {
-  /** Readback wait above which the GPU did not keep up with last frame's steps: halve the allowance. */
-  waitHighMs: 2,
-  /** Readback wait below which the GPU idled: one more step a frame. */
+  /** Readback wait below which the GPU idled: the pace grows. */
   waitLowMs: 0.5,
+  /** Steps a frame the pace grows by after an idle read (one boundary a frame is reached in ~5 frames). */
+  growSteps: 1,
+  /** The pace after a frame over the budget, as a share of what it was. */
+  backoff: 0.6,
   /** Fewest steps a frame queues (a GPU this slow incubates slowly instead of stalling the page). */
   minSteps: 2,
-  /** Steps a frame starts with: one boundary, the old loop's first frame. */
-  startSteps: 10,
+  /** Pace a page starts with (steps a frame): the first incubation runs under the title screen. */
+  startSteps: 5,
   /**
-   * After a slow read the allowance climbs back only to one step below where the GPU fell behind;
-   * that ceiling rises by one after this many reads in a row that found the GPU idle (a GPU near its
-   * limit is probed now and then, not every few frames).
+   * After a frame over the budget the pace climbs back only to just below where it was; that ceiling
+   * rises by one step after this many idle reads in a row (a GPU near its limit is probed now and
+   * then, not every few frames).
    */
   probeAfter: 16,
   /** Weight of the newest in-frame read in its running estimate. */
@@ -81,11 +84,13 @@ export interface IncubationFrame {
 }
 
 export class IncubationPacer {
-  /** Steps the next frame may queue. */
-  allowance: number;
+  /** Steps a frame (fractional: the unused part is carried in `credit`). */
+  pace: number;
+  /** Steps the next frame may queue, carried over from frames that stopped at a boundary. */
+  private credit = 0;
   /** Running cost (wait + detector) of a read taken after steps queued in the same frame; null = never measured. */
   private readEst: number | null = null;
-  /** Highest allowance since the GPU last fell behind (see INCUBATE.probeAfter). */
+  /** Highest pace since a frame last passed the budget (see INCUBATE.probeAfter). */
   private ceiling = Infinity;
   private idleReads = 0;
   private readonly budget: number;
@@ -99,7 +104,7 @@ export class IncubationPacer {
     this.every = Math.max(1, Math.floor(o.every));
     this.max = Math.max(1, Math.floor(o.maxSteps));
     this.min = Math.max(1, Math.min(this.max, Math.floor(o.minSteps ?? INCUBATE.minSteps)));
-    this.allowance = Math.max(this.min, Math.min(this.max, INCUBATE.startSteps));
+    this.pace = Math.max(this.min, Math.min(this.max, INCUBATE.startSteps));
   }
 
   /** Measured cost of an in-frame read (ms), or null before the first one. */
@@ -116,8 +121,9 @@ export class IncubationPacer {
     out.ran = 0;
     out.reads = 0;
     const t0 = io.now();
+    this.credit = Math.min(this.cap(), this.credit + this.pace);
     /** Steps this frame may still reach (lowered to the floor once a read ate the budget). */
-    let allow = Math.min(Math.floor(left), this.allowance);
+    let allow = Math.min(Math.floor(left), Math.max(this.min, Math.floor(this.credit)));
     /** Wait of the read the frame started with (-1: it started mid-boundary, nothing to learn). */
     let firstWait = -1;
     let queued = false;
@@ -143,8 +149,16 @@ export class IncubationPacer {
       queued = true;
     }
     out.ms = io.now() - t0;
-    this.adapt(firstWait);
+    this.credit = Math.max(0, this.credit - out.ran);
+    this.adapt(firstWait, out.ms, out.reads);
     return out;
+  }
+
+  /** Most steps one frame may hold: one boundary, unless a second read in a frame is cheap (a fast GPU). */
+  private cap(): number {
+    // Two boundaries while that is still unmeasured, so the first idle frame can try one.
+    const c = this.readEst === null ? 2 * this.every : this.readEst < this.budget / 2 ? this.max : this.every;
+    return Math.max(this.min, Math.min(this.max, c));
   }
 
   /**
@@ -157,25 +171,25 @@ export class IncubationPacer {
     return elapsed + this.readEst <= this.budget;
   }
 
-  private adapt(firstWait: number): void {
-    if (firstWait > INCUBATE.waitHighMs) {
-      // The GPU had not finished what the last frames queued: back off, and remember where.
-      this.ceiling = Math.max(this.min, this.allowance - 1);
-      this.allowance = Math.floor(this.allowance / 2);
+  private adapt(firstWait: number, frameMs: number, reads: number): void {
+    // A frame without a read says nothing about the GPU.
+    if (reads === 0) return;
+    if (frameMs > this.budget) {
+      // A read waited for steps the GPU had not finished: back off, and remember where.
+      this.ceiling = Math.max(this.min, this.pace - INCUBATE.growSteps);
+      this.pace = Math.max(this.min, this.pace * INCUBATE.backoff);
+      this.credit = Math.min(this.credit, this.pace);
       this.idleReads = 0;
-    } else if (firstWait >= 0 && firstWait < INCUBATE.waitLowMs) {
+    } else if (firstWait < INCUBATE.waitLowMs && frameMs <= this.budget / 2) {
+      // The GPU idled (a frame-start read that did not wait, or reads after this frame's own steps
+      // that were cheap enough to be allowed).
       if (this.readEst !== null) this.readEst *= INCUBATE.readEstDecay;
       if (++this.idleReads >= INCUBATE.probeAfter) {
         this.idleReads = 0;
-        this.ceiling++;
+        this.ceiling += INCUBATE.growSteps;
       }
-      const up = this.allowance >= this.every ? this.every : 1;
-      this.allowance = Math.min(this.ceiling, this.allowance + up);
+      const up = this.pace >= this.every ? this.every : INCUBATE.growSteps;
+      this.pace = Math.min(this.ceiling, this.max, this.cap(), this.pace + up);
     }
-    // Past one boundary a frame only while a second read in the frame is cheap (a fast GPU); two
-    // boundaries while that is still unmeasured, so the first idle frame can try one.
-    const cap = this.readEst === null ? 2 * this.every : this.readEst < this.budget / 2 ? this.max : this.every;
-    this.allowance = Math.max(this.min, Math.min(this.max, cap, this.allowance));
   }
-
 }

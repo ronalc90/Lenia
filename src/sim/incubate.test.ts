@@ -87,8 +87,9 @@ describe('hidden incubation pacing', () => {
     expect(ms[Math.floor(ms.length * 0.95)]).toBeLessThanOrEqual(BUDGET);
     expect(ms[ms.length - 1]).toBeLessThan(12);
     expect(frames.filter((f) => f.ms > BUDGET).length).toBeLessThan(frames.length / 20);
-    // Still done in a few seconds of 60 Hz frames (1250 steps are ~2.2 s of this GPU's time at best).
-    expect(frames.length).toBeLessThan(5 * 60);
+    // Still done in a few seconds of 60 Hz frames (1250 steps are ~2.2 s of this GPU's time at best;
+    // the old loop took ~2.9 s at 30 fps on this model, the frames waiting on the GPU).
+    expect(frames.length).toBeLessThan(4.5 * 60);
   });
 
   it('the old loop on the same phone: every frame waited for the previous frame’s steps', () => {
@@ -121,17 +122,20 @@ describe('hidden incubation pacing', () => {
     expect(sorted[Math.floor(sorted.length / 2)]).toBeGreaterThan(BUDGET);
   });
 
-  it('a fast GPU still incubates the starter in a few frames', () => {
-    const { frames, left } = play({ msPerStep: 0.05, renderMs: 0.5, detectMs: 0.3 }, 1250);
+  it('a fast GPU still incubates the starter within a second', () => {
+    const { frames, left, pacer } = play({ msPerStep: 0.05, renderMs: 0.5, detectMs: 0.3 }, 1250);
     expect(left).toBe(0);
-    expect(frames.length).toBeLessThan(40);
+    expect(frames.length).toBeLessThan(60);
+    // It learned that a second read in a frame is cheap: several boundaries a frame.
+    expect(Math.max(...frames.map((f) => f.reads))).toBeGreaterThan(1);
+    expect(pacer.inFrameReadMs).not.toBeNull();
     expect(Math.max(...frames.map((f) => f.ms))).toBeLessThanOrEqual(BUDGET + 1);
   });
 
   it('a very slow GPU queues the fewest steps a frame and is read once a frame', () => {
     const { frames, pacer } = play({ msPerStep: 8, renderMs: 6, detectMs: 6 }, 400);
     expect(Math.max(...frames.map((f) => f.reads))).toBe(1);
-    expect(pacer.allowance).toBe(2);
+    expect(pacer.pace).toBe(2);
   });
 
   it('lockstep tests keep one boundary a frame at least', () => {
