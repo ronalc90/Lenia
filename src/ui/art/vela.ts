@@ -444,6 +444,15 @@ export class VelaScope {
   private warm = false;
   private lampWarm = false;
   private tickE = 0;
+  private voiceT = 0;
+
+  /**
+   * «◉ VOZ» stays on through the typewriter's pauses at commas and full stops (0.45 s), so the label does not
+   * blink between words; it goes when she has finished.
+   */
+  get speaking(): boolean {
+    return this.voiceT > 0;
+  }
   private readonly target: LampReading = { on: 0, K: 0 };
 
   /** One letter typed: a +0.6-u blip where the beam is writing (§4.6). */
@@ -460,6 +469,7 @@ export class VelaScope {
 
   step(t: number, dt: number, s: VelaPose): void {
     const st = stateOf(s.mood);
+    this.voiceT = s.talking ? 0.45 : Math.max(0, this.voiceT - Math.max(0, dt));
     const env = s.talking ? 0.25 + 0.75 * clamp01(s.talk) : 0.8 * clamp01(s.talk);
     if (!this.warm) {
       this.beam = Math.max(0, velaTrace(this.y, s.mood, t, s.moodAge, s.talk, s.talking, false));
@@ -1552,14 +1562,14 @@ function paintScreen(c: Ctx2D, detail: 0 | 1 | 2): void {
       let x = b.x + 1.8;
       if (D.talking) {
         glyph(c, 'voice', x, yL, f);
-        x += f * 1.05;
+        x += f * 1.2;
         const v = VOICE_LABEL[F.lang];
         c.fillText(v, x, yL);
         x += adv * (v.length + 1.4);
       }
       if (st.glyph) {
         glyph(c, st.glyph, x, yL, f);
-        x += f * 1.05;
+        x += f * 1.2;
       }
       const label = st.label[F.lang];
       c.fillText(label, x, yL);
@@ -2036,7 +2046,7 @@ function frameLook(s: VelaPose, t: number, opts: VelaDrawOptions): void {
   D.t = t;
   D.age = age;
   D.rm = rm;
-  D.talking = s.talking;
+  D.talking = s.talking || (!rm && !!opts.scope && opts.scope.speaking);
   D.talk = rm ? 0.6 : clamp01(s.talk);
   D.alarm = opts.alarm ?? DEFAULT_ALARM;
   // Standby dims the screen in 400 ms; the label fades in over 200 ms; the awed flash is one per change.
