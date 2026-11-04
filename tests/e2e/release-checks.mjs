@@ -9,6 +9,9 @@
 //   RF-05  Settings says when a Quality change applies.
 //   RF-02  Export carries the whole progress (BIOLUMA2 bundle) and Import on a fresh device restores the
 //          story, the Encargos, the secrets and the Momentos seen, then reopens the game.
+//   B1     (QA-CLARIDAD-2) On a slow device the start card's «¡Empezar!» is tappable within the wait cap, with
+//          the seconds counting down on it: a 6× throttled CPU, real time (no lockstep), software GL. v0.023
+//          hung there for minutes (1250 hidden steps at 2 a frame).
 //
 // Usage: node tests/e2e/release-checks.mjs [--dist <dir>] [--out <dir>]   (VITE_E2E build: debug handle)
 import { spawn, spawnSync } from 'node:child_process';
@@ -328,6 +331,63 @@ try {
     problems.push('RF-05: after a Quality change the waiting session lost its starter creature');
   await shot('quality-changed');
   await A.ctx.close();
+
+  // ───────────── Device C: a slow device's start card (QA-CLARIDAD-2 B1) ─────────────
+  {
+    const Cd = await newPage();
+    const pc = Cd.page;
+    const tapC = await boot(pc);
+    await pc.evaluate(() => {
+      const b = window.bioluma;
+      b.story.skipTutorial();
+      if (b.story.current()) b.story.skip();
+      const d = b.game.view().dish;
+      b.game.actions.seedAt(d.cx, d.cy);
+    });
+    await pc.waitForTimeout(1500);
+    await pc.evaluate(() => window.bioluma.game.actions.endSessionNow?.());
+    for (let i = 0; i < 40 && !(await pc.locator('.ss-layer [data-act="next"]').first().isVisible().catch(() => false)); i++) await pc.waitForTimeout(400);
+    await pc.waitForTimeout(4500); // the staged tally
+    // A slow phone in real time: no lockstep, no time scale, the CPU 6× slower.
+    const cdp = await Cd.ctx.newCDPSession(pc);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 6 });
+    await pc.evaluate(() => {
+      const b = window.bioluma;
+      Object.assign(b.debugTime, { scale: 1, lockstep: false });
+      const w = (window.__wake = { t0: -1, t1: -1, texts: [] });
+      b.bus.on('sessionStart', () => {
+        if (w.t0 < 0) w.t0 = performance.now();
+      });
+      const tick = () => {
+        const go = document.querySelector('.ss-layer:not(.ss-welcome) [data-act="go"]');
+        if (w.t0 >= 0 && go && go.getBoundingClientRect().width > 0) {
+          const tx = go.textContent.trim();
+          if (w.texts[w.texts.length - 1] !== tx) w.texts.push(tx);
+          if (!go.disabled) {
+            w.t1 = performance.now();
+            return;
+          }
+        }
+        setTimeout(tick, 50);
+      };
+      tick();
+    });
+    await tapC('.ss-layer [data-act="next"]');
+    let wake = null;
+    for (let i = 0; i < 90; i++) {
+      await pc.waitForTimeout(500);
+      wake = await pc.evaluate(() => ({ ...window.__wake, capped: window.bioluma.culture.capped, left: window.bioluma.culture.left }));
+      if (wake.t1 >= 0) break;
+    }
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    await pc.screenshot({ path: `${out}/release-slow-start.png` });
+    // START_WAKE_MAX_S = 6 (src/game/cycleBalance.ts), plus the 100 ms view refresh of a throttled page.
+    const waited = wake && wake.t0 >= 0 && wake.t1 >= 0 ? (wake.t1 - wake.t0) / 1000 : Infinity;
+    notes.push(`B1: «¡Empezar!» tappable after ${waited.toFixed(1)} s on a 6× throttled CPU (culture capped ${wake?.capped}, steps left ${wake?.left}); button said ${JSON.stringify(wake?.texts ?? [])}`);
+    if (!(waited <= 7.5)) problems.push(`B1: the start card's «¡Empezar!» was still grey after ${Number.isFinite(waited) ? waited.toFixed(1) + ' s' : '45 s'} on a slow device`);
+    if (wake && wake.texts.length && !wake.texts.some((t) => /\d/.test(t) || /Empezar/.test(t))) problems.push('B1: the grey «¡Empezar!» shows no countdown');
+    await Cd.ctx.close();
+  }
 
   // ───────────── Device B: import ─────────────
   const B = await newPage();

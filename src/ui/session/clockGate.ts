@@ -8,7 +8,10 @@
  *  - The clock stops while VELA talks in a running session ('story') and while a sheet covers the dish
  *    ('sheet': the Bestiary, the Bitácora, Settings, «?», a price or behaviour sheet). A session never
  *    ends behind a sheet: a paused clock cannot reach 0.
+ *  - The start card's «¡Empezar!» waits for the run's culture to be lit, never longer than START_WAKE_MAX_S,
+ *    with the seconds left on the button (QA-CLARIDAD-2 B1: it hung for minutes on a slow device).
  */
+import { START_WAKE_MAX_S } from '../../game/cycleBalance';
 
 /**
  * Wall milliseconds the session-1 clock may wait for the tutorial at most (a story stuck behind something
@@ -31,4 +34,14 @@ export function shouldStartClock(s: ClockSession | null | undefined, tutorialHol
 /** The two pause sources of the clarity pass: VELA talking over a running clock, and any open sheet. */
 export function clockPauses(f: { talking: boolean; phase: ClockSession['phase'] | null | undefined; sheet: boolean }): { story: boolean; sheet: boolean } {
   return { story: f.talking && f.phase === 'running', sheet: f.sheet };
+}
+
+/**
+ * «¡Empezar!» on the start card: enabled once the culture is lit, or after START_WAKE_MAX_S at most (the culture
+ * may light a little later; the run waits for it). `waitedMs`: wall time the card has waited so far.
+ */
+export function startGo(cultureReady: boolean, waitedMs: number): { ready: boolean; secondsLeft: number } {
+  const left = START_WAKE_MAX_S - Math.max(0, waitedMs) / 1000;
+  if (cultureReady || left <= 0) return { ready: true, secondsLeft: 0 };
+  return { ready: false, secondsLeft: Math.ceil(left) };
 }

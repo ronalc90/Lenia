@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Bus, type GameEvents } from '../../core/bus';
 import { createGame } from '../../game/game';
-import { clockPauses, shouldStartClock, TUTORIAL_CLOCK_FAILSAFE_MS } from './clockGate';
+import { START_WAKE_MAX_S } from '../../game/cycleBalance';
+import { clockPauses, shouldStartClock, startGo, TUTORIAL_CLOCK_FAILSAFE_MS } from './clockGate';
 
 describe('the clock waits for the player (ADR-030, CLARIDAD2 §2.3, §2.4)', () => {
   it('session 1: the first creature does not start the clock; VELA’s line does', () => {
@@ -50,5 +51,20 @@ describe('the clock waits for the player (ADR-030, CLARIDAD2 §2.3, §2.4)', () 
     game.isPaused = false;
     for (let i = 0; i < 10; i++) game.tick(0.1, null);
     expect(se().remaining).toBeLessThan(left);
+  });
+});
+
+describe('the start card never hangs on «La criatura se está despertando…» (QA-CLARIDAD-2 B1)', () => {
+  it('«¡Empezar!» waits for the lit culture, counting down the seconds on the button', () => {
+    expect(startGo(false, 0)).toEqual({ ready: false, secondsLeft: START_WAKE_MAX_S });
+    expect(startGo(false, 1200).secondsLeft).toBe(START_WAKE_MAX_S - 1);
+    expect(startGo(true, 300)).toEqual({ ready: true, secondsLeft: 0 });
+  });
+
+  it('is enabled after the short maximum wait even when the culture never lights (a stalled device)', () => {
+    expect(startGo(false, START_WAKE_MAX_S * 1000 - 1).ready).toBe(false);
+    expect(startGo(false, START_WAKE_MAX_S * 1000)).toEqual({ ready: true, secondsLeft: 0 });
+    expect(startGo(false, 120_000).ready).toBe(true);
+    expect(START_WAKE_MAX_S).toBeLessThanOrEqual(6);
   });
 });

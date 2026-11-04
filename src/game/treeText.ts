@@ -496,6 +496,8 @@ export const SESSION_UI = {
   seedAlways: (price: string) => t(`Una semilla cuesta ${price} de luz. Siempre.`, `A seed costs ${price} glow. Always.`),
   /** Start card with the Nevera: "¡Empezar!" waits until the creature is lit on the dish. */
   fridgeWaking: t('La criatura se está despertando…', 'The creature is waking up…'),
+  /** …with the seconds it may still take (QA-CLARIDAD-2 B1: never a grey button without a countdown). */
+  fridgeWakingIn: (s: number) => t(`La criatura se está despertando… ${s}`, `The creature is waking up… ${s}`),
   fridgeOut: (name: string) => t(`❄ Sale de la nevera: ${name}`, `❄ Out of the fridge: ${name}`),
   fridgeTag: t('❄ de la nevera', '❄ from the fridge'),
   /** World cards: species still to find there, or complete (QA-CLARIDAD #36). */

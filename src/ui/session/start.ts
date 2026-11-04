@@ -40,14 +40,19 @@ export interface SessionStartExtras {
   seedPrice?: number;
   /** The dish is lit (its Nevera creatures are visible): «¡Empezar!» waits for it (QA#14). Default true. */
   ready?: boolean;
+  /** Seconds «¡Empezar!» may still wait (shown on the button while it is not ready; QA-CLARIDAD-2 B1). */
+  wakeLeft?: number;
 }
 
 export interface SessionStartView {
   readonly el: HTMLElement;
   readonly isOpen: boolean;
   show(start: SessionStart, extras?: SessionStartExtras): void;
-  /** The dish lit up (or went dark again): «¡Empezar!» is enabled only when it is (QA#14). */
-  setReady(ready: boolean): void;
+  /**
+   * The dish lit up (or went dark again): «¡Empezar!» is enabled only when it is (QA#14), or once the short
+   * maximum wait is over; `secondsLeft` counts down on the grey button (QA-CLARIDAD-2 B1).
+   */
+  setReady(ready: boolean, secondsLeft?: number): void;
   hide(): void;
   dispose(): void;
 }
@@ -147,7 +152,8 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
     btn.setAttribute('aria-disabled', String(!ready));
     btn.style.opacity = ready ? '' : '0.62';
     const tx = btn.querySelector('.tx');
-    if (tx) tx.textContent = ready ? SESSION_UI.startGo[l] : SESSION_UI.fridgeWaking[l];
+    const left = current.extras.wakeLeft;
+    if (tx) tx.textContent = ready ? SESSION_UI.startGo[l] : left !== undefined && left > 0 ? SESSION_UI.fridgeWakingIn(left)[l] : SESSION_UI.fridgeWaking[l];
   }
 
   const api: SessionStartView = {
@@ -248,9 +254,11 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
           });
       }
     },
-    setReady(ready) {
-      if (!current || (current.extras.ready ?? true) === ready) return;
-      current = { start: current.start, extras: { ...current.extras, ready } };
+    setReady(ready, secondsLeft) {
+      if (!current) return;
+      const left = ready ? undefined : secondsLeft;
+      if ((current.extras.ready ?? true) === ready && current.extras.wakeLeft === left) return;
+      current = { start: current.start, extras: { ...current.extras, ready, wakeLeft: left } };
       paintGo();
     },
     hide() {

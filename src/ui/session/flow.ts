@@ -22,7 +22,7 @@ import { catalogGroup, catalogPortrait } from '../../species';
 import { createTreeView, type TreeSound, type TreeView } from '../tree';
 import { createSessionHud, hudViewOf, type SessionHud, type SessionHudSound } from './hud';
 import { createSessionStart, type SessionStartView } from './start';
-import { shouldStartClock } from './clockGate';
+import { shouldStartClock, startGo } from './clockGate';
 import { celebrateNight } from './night';
 import { createSessionSummary, type SessionSummaryView, type SummarySound } from './summary';
 import { momentPlateKind } from '../moments/plates';
@@ -104,6 +104,8 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
   let pausedShown = false;
   /** Merges of this run (VELA's tip in the report: «Hoy se juntaron 2…», docs/CLARIDAD2.md §2.5). */
   let merged = 0;
+  /** Wall time the start card started waiting for the culture (QA-CLARIDAD-2 B1: never longer than START_WAKE_MAX_S). */
+  let wakeSince = -1;
 
   function speciesInfo(id: string): { name: string; portrait: Pattern | null; hue?: number; latin?: string | null } | null {
     const sp = game.view().species.find((x) => x.id === id);
@@ -205,6 +207,7 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
     }
     // «¡Empezar!» starts waiting: the run's culture is set to incubate right after this event (main.ts),
     // so the dish's state now is the last run's; update() enables it once the new culture is lit.
+    wakeSince = performance.now();
     start.show(st, { encargo: o.encargo?.() ?? null, seedPrice: game.view().seedCost, ready: !o.cultureReady });
   }
 
@@ -276,8 +279,14 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
       if (startPending && !o.holdStart?.()) showStart();
       const s = game.session;
       if (!s) return;
-      // «¡Empezar!» waits until the Nevera's creatures are lit on the dish (QA#14).
-      if (start.isOpen) start.setReady(o.cultureReady?.() ?? true);
+      // «¡Empezar!» waits until the Nevera's creatures are lit on the dish (QA#14), at most START_WAKE_MAX_S with
+      // the seconds counting down on it (QA-CLARIDAD-2 B1: a slow device hung there for minutes).
+      if (start.isOpen) {
+        const now = performance.now();
+        if (wakeSince < 0) wakeSince = now;
+        const go = startGo(o.cultureReady?.() ?? true, now - wakeSince);
+        start.setReady(go.ready, go.secondsLeft);
+      }
       // Session 1: the first creature is the player's; the clock starts when VELA lets it (§2.4).
       if (s.phase === 'ready' && v.session?.tutorialHold) {
         const now = performance.now();
