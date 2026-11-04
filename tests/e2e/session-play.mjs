@@ -253,6 +253,8 @@ async function runCase(c) {
         out.push({ id: cr.id, hue: cr.hue, name: sp ? (sp.name.es ?? String(sp.name)) : '?', x: dish.x + p.x - r, y: dish.y + p.y - r, s: 2 * r });
       }
       for (const cv of document.querySelectorAll('canvas')) if (cv.getContext('2d')) cv.dataset.hueHidden = cv.style.visibility || '-', (cv.style.visibility = 'hidden');
+      // Messages floating over the dish (a toast, a brief, the objective bar) are not the matter's colour.
+      for (const el of document.querySelectorAll('.toasts, .mo-brief, .bl-objective')) el.dataset.hueHidden = el.style.visibility || '-', (el.style.visibility = 'hidden');
       return out;
     });
     let fails = 0;
@@ -278,7 +280,7 @@ async function runCase(c) {
       if (items.length) await shot(`${label}-species-tints`);
     } finally {
       await page.evaluate((s) => {
-        for (const cv of document.querySelectorAll('canvas'))
+        for (const cv of document.querySelectorAll('canvas, .toasts, .mo-brief, .bl-objective'))
           if (cv.dataset.hueHidden) {
             cv.style.visibility = cv.dataset.hueHidden === '-' ? '' : cv.dataset.hueHidden;
             delete cv.dataset.hueHidden;
