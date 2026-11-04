@@ -43,6 +43,7 @@ import { Toasts } from './toasts';
 import { SESSION_UI } from '../game/treeText';
 import { MOMENT_MIN_RUN_SECONDS, SESSION_SIM_PACE, SESSION_TOAST_MAX_MS, SIM_STEPS_PER_SEC } from '../game/cycleBalance';
 import { safeSowSpot } from './sowHint';
+import { deathLabel, shapelessLabel } from './deathLabel';
 import { earningNow } from './moments/status';
 import { installPressFeedback, pop, restartClass, setReduceMotion, DURATION, EASING } from './art/motion';
 
@@ -2491,21 +2492,21 @@ class BiolumaUI implements UI {
       if (this.card?.id === e.id) this.closeCard();
       // Why it went dark (ADR-030 §2.5): a seed that never took fades grey with its cause in words, no
       // particles of any colour (QA 071); a living creature that hit the glass says its light is still there.
-      if (e.cause) {
-        const alive = ov.stateOf(e.id) === 'stable';
-        const text =
-          e.cause === 'glass' ? tx(alive ? TEXT.deathGlassAlive : TEXT.deathGlass) : e.cause === 'crowd' ? tx(TEXT.deathCrowd) : alive ? '' : tx(TEXT.deathFaded);
-        if (alive) ov.puff(e.x, e.y);
-        // One label at a time on the dish (ARTE §10): while a Momento or VELA speaks, the grey fade alone.
-        ov.wentDark(e.x, e.y, this.deps.isNarrating?.() ? '' : text, !alive);
-        return;
-      }
-      ov.puff(e.x, e.y);
+      // Every death, not only the first one's card (QA-CLARIDAD-2 C7: living creatures faded in open agar unsaid).
+      const alive = ov.stateOf(e.id) === 'stable';
+      const label = deathLabel(e.cause, alive);
+      if (alive) ov.puff(e.x, e.y);
+      // One label at a time on the dish (ARTE §10): while a Momento or VELA speaks, the grey fade alone.
+      ov.wentDark(e.x, e.y, this.deps.isNarrating?.() || !label ? '' : tx(label), !alive);
     });
     bus.on('creatureExploded', (e) => {
+      // Before the pulse: the overlay still knows it as the creature it was.
+      const alive = ov.stateOf(e.id) === 'stable';
       ov.explodedPulse(e.x, e.y);
-      // A fusion seen again (ADR-030 §2.5): its 2 s label at the spot; the first one has its card.
-      if (e.cause === 'touch' && this.deps.mergeTold?.() && !this.deps.isNarrating?.()) ov.wentDark(e.x, e.y, tx(TEXT.merged), false);
+      // A fusion seen again (ADR-030 §2.5): its 2 s label at the spot; the first one has its card. A living
+      // creature that fell apart on its own says so too (QA-CLARIDAD-2 C7).
+      const label = shapelessLabel(e.cause ?? null, alive, this.deps.mergeTold?.() ?? false);
+      if (label && !this.deps.isNarrating?.()) ov.wentDark(e.x, e.y, tx(label), false);
     });
     // Shapeless matter dissolved (lysis, clean-up): it fades like a puff; it was never a creature that died.
     bus.on('creatureDissolved', (e) => {

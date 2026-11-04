@@ -428,6 +428,12 @@ export const TEXT = {
   deathFaded: t('Se apagó: no prendió. ¡Prueba otra!', 'Went dark: didn’t take. Try another!'),
   /** A living creature hit the glass (a rare miss of the deflector): its drop stays on the dish. */
   deathGlassAlive: t('Chocó con el cristal y se apagó. Su luz sigue ahí.', 'It hit the glass and went dark. Its glow is still there.'),
+  /**
+   * A living creature that went dark in open agar, or lost its shape on its own (QA-CLARIDAD-2 C7: three
+   * Nadadoras of a run vanished without a word). Its drop stays on the dish.
+   */
+  deathLost: t('Se apagó: perdió la forma. Su luz sigue ahí.', 'Went dark: lost its shape. Its glow is still there.'),
+  shapeLost: t('Se deshizo: sin forma no da luz', 'Fell apart: no shape, no glow'),
   /** A fusion seen again (the first one gets its card): a 2 s label in place. */
   merged: t('Se juntaron: sin forma no da luz', 'Merged: no shape, no glow'),
   /** The warning before two creatures touch (GameView.dangers); `contactSteer` when one is a swimmer. */
