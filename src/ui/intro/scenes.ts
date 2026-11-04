@@ -31,6 +31,7 @@ import { type ArtMood } from '../art/vela';
 import { WORLD_ART_IDS, WORLD_HUE } from '../art/worlds';
 import { PHOTOS, peekPhoto, type PhotoId } from '../art/photos';
 import { catalogPattern } from '../../sim/catalog';
+import { DATOS_ESSENCE_DIV } from '../../game/cycleBalance';
 import type { IntroSceneId } from '../../story/introScript';
 import {
   INK_ON_PLATE,
@@ -1220,6 +1221,9 @@ function stopwatch(ctx: CanvasRenderingContext2D, cx: number, cy: number, R: num
   plateText(ctx, `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`, cx, cy + R * 0.42, Math.max(16, Math.round(R * 0.2)), { mono: true, weight: 700, align: 'center' });
 }
 
+/** Fig. 3 b: the Datos the example's light gives (its light is this many times DATOS_ESSENCE_DIV: «50 → +2»). */
+const INTRO_DATOS = 2;
+
 const clock: Painter = (ctx, e) => {
   const { t, rm } = e;
   const wd = wide(e);
@@ -1234,10 +1238,12 @@ const clock: Painter = (ctx, e) => {
   const R = Math.min(A.w * 0.34, A.h * 0.36);
   stopwatch(ctx, A.x + A.w / 2, A.y + A.h * 0.54, R, left, rm, ((loop * 50) % 1) / 1);
   panelFrame(ctx, A, 'a');
-  // b · when time is up, the Essence turns into Datos (both readings step at 8 Hz).
+  // b · when time is up, the light turns into Datos at the game's rate, 25 to 1 (both readings step at 8 Hz;
+  // QA-CLARIDAD-2 C2: «LUZ 12 → DATOS +12» taught 1 to 1).
   const conv = rm ? 1 : clamp01((at8Hz(loop) - 2.4) / 1.2);
-  const ess = Math.round(12 * (1 - conv));
-  const dat = Math.round(12 * conv);
+  const luz0 = INTRO_DATOS * DATOS_ESSENCE_DIV;
+  const ess = Math.round(luz0 * (1 - conv));
+  const dat = Math.floor((luz0 - ess) / DATOS_ESSENCE_DIV);
   const rowY = B.y + B.h * 0.36;
   const left0 = B.x + 18;
   const right0 = B.x + B.w - 18;
@@ -1254,16 +1260,17 @@ const clock: Painter = (ctx, e) => {
     ctx.fillRect(left0, by, bw, 8);
     ctx.fillRect(left0, by + 18, bw, 8);
     ctx.fillStyle = '#5bc0eb';
-    ctx.fillRect(left0, by, bw * (ess / 12), 8);
+    ctx.fillRect(left0, by, bw * (ess / luz0), 8);
     ctx.fillStyle = TEAL;
-    ctx.fillRect(left0, by + 18, bw * (dat / 12), 8);
+    ctx.fillRect(left0, by + 18, bw * (dat / INTRO_DATOS), 8);
   }
   panelFrame(ctx, B, 'b');
 };
 
 // ───────────────────────────── 9 · how to: the Árbol and the Mundos ─────────────────────────────
 
-const ROUTES: readonly RouteId[] = ['time', 'dropper', 'dish', 'life', 'discovery', 'worlds', 'spark'];
+/** The Tree's 8 routes (ADR-030 added ↓ Recoger; QA-CLARIDAD-2 §2e: the figure still said 7). */
+const ROUTES: readonly RouteId[] = ['time', 'dropper', 'dish', 'life', 'discovery', 'worlds', 'spark', 'collect'];
 const WORLD_CODES: readonly string[] = ['O2u', 'OG2g', 'S1s', 'O4d', 'H3s', '3GH2n', 'K4d'];
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
 
@@ -1275,13 +1282,14 @@ const tree: Painter = (ctx, e) => {
   const A: Rect = wd ? { x: P.x, y: P.y, w: P.w * 0.64, h: P.h } : { x: P.x, y: P.y, w: P.w, h: P.h * 0.7 };
   const B: Rect = wd ? { x: P.x + A.w + gap, y: P.y, w: P.w - A.w - gap, h: P.h } : { x: P.x, y: P.y + A.h + gap, w: P.w, h: P.h - A.h - gap };
   const lt = rm ? 99 : t;
-  // a · the research tree as a route diagram: the root, seven routes at 24° and three levels each.
-  // The fan is as long as the panel allows (its outer routes reach 3 × step to each side) and centred in it.
-  const step = wd ? 0.3 : 0.42;
-  const len = Math.max(40, Math.min(A.h - 96, (A.w / 2 - 28) / Math.sin(3 * step)));
+  // a · the research tree as a route diagram: the centre and its eight routes, three levels drawn on each.
+  // The fan is as long as the panel allows (its outer routes reach `side` steps to each side) and centred in it.
+  const side = (ROUTES.length - 1) / 2;
+  const step = (wd ? 0.3 : 0.42) * (3 / side);
+  const len = Math.max(40, Math.min(A.h - 96, (A.w / 2 - 28) / Math.sin(side * step)));
   const root = { x: A.x + A.w / 2, y: Math.min(A.y + A.h - 34, A.y + (A.h + len) / 2 + 16) };
   ROUTES.forEach((rid, i) => {
-    const a = -Math.PI / 2 + (i - 3) * step;
+    const a = -Math.PI / 2 + (i - side) * step;
     const col = ROUTE_COLOR.dark[rid];
     ctx.strokeStyle = col;
     ctx.globalAlpha = 0.8;
@@ -1305,23 +1313,17 @@ const tree: Painter = (ctx, e) => {
       ctx.stroke();
     }
   });
-  // Dimension: the angle between two routes and the levels along one (cotas).
-  ctx.strokeStyle = PLATE.dark.ink2;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.arc(root.x, root.y, len * 0.24, -Math.PI / 2 - step, -Math.PI / 2);
-  ctx.stroke();
-  const am = -Math.PI / 2 - step / 2;
-  plateText(ctx, `${Math.round((step * 180) / Math.PI)}°`, root.x + Math.cos(am) * len * 0.33, root.y + Math.sin(am) * len * 0.33 + 4, 13, { align: 'center', color: PLATE.dark.ink2 });
+  // No lab dimensions («24°», «raíz»: QA-CLARIDAD-2 §2e): the centre, and what the routes are.
   ctx.fillStyle = PLATE.dark.ink;
   ctx.beginPath();
   ctx.arc(root.x, root.y, 7, 0, TAU);
   ctx.fill();
-  plateText(ctx, tr(e, 'raíz', 'root'), root.x + 14, root.y + 18, 13, { color: PLATE.dark.ink2 });
-  plateText(ctx, tr(e, '7 rutas · 3 niveles', '7 routes · 3 levels'), A.x + 30, A.y + 20, 14);
+  plateText(ctx, tr(e, `${ROUTES.length} rutas de mejoras`, `${ROUTES.length} upgrade routes`), A.x + 30, A.y + 20, 14);
   panelFrame(ctx, A, 'a');
-  // b · the seven Worlds: seven small dishes, each with its own real creature and hue.
+  // b · the seven Worlds: seven small dishes, each with its own real creature and hue, said in words too (the
+  // panel read as empty while they came in on a slow phone, QA-CLARIDAD-2 §2f).
   const n = WORLD_ART_IDS.length;
+  plateText(ctx, tr(e, `${n} Mundos, cada uno con sus especies`, `${n} Worlds, each with its own species`), B.x + 30, B.y + 20, 14);
   WORLD_ART_IDS.forEach((id, i) => {
     let x: number;
     let y: number;
@@ -1338,7 +1340,7 @@ const tree: Painter = (ctx, e) => {
       x = B.x + 12 + (B.w - 24) * ((i + 0.5) / n);
       y = B.y + B.h * 0.48;
     }
-    const appear = rm ? 1 : smooth(1.4 + i * 0.16, 1.9 + i * 0.16, t);
+    const appear = rm ? 1 : smooth(0.4 + i * 0.16, 0.9 + i * 0.16, t);
     if (appear <= 0) return;
     ctx.save();
     ctx.globalAlpha = appear;

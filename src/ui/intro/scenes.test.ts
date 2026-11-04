@@ -123,6 +123,32 @@ describe('intro scenes as a realistic lab night (docs/ARTE-REALISTA.md §6.6)', 
     expect(at(3)).toBe(at(3));
   });
 
+  it('QA-CLARIDAD-2 C2: Fig. 3 converts light at the game’s rate (25 luz = 1 Dato), never «LUZ 12 → DATOS +12»', async () => {
+    const { DATOS_ESSENCE_DIV } = await import('../../game/cycleBalance');
+    /** The two readings of panel b: «+N» Datos, and the light: the last plain number drawn before it. */
+    const read = (t: number, rm = false) => {
+      const tx = paint('clock', PHONE, t, rm).texts;
+      const j = tx.findIndex((x) => /^\+\d+$/.test(x));
+      const luz = tx.slice(0, j).filter((x) => /^\d+$/.test(x)).pop();
+      return { luz: Number(luz), datos: Number(tx[j].slice(1)) };
+    };
+    const luz0 = read(0).luz;
+    expect(luz0).toBeGreaterThanOrEqual(DATOS_ESSENCE_DIV);
+    // The finished panel: all the light became Datos, 25 to 1.
+    expect(read(0, true)).toEqual({ luz: 0, datos: Math.floor(luz0 / DATOS_ESSENCE_DIV) });
+    // Every frame on the way: the Datos shown never exceed the light spent ÷ 25.
+    for (let t = 2.4; t <= 4; t += 0.05) {
+      const r = read(t);
+      expect(r.datos * DATOS_ESSENCE_DIV).toBeLessThanOrEqual(luz0 - r.luz);
+    }
+  });
+
+  it('QA-CLARIDAD-2 §2e: Fig. 4 shows the Tree’s 8 routes, without «24°» or «raíz»', () => {
+    const tx = paint('tree', PHONE, 5).texts.join(' | ');
+    expect(tx).toMatch(/8 rutas/);
+    expect(tx).not.toMatch(/7 rutas|24°|raíz/);
+  });
+
   it('the dish carries its true size: Ø 90 mm (Ø128 cells at 0.7 mm per cell)', () => {
     expect(paint('dish', PHONE, 2.6).texts).toContain('Ø 90 mm');
   });
