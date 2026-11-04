@@ -30,7 +30,9 @@ function findChromium() {
 }
 
 const port = 4700 + Math.floor(Math.random() * 800);
-const server = spawn('npx', ['vite', 'preview', '--outDir', dist, '--port', String(port), '--strictPort'], { stdio: ['ignore', 'pipe', 'pipe'] });
+// The project's own vite when installed: `npx` may first ask the registry and miss the start window.
+const localVite = existsSync('node_modules/.bin/vite') ? 'node_modules/.bin/vite' : null;
+const server = spawn(localVite ?? 'npx', [...(localVite ? [] : ['vite']), 'preview', '--outDir', dist, '--port', String(port), '--strictPort'], { stdio: ['ignore', 'pipe', 'pipe'] });
 await new Promise((res, rej) => {
   const t = setTimeout(() => rej(new Error('preview did not start')), 30000);
   server.stdout.on('data', (d) => {
