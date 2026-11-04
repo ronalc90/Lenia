@@ -769,7 +769,13 @@ async function runCase(c) {
     if (!started) problems.push(`[${c.name}] session ${k}: the clock did not start after seeding (${JSON.stringify(v.session)})`);
     say(`Session ${k}: seeded, the clock runs (${v.session?.remaining ?? '?'} s left, ${v.creatures} creatures).`);
     // QA#19/#40 (docs/CLARIDAD2.md §2.3): the clock does not move while the Bestiary is open.
-    if (k === 2 && (await view()).session?.phase === 'running' && (await settle(`bestiary clock ${k}`), (await view()).session?.phase === 'running')) {
+    // It needs a clock with time left to watch: a tap that lands as «¡Tiempo!» sounds (slow software GL) proves nothing.
+    const bestiaryTime = async () => {
+      const s = (await view()).session;
+      return s?.phase === 'running' && (s.remaining ?? 0) >= 6;
+    };
+    if (k === 2 && (await view()).session?.phase === 'running' && (await settle(`bestiary clock ${k}`), !(await bestiaryTime()))) say(`Session ${k}: under 6 s left, the Bestiary clock check waits for a longer run.`);
+    else if (k === 2 && (await bestiaryTime())) {
       // The dock ignores a tap for 350 ms after something stopped covering it (QA#17): like a player, tap the
       // button once it is plainly there (a card just closed over the dock on a wide screen).
       await dockReady('.bl-dock [data-tab="bestiary"]');
