@@ -33,6 +33,12 @@ const SWIPE_UP_PX = 24;
  * What a tap or a swipe does to a toast (owner bug, docs/ARTE-PULIDO.md B-10.4): every toast closes
  * when tapped; one with an action runs it only from its own button.
  */
+/** Does a showing toast of this kind step aside while something else talks? Warnings never do. */
+export function toastYields(kind: ToastKind, held: boolean): boolean {
+  if (kind === 'warn' || kind === 'bad') return false;
+  return held;
+}
+
 export function toastGestureResult(g: ToastGesture, hasAction: boolean): 'action' | 'dismiss' | 'none' {
   if (g.dy <= -SWIPE_UP_PX && Math.abs(g.dy) > Math.abs(g.dx)) return 'dismiss';
   if (Math.hypot(g.dx, g.dy) > TAP_SLOP_PX) return 'none';
@@ -104,7 +110,21 @@ export class Toasts {
   }
 
   private critical(item: ToastItem): boolean {
-    return item.kind === 'warn' || item.kind === 'bad';
+    return toastYields(item.kind, false) === false;
+  }
+
+  /**
+   * Call every frame: a non-critical toast already on screen when VELA (or an explainer) starts talking
+   * steps aside and waits at the head of the queue, so it never sits on her line (session-play,
+   * «.sty-box × .toast»); warnings stay.
+   */
+  yieldIfHeld(): void {
+    const item = this.currentItem;
+    const el = this.current;
+    if (!item || !el || el.classList.contains('out') || !toastYields(item.kind, this.hold())) return;
+    this.queue.unshift(item);
+    while (this.queue.length > 3) this.queue.pop();
+    this.dismiss();
   }
 
   private next(): void {

@@ -915,6 +915,8 @@ class BiolumaUI implements UI {
 
   frame(timeSec: number, dtSec: number): void {
     this.lastFrameAt = performance.now();
+    // A toast on screen steps aside when VELA starts talking (cheap: a no-op while nothing shows).
+    this.toasts.yieldIfHeld();
     // Follow a creature with the camera (not while a Momento owns the camera).
     if (this.follow !== null && !this.deps.cameraBusy?.()) {
       const p = this.overlay.creaturePos(this.follow);
