@@ -421,6 +421,9 @@ export const SESSION_UI = {
   /** The Datos preview in the dock: "+12 Datos" over "al terminar". */
   previewShort: (n: string) => t(`+${n} Datos`, `+${n} Data`),
   previewEnd: t('al terminar', 'at the end'),
+  /** …while all of it is the minimum a session pays (QA-CLARIDAD-2 C8: «+3 Datos al terminar» with 0 light: «¿3 por qué?»). */
+  previewPlay: t('por jugar', 'for playing'),
+  previewDatosPlay: (n: string) => t(`+${n} Datos por jugar`, `+${n} Data for playing`),
   endNowConfirm: (datos: string) => t(`¿Terminar ya? Te llevas ${datos} Datos.`, `End now? You take ${datos} Data.`),
   // QA4 F-17: the price said "20 s" while the rule was 8 s, and nothing said what Abono is.
   boostDesc: t(

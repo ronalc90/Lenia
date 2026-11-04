@@ -414,6 +414,16 @@ describe('Datos preview before the clock runs out', () => {
     expect(p.goal!.cost).toBe(C.TREE_RING_START[2]);
     expect(p.goal!.missing).toBe(Math.max(0, C.TREE_RING_START[2] - 1 - 9));
   });
+
+  it('QA-CLARIDAD-2 C8: with no light yet the preview says its Datos are the minimum for playing', () => {
+    const r = { ...freshResearch(), datos: 1 };
+    const fx = treeEffects(r.levels);
+    const { session } = beginSession(r, fx);
+    noteSeed(session);
+    expect(sessionPreview(r, session, fx, 0)).toMatchObject({ datos: C.DATOS_MIN, minimum: true });
+    noteEssence(session, 9.5 * C.DATOS_ESSENCE_DIV);
+    expect(sessionPreview(r, session, fx, 0).minimum).toBe(false);
+  });
 });
 
 describe('Abono price: one rule, never jumping down (QA4 F-17)', () => {

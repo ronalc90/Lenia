@@ -540,7 +540,12 @@ export interface GameView {
   /** (game, sessions) Datos, tree, night and worlds: what lasts between sessions. */
   research?: ResearchView;
   /** (game, sessions) Datos this session would pay if it ended now, and the cheapest node they reach. */
-  sessionPreview?: { datos: number; goal: { id: string; cost: number; missing: number } | null } | null;
+  sessionPreview?: {
+    datos: number;
+    goal: { id: string; cost: number; missing: number } | null;
+    /** (game, QA-CLARIDAD-2 C8) All of `datos` is the minimum a session pays for playing (no light collected yet). */
+    minimum?: boolean;
+  } | null;
   /** (game, sessions) Abono: an in-session production boost bought with Esencia (null when no session runs). */
   boost?: BoostView | null;
   /** (game, ADR-030) Drops of Luz on the dish, owned and loose (empty or absent when there is none). */

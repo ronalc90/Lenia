@@ -649,12 +649,15 @@ export interface SessionPreview {
   datos: number;
   /** Cheapest node that only waits for Datos; `missing` counts the Datos of this session too. */
   goal: { id: string; cost: number; missing: number } | null;
+  /** All of `datos` is the minimum a session pays for playing (no light, no prize yet: QA-CLARIDAD-2 C8). */
+  minimum: boolean;
 }
 
 export function sessionPreview(r: ResearchState, s: SessionState, fx: TreeEffects, species: number): SessionPreview {
-  const datos = computeDatos(s, fx, 0).total;
+  const d = computeDatos(s, fx, 0);
+  const datos = d.total;
   const g = nextGoal(treeCtxOf(r, species));
-  return { datos, goal: g ? { id: g.id, cost: g.cost, missing: Math.max(0, g.cost - r.datos - datos) } : null };
+  return { datos, goal: g ? { id: g.id, cost: g.cost, missing: Math.max(0, g.cost - r.datos - datos) } : null, minimum: datos > 0 && d.minimum === datos };
 }
 
 /** Which VELA line closes the end card. */

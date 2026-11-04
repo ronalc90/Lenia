@@ -301,7 +301,7 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
       }
       hud.update(hudViewOf(s, v.session?.sprint ?? 1));
       const p = v.sessionPreview;
-      hud.preview(p ? { datos: p.datos, goal: p.goal ? { name: nodeText(p.goal.id).name, missing: p.goal.missing } : null } : null);
+      hud.preview(p ? { datos: p.datos, goal: p.goal ? { name: nodeText(p.goal.id).name, missing: p.goal.missing } : null, minimum: !!p.minimum } : null);
     },
     get busy() {
       // A start card waiting for its turn (behind the welcome card) counts: nothing slips in between.

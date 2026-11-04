@@ -83,6 +83,8 @@ export interface SessionHudOptions {
 export interface SessionPreviewView {
   datos: number;
   goal: { name: Text; missing: number } | null;
+  /** All of it is the minimum for playing: «+3 Datos por jugar» instead of «al terminar» (QA-CLARIDAD-2 C8). */
+  minimum?: boolean;
 }
 
 export interface SessionHudView {
@@ -404,13 +406,13 @@ export function createSessionHud(container: HTMLElement, opts: SessionHudOptions
         return;
       }
       const l = opts.lang();
-      const key = `${p.datos}|${p.goal?.name[l] ?? ''}|${p.goal?.missing ?? ''}|${l}`;
+      const key = `${p.datos}|${p.goal?.name[l] ?? ''}|${p.goal?.missing ?? ''}|${p.minimum ? 1 : 0}|${l}`;
       if (key === prevKey) return;
       prevKey = key;
       prev.hidden = false;
       // In the dock: "+12 Datos" over "al terminar" (narrow cell); under the clock: one line.
-      if (opts.previewHost) prevD.innerHTML = `<b>${SESSION_UI.previewShort(fmt(p.datos, l))[l]}</b><small>${SESSION_UI.previewEnd[l]}</small>`;
-      else prevD.textContent = SESSION_UI.previewDatos(fmt(p.datos, l))[l];
+      if (opts.previewHost) prevD.innerHTML = `<b>${SESSION_UI.previewShort(fmt(p.datos, l))[l]}</b><small>${(p.minimum ? SESSION_UI.previewPlay : SESSION_UI.previewEnd)[l]}</small>`;
+      else prevD.textContent = (p.minimum ? SESSION_UI.previewDatosPlay : SESSION_UI.previewDatos)(fmt(p.datos, l))[l];
       const g = p.goal;
       prevG.textContent = g ? (g.missing > 0 ? SESSION_UI.previewNext(g.name[l], fmt(g.missing, l))[l] : SESSION_UI.previewReady(g.name[l])[l]) : '';
       prevG.hidden = !g;
