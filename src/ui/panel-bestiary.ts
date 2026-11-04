@@ -11,6 +11,7 @@ import { BEHAVIORS, behaviorName, getLang, RARITIES, rarityName, t } from './i18
 import { icon } from './icons';
 import { mountPortrait } from './portrait';
 import { TOTAL_WORLD_SPECIES } from '../game/worlds';
+import { bestiaryEmptyHint } from './bestiaryHint';
 
 /** Species cards per page in the grid. */
 const PAGE = 60;
@@ -109,7 +110,9 @@ export class BestiaryPanel implements Panel {
       (it) => this.createCard(it),
       (c, it) => this.updateCard(c, it),
     );
-    setText(this.empty, v.species.length === 0 ? t('emptyBestiary') : t('noMatches'));
+    // With a creature alive but no species yet: when it will count (QA-CLARIDAD-2 C4), not «Aún no hay nadie».
+    const hint = v.species.length === 0 ? bestiaryEmptyHint(v) : null;
+    setText(this.empty, hint ? hint[getLang()] : v.species.length === 0 ? t('emptyBestiary') : t('noMatches'));
     show(this.empty, list.length === 0 && (filtering || v.species.length === 0));
     if (v.species.length === 0) show(this.grid, true);
   }
