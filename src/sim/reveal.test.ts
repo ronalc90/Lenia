@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { INCUBATE_MAX_S } from '../game/cycleBalance';
 import { CultureReveal, REVEAL } from './reveal';
 
 /**
@@ -132,5 +133,24 @@ describe('culture reveal (calm start)', () => {
     const fr = r.frame(1 / 60, ready);
     expect(fr.fade).toBe(1);
     expect(fr.pace).toBe(1);
+  });
+
+  it('the tutorial’s first seed shows within the cap on a slow device, even once the failsafe started the clock (QA-CLARIDAD-2 B2)', () => {
+    // Session 1: the tap plants the sure creature while the run is 'ready'; at ~5 fps the pacer runs 2 steps a
+    // frame. The 30 s failsafe then started the clock, but the clock counts dish time and the regular steps wait
+    // for the hidden incubation, so the dish stayed dark and the clock stood still.
+    const r = new CultureReveal({ maxS: INCUBATE_MAX_S });
+    r.incubate(1250);
+    let t = 0;
+    let fr = r.frame(0.2, { ...ready, wallDt: 0.2 });
+    for (let f = 0; f < 2000 && !r.lit; f++) {
+      const ctx = t < 2 ? { ...ready, wallDt: 0.2 } : { ...ready, ready: false, running: true, wallDt: 0.2 };
+      fr = r.frame(0.2, ctx);
+      r.ran(Math.min(2, fr.incubateBudget));
+      t += 0.2;
+    }
+    expect(r.lit).toBe(true);
+    expect(r.capped).toBe(true);
+    expect(t).toBeLessThanOrEqual(INCUBATE_MAX_S + REVEAL.fadeMs / 1000 + 0.2);
   });
 });

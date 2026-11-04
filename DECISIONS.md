@@ -563,6 +563,20 @@ ADR that supersedes the old one.
   it (the usual case), at most the whole incubation for a player who sows the instant a run opens (≈ 4 s on the
   mid-range model). Seeds sown in that wait incubate with the starter; nothing pays before the light. Lockstep
   e2e builds run 4 boundaries a frame (a software-rendered browser spends most of a frame drawing).
+- **Amendment v0.024 (QA-CLARIDAD-2 B1, B2: black-box play on software GL at ~5 fps):** the incubation has a
+  **wall-time cap**, `INCUBATE_MAX_S` = 5 s (`src/game/cycleBalance.ts`). On that device the pacer's floor of 2
+  steps a frame made the 1250 steps take ~2 minutes (the pacer's model GPU at 60 ms a step: 138 s): the start card
+  stayed on «La criatura se está despertando…» 6 times out of 6, and in session 1 the tutorial's first seed never
+  showed. The 30 s tutorial failsafe did start the clock, but the clock counts dish time and the regular steps
+  wait for the hidden incubation (v0.020), so the clock stood at 0:15 over a dark dish. Now, after 5 s of wall
+  time in which the incubation could run (a Momento's pause and a hidden tab do not count), the culture is lit
+  with the steps it got and the run goes on: the clock and the regular steps start, the detector keeps reading
+  every 10th step, the dish never steps blind, and nothing pays before it is stable. On such a device the starter
+  registers its species later (part (b) of v0.016 does not hold there); a mid-range phone (1250 steps in 4.2 s)
+  and anything faster are never cut. The start card's «¡Empezar!» also stops waiting after `START_WAKE_MAX_S` =
+  6 s, the seconds counting down on the grey button. Tests: `src/sim/incubate.test.ts` (pacer + reveal on the
+  model GPU), `src/sim/reveal.test.ts`, `src/ui/session/clockGate.test.ts`; e2e `release-checks.mjs` (start card
+  on a 6× throttled CPU). Session bot before/after: identical (it models whole steps, not wall time).
 
 
 ## ADR-028: Contract removals of the sessions cycle (d9da2ef) and the retired classic loop

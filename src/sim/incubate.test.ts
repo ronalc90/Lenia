@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { INCUBATE_MAX_S } from '../game/cycleBalance';
 import { IncubationPacer, type IncubatingDish, type IncubationIO } from './incubate';
+import { CultureReveal, REVEAL } from './reveal';
 
 /**
  * A model device: the GPU runs queued work in order (`msPerStep` per step, `renderMs` per frame), a
@@ -157,5 +159,103 @@ describe('hidden incubation pacing', () => {
     const dish: IncubatingDish = { stepCount: 0, contextLost: true, advance: () => undefined };
     const f = pacer.frame(dish, 100, { due: () => false, read: () => 0, now: () => 0 });
     expect(f.ran).toBe(0);
+  });
+});
+
+/**
+ * QA-CLARIDAD-2 B1/B2 (v0.023): on a slow device (software GL, ~5 fps) the start card stayed on «La
+ * criatura se está despertando…» for minutes and the tutorial's first seed never showed: 1250 hidden steps
+ * at the pacer's floor of 2 steps a frame are ~2 minutes there. The incubation has a wall-time cap: after it
+ * the culture is lit with the steps it got and the run goes on (the detector keeps reading every 10th step).
+ */
+describe('incubation wall-time cap (ADR-027 v0.024)', () => {
+  /** The pacer and the reveal together on a model device, frame by frame, until the culture is lit. */
+  function playReveal(dev: Device, steps: number, maxFrames = 4000) {
+    let clock = 0;
+    let gpuFreeAt = 0;
+    let step = 0;
+    let detected = -1;
+    const blind: number[] = [];
+    const dish: IncubatingDish = {
+      get stepCount() {
+        return step;
+      },
+      contextLost: false,
+      advance(k: number) {
+        if (step % EVERY === 0 && detected !== step) blind.push(step);
+        gpuFreeAt = Math.max(gpuFreeAt, clock) + k * dev.msPerStep;
+        step += k;
+      },
+    };
+    const io: IncubationIO = {
+      due: () => step % EVERY === 0 && detected !== step,
+      read: () => {
+        const wait = Math.max(0, gpuFreeAt - clock) + (dev.readMs ?? 0.3);
+        clock += wait + dev.detectMs;
+        detected = step;
+        return wait;
+      },
+      now: () => clock,
+    };
+    const pacer = new IncubationPacer({ budgetMs: BUDGET, every: EVERY, maxSteps: 400 });
+    const reveal = new CultureReveal({ maxS: INCUBATE_MAX_S });
+    reveal.incubate(steps);
+    let frameStart = 0;
+    let prevStart = 0;
+    let ran = 0;
+    let frames = 0;
+    let litAt = -1;
+    for (; frames < maxFrames && litAt < 0; frames++) {
+      clock = frameStart;
+      const wall = (frameStart - prevStart) / 1000;
+      const rv = reveal.frame(Math.min(0.25, wall), { ready: true, momentPaused: false, hidden: false, stepping: false, wallDt: wall });
+      if (rv.incubateBudget > 0) {
+        const f = pacer.frame(dish, rv.incubateBudget, io);
+        reveal.ran(f.ran);
+        ran += f.ran;
+      }
+      if (reveal.lit) litAt = frameStart;
+      gpuFreeAt = Math.max(gpuFreeAt, clock) + dev.renderMs;
+      prevStart = frameStart;
+      frameStart = Math.max(frameStart + VSYNC, Math.ceil((Math.max(clock, gpuFreeAt) + 1) / VSYNC) * VSYNC);
+    }
+    return { litAt, ran, blind, frames, capped: reveal.capped };
+  }
+
+  // Software GL on a loaded 4-core machine (QA-CLARIDAD-2: ~5 fps): every step is tens of ms of CPU.
+  const softwareGL: Device = { msPerStep: 60, renderMs: 90, detectMs: 12 };
+
+  it('a very slow GPU lights its culture within the cap instead of after minutes', () => {
+    const { litAt, ran, blind, capped } = playReveal(softwareGL, 1250);
+    expect(litAt).toBeGreaterThan(0);
+    // The cap, the 700 ms light-up and one slow frame.
+    expect(litAt / 1000).toBeLessThanOrEqual(INCUBATE_MAX_S + REVEAL.fadeMs / 1000 + 0.5);
+    expect(capped).toBe(true);
+    expect(ran).toBeGreaterThan(0);
+    expect(ran).toBeLessThan(1250);
+    // Still never a step past a boundary the detector has not read.
+    expect(blind).toEqual([]);
+  });
+
+  it('a mid-range phone still gets every incubation step (the cap only catches slow devices)', () => {
+    const { litAt, ran, capped } = playReveal({ msPerStep: 1.75, renderMs: 3, detectMs: 3 }, 1250);
+    expect(ran).toBe(1250);
+    expect(capped).toBe(false);
+    expect(litAt / 1000).toBeLessThan(INCUBATE_MAX_S + REVEAL.fadeMs / 1000);
+  });
+
+  it('time the incubation could not run (a Momento pause, a hidden tab) does not count', () => {
+    const r = new CultureReveal({ maxS: INCUBATE_MAX_S });
+    r.incubate(1250);
+    for (let f = 0; f < 100; f++) r.frame(0.25, { ready: true, momentPaused: true, hidden: false, stepping: false, wallDt: 0.25 });
+    expect(r.incubating).toBe(true);
+    for (let f = 0; f < 100; f++) r.frame(0.25, { ready: true, momentPaused: false, hidden: true, stepping: false, wallDt: 0.25 });
+    expect(r.incubating).toBe(true);
+    // A new incubation (the next run) starts its own wall clock.
+    for (let t = 0; t < INCUBATE_MAX_S - 0.5; t += 0.25) r.frame(0.25, { ready: true, momentPaused: false, hidden: false, stepping: false, wallDt: 0.25 });
+    expect(r.incubating).toBe(true);
+    r.incubate(1250);
+    r.frame(0.25, { ready: true, momentPaused: false, hidden: false, stepping: false, wallDt: 1 });
+    expect(r.incubating).toBe(true);
   });
 });

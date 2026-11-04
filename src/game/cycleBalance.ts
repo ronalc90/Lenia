@@ -111,6 +111,23 @@ export const SIM_PACE_MAX = 4;
  */
 export const PREINCUBATE_STEPS = 1250;
 /**
+ * Wall seconds the hidden incubation may run at most (ADR-027 amendment v0.024). QA-CLARIDAD-2 B1/B2: on a
+ * slow device (software GL, ~5 fps) the pacer's floor of 2 steps a frame made the 1250 steps take ~2 min
+ * (src/sim/incubate.test.ts models 138 s): the start card stayed on «La criatura se está despertando…» and
+ * the tutorial's first seed never showed. After this long the culture is lit with the steps it got and the
+ * run goes on; the detector keeps reading every 10th step, so the starter registers a little later on such
+ * a device. Counted only while the incubation can run (not under a Momento's pause, not in a hidden tab).
+ * A mid-range phone needs ~4.2 s for the 1250 steps and is never cut (same test). [QA-CLARIDAD-2; ADR-027]
+ */
+export const INCUBATE_MAX_S = 5;
+/**
+ * Seconds the start card's «¡Empezar!» may wait for the culture at most, counting down on the button
+ * (QA-CLARIDAD-2 B1: «que nunca haya un botón gris sin una cuenta atrás visible»). The cap above plus the
+ * 700 ms light-up, rounded up: normally the culture is lit first; this only covers a stalled readback.
+ * [QA-CLARIDAD-2; INCUBATE_MAX_S + REVEAL.fadeMs]
+ */
+export const START_WAKE_MAX_S = 6;
+/**
  * Pace ramp, seconds: once the pre-incubated culture is lit (docs/ARTE-PULIDO.md A-6, §7.3: it holds
  * still during the 700 ms light-up), the dish's time-lapse climbs from rest to SESSION_SIM_PACE over
  * this long, counted only while the dish steps (a start card that pauses it never hands over a dish

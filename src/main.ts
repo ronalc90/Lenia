@@ -58,7 +58,7 @@ import { bigSeedChip, createSeedMeter, seedPriceSheetExplain, type SeedMeter } f
 import { attachSecretInputs, createSecretsUI, createStrokeRecorder, mountBasementEntry, type BasementEntry } from './ui/secrets';
 import { clockPauses, createSessionFlow, createWelcomeCard, datosExplain, type SessionFlow, type SessionFlowSound } from './ui/session';
 import { computeDatos, unlockedWorlds } from './game/session';
-import { PREINCUBATE_STEPS, SESSION_PACE_RAMP_S, SIM_STEPS_PER_SEC } from './game/cycleBalance';
+import { INCUBATE_MAX_S, PREINCUBATE_STEPS, SESSION_PACE_RAMP_S, SIM_STEPS_PER_SEC } from './game/cycleBalance';
 import { CultureReveal, REVEAL, type RevealContext } from './sim/reveal';
 import { IncubationPacer, type IncubationIO } from './sim/incubate';
 import { dishFx, PULSE } from './ui/fx/stage';
@@ -254,9 +254,10 @@ function boot(): void {
   let idle = false;
   /**
    * Calm start (ARTE-PULIDO A-6, owner bug "la criatura inicial corre"): every run's starter incubates
-   * unlit (src/sim/reveal.ts), then the culture is lit and the dish's pace climbs from rest.
+   * unlit (src/sim/reveal.ts), then the culture is lit and the dish's pace climbs from rest. Never longer
+   * than INCUBATE_MAX_S of wall time (ADR-027 v0.024: a slow device lights what it has and plays on).
    */
-  const culture = new CultureReveal({ rampS: SESSION_PACE_RAMP_S });
+  const culture = new CultureReveal({ rampS: SESSION_PACE_RAMP_S, maxS: INCUBATE_MAX_S });
 
   const audio = createAudio(bus);
   // Cosmetics need the leaderboard's equipped-profile getter and vice versa: late-bound closure.
@@ -1159,7 +1160,7 @@ function boot(): void {
    */
   if (!dishRestored && game.session?.phase === 'ready') culture.incubate(PREINCUBATE_STEPS);
   // What frame() hands on every frame: one object each, filled in place (nothing allocated per frame).
-  const revealCtx: RevealContext = { ready: false, running: false, momentPaused: false, hidden: false, stepping: false };
+  const revealCtx: RevealContext = { ready: false, running: false, momentPaused: false, hidden: false, stepping: false, wallDt: 0 };
   const dishFxArg = { grow: 0 };
   const clockArg = { stepped: 0, speed: 1, wallDt: 0, paused: false };
   const renderArg: Parameters<NonNullable<typeof sim>['render']>[0] = { camera, time: 0, quality: fxQuality };
@@ -1479,7 +1480,8 @@ function boot(): void {
   }
 
   function frame(now: number): void {
-    const dt = Math.min(0.25, (now - last) / 1000);
+    const wallDt = Math.max(0, (now - last) / 1000);
+    const dt = Math.min(0.25, wallDt);
     last = now;
     const s = sim!;
     syncParams(now);
@@ -1506,6 +1508,8 @@ function boot(): void {
     revealCtx.momentPaused = pauseSources.has('moment');
     revealCtx.hidden = document.hidden;
     revealCtx.stepping = !isPaused() && !document.hidden;
+    // Real time for the incubation's wall-time cap (a 5 fps frame is 0.2 s; a return from a hidden tab, ≤ 1 s).
+    revealCtx.wallDt = Math.min(1, wallDt);
     const rv = culture.frame(dt, revealCtx);
     // Unlit, the detector reads each 10th step synchronously (nothing on screen waits for it), paced so
     // a read never waits for steps queued in the same frame (src/sim/incubate.ts); an asynchronous read
