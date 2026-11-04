@@ -275,6 +275,10 @@ function sanitizePrefs(raw: unknown): Prefs {
 const THEME_KEY = 'bioluma.theme';
 /** Quiet time with an empty dish before the "tap here again" finger returns (QA2 §5b, CLARIDAD J-164). */
 const TAP_AGAIN_HINT_MS = 8000;
+/** Share of the dish's radius «¡Toca aquí!»'s words keep inside (the glass rim and its frost are lighter). */
+const HINT_INSIDE = 0.86;
+/** Room «¡Toca aquí!»'s rings keep below the objective bar (their radius and a notice's height), px. */
+const HINT_BAR_GAP_PX = 72;
 
 /**
  * A short session run is on the clock (shorter than MOMENT_MIN_RUN_SECONDS): no card may eat it, toasts
@@ -404,6 +408,8 @@ class BiolumaUI implements UI {
   private hintEl: HTMLElement | null = null;
   /** Where «¡Toca aquí!» points on a dish with creatures (grid cells; QA-CLARIDAD-2 C3), or null: the centre. */
   private hintSpot: { x: number; y: number } | null = null;
+  /** The pointed hint's width (px), measured once per spot: its words stay inside the dish. */
+  private hintW = 0;
   private gestureHint: HTMLElement | null = null;
   private toasts = new Toasts();
   private card: {
@@ -1897,20 +1903,40 @@ class BiolumaUI implements UI {
    */
   private placeHint(v: GameView): void {
     const el = this.hintEl!;
+    if (!v.dish) return;
     const R = v.calibration.R;
     const bodies = v.creatures.filter((c) => c.state !== 'dead');
     const near = (p: { x: number; y: number }) => bodies.some((c) => Math.hypot(c.x - p.x, c.y - p.y) - c.r < 2 * R);
-    if (!v.dish || !bodies.length) this.hintSpot = null;
-    else if (!this.hintSpot || near(this.hintSpot)) this.hintSpot = safeSowSpot(v.dish, bodies, R, SIM_STEPS_PER_SEC * SESSION_SIM_PACE);
+    if (!bodies.length) this.hintSpot = null;
+    else if (!this.hintSpot || near(this.hintSpot)) {
+      // Not under the objective bar and the notices over the top of the dish (QA-CLARIDAD-2 §2f): the rings'
+      // radius below the bar's bottom edge, in dish coordinates.
+      const d = this.dish.getBoundingClientRect();
+      const bar = this.objEl.getBoundingClientRect();
+      const topPx = bar.height > 0 ? bar.bottom - d.top + HINT_BAR_GAP_PX : 0;
+      this.hintSpot = safeSowSpot(v.dish, bodies, R, SIM_STEPS_PER_SEC * SESSION_SIM_PACE, (x, y) => this.camera.gridToScreen(x, y).y < topPx);
+      this.hintW = 0;
+    }
     if (!this.hintSpot) {
       el.classList.remove('at');
       el.style.left = el.style.top = '';
       return;
     }
-    const p = this.camera.gridToScreen(this.hintSpot.x, this.hintSpot.y);
     el.classList.add('at');
-    setStyle(el, 'left', `${Math.round(p.x)}px`);
+    if (!this.hintW) this.hintW = el.offsetWidth;
+    const p = this.camera.gridToScreen(this.hintSpot.x, this.hintSpot.y);
+    // The rings on the spot; the words kept inside the glass (over the rim's frost they could not be read).
+    const c = this.camera.gridToScreen(v.dish.cx, v.dish.cy);
+    const inner = Math.abs(this.camera.gridToScreen(v.dish.cx + v.dish.radius, v.dish.cy).x - c.x) * HINT_INSIDE;
+    const lo = Math.max(this.hintW / 2, c.x - inner + this.hintW / 2);
+    const hi = Math.min(this.camera.viewW - this.hintW / 2, c.x + inner - this.hintW / 2);
+    const x = lo <= hi ? Math.max(lo, Math.min(hi, p.x)) : c.x;
+    setStyle(el, 'left', `${Math.round(x)}px`);
     setStyle(el, 'top', `${Math.round(p.y)}px`);
+    // In the lower half the words go above the rings: below them they fell off the glass onto the light agar.
+    el.classList.toggle('up', p.y > c.y);
+    // …and the rings stay on the spot itself.
+    setStyle(el, '--hint-dx', `${Math.round(p.x - x)}px`);
   }
 
   private hideFirstHint(): void {

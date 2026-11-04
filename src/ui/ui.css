@@ -709,6 +709,13 @@
   width: max-content;
   max-width: 60%;
 }
+.dish-hint.at .tap-rings {
+  transform: translateX(var(--hint-dx, 0px));
+}
+.dish-hint.at.up {
+  flex-direction: column-reverse;
+  transform: translate(-50%, calc(-100% + 32px));
+}
 .dish-hint .tap-rings {
   position: relative;
   width: 64px;

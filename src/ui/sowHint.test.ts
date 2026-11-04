@@ -21,6 +21,12 @@ describe('«¡Toca aquí!» points at a safe spot (QA-CLARIDAD-2 C3)', () => {
     expect(Math.abs(p.y - dish.cy) > 2 * R || p.x < swimmer.x).toBe(true);
   });
 
+  it('never under the bar and the notices at the top of the dish', () => {
+    const low = { x: dish.cx, y: dish.cy + 40, r: 8 };
+    const top = (_x: number, y: number) => y < dish.cy - 20;
+    expect(safeSowSpot(dish, [low], R, 45, top).y).toBeGreaterThanOrEqual(dish.cy - 20);
+  });
+
   it('an empty dish: the centre, as before', () => {
     expect(safeSowSpot(dish, [], R)).toEqual({ x: dish.cx, y: dish.cy });
   });

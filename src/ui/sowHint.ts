@@ -26,7 +26,14 @@ const GLASS_KEEP_R = 1.6;
  * glass, the one farthest from the nearest body's outline, now and `aheadSteps` steps on its way (ties: farther
  * from the glass). An empty dish: the centre.
  */
-export function safeSowSpot(dish: { cx: number; cy: number; radius: number }, bodies: readonly SowBody[], R: number, aheadSteps = 45): { x: number; y: number } {
+export function safeSowSpot(
+  dish: { cx: number; cy: number; radius: number },
+  bodies: readonly SowBody[],
+  R: number,
+  aheadSteps = 45,
+  /** Spots the hint must not use (under the objective bar and the notices at the top of the dish). */
+  keepOut?: (x: number, y: number) => boolean,
+): { x: number; y: number } {
   const best = { x: dish.cx, y: dish.cy };
   if (!bodies.length) return best;
   // A seed's body, the half kernel the game keeps from the glass («muy pegada al cristal») and a margin.
@@ -49,6 +56,7 @@ export function safeSowSpot(dish: { cx: number; cy: number; radius: number }, bo
       const a = ((k + (f === RINGS[1] ? 0.5 : 0)) / PER_RING) * Math.PI * 2 - Math.PI / 2;
       const x = dish.cx + Math.cos(a) * usable * f;
       const y = dish.cy + Math.sin(a) * usable * f;
+      if (keepOut?.(x, y)) continue;
       const c = clearance(x, y);
       const rim = dish.radius - usable * f;
       if (c > bestC + 1e-6 || (Math.abs(c - bestC) <= 1e-6 && rim > bestRim)) {
