@@ -419,9 +419,12 @@ export const TEXT = {
     encargo: t('encargo', 'request'),
     firstSeed: t('primera semilla', 'first seed'),
     firstCreature: t('primera criatura', 'first creature'),
-    goal: t('meta cumplida', 'goal done'),
+    // «meta cumplida» said nothing (QA-CLARIDAD-2 C9): these are the session's requests, like an Encargo's.
+    goal: t('encargo cumplido', 'request done'),
   } as Record<LuzGiftReason, Text>,
   giftLine: (amount: number, reason: Text) => t(`+${f(amount)} · ${reason.es}`, `+${f(amount)} · ${reason.en}`),
+  /** Several requests' light at once, one chip («+189 · 7 encargos cumplidos»). */
+  giftMany: (n: number) => t(`${n} encargos cumplidos`, `${n} requests done`),
   /** A seed that never became stable went dark (game/contact.ts deathCause), a 2 s label in place, grey fade. */
   deathGlass: t('Se apagó: muy pegada al cristal', 'Went dark: too close to the glass'),
   deathCrowd: t('Se apagó: muy cerca de otra', 'Went dark: too close to another'),

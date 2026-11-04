@@ -329,7 +329,7 @@ class BiolumaUI implements UI {
   private essLabel!: HTMLElement;
   /** "+5 · primera semilla": why some Luz arrived without a drop (bus luzGift), beside the counter. */
   private giftEl!: HTMLElement;
-  private gift: { key: string; amount: number; reason: Text; at: number } | null = null;
+  private gift: { key: string; amount: number; reason: Text; at: number; n: number } | null = null;
   private giftTimer = 0;
   /** The counter as an 8 Hz instrument readout that counts the light when it lands (ARTE-REALISTA §6.8). */
   private readonly readout = new Readout();
@@ -2122,14 +2122,19 @@ class BiolumaUI implements UI {
     }
   }
 
-  /** "+5 · primera semilla" beside the counter (bus luzGift): one chip, amounts of the same reason add up. */
+  /**
+   * "+5 · primera semilla" beside the counter (bus luzGift): one chip, amounts of the same reason add up; the
+   * session's requests and the Encargos are one reason, counted («+189 · 7 encargos cumplidos», QA-CLARIDAD-2 C9).
+   */
   private showGift(amount: number, reason: Text): void {
     if (!(amount > 0)) return;
     const now = performance.now();
-    const key = reason.es + '|' + reason.en;
+    const request = reason.es === TEXT.gift.goal.es || reason.es === TEXT.gift.encargo.es;
+    const key = request ? 'request' : reason.es + '|' + reason.en;
     const g = this.gift && this.gift.key === key && now - this.gift.at < COLLECT_UI.giftMs ? this.gift : null;
-    this.gift = { key, amount: (g?.amount ?? 0) + amount, reason, at: now };
-    setText(this.giftEl, tx(TEXT.giftLine(this.gift.amount, reason)));
+    const n = (g?.n ?? 0) + 1;
+    this.gift = { key, amount: (g?.amount ?? 0) + amount, reason, at: now, n };
+    setText(this.giftEl, tx(TEXT.giftLine(this.gift.amount, request && n > 1 ? TEXT.giftMany(n) : reason)));
     show(this.giftEl, true);
     if (!this.v?.settings.reduceMotion && typeof this.giftEl.animate === 'function' && !g)
       this.giftEl.animate([{ opacity: 0, transform: 'translateY(-4px)' }, { opacity: 1, transform: 'none' }], { duration: DURATION.base, easing: EASING.enter });

@@ -33,6 +33,41 @@ export type SessionHudSound = 'tick' | 'warn' | 'lastMinute' | 'timesUp' | 'exte
 
 /** How long «+3 s · especie nueva» stays docked on the clock before it melts into the digits, ms. */
 const EXTEND_HOLD_MS = 2000;
+/** How long a long chip (the first species, a burst of bonuses) stays docked, ms. */
+const EXTEND_LONG_HOLD_MS = 2400;
+
+/** Seconds the clock gained in one burst, by what gave them (QA-CLARIDAD-2 C9). */
+export interface ExtendGroup {
+  seconds: number;
+  species: number;
+  encargo: number;
+  golden: number;
+  other: number;
+  /** The save's first species is in it (its long line, CLARIDAD J-170). */
+  first: boolean;
+}
+
+/**
+ * The chip for a burst of clock bonuses: one alone is «+3 s · encargo» (or the first species' long line); several
+ * at once are one long chip that says what they were, «¡+21 s de reloj! 7 encargos cumplidos» (QA-CLARIDAD-2 C9:
+ * seven «+3 s · encargo» chips and the clock jumping 0:11 → 0:32 without a word).
+ */
+export function extendChip(g: ExtendGroup, l: Lang): { long: boolean; text: string; why: string } {
+  const s = Math.round(g.seconds);
+  const n = g.species + g.encargo + g.golden + g.other;
+  if (n <= 1) {
+    if (g.first && g.species) return { long: true, text: SESSION_UI.newSpeciesTime(s)[l], why: '' };
+    const why = g.species ? SESSION_UI.extendWhy.species[l] : g.encargo ? SESSION_UI.extendWhy.encargo[l] : g.golden ? SESSION_UI.extendWhy.golden[l] : '';
+    return { long: false, text: SESSION_UI.plusTime(s)[l], why };
+  }
+  const parts: string[] = [];
+  if (g.encargo) parts.push(SESSION_UI.extendEncargos(g.encargo)[l]);
+  if (g.species) parts.push(SESSION_UI.extendSpecies(g.species)[l]);
+  if (g.golden) parts.push(SESSION_UI.extendWhy.golden[l]);
+  const and = l === 'es' ? ' y ' : ' and ';
+  const list = parts.length > 1 ? `${parts.slice(0, -1).join(', ')}${and}${parts[parts.length - 1]}` : (parts[0] ?? '');
+  return { long: true, text: SESSION_UI.extendBurst(s, list)[l], why: '' };
+}
 
 export interface SessionHudOptions {
   lang(): Lang;
@@ -198,6 +233,54 @@ export function createSessionHud(container: HTMLElement, opts: SessionHudOptions
   let lastState = '';
   let lastText = '';
 
+  /** Clock bonuses of the burst still being gathered (one chip for all of them). */
+  let pendingExtend: ExtendGroup | null = null;
+  let extendTimer = 0;
+  function flushExtend(): void {
+    extendTimer = 0;
+    const g = pendingExtend;
+    pendingExtend = null;
+    if (!g) return;
+    opts.onSound?.('extend');
+    const l = opts.lang();
+    const c = extendChip(g, l);
+    const chip = document.createElement('span');
+    chip.className = 'ss-plus';
+    // «+3 s · especie nueva» (docs/CLARIDAD2.md §5.5): what gave the time, for 2 s; the needle goes back by itself.
+    if (c.long) {
+      chip.classList.add('long');
+      chip.textContent = c.text;
+    } else chip.innerHTML = `${c.text}${c.why ? `<small>· ${c.why}</small>` : ''}`;
+    el.appendChild(chip);
+    // The time travels INTO the clock (B-7): it rises 450 ms `enter` from under the clock and docks on
+    // the clock's own lower edge (its place: never over the Datos preview or VELA's task below), holds,
+    // then melts up into the digits, which pop.
+    const hold = c.long ? EXTEND_LONG_HOLD_MS : EXTEND_HOLD_MS;
+    if (rm() || typeof chip.animate !== 'function') {
+      window.setTimeout(() => chip.remove(), hold + 600);
+      return;
+    }
+    const docked = 'translate(-50%, calc(-50% - 4px)) scale(1)';
+    chip.animate(
+      [
+        { opacity: 0, transform: 'translate(-50%, 18px) scale(.9)' },
+        { opacity: 1, transform: docked },
+      ],
+      { duration: 450, easing: EASING.enter, fill: 'both' },
+    );
+    window.setTimeout(() => {
+      const out = chip.animate(
+        [
+          { opacity: 1, transform: docked },
+          { opacity: 0, transform: 'translate(-50%, -160%) scale(.7)' },
+        ],
+        { duration: DURATION.card, easing: EASING.exit, fill: 'forwards' },
+      );
+      out.onfinish = () => chip.remove();
+      pop(num, 1.1);
+    }, 450 + hold);
+  }
+
   const api: SessionHud = {
     el,
     update(v) {
@@ -238,46 +321,15 @@ export function createSessionHud(container: HTMLElement, opts: SessionHudOptions
     },
     extended(seconds, reason, first) {
       if (!(seconds > 0)) return;
-      opts.onSound?.('extend');
-      const l = opts.lang();
-      const chip = document.createElement('span');
-      chip.className = 'ss-plus';
-      // «+3 s · especie nueva» (docs/CLARIDAD2.md §5.5): what gave the time, for 2 s; the needle goes back by itself.
-      const why =
-        reason === 'species' ? (l === 'es' ? 'especie nueva' : 'new species') : reason === 'encargo' ? (l === 'es' ? 'encargo' : 'request') : reason === 'golden' ? (l === 'es' ? 'Destello' : 'Spark') : '';
-      // The first new species that lengthens the clock says so in words (CLARIDAD J-170).
-      if (first && reason === 'species') {
-        chip.classList.add('long');
-        chip.textContent = SESSION_UI.newSpeciesTime(Math.round(seconds))[l];
-      } else chip.innerHTML = `${SESSION_UI.plusTime(Math.round(seconds))[l]}${why ? `<small>· ${why}</small>` : ''}`;
-      el.appendChild(chip);
-      // The time travels INTO the clock (B-7): it rises 450 ms `enter` from under the clock and docks on
-      // the clock's own lower edge (its place: never over the Datos preview or VELA's task below), holds,
-      // then melts up into the digits, which pop.
-      const hold = first ? 2400 : EXTEND_HOLD_MS;
-      if (rm() || typeof chip.animate !== 'function') {
-        window.setTimeout(() => chip.remove(), hold + 600);
-        return;
-      }
-      const docked = 'translate(-50%, calc(-50% - 4px)) scale(1)';
-      chip.animate(
-        [
-          { opacity: 0, transform: 'translate(-50%, 18px) scale(.9)' },
-          { opacity: 1, transform: docked },
-        ],
-        { duration: 450, easing: EASING.enter, fill: 'both' },
-      );
-      window.setTimeout(() => {
-        const out = chip.animate(
-          [
-            { opacity: 1, transform: docked },
-            { opacity: 0, transform: 'translate(-50%, -160%) scale(.7)' },
-          ],
-          { duration: DURATION.card, easing: EASING.exit, fill: 'forwards' },
-        );
-        out.onfinish = () => chip.remove();
-        pop(num, 1.1);
-      }, 450 + hold);
+      // Bonuses that come together (a species and the 7 requests it met) are one chip (QA-CLARIDAD-2 C9).
+      const g = (pendingExtend ??= { seconds: 0, species: 0, encargo: 0, golden: 0, other: 0, first: false });
+      g.seconds += seconds;
+      if (reason === 'species') g.species++;
+      else if (reason === 'encargo') g.encargo++;
+      else if (reason === 'golden') g.golden++;
+      else g.other++;
+      if (first && reason === 'species') g.first = true;
+      if (!extendTimer) extendTimer = window.setTimeout(flushExtend, C.SESSION_NOTICE_GROUP_MS);
     },
     lastMinute(over) {
       opts.onSound?.('lastMinute');
@@ -375,6 +427,7 @@ export function createSessionHud(container: HTMLElement, opts: SessionHudOptions
     },
     dispose() {
       cancelAnimationFrame(needleRaf);
+      clearTimeout(extendTimer);
       wrap.remove();
       prev.remove();
     },

@@ -128,6 +128,12 @@ export const INCUBATE_MAX_S = 5;
  */
 export const START_WAKE_MAX_S = 6;
 /**
+ * Notices that come within this many ms are one message (QA-CLARIDAD-2 C9: a new species met 7 requests at once:
+ * 7 «+3 s · encargo» chips and «+189 · meta cumplida», the clock jumping 0:11 → 0:32 unexplained). They arrive in
+ * the same game tick or the next report; a short window keeps the chip from lagging the clock. [QA-CLARIDAD-2]
+ */
+export const SESSION_NOTICE_GROUP_MS = 250;
+/**
  * Pace ramp, seconds: once the pre-incubated culture is lit (docs/ARTE-PULIDO.md A-6, §7.3: it holds
  * still during the 700 ms light-up), the dish's time-lapse climbs from rest to SESSION_SIM_PACE over
  * this long, counted only while the dish steps (a start card that pauses it never hands over a dish

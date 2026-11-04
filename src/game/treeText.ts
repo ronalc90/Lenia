@@ -444,6 +444,12 @@ export const SESSION_UI = {
   sheetHintBought: t('¡Es tuya para siempre! La notarás en la próxima sesión.', 'It is yours forever! You will feel it next session.'),
   worldHint: t('Toca un mundo para jugar allí.', 'Tap a world to play there.'),
   newSpeciesTime: (s: number) => t(`¡Especie nueva: +${s} segundos!`, `New species: +${s} seconds!`),
+  /** What gave the clock its seconds, on the «+3 s» chip (docs/CLARIDAD2.md §5.5). */
+  extendWhy: { species: t('especie nueva', 'new species'), encargo: t('encargo', 'request'), golden: t('Destello', 'Spark') },
+  /** Several clock bonuses at once, one chip (QA-CLARIDAD-2 C9): «¡+21 s de reloj! 7 encargos cumplidos». */
+  extendBurst: (s: number, what: string) => t(`¡+${s} s de reloj! ${what}`, `+${s} s on the clock! ${what}`),
+  extendEncargos: (n: number) => (n === 1 ? t('1 encargo cumplido', '1 request done') : t(`${n} encargos cumplidos`, `${n} requests done`)),
+  extendSpecies: (n: number) => (n === 1 ? t('1 especie nueva', '1 new species') : t(`${n} especies nuevas`, `${n} new species`)),
   // ── ADR-030 (docs/CLARIDAD2.md §8.2): Luz that is collected, Nutrientes, a report that tells a story ──
   // Amounts arrive formatted for the player's language (strings); counts are numbers (plurals).
   /** The in-run currency on screen (code ids stay `essence`). */

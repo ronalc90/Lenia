@@ -4,7 +4,8 @@ import { beginSession, computeDatos, freshResearch, noteEncargo, noteEssence, no
 import { treeEffects } from '../../game/tree';
 import { nodePriceExplain } from '../tree/treeView';
 import { fmt } from '../format';
-import { NEEDLE, dialTarget, hudSub, stepNeedle } from './hud';
+import { NEEDLE, dialTarget, extendChip, hudSub, stepNeedle } from './hud';
+import { TEXT } from '../../game/content';
 import { hudState } from './hud';
 import { datosExplain, reportDataOf, reportHeadline, reportRows, type ReportData } from './summary';
 import type { SessionSummary } from '../../game/session';
@@ -287,5 +288,26 @@ describe('tree price for the shared "¿Por qué cuesta esto?" sheet', () => {
     expect(x.advice).toBe('Te faltan 2 Datos — una sesión más');
     expect(nodePriceExplain('clock', C.TIME_CLOCK_LEVELS, 'es')).toBeNull(); // maxed
     expect(nodePriceExplain('lab', 1, 'es')).toBeNull();
+  });
+});
+
+describe('a burst of notices is one message (QA-CLARIDAD-2 C9)', () => {
+  const g = (o: Partial<Parameters<typeof extendChip>[0]>) => ({ seconds: 0, species: 0, encargo: 0, golden: 0, other: 0, first: false, ...o });
+  it('7 «+3 s · encargo» at once become one chip that says what gave the clock its seconds', () => {
+    const c = extendChip(g({ seconds: 21, encargo: 7 }), 'es');
+    expect(c.long).toBe(true);
+    expect(c.text).toBe('¡+21 s de reloj! 7 encargos cumplidos');
+    expect(extendChip(g({ seconds: 24, encargo: 7, species: 1 }), 'es').text).toBe('¡+24 s de reloj! 7 encargos cumplidos y 1 especie nueva');
+    expect(extendChip(g({ seconds: 21, encargo: 7 }), 'en').text).toBe('+21 s on the clock! 7 requests done');
+  });
+
+  it('one bonus alone stays the short chip («+3 s · encargo»), the first species its long line', () => {
+    expect(extendChip(g({ seconds: 3, encargo: 1 }), 'es')).toEqual({ long: false, text: '+3 s', why: 'encargo' });
+    expect(extendChip(g({ seconds: 3, species: 1, first: true }), 'es')).toEqual({ long: true, text: '¡Especie nueva: +3 segundos!', why: '' });
+  });
+
+  it('the light of several requests says where it came from («+189 · meta cumplida» meant nothing)', () => {
+    expect(TEXT.giftLine(189, TEXT.giftMany(7)).es).toBe('+189 · 7 encargos cumplidos');
+    expect(TEXT.giftLine(27, TEXT.gift.goal).es).toBe('+27 · encargo cumplido');
   });
 });
