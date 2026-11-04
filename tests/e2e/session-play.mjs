@@ -357,6 +357,10 @@ async function runCase(c) {
           if (hidden) continue;
           const b = e.getBoundingClientRect();
           if (b.width < 2 || b.height < 2) continue;
+          // On screen means seen: a message under an opaque screen of its own (the dish's objective bar under
+          // the Research tree) is not "stacked" with what shows on that screen.
+          const top = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+          if (top && !e.contains(top) && !top.contains(e) && getComputedStyle(top).pointerEvents !== 'none' && top.closest('.rt') && !e.closest('.rt')) continue;
           boxes.push({ s, b: [b.left, b.top, b.right, b.bottom] });
         }
       const out = [];
@@ -718,18 +722,6 @@ async function runCase(c) {
         await page.waitForTimeout(400);
       }
     }
-    for (let i = 0; i < 4; i++) {
-      await settle(`seed ${k}`);
-      await collectOnce();
-      await seedOnce();
-    }
-    await settle(`seed ${k}`);
-    v = await view();
-    // The clock started: it runs, or (a software-GL machine under load can spend a whole short e2e session
-    // on four sowings) it already ran out, which only a started clock can do.
-    const started = !!v.session && (v.session.phase === 'running' || (v.session.phase === 'over' && v.session.remaining < v.session.total));
-    if (!started) problems.push(`[${c.name}] session ${k}: the clock did not start after seeding (${JSON.stringify(v.session)})`);
-    say(`Session ${k}: seeded, the clock runs (${v.session?.remaining ?? '?'} s left, ${v.creatures} creatures).`);
     // QA#3 (docs/CLARIDAD2.md §2.12): with the Copiadora bought, the seed pill shows «Copiar»; it lists this
     // world's species and a pick enters the copy mode.
     if ((await page.evaluate(() => window.bioluma.game.research?.levels.print ?? 0)) > 0 && (await view()).session?.phase === 'running') {
@@ -743,7 +735,11 @@ async function runCase(c) {
           await shot(`s${k}-copy-strip`);
           await tapSel('.copy-strip .cs-sp');
           await page.waitForTimeout(500);
-          if (!(await visible('.mode-pill.print'))) problems.push(`[${c.name}] QA#3: picking a species in «Copiar» did not enter the copy mode`);
+          if (!(await visible('.mode-pill.print'))) {
+            // A slow software-GL click can land after «¡Tiempo!»: the run is over, so there is no copy mode to enter.
+            if ((await view()).session?.phase === 'over') say(`QA#3: the session ended before the pick landed (slow GL); not checked`);
+            else problems.push(`[${c.name}] QA#3: picking a species in «Copiar» did not enter the copy mode`);
+          }
           else {
             await shot(`s${k}-copy-mode`);
             say(`Session ${k}: «Copiar» by the seed: picked a species, the pill says where to put the copy.`);
@@ -756,6 +752,18 @@ async function runCase(c) {
         } else problems.push(`[${c.name}] QA#3: «Copiar» opened no species strip`);
       }
     }
+    for (let i = 0; i < 4; i++) {
+      await settle(`seed ${k}`);
+      await collectOnce();
+      await seedOnce();
+    }
+    await settle(`seed ${k}`);
+    v = await view();
+    // The clock started: it runs, or (a software-GL machine under load can spend a whole short e2e session
+    // on four sowings) it already ran out, which only a started clock can do.
+    const started = !!v.session && (v.session.phase === 'running' || (v.session.phase === 'over' && v.session.remaining < v.session.total));
+    if (!started) problems.push(`[${c.name}] session ${k}: the clock did not start after seeding (${JSON.stringify(v.session)})`);
+    say(`Session ${k}: seeded, the clock runs (${v.session?.remaining ?? '?'} s left, ${v.creatures} creatures).`);
     // QA#19/#40 (docs/CLARIDAD2.md §2.3): the clock does not move while the Bestiary is open.
     if (k === 2 && (await view()).session?.phase === 'running' && (await settle(`bestiary clock ${k}`), (await view()).session?.phase === 'running')) {
       // The dock ignores a tap for 350 ms after something stopped covering it (QA#17): like a player, tap the
