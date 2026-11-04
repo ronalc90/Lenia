@@ -346,7 +346,8 @@ async function runCase(c) {
   /** Several of these on screen at once would be the "stacked bubbles" bug. */
   const overlapCheck = async (label) => {
     const hits = await page.evaluate(() => {
-      const sels = ['.bl-objective:not([hidden])', '.sty-box', '.sty-task', '.enc-bubble', '.mo-card', '.mo-brief', '.ss-banner', '.toast'];
+      // A toast fading out (`.out`, 160 ms: it stepped aside for VELA or a brief) is leaving, not stacked.
+      const sels = ['.bl-objective:not([hidden])', '.sty-box', '.sty-task', '.enc-bubble', '.mo-card', '.mo-brief', '.ss-banner', '.toast:not(.out)'];
       const boxes = [];
       for (const s of sels)
         for (const e of document.querySelectorAll(s)) {
