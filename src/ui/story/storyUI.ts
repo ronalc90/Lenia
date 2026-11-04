@@ -760,7 +760,9 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
       cine?.relabel();
     },
     get busy() {
-      return !box.hidden || !task.hidden || !choice.hidden || !!cine;
+      // Showing includes a box that left to re-enter on the other side: a toast must not slip into that
+      // one-frame gap and land on top of her line (session-play: «.sty-box × .toast» at t_stable).
+      return showing() || !!cine;
     },
     debug: {
       /** The spotlight's hole (layer-relative CSS px) or null: tests check where VELA points. */
