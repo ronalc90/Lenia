@@ -12,6 +12,8 @@
 //   B1     (QA-CLARIDAD-2) On a slow device the start card's «¡Empezar!» is tappable within the wait cap, with
 //          the seconds counting down on it: a 6× throttled CPU, real time (no lockstep), software GL. v0.023
 //          hung there for minutes (1250 hidden steps at 2 a frame).
+//   B2     (QA-CLARIDAD-2) On the same slow device the tutorial's first seed is lit on the dish within the
+//          incubation cap (v0.023: a dark dish and a silent VELA for minutes).
 //
 // Usage: node tests/e2e/release-checks.mjs [--dist <dir>] [--out <dir>]   (VITE_E2E build: debug handle)
 import { spawn, spawnSync } from 'node:child_process';
@@ -337,8 +339,29 @@ try {
     const Cd = await newPage();
     const pc = Cd.page;
     const tapC = await boot(pc);
+    // A slow phone in real time: no lockstep, no time scale, the CPU 6× slower.
+    const cdp = await Cd.ctx.newCDPSession(pc);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 6 });
+    const born = await pc.evaluate(async () => {
+      const b = window.bioluma;
+      Object.assign(b.debugTime, { scale: 1, lockstep: false });
+      // The tutorial's first tap (game.actions.seedAt is what a tap on the dish calls).
+      const d = b.game.view().dish;
+      b.game.actions.seedAt(d.cx, d.cy);
+      const t0 = performance.now();
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 100));
+        const alive = b.game.view().creatures.some((c) => c.state !== 'dead');
+        if ((b.culture.lit && alive) || performance.now() - t0 > 45000) return { s: (performance.now() - t0) / 1000, lit: b.culture.lit, alive, capped: b.culture.capped };
+      }
+    });
+    notes.push(`B2: the tutorial's first seed lit after ${born.s.toFixed(1)} s on a 6× throttled CPU (alive ${born.alive}, capped ${born.capped})`);
+    // INCUBATE_MAX_S = 5 plus the 700 ms light-up and a throttled frame or two.
+    if (!(born.lit && born.alive && born.s <= 7.5)) problems.push(`B2: the tutorial's first seed was not on the dish after ${born.s.toFixed(1)} s on a slow device`);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
     await pc.evaluate(() => {
       const b = window.bioluma;
+      Object.assign(b.debugTime, { scale: 6, lockstep: true });
       b.story.skipTutorial();
       if (b.story.current()) b.story.skip();
       const d = b.game.view().dish;
@@ -348,8 +371,6 @@ try {
     await pc.evaluate(() => window.bioluma.game.actions.endSessionNow?.());
     for (let i = 0; i < 40 && !(await pc.locator('.ss-layer [data-act="next"]').first().isVisible().catch(() => false)); i++) await pc.waitForTimeout(400);
     await pc.waitForTimeout(4500); // the staged tally
-    // A slow phone in real time: no lockstep, no time scale, the CPU 6× slower.
-    const cdp = await Cd.ctx.newCDPSession(pc);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 6 });
     await pc.evaluate(() => {
       const b = window.bioluma;
