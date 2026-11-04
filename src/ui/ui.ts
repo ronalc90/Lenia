@@ -41,7 +41,8 @@ import type { LeaderboardClient } from './leaderboard-types';
 import { createSplash, type Splash } from './splash';
 import { Toasts } from './toasts';
 import { SESSION_UI } from '../game/treeText';
-import { MOMENT_MIN_RUN_SECONDS, SESSION_TOAST_MAX_MS, SIM_STEPS_PER_SEC } from '../game/cycleBalance';
+import { MOMENT_MIN_RUN_SECONDS, SESSION_SIM_PACE, SESSION_TOAST_MAX_MS, SIM_STEPS_PER_SEC } from '../game/cycleBalance';
+import { safeSowSpot } from './sowHint';
 import { earningNow } from './moments/status';
 import { installPressFeedback, pop, restartClass, setReduceMotion, DURATION, EASING } from './art/motion';
 
@@ -400,6 +401,8 @@ class BiolumaUI implements UI {
   private buffRows = new Map<string, { el: HTMLElement; ring: HTMLElement; name: HTMLElement; x: HTMLElement; tm: HTMLElement }>();
   private buffMax = new Map<string, number>();
   private hintEl: HTMLElement | null = null;
+  /** Where «¡Toca aquí!» points on a dish with creatures (grid cells; QA-CLARIDAD-2 C3), or null: the centre. */
+  private hintSpot: { x: number; y: number } | null = null;
   private gestureHint: HTMLElement | null = null;
   private toasts = new Toasts();
   private card: {
@@ -1864,7 +1867,9 @@ class BiolumaUI implements UI {
         wantHint ? h('div', { class: 'h2' }, waiting && this.firstTapDone ? tx(SESSION_UI.startHint) : t('tapDishSub')) : null,
       );
       this.dishUI.appendChild(this.hintEl);
+      this.hintSpot = null;
     } else if (!want && this.hintEl) this.hideFirstHint();
+    if (this.hintEl) this.placeHint(v);
 
     // Gesture hints the first time a gesture becomes available.
     if (!this.hintEl && !this.gestureHint && !this.card && !this.splash?.visible && !this.deps.isNarrating?.()) {
@@ -1883,6 +1888,28 @@ class BiolumaUI implements UI {
         this.showGestureHint(t('hintSteer'), 'motion');
       }
     }
+  }
+
+  /**
+   * «¡Toca aquí!» over free agar (QA-CLARIDAD-2 C3): with creatures on the dish (the Nevera's, from session 2) the
+   * centre sat on top of them; the spot is picked once and again only when a creature comes near it.
+   */
+  private placeHint(v: GameView): void {
+    const el = this.hintEl!;
+    const R = v.calibration.R;
+    const bodies = v.creatures.filter((c) => c.state !== 'dead');
+    const near = (p: { x: number; y: number }) => bodies.some((c) => Math.hypot(c.x - p.x, c.y - p.y) - c.r < 2 * R);
+    if (!v.dish || !bodies.length) this.hintSpot = null;
+    else if (!this.hintSpot || near(this.hintSpot)) this.hintSpot = safeSowSpot(v.dish, bodies, R, SIM_STEPS_PER_SEC * SESSION_SIM_PACE);
+    if (!this.hintSpot) {
+      el.classList.remove('at');
+      el.style.left = el.style.top = '';
+      return;
+    }
+    const p = this.camera.gridToScreen(this.hintSpot.x, this.hintSpot.y);
+    el.classList.add('at');
+    setStyle(el, 'left', `${Math.round(p.x)}px`);
+    setStyle(el, 'top', `${Math.round(p.y)}px`);
   }
 
   private hideFirstHint(): void {

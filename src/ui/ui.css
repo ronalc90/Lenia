@@ -703,6 +703,12 @@
   text-align: center;
   animation: bl-fade-in var(--bl-t-story) var(--ease);
 }
+/* Pointing at a spot (QA-CLARIDAD-2 C3): the rings' centre sits on it, the words under them. */
+.dish-hint.at {
+  transform: translate(-50%, -32px);
+  width: max-content;
+  max-width: 60%;
+}
 .dish-hint .tap-rings {
   position: relative;
   width: 64px;
