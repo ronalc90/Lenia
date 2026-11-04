@@ -242,6 +242,18 @@ export const TREE_UI = {
   /** The night button while its gate is not met (J-102): what is still missing. */
   nightNotYet: (sessions: number) =>
     sessions === 1 ? t('Aún no: falta 1 sesión', 'Not yet: 1 session to go') : t(`Aún no: faltan ${sessions} sesiones`, `Not yet: ${sessions} sessions to go`),
+  /**
+   * …said with the same counts as the sheet's two bars (QA-CLARIDAD-2 C5: «Juega 4 · llevas 3» over «faltan 5
+   * sesiones», which was the never-stuck fallback). `orSessions`: sessions left to the fallback, when a species is missing.
+   */
+  nightNotYetGate: (sessions: number, species: number, orSessions: number) => {
+    const sp = species === 1 ? t('1 especie', '1 species') : t(`${species} especies`, `${species} species`);
+    const ses = sessions === 1 ? t('1 sesión más', '1 more session') : t(`${sessions} sesiones más`, `${sessions} more sessions`);
+    const or = t(`(o juega ${orSessions} sesiones)`, `(or play ${orSessions} sessions)`);
+    return sessions > 0
+      ? t(`Aún no: ${ses.es} y ${sp.es} ${or.es}`, `Not yet: ${ses.en} and ${sp.en} ${or.en}`)
+      : t(`Aún no: ${species === 1 ? 'falta' : 'faltan'} ${sp.es} ${or.es}`, `Not yet: ${sp.en} to go ${or.en}`);
+  },
   missing: (n: string, s: string | null) =>
     s ? t(`Te faltan ${n} Datos — ${s}`, `You need ${n} more Data — ${s}`) : t(`Te faltan ${n} Datos`, `You need ${n} more Data`),
   sessions: (n: number) => (n === 1 ? t('una sesión más', 'one more session') : t(`unas ${n} sesiones`, `about ${n} sessions`)),

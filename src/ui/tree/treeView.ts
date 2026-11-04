@@ -22,7 +22,6 @@
  * to buy (opts.onBuy → the host runs session.researchBuy, saves, and calls update()).
  */
 import type { Lang, Pattern, Text } from '../../core/types';
-import * as C from '../../game/cycleBalance';
 import {
   BRANCHES,
   TREE_BANDS,
@@ -36,6 +35,7 @@ import {
   branchAngle,
   costRows,
   nightInfo,
+  nightNotYetText,
   nodeText,
   priceRule,
   routeNodes,
@@ -806,9 +806,9 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
         l === 'es' ? `Empezar la Noche ${ni.next}` : `Start Night ${ni.next}`,
       )}</span>${ni.cost > 0 ? `<b>· ${fmt(ni.cost, l)}</b>` : ''}</button>`;
     } else {
-      const alt = ni.gate.sessions + C.NIGHT_GATE_FALLBACK;
-      const left = data.species >= ni.gate.species ? Math.max(0, ni.gate.sessions - data.sessions) : Math.max(0, alt - data.sessions);
-      body += `<button type="button" class="rt-notyet" data-notyet="1">${treeIcon('moon', 22)}<span>${esc(tx(TREE_UI.nightNotYet(Math.max(1, left)), l))}</span></button>`;
+      // The same counts as the two bars above (QA-CLARIDAD-2 C5).
+      const why = nightNotYetText(ctxOf(data)) ?? TREE_UI.nightNotYet(1);
+      body += `<button type="button" class="rt-notyet" data-notyet="1">${treeIcon('moon', 22)}<span>${esc(tx(why, l))}</span></button>`;
     }
     return body;
   }

@@ -23,6 +23,7 @@ import {
   nodeTotalCost,
   niceRound,
   nightGateLines,
+  nightNotYetText,
   possibleSpecies,
   priceRule,
   routeNodes,
@@ -292,6 +293,23 @@ describe('nights (the centre)', () => {
     expect(r.ok).toBe(true);
     expect(r.levels.lab).toBe(2);
     expect(r.datos).toBe(0);
+  });
+
+  it('QA-CLARIDAD-2 C5: the «Aún no» button counts what its bars count («llevas 3 de 4» vs «faltan 5 sesiones»)', () => {
+    const gate = C.NIGHT_GATES[0];
+    // 3 of 4 sessions, no species yet: one more session AND one species, or the never-stuck fallback.
+    const both = nightNotYetText(ctx({}, 0, gate.sessions - 1, 0))!.es;
+    expect(both).toMatch(/1 sesión más/);
+    expect(both).toMatch(/1 especie/);
+    expect(both).toContain(`${gate.sessions + C.NIGHT_GATE_FALLBACK - (gate.sessions - 1)} sesiones`);
+    // The species is there: only the session is missing.
+    expect(nightNotYetText(ctx({}, 0, gate.sessions - 1, gate.species))!.es).toBe('Aún no: falta 1 sesión');
+    // The sessions are there: only the species (or the fallback).
+    const sp = nightNotYetText(ctx({}, 0, gate.sessions, 0))!.es;
+    expect(sp).toMatch(/^Aún no: falta 1 especie/);
+    expect(sp).not.toMatch(/falta 1 sesión/);
+    // Ready: no «Aún no».
+    expect(nightNotYetText(ctx({}, 0, gate.sessions, gate.species))).toBeNull();
   });
 
   it('opens ring 3 on night 2, ring 4 on night 3 and ring 5 on night 4', () => {

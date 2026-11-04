@@ -682,6 +682,19 @@ export function nightGateLines(ctx: TreeCtx): Text[] {
   return [TREE_UI.nightPrize(ni.next), TREE_UI.gateSessions(ctx.sessions, ni.gate.sessions), TREE_UI.gateSpecies(ctx.species, ni.gate.species)];
 }
 
+/**
+ * The night button while its gate is not met, in the counts of the sheet's two bars (QA-CLARIDAD-2 C5): the
+ * sessions and the species still missing, and the never-stuck fallback when a species is missing. Null once met.
+ */
+export function nightNotYetText(ctx: TreeCtx): Text | null {
+  const ni = nightInfo(ctx);
+  if (!ni.next || !ni.gate || ni.gateMet) return null;
+  const sessions = Math.max(0, ni.gate.sessions - ctx.sessions);
+  const species = Math.max(0, ni.gate.species - ctx.species);
+  if (species === 0) return TREE_UI.nightNotYet(Math.max(1, sessions));
+  return TREE_UI.nightNotYetGate(sessions, species, Math.max(1, ni.gate.sessions + C.NIGHT_GATE_FALLBACK - ctx.sessions));
+}
+
 /** Status of every node. Routes are walked centre outwards, so a node's prerequisite is decided first. */
 export function treeStates(ctx: TreeCtx): Map<string, NodeState> {
   const night = nightOf(ctx.levels);
