@@ -482,6 +482,17 @@ async function runCase(c) {
         did = true;
         continue;
       }
+      // A sheet opened by a tap that landed on a toast's «Ver» (the Journal, an achievement): the clock waits
+      // behind it (ADR-030), so a player reads it and closes it.
+      if (!(await page.evaluate(() => !!window.bioluma.ui.drawerOpen)) && (await visible('.modal .modal-close'))) {
+        sheets++;
+        if (sheets === 1) say(`A sheet was open${label ? ` (${label})` : ''}: read it and closed it.`);
+        await tapSel('.modal .modal-close');
+        await page.waitForTimeout(400);
+        did = true;
+        if (sheets > 4) break;
+        continue;
+      }
       // The Bestiary drawer left open (a species chip, a Momento's link): look, then close it like a player.
       if (await page.evaluate(() => !!window.bioluma.ui.drawerOpen)) {
         drawers++;
