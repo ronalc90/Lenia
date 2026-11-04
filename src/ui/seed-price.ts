@@ -33,12 +33,13 @@ const T = {
   wells: { es: 'Huecos', en: 'Room' },
   room1: { es: 'Cabe 1 más', en: 'Room for 1 more' },
   roomN: { es: 'Caben {n} más', en: 'Room for {n} more' },
-  roomFull: { es: 'Placa llena · caben {n}', en: 'Dish full · holds {n}' },
+  // «Placa llena (4 de 4)»: «· caben 4» read as «4 more fit» (QA-CLARIDAD-2 C6).
+  roomFull: { es: 'Placa llena ({n} de {n})', en: 'Dish full ({n} of {n})' },
   roomOver: { es: '{n} de más', en: '{n} too many' },
   // The pill's short room words.
   pill1: { es: 'Cabe 1 más', en: '1 more' },
   pillN: { es: 'Caben {n} más', en: '{n} more' },
-  pillFull: { es: 'Llena · caben {n}', en: 'Full · holds {n}' },
+  pillFull: { es: 'Llena ({n} de {n})', en: 'Full ({n} of {n})' },
   big: { es: 'Mantén pulsado: semilla grande {m}', en: 'Hold: big seed {m}' },
   growing: { es: 'Hay semillas naciendo: espera un poco.', en: 'Seeds are hatching: wait a moment.' },
   ruleSession: { es: 'Una semilla cuesta lo mismo toda la sesión.', en: 'A seed costs the same all session long.' },
@@ -101,10 +102,16 @@ function slotsOf(p: SeedPriceParts): { free: number; used: number; over: number 
   return { free: p.freeSlots, used, over: Math.max(0, used - p.freeSlots) };
 }
 
-/** "Caben 2 más", "Cabe 1 más", "Placa llena · caben 3", "1 de más". */
+/** "Caben 2 más", "Cabe 1 más", "Placa llena (3 de 3)", "1 de más". */
 function roomText(s: { free: number; used: number; over: number }, lang: Lang): string {
   const left = Math.max(0, s.free - s.used);
   return s.over > 0 ? tr(T.roomOver, lang, { n: s.over }) : left === 0 ? tr(T.roomFull, lang, { n: s.free }) : left === 1 ? tr(T.room1, lang) : tr(T.roomN, lang, { n: left });
+}
+
+/** The pill's short room words: "Caben 2 más", "Cabe 1 más", "Llena (4 de 4)", "1 de más". */
+export function pillRoomText(s: { free: number; used: number; over: number }, lang: Lang): string {
+  const left = Math.max(0, s.free - s.used);
+  return s.over > 0 ? tr(T.roomOver, lang, { n: s.over }) : left === 0 ? tr(T.pillFull, lang, { n: s.free }) : left === 1 ? tr(T.pill1, lang) : tr(T.pillN, lang, { n: left });
 }
 
 /**
@@ -248,7 +255,7 @@ export function createSeedMeter(lang: () => Lang): SeedMeter {
         el.classList.toggle('over', !!slots && slots.over > 0);
         if (slots) {
           const left = Math.max(0, slots.free - slots.used);
-          const words = slots.over > 0 ? tr(T.roomOver, L, { n: slots.over }) : left === 0 ? tr(T.pillFull, L, { n: slots.free }) : left === 1 ? tr(T.pill1, L) : tr(T.pillN, L, { n: left });
+          const words = pillRoomText(slots, L);
           dots.innerHTML = `${moIcon('creatures', 14)}<span>${words}</span>`;
           dots.classList.toggle('full', left === 0 || slots.over > 0);
           el.setAttribute('aria-label', roomText(slots, L));

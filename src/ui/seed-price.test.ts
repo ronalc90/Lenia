@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { GameView } from '../core/types';
 import { makeView } from '../story/testUtil';
 import { priceSheetHtml } from './moments/price';
-import { bigSeedChip, seedPriceChange, seedPriceRule, seedPriceSheetExplain, seedPriceSnap, seedPriceTerms, type SeedPriceParts } from './seed-price';
+import { bigSeedChip, pillRoomText, seedPriceChange, seedPriceRule, seedPriceSheetExplain, seedPriceSnap, seedPriceTerms, type SeedPriceParts } from './seed-price';
 
 /** The sessions loop as the game sends it (docs/CICLO.md, ADR-030): no crowding, room from the Tree. */
 const ses: SeedPriceParts = { base: 4, alive: 3, crowdMult: 1, freeSlots: 4, used: 3, satMult: 1, bigMult: 2.25, freeSeeds: 0, cheapMult: 1, stepMult: 1, bought: 2, capacity: 4 };
@@ -68,12 +68,16 @@ describe('the seed price card (docs/CLARIDAD2.md §2.11)', () => {
     expect(seedPriceTerms(ses, 'es').map((t) => t.value)).toEqual(['4 luz']);
   });
 
-  it('room is a row of wells with words: "Caben 1 más", "Placa llena · caben 4"', () => {
+  it('room is a row of wells with words: "Caben 1 más", "Placa llena (4 de 4)"', () => {
     const x = seedPriceSheetExplain(view(ses, 4), 'es')!;
     expect(x.rows?.[0]).toMatchObject({ label: 'Huecos', text: 'Cabe 1 más', dots: { free: 4, used: 3, over: 0 } });
     expect(priceSheetHtml(x)).toMatch(/mo-well on/);
     const full = seedPriceSheetExplain(view({ ...ses, used: 4, full: true }, 4), 'es', { onSeeTree: () => undefined })!;
-    expect(full.rows?.[0].text).toBe('Placa llena · caben 4');
+    // QA-CLARIDAD-2 C6: «Llena · caben 4» read as «is it full, or do 4 more fit?».
+    expect(full.rows?.[0].text).toBe('Placa llena (4 de 4)');
+    expect(pillRoomText({ free: 4, used: 4, over: 0 }, 'es')).toBe('Llena (4 de 4)');
+    expect(pillRoomText({ free: 4, used: 4, over: 0 }, 'en')).toBe('Full (4 of 4)');
+    expect(pillRoomText({ free: 4, used: 1, over: 0 }, 'es')).toBe('Caben 3 más');
     expect(full.rows?.map((r) => r.text)).toContain('¿Placa llena? Compra «Más sitio» en el Árbol.');
     expect(full.action?.label).toBe('Ver en el Árbol');
     expect(seedPriceSheetExplain(view({ ...ses, freeSeeds: 1 }, 0), 'es')!.rows?.map((r) => r.text)).toContain('1 semilla gratis · las demás, 4 de luz');
