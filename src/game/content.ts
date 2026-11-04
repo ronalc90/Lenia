@@ -399,7 +399,14 @@ export const TEXT = {
   /** Nutrientes (was Abono, ADR-030): the in-session production boost. */
   boost: t('Nutrientes', 'Nutrients'),
   /** `pct`: what all the Nutrientes bought today add, in whole percent («+25 %», a gain in green). */
-  boostBought: (pct: number) => t(`¡Nutrientes! +${pct} % de luz hasta el final.`, `Nutrients! +${pct}% glow until the end.`),
+  /**
+   * Bought: what it gives, and what the next one costs and why (QA-CLARIDAD-2 C11: «10, 12, 24, 49, 97» without a
+   * word). `growth`: the price rule in words («el doble», treeText.growthWord of BOOST_GROWTH).
+   */
+  boostBought: (pct: number, next?: number, growth?: Text) =>
+    next !== undefined && growth
+      ? t(`¡Nutrientes! +${pct} % de luz hasta el final. El siguiente cuesta ${growth.es}: ${f(next)}.`, `Nutrients! +${pct}% glow until the end. The next one costs ${growth.en}: ${f(next)}.`)
+      : t(`¡Nutrientes! +${pct} % de luz hasta el final.`, `Nutrients! +${pct}% glow until the end.`),
   multTree: t('Árbol (Vida)', 'Tree (Life)'),
   multWorld: t('Mundo', 'World'),
   multEcosystem: t('Placa variada', 'Mixed dish'),

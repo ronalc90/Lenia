@@ -196,7 +196,7 @@ import {
   type TreeEffects,
 } from './tree';
 import { isWorldId, REACHABLE_BEHAVIORS, TOTAL_WORLD_SPECIES, WORLD_BY_ID, WORLDS, worldEssenceMult, worldOfSpecies, worldRoom, worldSpeciesGroups, type WorldId } from './worlds';
-import { NODE_TEXT, SESSION_UI, TREE_UI, WORLD_TEXT } from './treeText';
+import { NODE_TEXT, SESSION_UI, TREE_UI, WORLD_TEXT, growthWord } from './treeText';
 
 const NODE_TEXT_CATALOGUING = NODE_TEXT.cataloguing.name;
 import {
@@ -3131,7 +3131,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       se.boosts++;
       const mult = boostMult(se);
       bus.emit('boostBought', { count: se.boosts, mult, cost });
-      toast(TEXT.boostBought(Math.round((mult - 1) * 100)), 'good');
+      toast(TEXT.boostBought(Math.round((mult - 1) * 100), boostCost(se, eps), growthWord(String(C.BOOST_GROWTH))), 'good');
       return true;
     },
   };

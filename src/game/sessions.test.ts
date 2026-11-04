@@ -202,6 +202,24 @@ describe('sessions cycle: gifts and boosts are proportional', () => {
     expect(g.session!.goldens).toBe(1);
   });
 
+  it('QA-CLARIDAD-2 C11: buying Nutrientes says what the next one costs (10, 12, 24, 49… went unexplained)', () => {
+    const { g, log } = sessionsGame();
+    const rep = report(stable(3));
+    g.actions.seedAt(150, 200);
+    g.actions.endSessionNow!();
+    g.actions.startSession!();
+    g.actions.seedAt(150, 200);
+    run(g, 2 + C.BOOST_FROM_SECONDS, rep, 0.5);
+    st(g).essence = 1e6;
+    expect(g.actions.buyBoost!()).toBe(true);
+    const next = g.view().boost!.cost;
+    const toasts = (log.get('toast') ?? []) as { text: { es: string; en: string } }[];
+    const t = toasts.find((x) => /Nutrientes/.test(x.text.es))!;
+    expect(t.text.es).toMatch(/el doble/);
+    expect(t.text.es).toContain(String(next));
+    expect(t.text.en).toContain(String(next));
+  });
+
   it('Abono costs 20 s of production, doubles each time, and raises production ×1,25', () => {
     const { g, count } = sessionsGame();
     const rep = report(stable(3));
