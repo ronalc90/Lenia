@@ -441,8 +441,9 @@ export const SESSION_UI = {
   /** Summary row: all the Luz collected this session (by hand, by pipette and the final sweep). */
   collected: t('Luz recogida', 'Glow collected'),
   /** Summary row: what VELA swept at "¡Tiempo!", already inside the Luz collected. */
-  sweptEnd: t('Recogida final (VELA)', 'Final sweep (VELA)'),
-  sweptNote: t('ya está en la luz de arriba', 'already in the glow above'),
+  /** The drops left at «¡Tiempo!», collected by VELA (QA-CLARIDAD-2 C12: «ya está en la luz de arriba» read as a double payment). */
+  sweptEnd: t('VELA recogió las gotas que quedaban', 'VELA collected the drops that were left'),
+  sweptNote: t('ya contada en «Luz recogida»', 'already counted in “Glow collected”'),
   /** The Datos chip from session 2: "38 Datos · próximo en 12 de luz". */
   datosNext: (datos: string, left: string) =>
     t(`${datos} ${datos === '1' ? 'Dato' : 'Datos'} · próximo en ${left} de luz`, `${datos} Data · next in ${left} glow`),
@@ -468,16 +469,25 @@ export const SESSION_UI = {
     cost
       ? t(`La siguiente vive en el ${world.es} (Árbol, ${cost} Datos)`, `The next one lives in ${world.en} (Tree, ${cost} Data)`)
       : t(`La siguiente vive en el ${world.es}`, `The next one lives in ${world.en}`),
-  /** Summary with fewer Datos than the one before (neutral, never red): why, then what to do (lessAction). */
-  lessReason: (r: { prize: number; before: string; now: string; grew: boolean }) =>
-    t(
-      `${r.prize > 0 ? `Hoy no hubo especie nueva (ayer +${r.prize}).` : 'Hoy salieron menos Datos que ayer.'} ${
-        r.grew ? `Tu luz sí creció: ${r.before} → ${r.now} Datos.` : `Tu luz dio ${r.before} → ${r.now} Datos.`
-      }`,
-      `${r.prize > 0 ? `No new species today (yesterday +${r.prize}).` : 'Fewer Data than yesterday.'} ${
-        r.grew ? `Your glow grew: ${r.before} → ${r.now} Data.` : `Your glow gave ${r.before} → ${r.now} Data.`
-      }`,
-    ),
+  /**
+   * Summary with fewer Datos than the one before (neutral, never red): why, then what to do (lessAction).
+   * `prize` / `today`: the discovery prizes of yesterday and today; `before` / `now`: the Datos the light gave,
+   * the same pair the report's rows show (QA-CLARIDAD-2 C1: «¡Especie nueva!» above, «Hoy no hubo especie
+   * nueva» below, and «25 ↓ ayer 29» against «29 → 27»).
+   */
+  lessReason: (r: { prize: number; today?: number; before: string; now: string; grew: boolean }) => {
+    const today = r.today ?? 0;
+    const why =
+      r.prize > 0 && today <= 0
+        ? t(`Hoy no hubo especie nueva (ayer +${r.prize}).`, `No new species today (yesterday +${r.prize}).`)
+        : r.prize > today
+          ? t(`Hoy los descubrimientos dieron +${today} (ayer +${r.prize}).`, `Today's discoveries gave +${today} (yesterday +${r.prize}).`)
+          : t('Hoy salieron menos Datos que ayer.', 'Fewer Data than yesterday.');
+    const light = r.grew
+      ? t(`Tu luz sí creció: ${r.now} Datos (ayer ${r.before}).`, `Your glow grew: ${r.now} Data (yesterday ${r.before}).`)
+      : t(`Tu luz dio ${r.now} Datos (ayer ${r.before}).`, `Your glow gave ${r.now} Data (yesterday ${r.before}).`);
+    return t(`${why.es} ${light.es}`, `${why.en} ${light.en}`);
+  },
   lessAction: (world: Text) => t(`Para descubrir otra: compra ${world.es} en el Árbol.`, `To discover another: buy ${world.en} in the Tree.`),
   /** …when that World is already open. */
   lessActionPlay: (world: Text) => t(`Para descubrir otra: juega en el ${world.es}.`, `To discover another: play in ${world.en}.`),

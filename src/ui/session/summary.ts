@@ -240,17 +240,16 @@ export function reportRows(sum: SessionSummary, data: ReportData, l: Lang, ctx: 
   const prev = data.previous ?? null;
   rows.push({ kind: 'light', label: SESSION_UI.collected[l], value: fmt(d.essence, l), adds: 0 });
   const trend = prev ? (d.fromEssence > prev.fromLight ? '↑' : d.fromEssence < prev.fromLight ? '↓' : '=') : '';
-  rows.push({
-    kind: 'div',
-    label: `÷ ${d.div}`,
-    value: `${fmt(d.base, l)} ${Dn(d.base)}`,
-    adds: d.base,
-    note: prev ? `${trend} ${SESSION_UI.yesterday(fmt(prev.fromLight, l))[l]}` : undefined,
-    noteTone: prev && trend === '↑' ? 'gain' : undefined,
-  });
+  // «↓ ayer 29» sits next to the Datos the light gave today: on the ÷ row, or, with a night bonus, on the night
+  // row as «= 27 ↓ ayer 29» (QA-CLARIDAD-2 C1: «25 Datos ↓ ayer 29» compared 25 with 29 while 27 was meant).
+  const nightRow = d.fromEssence !== d.base;
+  const vs = prev ? `${trend} ${SESSION_UI.yesterday(fmt(prev.fromLight, l))[l]}` : undefined;
+  const vsTone = prev && trend === '↑' ? ('gain' as const) : undefined;
+  rows.push({ kind: 'div', label: `÷ ${d.div}`, value: `${fmt(d.base, l)} ${Dn(d.base)}`, adds: d.base, note: nightRow ? undefined : vs, noteTone: nightRow ? undefined : vsTone });
+  const nightVs = vs ? `= ${fmt(d.fromEssence, l)} ${vs}` : undefined;
   if (d.nightMult > 1 && d.fromEssence > d.base)
-    rows.push({ kind: 'night', label: `${TREE_UI.night(ctx.night)[l]} ${fmtMult(d.nightMult, l)}`, value: plus(d.fromEssence - d.base), adds: d.fromEssence - d.base, tone: 'gain' });
-  else if (d.fromEssence !== d.base) rows.push({ kind: 'night', label: TREE_UI.night(ctx.night)[l], value: plus(d.fromEssence - d.base), adds: d.fromEssence - d.base });
+    rows.push({ kind: 'night', label: `${TREE_UI.night(ctx.night)[l]} ${fmtMult(d.nightMult, l)}`, value: plus(d.fromEssence - d.base), adds: d.fromEssence - d.base, tone: 'gain', note: nightVs, noteTone: vsTone });
+  else if (nightRow) rows.push({ kind: 'night', label: TREE_UI.night(ctx.night)[l], value: plus(d.fromEssence - d.base), adds: d.fromEssence - d.base, note: nightVs, noteTone: vsTone });
 
   // A term as named rows (when the names match its count) or one "label count × each" row.
   const named = (kind: ReportRow['kind'], t: DatosBreakdown['terms'][number] | null, names: string[] | null, label: string, section?: ReportRow['section']) => {
@@ -313,7 +312,13 @@ export function reportRows(sum: SessionSummary, data: ReportData, l: Lang, ctx: 
   if (prev && d.total < prev.total) {
     rows.push({
       kind: 'less',
-      label: SESSION_UI.lessReason({ prize: prev.prize, before: fmt(prev.fromLight, l), now: fmt(d.fromEssence, l), grew: d.fromEssence > prev.fromLight })[l],
+      label: SESSION_UI.lessReason({
+        prize: prev.prize,
+        today: d.terms.filter((t) => t.kind === 'species' || t.kind === 'variants' || t.kind === 'behaviors').reduce((a, t) => a + t.value, 0),
+        before: fmt(prev.fromLight, l),
+        now: fmt(d.fromEssence, l),
+        grew: d.fromEssence > prev.fromLight,
+      })[l],
       value: '',
       adds: 0,
       note: data.lessAction ? data.lessAction[l] : data.lessWorld ? SESSION_UI.lessAction(data.lessWorld)[l] : undefined,

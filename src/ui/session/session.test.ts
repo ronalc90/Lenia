@@ -107,12 +107,48 @@ describe('the session report tells a story (docs/CLARIDAD2.md §2.9)', () => {
     const rows = reportRows(sum, data, 'es', ctxOf(1));
     const less = rows.find((r) => r.kind === 'less')!;
     expect(less.tone).toBe('info');
-    expect(less.label).toBe('Hoy no hubo especie nueva (ayer +10). Tu luz sí creció: 2 → 6 Datos.');
+    expect(less.label).toBe('Hoy no hubo especie nueva (ayer +10). Tu luz sí creció: 6 Datos (ayer 2).');
     expect(less.note).toBe('Para descubrir otra: compra Mundo 2 en el Árbol.');
     // "ayer 2 ↑" next to the Datos the light gave.
     expect(rows.find((r) => r.kind === 'div')?.note).toBe('↑ ayer 2');
     // As many or more than yesterday: no such line.
     expect(reportRows(sum, { previous: { total: 3, fromLight: 2, prize: 0 } }, 'es', ctxOf(1)).some((r) => r.kind === 'less')).toBe(false);
+  });
+
+  it('QA-CLARIDAD-2 C1: a report with a new species never says there was none, and its numbers match the rows', () => {
+    // Session 5 of the QA: a new species (+14), Night 2 (+10 %), fewer Datos than the day before (+15 prize).
+    const fx = treeEffects({ lab: 2 });
+    const { session } = beginSession(freshResearch(), fx);
+    noteEssence(session, 643);
+    noteSpecies(session, fx, 'a', true);
+    const d = computeDatos(session, fx, 0);
+    const sum = summaryOf({ n: 5, datos: d, species: [{ id: 'a', isNew: true }] });
+    const prev = { total: d.total + 20, fromLight: d.fromEssence + 2, prize: 15 };
+    const rows = reportRows(sum, { previous: prev }, 'es', ctxOf(2));
+    const less = rows.find((r) => r.kind === 'less')!;
+    expect(less.label).not.toMatch(/no hubo especie nueva/);
+    // The light's Datos it compares are the ones a row shows (never «25 ↓ ayer 29» above and «29 → 27» below).
+    const shown = rows.filter((r) => r.kind !== 'less').map((r) => `${r.value} ${r.note ?? ''}`).join(' | ');
+    expect(shown).toContain(fmt(d.fromEssence, 'es'));
+    expect(less.label).toContain(`${fmt(d.fromEssence, 'es')} Datos`);
+    expect(less.label).toContain(`ayer ${fmt(prev.fromLight, 'es')}`);
+    const note = rows.find((r) => r.note && /ayer/.test(r.note))!;
+    expect(note.note).toContain(fmt(d.fromEssence, 'es'));
+    // Without a new species today it still says so.
+    const plain = summaryOf({ n: 5, datos: computeDatos(beginSession(freshResearch(), fx).session, fx, 0) });
+    const r2 = reportRows(plain, { previous: { total: 99, fromLight: 9, prize: 15 } }, 'es', ctxOf(2)).find((r) => r.kind === 'less')!;
+    expect(r2.label).toMatch(/^Hoy no hubo especie nueva \(ayer \+15\)\./);
+  });
+
+  it('QA-CLARIDAD-2 C12: the final sweep says what VELA did, not «ya está en la luz de arriba»', () => {
+    const fx = treeEffects({});
+    const { session } = beginSession(freshResearch(), fx);
+    noteEssence(session, 90);
+    const sum = summaryOf({ datos: computeDatos(session, fx, 0) });
+    const sweep = reportRows(sum, { swept: 53 }, 'es', ctxOf(1)).find((r) => r.kind === 'swept')!;
+    expect(`${sweep.label} ${sweep.value} ${sweep.note ?? ''}`).not.toMatch(/luz de arriba/);
+    expect(sweep.label).toBe('VELA recogió las gotas que quedaban');
+    expect(sweep.adds).toBe(0);
   });
 
   it('the final sweep is told but not added twice', () => {
@@ -121,7 +157,7 @@ describe('the session report tells a story (docs/CLARIDAD2.md §2.9)', () => {
     noteEssence(session, 90);
     const sum = summaryOf({ datos: computeDatos(session, fx, 0) });
     const sweep = reportRows(sum, { swept: 24 }, 'es', ctxOf(1)).find((r) => r.kind === 'swept')!;
-    expect(sweep).toMatchObject({ label: 'Recogida final (VELA)', value: '+24 luz', adds: 0, note: 'ya está en la luz de arriba' });
+    expect(sweep).toMatchObject({ label: 'VELA recogió las gotas que quedaban', value: '+24 luz', adds: 0, note: 'ya contada en «Luz recogida»' });
   });
 
   it('no two-decimal multiplier anywhere in the report', () => {
