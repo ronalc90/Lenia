@@ -70,6 +70,8 @@ const S = {
   achievementsAll: { es: 'Ver logros', en: 'All achievements' },
   seedPriceWhy: { es: '¿Por qué cuesta esto?', en: 'Why does it cost this?' },
   seedWait: { es: 'Espera…', en: 'Wait…' },
+  // ADR-031 (docs/MECANICAS.md §4): a living creature crowded out; like every loss, it says what it left.
+  crowdLeft: { es: 'Le faltó sitio · su luz quedó aquí', en: 'Ran out of room · its glow stayed here' },
   deniedShort: { es: 'Te faltan {n} de luz', en: 'You need {n} more glow' },
   deniedWait: { es: 'Espera a tus criaturas.', en: 'Wait for your creatures.' },
   seedWaitWhy: { es: 'Hay semillas naciendo: espera a que terminen.', en: 'Seeds are hatching: wait until they finish.' },
