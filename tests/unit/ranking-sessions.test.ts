@@ -134,7 +134,9 @@ describe('tampered sessions-cycle submissions are still caught', () => {
     const s = late();
     const prev: Baseline = { ...s.stats, at: s.serverNow - 5 * 60_000, clientTime: s.serverNow - 5 * 60_000 };
     expect(judge({ sessions: s.stats.sessions! - 1 }, prev).hard).toContain('regress_sessions');
-    expect(judge({ datos: (s.stats.datos ?? 0) - 10 }, prev).hard).toContain('regress_datos');
+    // Far beyond the validator's float tolerance (1e-12 of the total: a late save holds ~1e13 Datos).
+    const d = s.stats.datos ?? 0;
+    expect(judge({ datos: d - Math.max(10, d * 1e-9) }, prev).hard).toContain('regress_datos');
     expect(judge({ era: s.stats.era - 1 }, prev).hard).toContain('regress_era');
   });
 

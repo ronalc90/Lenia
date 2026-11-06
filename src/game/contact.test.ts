@@ -60,8 +60,54 @@ describe('collisions seen coming (ADR-030)', () => {
     expect((rec.log.get('creatureDied')!.at(-1) as GameEvents['creatureDied']).cause).toBe('crowd');
     const pair = [creature({ id: 4, x: 90, y: 100, radius: 6, vx: 0.1 }), creature({ id: 5, x: 112, y: 100, radius: 6, vx: -0.1 })];
     g.tick(0.5, report(pair));
-    expect(g.view().dangers).toEqual([{ a: 4, b: 5, inS: expect.any(Number) }]);
+    expect(g.view().dangers).toEqual([{ a: 4, b: 5, inS: expect.any(Number), actionable: expect.any(Boolean) }]);
     g.tick(0.5, report([{ ...pair[0], state: 'exploded' }, pair[1]], [{ type: 'exploded', id: 4, x: 95, y: 100 }]));
     expect((rec.log.get('creatureExploded')!.at(-1) as GameEvents['creatureExploded']).cause).toBe('touch');
+  });
+});
+
+describe('warnings the player can act on (ADR-031, docs/MECANICAS.md §4)', () => {
+  it('a danger is actionable only when a swimmer can be steered', () => {
+    const swim = { id: 1, x: 85, y: 100, r: 6, vx: 0.6, vy: 0, state: 'stable' as const, behavior: 'swimmer' as const };
+    const seed = { id: 2, x: 110, y: 100, r: 6, vx: 0, vy: 0, state: 'born' as const, behavior: null };
+    expect(predictContacts([swim, seed], SPS, DISH)[0]).toMatchObject({ actionable: true });
+    // Two still creatures drifting into each other: the link is drawn, nobody can steer them.
+    const a = { id: 7, x: 85, y: 100, r: 6, vx: 0.1, vy: 0, state: 'stable' as const, behavior: 'still' as const };
+    const b = { id: 3, x: 115, y: 100, r: 6, vx: -0.1, vy: 0, state: 'stable' as const, behavior: 'still' as const };
+    expect(predictContacts([a, b], SPS, DISH)[0]).toMatchObject({ actionable: false });
+  });
+
+  it('a warned contact that passes after the player steered one: «¡Salvada!», streak +5', () => {
+    const rec = recordingBus();
+    const g = createGame({ bus: rec.bus, rng: seededRng(1), cycle: 'sessions' }, undefined);
+    g.setDish({ ...DISH });
+    g.actions.startClock!();
+    // A swimmer heading for a still creature, about 1 s away.
+    const swim = creature({ id: 1, x: 70, y: 100, radius: 5, behavior: 'swimmer', vx: 0.6, vy: 0 });
+    const still = creature({ id: 2, x: 110, y: 100, radius: 5, behavior: 'still' });
+    g.tick(0.25, report([swim, still], [], 100));
+    expect(g.view().dangers![0]).toMatchObject({ a: 1, b: 2, actionable: true });
+    g.actions.noteSteer!(1);
+    // The finger turned it: it swims away, the pair never touches.
+    const away = creature({ ...swim, y: 70, vx: 0, vy: -0.6 });
+    let hits = -1;
+    rec.bus.on('contactSaved', () => void (hits = g.view().streak!.hits));
+    for (let i = 0; i < 16; i++) g.tick(0.25, report([away, still], [], 110 + i * 10));
+    expect(rec.log.get('contactSaved')).toEqual([{ a: 1, b: 2 }]);
+    expect(hits).toBe(C.SAVE_STREAK_HITS);
+    expect(g.session!.losses!.saved).toBe(1);
+  });
+
+  it('without the finger there is no «¡Salvada!»', () => {
+    const rec = recordingBus();
+    const g = createGame({ bus: rec.bus, rng: seededRng(1), cycle: 'sessions' }, undefined);
+    g.setDish({ ...DISH });
+    g.actions.startClock!();
+    const swim = creature({ id: 1, x: 70, y: 100, radius: 5, behavior: 'swimmer', vx: 0.6, vy: 0 });
+    const still = creature({ id: 2, x: 110, y: 100, radius: 5, behavior: 'still' });
+    g.tick(0.25, report([swim, still], [], 100));
+    const away = creature({ ...swim, y: 70, vx: 0, vy: -0.6 });
+    for (let i = 0; i < 16; i++) g.tick(0.25, report([away, still], [], 110 + i * 10));
+    expect(rec.count('contactSaved')).toBe(0);
   });
 });

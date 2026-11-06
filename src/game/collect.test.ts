@@ -71,7 +71,9 @@ describe('collected light: the drops (ADR-030)', () => {
   it('light of a creature that went dark stays on the dish and is swept at the end', () => {
     const { g, log } = runningGame();
     run(g, 3, report(stable(1)), 0.5);
-    const waiting = g.view().drops![0].amount;
+    const eps = g.view().creatures[0].eps;
+    // ADR-031: a living creature that dies adds DEATH_BURST_SECONDS of its light to the drop it leaves.
+    const waiting = g.view().drops![0].amount + C.DEATH_BURST_SECONDS * eps;
     run(g, 1, report([], [{ type: 'died', id: 1, x: 20, y: 40 }]), 0.5);
     const loose = g.view().drops!;
     expect(loose).toHaveLength(1);

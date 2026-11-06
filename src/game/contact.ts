@@ -31,6 +31,16 @@ export interface Danger {
   b: number;
   /** Seconds of dish time until their outlines touch (0 = touching now). */
   inS: number;
+  /**
+   * (ADR-031) The player can do something: one of the two is a stable swimmer the finger can steer (src/sim/steer.ts).
+   * Only then is the warning worded («¡Van a chocar! Arrastra una»); otherwise only the link is drawn.
+   */
+  actionable: boolean;
+}
+
+/** A body the finger can steer: a stable swimmer (steer.ts guides swimmers only). */
+function steerable(b: Body): boolean {
+  return (b.state ?? 'stable') === 'stable' && b.behavior === 'swimmer';
 }
 
 /** Earliest t ≥ 0 (steps) at which |d + w·t| ≤ R, or null. */
@@ -90,7 +100,7 @@ export function predictContacts(bodies: readonly Body[], stepsPerSec: number, di
       if (t === null) continue;
       if (t > 0 && deflected(p) && deflected(q)) continue;
       if (dish && t > 0 && [p, q].some((b) => deflected(b) && stepsToGlass(b, dish) < t)) continue;
-      out.push({ a: Math.min(p.id, q.id), b: Math.max(p.id, q.id), inS: t / stepsPerSec });
+      out.push({ a: Math.min(p.id, q.id), b: Math.max(p.id, q.id), inS: t / stepsPerSec, actionable: steerable(p) || steerable(q) });
     }
   }
   return out.sort((x, y) => x.inS - y.inS || x.a - y.a || x.b - y.b);

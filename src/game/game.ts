@@ -358,6 +358,16 @@ export interface Game {
    * points at can still be caught. Any other pause keeps QA1 #9 (no aiming at a frozen spark).
    */
   catchWhilePaused: boolean;
+  /**
+   * (ADR-031) The player erased matter at (x, y) within `r` cells (the Goma / eraser, main.ts): the creatures there
+   * that go dark in the next reports leave only their drop, never DEATH_BURST_SECONDS of light (erasing is no business).
+   */
+  noteErased(x: number, y: number, r: number): void;
+  /**
+   * (ADR-031) VELA's safety net dissolved a blob that kept growing (src/sim/runaway.ts lysis, main.ts): it pays no
+   * light (it never was a creature), but the first time ever it teaches (accidentLearned 'runaway').
+   */
+  noteLysis(x: number, y: number): void;
 }
 
 interface Golden {
@@ -439,6 +449,15 @@ export function createGame(deps: GameDeps, save?: string): Game {
    * and the creature it became (`id`, linked on its first report near the spot).
    */
   let ledger: { x: number; y: number; cost: number; free: boolean; step: number; id: number | null }[] = [];
+  /** (ADR-031) Creatures the player erased (no death light), by id, with the report step they were marked at. */
+  const erased = new Map<number, number>();
+  /** Where the eraser touched lately (creatures there are marked as erased on the next report). */
+  let eraseMarks: { x: number; y: number; r: number; step: number }[] = [];
+  /**
+   * (ADR-031) Warned contacts the player could act on (`a-b` → the session clock by which they would have touched
+   * plus SAVE_GRACE_S, and whether the finger steered one of the two): «¡Salvada!» when the time passes untouched.
+   */
+  const warned = new Map<string, { a: number; b: number; until: number; steered: boolean }>();
   /** (ADR-031) The Sembrar button's spot, recomputed only when the dish changes (view() runs every frame). */
   let sowCache: { key: string; spot: { x: number; y: number } | null } | null = null;
   /** State of each creature in the previous report (a 'died' creature that was exploded dissolved). */
@@ -1277,6 +1296,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       l.refunded += amount;
     }
     bus.emit('seedRefund', { x: e.x, y: e.y, amount, free: e.free });
+    learn('faded');
   }
 
   /** Settle the ledger against the latest report: link new creatures to their seed, refund the ones that never took. */
@@ -1638,6 +1658,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       resolveRecentSeeds();
     }
     updateOvergrown(Number.isFinite(report.fill) ? report.fill : 0);
+    markErased();
     for (const c of creatures) {
       if (!knownIds.has(c.id)) {
         knownIds.add(c.id);
@@ -1659,7 +1680,11 @@ export function createGame(deps: GameDeps, save?: string): Game {
             break;
           }
           s.stats.deaths++;
-          bus.emit('creatureDied', { id: ev.id, x: ev.x, y: ev.y, cause: causeOfDeath(ev.id, ev.x, ev.y) });
+          {
+            const cause = causeOfDeath(ev.id, ev.x, ev.y);
+            bus.emit('creatureDied', { id: ev.id, x: ev.x, y: ev.y, cause });
+            if (lastStates.get(ev.id) === 'stable') livingDeath(ev.id, ev.x, ev.y, cause === 'glass' ? 'glass' : cause === 'crowd' ? 'touch' : 'lost');
+          }
           unlockJournal('firstDeath');
           break;
         case 'exploded':
@@ -1667,6 +1692,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
           {
             const cause = causeOfBlob(ev.id, ev.x, ev.y);
             bus.emit('creatureExploded', cause ? { id: ev.id, x: ev.x, y: ev.y, cause } : { id: ev.id, x: ev.x, y: ev.y });
+            // A flooded dish ('crowd') pays nothing at all: no light to leave.
+            if (lastStates.get(ev.id) === 'stable' && cause !== 'crowd') livingDeath(ev.id, ev.x, ev.y, cause === 'touch' ? 'touch' : 'lost');
           }
           unlockJournal('firstExplosion');
           break;
@@ -1698,12 +1725,14 @@ export function createGame(deps: GameDeps, save?: string): Game {
         lastBehavior.delete(id);
         incomeAcc.delete(id);
         portraitWatch.delete(id);
+        erased.delete(id);
       }
     }
     processPortraitWatch();
     stableIds = new Set(creatures.filter((c) => c.state === 'stable').map((c) => c.id));
     // ADR-031: a seed that took clears the bad luck; one that never took gives back what it cost.
     settleLedger();
+    trackWarnings();
     // A creature that went dark, merged or was wiped leaves its drop on the dish, loose (ADR-030).
     const L = collectable();
     if (L) pocket(releaseDrops(L, stableIds));
@@ -1736,8 +1765,90 @@ export function createGame(deps: GameDeps, save?: string): Game {
     return explodeCause(me, neighbours(id), overgrown, 0.5 * s.calib.R);
   }
 
+  // ── Losses that give something back (ADR-031) ──
+
+  /** The first death of this cause ever: its card, and FIRST_ACCIDENT_DATOS Datos banked at once ("aprendiste por qué"). */
+  function learn(cause: 'faded' | 'touch' | 'glass' | 'lost' | 'runaway'): void {
+    const key = `learned_${cause}`;
+    const r = s.research;
+    if (!sessions || !r || s.flags[key]) return;
+    s.flags[key] = true;
+    const datos = C.FIRST_ACCIDENT_DATOS;
+    s.research = { ...r, datos: r.datos + datos, datosEarned: r.datosEarned + datos };
+    treeCache = null;
+    const se = ses();
+    if (se) losses(se).learned += datos;
+    bus.emit('accidentLearned', { cause, datos });
+  }
+
+  /**
+   * A STABLE creature went dark (glass, fusion, lost shape): DEATH_BURST_SECONDS of its last light join its drop,
+   * which stays on the dish (it goes loose with releaseDrops). One the player erased leaves only its drop.
+   */
+  function livingDeath(id: number, x: number, y: number, cause: 'glass' | 'touch' | 'lost'): void {
+    const se = ses();
+    if (!se || se.phase !== 'running' || erased.has(id)) return;
+    const l = losses(se);
+    l.deaths++;
+    if (cause === 'touch') l.merged++;
+    const at = lastBodies.get(id) ?? { x, y };
+    const amount = C.DEATH_BURST_SECONDS * (perCreature.get(id) ?? 0) * buffMult();
+    const L = lightState();
+    if (amount > 0 && L && addLight(L, at.x, at.y, amount, id)) {
+      earnLight(amount);
+      l.burst += amount;
+      bus.emit('deathBurst', { id, x: at.x, y: at.y, amount, cause });
+    }
+    learn(cause);
+  }
+
+  /** Creatures within an eraser stroke of the last few reports are marked: their death is the player's tool. */
+  function markErased(): void {
+    if (!eraseMarks.length) return;
+    eraseMarks = eraseMarks.filter((m) => !(reportStep < m.step) && reportStep - m.step <= B.SEED_SEEN_STEPS);
+    for (const c of creatures) for (const m of eraseMarks) if (gdist(c.x, c.y, m.x, m.y) <= m.r + (Number.isFinite(c.radius) ? c.radius : 0)) erased.set(c.id, reportStep);
+    for (const [id, step] of lastBodies) for (const m of eraseMarks) if (gdist(step.x, step.y, m.x, m.y) <= m.r + step.r) erased.set(id, reportStep);
+  }
+
+  /**
+   * Warned contacts the player can act on (Danger.actionable), followed until they would have touched plus
+   * SAVE_GRACE_S. Untouched, both still alive and one of them steered by the finger: «¡Salvada!» (SAVE_STREAK_HITS).
+   */
+  function trackWarnings(): void {
+    const se = ses();
+    if (!se || se.phase !== 'running') {
+      warned.clear();
+      return;
+    }
+    const byId = new Map(creatures.map((c) => [c.id, c]));
+    for (const d of dangerViews()) {
+      if (!d.actionable || d.inS <= 0) continue;
+      const key = `${d.a}-${d.b}`;
+      const w = warned.get(key);
+      const until = se.elapsed + d.inS + C.SAVE_GRACE_S;
+      if (w) w.until = Math.max(w.until, until);
+      else warned.set(key, { a: d.a, b: d.b, until, steered: false });
+    }
+    for (const [key, w] of warned) {
+      const a = byId.get(w.a);
+      const b = byId.get(w.b);
+      // Gone, shapeless, or touching: not saved.
+      if (!a || !b || a.state !== 'stable' || b.state === 'dead' || b.state === 'exploded' || gdist(a.x, a.y, b.x, b.y) <= outline(a.radius) + outline(b.radius)) {
+        warned.delete(key);
+        continue;
+      }
+      if (se.elapsed < w.until) continue;
+      warned.delete(key);
+      if (!w.steered) continue;
+      losses(se).saved++;
+      const f = fingerOf();
+      if (f) addBonusHits(f.ps, C.SAVE_STREAK_HITS, f.pf);
+      bus.emit('contactSaved', { a: w.a, b: w.b });
+    }
+  }
+
   /** Pairs about to touch on the running dish (GameView.dangers): the red warning link. */
-  function dangerViews(): { a: number; b: number; inS: number }[] {
+  function dangerViews(): { a: number; b: number; inS: number; actionable: boolean }[] {
     const se = ses();
     if (!se || se.phase !== 'running' || overgrown) return [];
     const bodies = creatures
@@ -2182,6 +2293,9 @@ export function createGame(deps: GameDeps, save?: string): Game {
     recentSeeds = [];
     ledger = [];
     sowCache = null;
+    erased.clear();
+    eraseMarks = [];
+    warned.clear();
     pendingMutations = [];
     portraitWatch.clear();
     portraitQueue = [];
@@ -3175,6 +3289,10 @@ export function createGame(deps: GameDeps, save?: string): Game {
       return sum;
     },
 
+    noteSteer(creatureId) {
+      for (const w of warned.values()) if (w.a === creatureId || w.b === creatureId) w.steered = true;
+    },
+
     catchMote(moteId) {
       const f = fingerOf();
       if (!f || !Number.isFinite(moteId)) return 0;
@@ -3790,6 +3908,18 @@ export function createGame(deps: GameDeps, save?: string): Game {
     },
     set isPaused(v: boolean) {
       paused = !!v;
+    },
+    noteErased(x, y, r) {
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !(r > 0)) return;
+      eraseMarks.push({ x, y, r, step: reportStep });
+      if (eraseMarks.length > 64) eraseMarks.shift();
+      // The bodies already known there are marked now (the next report may not list them any more).
+      for (const [id, b] of lastBodies) if (gdist(b.x, b.y, x, y) <= r + b.r) erased.set(id, reportStep);
+    },
+    noteLysis(x, y) {
+      void x;
+      void y;
+      learn('runaway');
     },
     setGridSize(w, h) {
       if (w > 0 && h > 0) grid = { w, h };
