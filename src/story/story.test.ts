@@ -68,7 +68,8 @@ describe('story: tutorial as scenes', () => {
     h.playLines();
     const cur = h.story.current()!;
     expect(cur.phase).toBe('wait');
-    expect(cur.wait!.target).toEqual(['dish']);
+    // The Sembrar button first (ADR-031, sessions); the classic loop has none, so its spotlight falls back to the dish.
+    expect(cur.wait!.target).toEqual(['seed', 'dish']);
     seed(h);
     h.story.tick();
     expect(h.id()).toBeNull();

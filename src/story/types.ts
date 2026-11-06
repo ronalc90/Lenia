@@ -49,7 +49,9 @@ export type TargetId =
   /** The world picker on the session start card. */
   | 'world.picker'
   /** (ADR-030) The ripest drop of Luz on the dish (fallbacks: 'creature', 'dish'). */
-  | 'drop';
+  | 'drop'
+  /** (ADR-031) The Sembrar button: sowing is a button, never a tap on the dish (sessions only; fallback 'dish'). */
+  | 'seed';
 
 export const TARGET_IDS: readonly TargetId[] = [
   'dish',
@@ -69,6 +71,7 @@ export const TARGET_IDS: readonly TargetId[] = [
   'tree.next',
   'world.picker',
   'drop',
+  'seed',
 ];
 
 /** Environmental hints: overlay effects drawn over the dish, never changes to the simulation (pillar 1). */

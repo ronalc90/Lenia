@@ -23,6 +23,7 @@
  * session's seconds, {seed} what a seed costs.
  */
 import type { Text } from '../core/types';
+import { TEXT } from '../game/content';
 import { REACHABLE_BEHAVIORS, WORLD_BY_ID } from '../game/worlds';
 import { catalogGroup } from '../species/identity';
 import { CATALOG, catalogByCode } from '../sim/catalog';
@@ -130,6 +131,14 @@ const sessions = (c: StoryCtx): boolean => c.v.cycle === 'sessions';
 const firstSession = (c: StoryCtx): boolean => sessions(c) && !!c.v.session && (c.v.session.first ?? c.v.session.n <= 1);
 /** The session's clock waits for the player (before the first seed, or held by the tutorial). */
 const clockWaits = (c: StoryCtx): boolean => c.v.session?.phase === 'ready';
+/**
+ * (ADR-031) The game has the pulse (its view carries the tap streak, also while session 1 waits) and a creature
+ * is there to tap: session 1 teaches it before the clock starts. A game without it is never taught a gesture
+ * that does nothing.
+ */
+const pulseLesson = (c: StoryCtx): boolean => !!c.v.streak && c.stablesNow() >= 1;
+/** Taps on the creature that end «Tócala» (MECANICAS §6.1 step 5: three taps, or its 6 s). */
+const PULSE_LESSON_HITS = 3;
 /** A drop of Luz on the dish is ripe enough to point at (75 %, §2.4 step 6). */
 const ripeDrop = (c: StoryCtx): boolean => (c.v.drops ?? []).some((d) => d.fill >= 0.75);
 /** "The dish is ripe": a new night is ready (sessions) or the Extinction is available (classic). */
@@ -175,8 +184,10 @@ export const CLASSIC_ONLY_SCENES: readonly string[] = ['t_lab', 't_calibrate', '
 /** Set by the integrator (story.setFlag) when the opening intro (src/ui/intro) finishes or is skipped. */
 export const INTRO_SEEN_FLAG = 'introSeen';
 
-/** The tap VELA asks for on an empty dish: the player plants the first creature (§2.4 step 2). */
+/** The tap VELA asks for on an empty dish: the player plants the first creature (§2.4 step 2; the classic loop). */
 const SOW_LINE = vela('happy', 'Toca la placa para poner una semilla de luz.', 'Tap the dish to drop a seed of light.', at('dish'));
+/** Sessions (ADR-031, MECANICAS §6.1 step 2): sowing is the Sembrar button; VELA points at it, never at the dish. */
+const SOW_BUTTON_LINE = vela('happy', TEXT.tutSow.es, TEXT.tutSow.en, at('seed', 'dish'));
 /** VELA's hello (t_intro) for a player who did not watch the intro. */
 export const T_INTRO_LINES: LineDef[] = [
   vela('awed', '¡Oh! ¡Hola, hola! Esto es la Estación Vigilia.', 'Oh! Hello, hello! This is Vigil Station.'),
@@ -189,6 +200,9 @@ export const T_INTRO_LINES: LineDef[] = [
  * first creature is the player's own (QA-CLARIDAD #4: «Tu primera semilla» was said over a starter).
  */
 export const T_INTRO_AFTER_INTRO: LineDef[] = [vela('happy', 'Hola. Soy VELA, el monitor de esta placa.', 'Hello. I\'m VELA, this dish\'s monitor.'), SOW_LINE];
+/** The same hello in the sessions cycle (ADR-031): the seed is sown with the Sembrar button. */
+export const T_INTRO_SESSIONS: LineDef[] = [...T_INTRO_LINES.slice(0, -1), SOW_BUTTON_LINE];
+export const T_INTRO_SESSIONS_AFTER_INTRO: LineDef[] = [T_INTRO_AFTER_INTRO[0], SOW_BUTTON_LINE];
 /** The first creature holds its shape (classic loop): no «Espera… ¡mira!» before it (§2.4). */
 export const T_STABLE_LINES: LineDef[] = [
   vela('awed', '¡Vive! Tiene borde. Tiene forma. ¡Se queda!', 'It\'s alive! It has an edge. A shape. It stays!', at('creature', 'dish')),
@@ -211,9 +225,11 @@ export const SCENES: SceneDef[] = [
     priority: 100,
     title: t('Estación Vigilia', 'Vigil Station'),
     when: (c) => c.n('seeds') === 0 && c.v.stats.seeds === 0,
-    // After the opening intro (src/ui/intro, flag 'introSeen') VELA skips the hello it already said.
-    lines: (c) => (c.flag(INTRO_SEEN_FLAG) ? T_INTRO_AFTER_INTRO : T_INTRO_LINES),
-    wait: tapWait('Toca la placa.', 'Tap the dish.', { event: 'seeds' }),
+    // After the opening intro (src/ui/intro, flag 'introSeen') VELA skips the hello it already said. In sessions
+    // she points at the Sembrar button (ADR-031): a tap on the dish never sows.
+    lines: (c) => (sessions(c) ? (c.flag(INTRO_SEEN_FLAG) ? T_INTRO_SESSIONS_AFTER_INTRO : T_INTRO_SESSIONS) : c.flag(INTRO_SEEN_FLAG) ? T_INTRO_AFTER_INTRO : T_INTRO_LINES),
+    // One task for both loops: the button in sessions ('seed'), the dish in the classic loop (no button there).
+    wait: { event: 'seeds', text: t('Siembra una semilla.', 'Sow a seed.'), target: ['seed', 'dish'] },
   },
   {
     id: 't_wait',
@@ -287,6 +303,36 @@ export const SCENES: SceneDef[] = [
     lines: [vela('neutral', 'Está naciendo… un momento.', 'It\'s being born… one moment.', { target: ['creature', 'dish'], auto: 1.6 })],
   },
   {
+    id: 't_pulse',
+    act: 1,
+    tutorial: true,
+    chain: true,
+    priority: 84,
+    after: ['t_stable'],
+    title: t('Tócala', 'Tap it'),
+    // ADR-031 (MECANICAS §6.1 step 5): the pulse works with the dish still; its first taps pay the floor (+1).
+    when: (c) => firstSession(c) && clockWaits(c) && pulseLesson(c),
+    lines: [vela('happy', TEXT.tutPulse.es, TEXT.tutPulse.en, at('creature', 'dish'))],
+    wait: {
+      until: (c) => (c.v.streak?.hits ?? 0) >= PULSE_LESSON_HITS,
+      text: t('Toca tu criatura.', 'Tap your creature.'),
+      target: ['creature', 'dish'],
+      timeoutSec: 6,
+    },
+  },
+  {
+    id: 't_streak',
+    act: 1,
+    tutorial: true,
+    chain: true,
+    priority: 84,
+    after: ['t_pulse'],
+    title: t('Racha', 'Streak'),
+    // Step 6: the streak chip shows by the counter («Racha ×1»); her line goes by itself.
+    when: (c) => firstSession(c) && clockWaits(c),
+    lines: [vela('awed', TEXT.tutStreak.es, TEXT.tutStreak.en, { target: ['creature', 'dish'], auto: 2.5 })],
+  },
+  {
     id: 't_clock',
     act: 1,
     tutorial: true,
@@ -294,8 +340,9 @@ export const SCENES: SceneDef[] = [
     priority: 84,
     after: ['t_stable'],
     title: t('Tu reloj', 'Your clock'),
-    // Step 5: when this line goes, the session flow starts the clock (story.holdsClock, flow.ts).
-    when: (c) => firstSession(c) && clockWaits(c),
+    // Step 7: when this line goes, the session flow starts the clock (story.holdsClock, flow.ts). With the pulse,
+    // after sow → pulse → streak (ADR-031); a game without it goes from «¡Vive!» straight here.
+    when: (c) => firstSession(c) && clockWaits(c) && (c.done('t_streak') || !pulseLesson(c)),
     lines: [vela('happy', 'Tu reloj empieza ahora: tienes {clock} segundos.', 'Your clock starts now: you have {clock} seconds.', { target: ['hud.clock'], auto: 2.5 })],
   },
   {
@@ -307,7 +354,8 @@ export const SCENES: SceneDef[] = [
     after: ['t_stable'],
     title: t('Recoger la luz', 'Collecting glow'),
     // Step 6: the first drop at 75 %. The dish waits while she says it; the drop can be tapped meanwhile.
-    when: (c) => firstSession(c) && c.v.session?.phase === 'running' && ripeDrop(c) && c.n('collected') === 0,
+    // ADR-031: with the pulse, a tap on the creature already collects its drop: this line is gone (§6.1).
+    when: (c) => firstSession(c) && c.v.session?.phase === 'running' && !c.v.streak && ripeDrop(c) && c.n('collected') === 0,
     lines: [vela('awed', '¡Hizo luz! Tócala para recogerla.', 'It made glow! Tap it to collect it.', at('drop', 'creature', 'dish'))],
     wait: { event: 'collected', text: t('Toca la gota de luz.', 'Tap the drop of glow.'), target: ['drop', 'creature', 'dish'], timeoutSec: 6 },
   },
@@ -320,9 +368,10 @@ export const SCENES: SceneDef[] = [
     priority: 82,
     after: ['t_stable'],
     title: t('Otra semilla', 'Another seed'),
-    // Step 7, after the first collection (or a while into the clock if no drop came).
-    when: (c) => firstSession(c) && c.v.session?.phase === 'running' && (c.done('t_collect') || c.n('collected') > 0 || c.since('t_clock') >= 10),
-    lines: [vela('happy', 'Con {seed} de luz pones otra semilla.', '{seed} glow buys another seed.', at('hud.essence'))],
+    // Step 7, after the first collection (or a while into the clock if no drop came). ADR-031: with the pulse the
+    // Sembrar button says its price and glows when it can be paid (§6.1 step 9), so VELA does not stop the clock.
+    when: (c) => firstSession(c) && c.v.session?.phase === 'running' && !c.v.streak && (c.done('t_collect') || c.n('collected') > 0 || c.since('t_clock') >= 10),
+    lines: [vela('happy', 'Con {seed} de luz pones otra semilla.', '{seed} glow buys another seed.', at('seed', 'hud.essence'))],
   },
   {
     id: 't_essence',
