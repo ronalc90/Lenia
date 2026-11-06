@@ -5873,12 +5873,13 @@ button.chip {
 .sow-luck i.on {
   background: var(--gold-fill);
 }
-/* The tutorial's hand tapping the button (§6.1 step 2), on its lower right: the space above belongs to the price
-   chip and VELA's arrow. It bobs gently; still under Reduce motion. */
+/* The tutorial's hand tapping the seed of the button (§6.1 step 2: «Toca la semilla»), its fingertip on the seed's
+   lower half: the words stay readable and the space above belongs to the price chip and VELA's arrow. It bobs
+   gently; still under Reduce motion. */
 .sow-hand {
   position: absolute;
-  left: 58%;
-  top: 46%;
+  left: 26px;
+  top: 30px;
   color: #fff;
   pointer-events: none;
   animation: sow-hand var(--bl-t-spring-slow) var(--ease) infinite alternate; /* css-lint-ok: an ambient pointer, transform only */
