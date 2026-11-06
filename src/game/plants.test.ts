@@ -119,6 +119,17 @@ describe('a seed that formed and crashed is not a seed that «did not take» (QA
     expect(Math.hypot(r[0].x - (spec.x + 6), r[0].y - spec.y)).toBeLessThan(1e-6);
   });
 
+  it('a fast fusion between two reports is still a crash (the browser repro: 31 cells apart, then one body)', () => {
+    const { g, log, starter } = runningGame();
+    const spec = g.actions.sow!()!;
+    const seedBody = creature({ id: 7, x: spec.x, y: spec.y, state: 'born', age: 10, behavior: null });
+    const other = creature({ id: 8, x: spec.x + 31, y: spec.y, state: 'born', age: 50, behavior: null, mass: 73 });
+    g.tick(0.1, report([starter, seedBody, other], [], 610));
+    // Ten steps later one body, its centroid between the two and twice the mass.
+    g.tick(0.1, report([starter, { ...other, x: spec.x + 16, mass: 146, radius: 12 }], [], 620));
+    expect(refunds(log)[0].cause).toBe('crowd');
+  });
+
   it('a seed the detector never saw form is still «did not take» (cause faded)', () => {
     const { g, log, starter } = runningGame();
     g.actions.sow!();

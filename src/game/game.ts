@@ -1347,11 +1347,18 @@ export function createGame(deps: GameDeps, save?: string): Game {
     learn(cause === 'crowd' ? 'touch' : cause);
   }
 
-  /** Why a seed's creature went dark before it lived (contact.ts deathCause on its last body; fused into a blob = 'crowd'). */
+  /**
+   * Why a seed's creature went dark before it lived (contact.ts deathCause on its last body; fused into a blob = 'crowd').
+   * Its neighbours are where the others were in the last report AND where they are now: two young swimmers close
+   * ~12 cells between reports, so a fusion 31 cells apart in one report is one body between them in the next (QA-3 §3,
+   * the browser reproduction).
+   */
   function seedLossCause(e: (typeof ledger)[number], c: Creature | undefined): 'faded' | 'glass' | 'crowd' {
     if (!e.at) return 'faded'; // the detector never saw it form
-    if (c?.state === 'exploded') return explodeCause(e.at, neighbours(e.id ?? -1), overgrown, 0.5 * s.calib.R) ? 'crowd' : 'faded';
-    return deathCause(e.at, neighbours(e.id ?? -1), s.calib.R, dish);
+    const others = neighbours(e.id ?? -1);
+    for (const o of creatures) if (o.id !== e.id && o.state !== 'dead') others.push({ x: o.x, y: o.y, r: outline(o.radius) });
+    if (c?.state === 'exploded') return explodeCause(e.at, others, overgrown, 0.5 * s.calib.R) ? 'crowd' : 'faded';
+    return deathCause(e.at, others, s.calib.R, dish);
   }
 
   /** Settle the ledger against the latest report: link new creatures to their seed, refund the ones that never took. */
