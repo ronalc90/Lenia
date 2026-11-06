@@ -437,6 +437,10 @@ export class Overlay {
   };
   private readonly hueOfOwner = (id: number): number | undefined => this.creatures.get(id)?.hue;
   private pulseLang: Lang | '' = '';
+  /** A creature's status pill sits right above it: the finger's numbers start above the pill. */
+  private readonly pillLift = (id: number): number => (this.pillsShown() && this.statusLayer.hasPill(id) ? PILL_LIFT_PX : 0);
+  /** The last matter flare of a tap (overlay s): the shader keeps four pulses, so taps share them. */
+  private tapFlareAt = -Infinity;
   private readonly pulsePoint = { x: 0, y: 0, hue: 0 };
   /** Creatures as drawn this frame, for the tap router (reused objects). */
   private readonly tapCreatures: TapCreature[] = [];
@@ -1323,8 +1327,9 @@ export class Overlay {
       ctx.globalAlpha = 1;
     }
     this.drawFloats();
-    this.pulses.drawText(ctx, this.now, rm, dishFx.matterFade, this.map, this.resolveCreature, this.light);
     ctx.restore();
+    // The finger's numbers and the Chispazo label: unclipped like the labels (a creature at the rim keeps them).
+    this.pulses.drawText(ctx, this.now, rm, dishFx.matterFade, this.map, this.resolveCreature, this.light, this.w, this.pillLift);
     // Pipettes rest on the rim, half over the glass: drawn unclipped, above the dish's own light.
     if (round && this.pipettes.count) this.pipettes.draw(ctx, this.atlas, nowMs, rm, dcx, dcy, round.radius * scale, this.dpr, dishFx.matterFade);
     if (this.guide.on || this.guide.out >= 0) this.drawGuide(rm);
@@ -1578,6 +1583,12 @@ export class Overlay {
   pulseTap(id: number): void {
     if (!this.gridOf(id, this.gScratch)) return;
     this.pulses.glow(id, this.gScratch.x, this.gScratch.y, this.now);
+    // The matter itself lights up (display only), at most one tap's flare every tapFlareGapS.
+    if (this.now - this.tapFlareAt >= PULSE_FX.tapFlareGapS || this.now < this.tapFlareAt) {
+      this.tapFlareAt = this.now;
+      const s = this.creatures.get(id);
+      dishFx.pulse(this.gScratch.x, this.gScratch.y, Math.max(this.kernelR, (s?.r ?? this.kernelR * 0.6) * 2), PULSE.birth, PULSE_FX.tapFlare, PULSE_FX.tapFlareS);
+    }
   }
 
   /** A forming seed or a shapeless blob was tapped (route 'grey'): a dim grey blink, «aún no brilla». */
@@ -2637,6 +2648,8 @@ export class Overlay {
 
 /** `Float.cid` of a collected-light number (never a creature id: those are ≥ 0). */
 const COLLECT_FLOAT = -7;
+/** A status pill's height plus its gap over the body (moments/status.ts): the finger's numbers start above it. */
+const PILL_LIFT_PX = 44;
 const NO_DANGERS: readonly { a: number; b: number; inS: number; actionable?: boolean }[] = [];
 
 const NAME_FONT = `600 12px ${SANS}`;

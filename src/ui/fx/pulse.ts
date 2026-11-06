@@ -37,11 +37,18 @@ export const PULSE_FX = {
   /** The flash peaks this soon (s): light, not a cartoon pop. */
   glowRiseS: 0.025,
   /** Peak opacity of the glow and its size (× the body's radius on screen). */
-  glowAlpha: 0.55,
-  glowR: 2.5,
+  glowAlpha: 0.85,
+  glowR: 2.4,
   /** The hot white core of the flash (× body radius, peak opacity). */
-  coreR: 1.1,
-  coreAlpha: 0.32,
+  coreR: 1.15,
+  coreAlpha: 0.5,
+  /**
+   * The matter itself lights up too (a display pulse of the dish shader, src/ui/fx/stage.ts; the field is never
+   * written): this much brighter for this long, at most one every tapFlareGapS (the shader keeps 4 pulses).
+   */
+  tapFlare: 0.25,
+  tapFlareS: 0.25,
+  tapFlareGapS: 0.15,
   /** Halo charge: +this per tap (0..1), each level drained to 0 in chargeS (§3.3). */
   chargeStep: 0.25,
   chargeS: 0.3,
@@ -71,6 +78,8 @@ export const PULSE_FX = {
   /** Grows 0.92 → 1 over this long, easing out, never past 1 (instrument motion, ARTE-REALISTA §6.4). */
   chispazoInS: 0.12,
   holdS: 0.06,
+  /** The label never goes above this (CSS px from the top of the view): it moves under the creature instead. */
+  labelTopPx: 76,
   /** The ring of light: from the outline to ×ringTo of it in ringS. */
   ringS: 0.45,
   ringTo: 1.75,
@@ -92,7 +101,7 @@ export const PULSE_FX = {
   moteTwinkleHz: 2.2,
   /** In its last share of life it dims as it sinks into the agar. */
   moteSinkShare: 0.25,
-  catchS: 0.18,
+  catchS: 0.32,
   settleS: 0.3,
 
   // ── Grey blink and water ripple (§3.1) ──
@@ -114,7 +123,7 @@ const clamp01 = (t: number) => (t < 0 ? 0 : t > 1 ? 1 : t);
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 const SANS = 'Inter, "Inter Fallback", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 /** The glow's fall: an exponential (a lamp's thermal tail) that reaches exactly 0 at glowS. */
-const FALL_K = 3;
+const FALL_K = 2.2;
 const FALL_END = Math.exp(-FALL_K);
 
 /** Glow envelope 0..1 at t s after the tap: a 25 ms rise, then an exponential fall to 0 at 250 ms. */
@@ -214,6 +223,8 @@ interface Burst {
   gy: number;
   t0: number;
   text: string;
+  /** Width of `text` at chispazoPx (measured once, when first drawn): the label is kept on screen. */
+  tw: number;
 }
 
 interface Mote {
@@ -299,7 +310,7 @@ export class PulseLayer {
   constructor() {
     this.glows = Array.from({ length: PULSE_FX.maxGlows }, () => ({ on: false, id: 0, gx: 0, gy: 0, t0: 0, charge: 0 }));
     this.nums = Array.from({ length: PULSE_FX.maxNums }, () => ({ on: false, id: 0, gx: 0, gy: 0, t0: 0, amount: 0, text: '', size: PULSE_FX.numPx, jitter: 0, free: false, fx: 0, fy: 0, hue: DEFAULT_HUE }));
-    this.bursts = Array.from({ length: PULSE_FX.maxBursts }, () => ({ on: false, id: 0, gx: 0, gy: 0, t0: 0, text: '' }));
+    this.bursts = Array.from({ length: PULSE_FX.maxBursts }, () => ({ on: false, id: 0, gx: 0, gy: 0, t0: 0, text: '', tw: 0 }));
     this.motes = Array.from({ length: PULSE_FX.maxMotes }, () => ({
       used: false,
       live: false,
@@ -391,6 +402,9 @@ export class PulseLayer {
       b.gy = gy;
       b.t0 = now;
       b.text = this.burstText(amount);
+      b.tw = 0;
+      // The label says what it paid: this creature's numbers in flight make way for it.
+      if (id >= 0) for (const n of this.nums) if (n.on && !n.free && n.id === id) n.on = false;
       return true;
     }
     if (!(amount > 0)) return false;
@@ -402,7 +416,7 @@ export class PulseLayer {
   caught(moteId: number, gx: number, gy: number, amount: number, now: number): void {
     if (!(amount > 0)) return;
     const m = this.findMote(moteId);
-    if (m && m.placed) this.number(-1, gx, gy, amount, 0, now, true, m.x, m.y, m.hue);
+    if (m && m.placed) this.number(-1, gx, gy, amount, 4, now, true, m.x, m.y, m.hue);
     else this.number(-1, gx, gy, amount, 0, now, false, 0, 0, DEFAULT_HUE);
   }
 
@@ -710,17 +724,22 @@ export class PulseLayer {
           continue;
         }
         if (vis <= 0.02) continue;
-        // A meniscus ring opens where it was, the core draws in.
+        // Caught: a bright flash where it was and two meniscus rings opening (the light went into the finger).
         const ci = this.color(atlas, m.hue, 70);
+        const f = 1 - t;
         ctx.globalCompositeOperation = 'lighter';
-        atlas.draw(ctx, SPR.disc, ci, m.x, m.y, PULSE_FX.moteGlowPx * 2 * (1 + 0.6 * t), 0.6 * (1 - t) * vis);
+        atlas.draw(ctx, SPR.disc, ci, m.x, m.y, PULSE_FX.moteGlowPx * 2 * (1 + (rm ? 0 : 0.9 * t)), 0.95 * f * vis);
+        atlas.draw(ctx, SPR.disc, this.whiteIdx, m.x, m.y, PULSE_FX.moteCorePx * 4 * f, 0.9 * f * vis);
         ctx.globalCompositeOperation = 'source-over';
         ctx.strokeStyle = '#e8f6ff';
-        ctx.lineWidth = 1;
-        ctx.globalAlpha = 0.8 * (1 - t) * vis;
-        ctx.beginPath();
-        ctx.arc(m.x, m.y, PULSE_FX.moteRingPx + (rm ? 0 : 12 * t), 0, TAU);
-        ctx.stroke();
+        for (let r = 0; r < 2; r++) {
+          const u = rm ? 0.5 : Math.max(0, t - r * 0.2) / (1 - r * 0.2);
+          ctx.lineWidth = 1.5 * (1 - u) + 0.5;
+          ctx.globalAlpha = 0.85 * (1 - u) * vis;
+          ctx.beginPath();
+          ctx.arc(m.x, m.y, PULSE_FX.moteRingPx + (rm ? 6 : 22 * u), 0, TAU);
+          ctx.stroke();
+        }
         ctx.globalAlpha = 1;
         continue;
       }
@@ -812,8 +831,21 @@ export class PulseLayer {
     }
   }
 
-  /** «+N» and the Chispazo labels, over everything (labels and names keep out of their way). */
-  drawText(ctx: CanvasRenderingContext2D, now: number, rm: boolean, vis: number, map: Projector, creature: CreatureResolver, light: boolean): void {
+  /**
+   * «+N» and the Chispazo labels, over everything and unclipped (a creature at the rim keeps its label, kept
+   * inside the `viewW` px wide view).
+   */
+  drawText(
+    ctx: CanvasRenderingContext2D,
+    now: number,
+    rm: boolean,
+    vis: number,
+    map: Projector,
+    creature: CreatureResolver,
+    light: boolean,
+    viewW = Infinity,
+    liftOf: ((id: number) => number) | null = null,
+  ): void {
     const w = this.where;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -836,7 +868,8 @@ export class PulseLayer {
       } else {
         this.place(n.id, n.gx, n.gy, map, creature);
         x = w.x;
-        y = w.y - w.r * 0.6 - 10;
+        // Born above the body (and above its status pill, when it has one): the matter is bright.
+        y = w.y - w.r * 0.6 - 10 - (liftOf ? liftOf(n.id) : 0);
         hue = w.hue ?? DEFAULT_HUE;
       }
       const a = numAlpha(t, PULSE_FX.numS, PULSE_FX.numFade) * vis;
@@ -863,15 +896,24 @@ export class PulseLayer {
       if (a <= 0) continue;
       const s = chispazoScale(t, rm);
       const rise = rm ? 0 : PULSE_FX.chispazoRise * easeOutCubic(clamp01(t / PULSE_FX.chispazoS));
+      if (b.tw === 0) {
+        ctx.font = this.font(PULSE_FX.chispazoPx, 700);
+        b.tw = ctx.measureText(b.text).width || 1;
+      }
       ctx.font = this.font(PULSE_FX.chispazoPx * s, 700);
       ctx.globalAlpha = a;
-      const y = w.y - w.r - 18 - rise;
+      // Above the numbers of the next taps; under the creature when the top of the view has no room (the dish's
+      // corner buttons live there); never off the edge of the view.
+      let y = w.y - w.r - 34 - rise - (liftOf ? liftOf(b.id) : 0);
+      if (y < PULSE_FX.labelTopPx) y = w.y + w.r + 30 + rise;
+      const half = b.tw / 2 + 8;
+      const x = viewW > 2 * half ? Math.min(viewW - half, Math.max(half, w.x)) : w.x;
       // Over bright matter a fine dark edge keeps it legible (AA on any culture).
       ctx.lineWidth = 3;
       ctx.strokeStyle = 'rgba(8,10,14,0.8)';
-      ctx.strokeText(b.text, w.x, y);
+      ctx.strokeText(b.text, x, y);
       ctx.fillStyle = PULSE_FX.chispazoColor;
-      ctx.fillText(b.text, w.x, y);
+      ctx.fillText(b.text, x, y);
     }
     ctx.globalAlpha = 1;
   }

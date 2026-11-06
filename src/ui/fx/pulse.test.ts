@@ -24,6 +24,7 @@ function fakeCtx(): CanvasRenderingContext2D & { texts: string[] } {
     stroke: noop,
     fill: noop,
     fillText: (t: string) => void texts.push(t),
+    measureText: (t: string) => ({ width: t.length * 10 }),
     strokeText: noop,
   } as unknown as CanvasRenderingContext2D & { texts: string[] };
 }
@@ -144,12 +145,15 @@ describe('the pulse layer (fx/pulse.ts)', () => {
 
   it('a Chispazo shows its own label, asks for the hit-stop and the kick, and makes no «+N»', () => {
     const L = layer();
+    // A number of the hit before is in flight: it makes way for the label.
+    L.paid(1, 50, 50, 2, 9, false, -0.1);
     const r = L.paid(1, 50, 50, 25, 10, true, 0);
     expect(r).toBe(true);
     expect(L.paid(1, 50, 50, 5, 11, false, 0.1)).toBe(false);
     const ctx = frame(L, 0.12);
     expect(ctx.texts).toContain('¡CHISPAZO! +25');
-    expect(ctx.texts.filter((t) => t === '+25').length).toBe(0);
+    expect(ctx.texts.filter((t) => t === '+25' || t === '+2').length).toBe(0);
+    expect(ctx.texts).toContain('+5');
   });
 
   it('a glimmer flies out from its creature and is a target where it lands', () => {
