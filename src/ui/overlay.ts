@@ -24,7 +24,7 @@ import type { Behavior, CreatureState, CreatureView, GameView, Lang } from '../c
 import { TEXT } from '../game/content';
 import { fmt } from './format';
 import { TAP_REACH_PX, type TapCreature, type TapMote, type TapScene } from './dishTap';
-import { DROP_FX, DropLayer, type CreatureResolver } from './fx/drops';
+import { DROP_FX, DropLayer, ghostAt, type CreatureResolver } from './fx/drops';
 import { hitStop, PULSE_FX, PulseLayer, type GridResolver } from './fx/pulse';
 import { PipetteLayer } from './fx/pipettes';
 import { behaviorName, stateName } from './i18n';
@@ -437,6 +437,9 @@ export class Overlay {
   };
   private readonly hueOfOwner = (id: number): number | undefined => this.creatures.get(id)?.hue;
   private pulseLang: Lang | '' = '';
+  /** Ghosts of living creatures that died (grid point, outline radius in cells, hue, when). */
+  private readonly ghosts = Array.from({ length: MAX_GHOSTS }, () => ({ on: false, x: 0, y: 0, r: 0, hue: DROP_FX.defaultHue as number, t0: 0 }));
+  private ghostHead = 0;
   /** A creature's status pill sits right above it: the finger's numbers start above the pill. */
   private readonly pillLift = (id: number): number => (this.pillsShown() && this.statusLayer.hasPill(id) ? PILL_LIFT_PX : 0);
   /** The last matter flare of a tap (overlay s): the shader keeps four pulses, so taps share them. */
@@ -687,7 +690,12 @@ export class Overlay {
         }
       }
     }
-    for (const id of this.creatures.keys()) if (!alive.has(id)) this.creatures.delete(id);
+    for (const s of this.creatures.values()) {
+      if (alive.has(s.id)) continue;
+      // ADR-031 §4 «la huella»: a living creature's outline stays a moment where it died, melting into its drop.
+      if (s.state === 'stable') this.addGhost(s);
+      this.creatures.delete(s.id);
+    }
 
     if (view.golden) {
       if (!this.golden) {
@@ -1302,6 +1310,7 @@ export class Overlay {
     if (!rm && round) this.drawMotes(dt, dcx, dcy, round.radius * scale);
     this.drawSpots();
     this.drawCreatures(rect, rm, dt);
+    this.drawGhosts(rm);
     this.runLayers('creatures', this.now, dt, rect, scale);
     if (this.dangers.length) this.drawDangers(rm);
     this.drops.draw(ctx, this.atlas, this.now, dt, rm, dishFx.matterFade, this.map.px, this.map.py, this.resolveCreature, cam.zoom);
@@ -1656,6 +1665,63 @@ export class Overlay {
     return pt;
   }
 
+  /**
+   * A living creature died and its light joined its drop (bus 'deathBurst', DEATH_BURST_SECONDS of its light):
+   * the drop flares and «+N» rises from it (the cause is PC's label, src/ui/deathLabel.ts).
+   */
+  deathBurst(e: GameEvents['deathBurst']): void {
+    this.drops.flareAt(e.x, e.y, this.now);
+    if (!(e.amount > 0)) return;
+    let hue: number = DROP_FX.defaultHue;
+    for (const g of this.ghosts) if (g.on && Math.hypot(g.x - e.x, g.y - e.y) < 8) hue = g.hue;
+    const lang = this.lang;
+    const f = this.pushFloat(e.x, e.y, 1.3, '+' + fmt(e.amount >= 1 ? Math.round(e.amount) : e.amount, lang), hueHex(hue, 82), INCOME_PX + 3, this.reduceMotion ? 0 : 30, false, 0);
+    f.lift = 10;
+  }
+
+  private addGhost(s: Smoothed): void {
+    if (dishFx.matterFade < 0.05) return;
+    const g = this.ghosts[this.ghostHead];
+    this.ghostHead = (this.ghostHead + 1) % MAX_GHOSTS;
+    g.on = true;
+    g.x = s.x;
+    g.y = s.y;
+    g.r = Math.max(7 / Math.max(this.camera.scale, 0.01), s.r * 1.9);
+    g.hue = s.hue ?? DROP_FX.defaultHue;
+    g.t0 = this.now;
+  }
+
+  /** «La huella»: a fine outline in its colour where a living creature died, fading and melting in 1.5 s. */
+  private drawGhosts(rm: boolean): void {
+    const ctx = this.ctx;
+    const vis = dishFx.matterFade;
+    for (const g of this.ghosts) {
+      if (!g.on) continue;
+      const t = this.now - g.t0;
+      const k = ghostAt(t, rm);
+      if (k.alpha <= 0) {
+        g.on = false;
+        continue;
+      }
+      if (vis <= 0.02) continue;
+      const x = this.map.px(g.x);
+      const y = this.map.py(g.y);
+      const r = g.r * this.camera.scale * k.scale;
+      ctx.globalCompositeOperation = 'lighter';
+      this.atlas.draw(ctx, SPR.disc, this.hueColor(g.hue), x, y, r * 2.2, 0.25 * k.alpha * vis);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = hueHex(g.hue, 72);
+      ctx.lineWidth = 1.25;
+      ctx.globalAlpha = k.alpha * vis;
+      ctx.setLineDash(DASH);
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, TAU);
+      ctx.stroke();
+      ctx.setLineDash(NO_DASH);
+    }
+    ctx.globalAlpha = 1;
+  }
+
   /** The game says glimmer `e.id` was caught (bus 'moteCaught'): «+N» where it was. */
   moteCaught(e: GameEvents['moteCaught']): void {
     this.pulses.caught(e.id, e.x, e.y, e.amount, this.now);
@@ -1878,7 +1944,19 @@ export class Overlay {
         this.atlas.draw(ctx, SPR.disc, this.c.warn, x, y, rr * 2, 0.34 * pulse * vis);
         this.atlas.draw(ctx, SPR.disc, this.c.danger, x, y, rr * 2.6, 0.14 * pulse * vis);
         ctx.globalCompositeOperation = 'source-over';
+        // ADR-031 §4: VELA watches it: a fine amber outline, an instrument's marking (steady with Reduce motion),
+        // and «Mancha sin forma · VELA la vigila» under it.
+        ctx.strokeStyle = C.warn;
+        ctx.lineWidth = 1.25;
+        ctx.globalAlpha = (rm ? 0.75 : 0.55 + 0.3 * pulse) * vis;
+        ctx.setLineDash(BLOB_DASH);
+        ctx.lineDashOffset = rm ? 0 : -this.now * 6;
+        ctx.beginPath();
+        ctx.arc(x, y, Math.max(R * 1.05, 16), 0, TAU);
+        ctx.stroke();
+        ctx.setLineDash(NO_DASH);
         ctx.globalAlpha = 1;
+        if (vis > 0.5) this.queueName(x, y + Math.max(R * 1.05, 16) + 6, null, TEXT.blobWatched[this.lang], C.warn);
       }
 
       const selected = id === this.selectedId;
@@ -2648,6 +2726,8 @@ export class Overlay {
 
 /** `Float.cid` of a collected-light number (never a creature id: those are ≥ 0). */
 const COLLECT_FLOAT = -7;
+/** Ghosts of dead creatures drawn at once (ADR-031 §4). */
+const MAX_GHOSTS = 6;
 /** A status pill's height plus its gap over the body (moments/status.ts): the finger's numbers start above it. */
 const PILL_LIFT_PX = 44;
 const NO_DANGERS: readonly { a: number; b: number; inS: number; actionable?: boolean }[] = [];
@@ -2656,6 +2736,7 @@ const NAME_FONT = `600 12px ${SANS}`;
 const LABEL_FONT = `700 14px ${SANS}`;
 const LABEL_SUB_FONT = `500 12px ${SANS}`;
 const DASH = [2, 4];
+const BLOB_DASH = [5, 3];
 const ARROW_DASH = [5, 4];
 const NO_DASH: number[] = [];
 

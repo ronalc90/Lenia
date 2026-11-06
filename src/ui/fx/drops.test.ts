@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { beadRadius, DROP_FX, dropAnchor, dropGlow, popScale } from './drops';
+import { beadRadius, DROP_FX, dropAnchor, dropGlow, flareGlow, ghostAt, popScale } from './drops';
 
 describe('drops of light (fx/drops.ts, ADR-030)', () => {
   it('a drop grows with its light and is always a touchable target', () => {
@@ -53,5 +53,49 @@ describe('a collected drop (DropLayer)', () => {
     // The next view: same id, emptied by the collection.
     L.setView([{ id: 1, x: 10, y: 10, amount: 0.1, fill: 0.01, owner: null }], () => undefined, 0.2, none);
     expect((L as unknown as { states: Map<number, { taken: boolean }> }).states.get(1)?.taken).toBe(false);
+  });
+});
+
+/** ADR-031 (MECANICAS §4): a death leaves its light, and it shows. */
+describe('what a death leaves (fx/drops.ts)', () => {
+  it("a dead creature's drop flares bright and settles back within a second", () => {
+    expect(flareGlow(-0.1)).toBe(0);
+    expect(flareGlow(0)).toBe(1);
+    let prev = 1;
+    for (let t = 0.05; t <= DROP_FX.flareS; t += 0.05) {
+      const g = flareGlow(t);
+      expect(g).toBeLessThanOrEqual(prev);
+      prev = g;
+    }
+    expect(flareGlow(DROP_FX.flareS)).toBe(0);
+    expect(DROP_FX.flareS).toBeLessThanOrEqual(1);
+  });
+
+  it('where a living creature dies its outline stays 1.5 s and melts into its drop', () => {
+    // (A reused object: read it at once.)
+    const a = { ...ghostAt(0, false) };
+    expect(a.alpha).toBeGreaterThan(0);
+    expect(a.scale).toBe(1);
+    const mid = { ...ghostAt(0.75, false) };
+    expect(mid.alpha).toBeLessThan(a.alpha);
+    expect(mid.scale).toBeLessThan(1);
+    expect(ghostAt(DROP_FX.ghostS, false).alpha).toBe(0);
+    expect(DROP_FX.ghostS).toBe(1.5);
+    // Reduce motion: it fades, it does not shrink.
+    expect(ghostAt(0.75, true).scale).toBe(1);
+  });
+
+  it('a flare asked before the drop shows up lands on it when it comes', async () => {
+    const { DropLayer } = await import('./drops');
+    const L = new DropLayer();
+    const none = () => false;
+    // The creature died: the game's deathBurst comes first, its loose drop in the next view.
+    L.flareAt(40, 40, 1);
+    L.setView([{ id: 9, x: 41, y: 40, amount: 12, fill: 1, owner: null }], () => undefined, 1.1, none);
+    expect(L.flaring(9, 1.2)).toBeGreaterThan(0.5);
+    // A drop far away is not the one.
+    L.flareAt(100, 100, 2);
+    L.setView([{ id: 9, x: 41, y: 40, amount: 12, fill: 1, owner: null }, { id: 10, x: 10, y: 10, amount: 3, fill: 0.3, owner: null }], () => undefined, 2.1, none);
+    expect(L.flaring(10, 2.2)).toBe(0);
   });
 });

@@ -11,6 +11,11 @@
  * Reduce motion). Collecting is a meniscus ring and the bead drawing in (150 ms), or the bead being
  * sipped into a pipette's tip.
  *
+ * A death leaves its light (ADR-031, docs/MECANICAS.md §4): the drop of a creature that died flares (its glow
+ * ×2,5 fading over 0,9 s, the bead swelling a little: the burst of light that joined it), and where a living
+ * creature died its outline stays 1,5 s as a faint ghost that melts into the drop (`ghostAt`, drawn by the
+ * overlay).
+ *
  * Frames allocate nothing: drop states and pops are pooled, the bead sprites are cached per hue, colours
  * are atlas indices, positions are written into reused objects.
  */
@@ -49,7 +54,38 @@ export const DROP_FX = {
   maxPops: 24,
   /** Default hue (the Luz accent, #5bc0eb) for a drop whose species has no colour yet. */
   defaultHue: 197,
+  /** A death's flare (bus 'deathBurst'): glow up to ×(1 + flareGlow) fading over flareS; the bead swells this much. */
+  flareS: 0.9,
+  flareGlow: 1.5,
+  flareSwell: 0.2,
+  /** A flare asked for a drop not in the view yet waits this long for it, within this many cells. */
+  flareWaitS: 1.2,
+  flareCells: 6,
+  /** The ghost of a creature that died: its outline for this long, shrinking to this share as it melts. */
+  ghostS: 1.5,
+  ghostTo: 0.55,
+  ghostAlpha: 0.5,
 } as const;
+
+/** A death's flare 0..1 at t s after it: 1 at once, easing out to 0 at flareS. */
+export function flareGlow(t: number): number {
+  if (!(t >= 0) || t >= DROP_FX.flareS) return 0;
+  const u = 1 - t / DROP_FX.flareS;
+  return u * u;
+}
+
+/**
+ * The ghost of a living creature that died, t s after: its opacity (fading over ghostS) and the scale of its
+ * outline (melting to ghostTo; 1 with Reduce motion).
+ */
+export function ghostAt(t: number, reduceMotion: boolean): { alpha: number; scale: number } {
+  const u = t <= 0 ? 0 : t >= DROP_FX.ghostS ? 1 : t / DROP_FX.ghostS;
+  const e = 1 - (1 - u) * (1 - u);
+  GHOST.alpha = u >= 1 ? 0 : DROP_FX.ghostAlpha * (1 - u);
+  GHOST.scale = reduceMotion ? 1 : 1 - (1 - DROP_FX.ghostTo) * e;
+  return GHOST;
+}
+const GHOST = { alpha: 0, scale: 1 };
 
 /** Bead radius in CSS px for a fill 0..1 at camera zoom `zoom` (1 = the whole dish). */
 export function beadRadius(fill: number, zoom = 1): number {
@@ -204,6 +240,8 @@ interface DropState {
   takenAt: number;
   /** It has been ripe once (the "¡Lista!" label is told once per drop). */
   ripeSeen: boolean;
+  /** A death's flare started then (overlay s; −∞: none). */
+  flareAt: number;
 }
 
 interface Pop {
@@ -236,6 +274,8 @@ export class DropLayer {
   active = false;
   /** A drop went ripe for the first time: (x, y) in overlay px (the overlay labels it). */
   onRipe: ((x: number, y: number) => void) | null = null;
+  /** Flares asked for drops not in the view yet (grid point, when; t < 0 = free). */
+  private readonly pending = Array.from({ length: 4 }, () => ({ x: 0, y: 0, t: -1 }));
 
   /** The latest view's drops (null/undefined: the game has no collection). */
   setView(drops: readonly DropView[] | null | undefined, hueOf: (owner: number) => number | undefined, now: number, sippedBy: (dropId: number) => boolean): void {
@@ -254,7 +294,17 @@ export class DropLayer {
           s.takenAt = 0;
           s.ripeSeen = d.fill >= DROP_FX.ripe;
           s.hue = DROP_FX.defaultHue;
+          s.flareAt = -Infinity;
           this.states.set(d.id, s);
+          // A death's flare that came before its drop.
+          for (const p of this.pending) {
+            if (p.t < 0) continue;
+            if (now - p.t > DROP_FX.flareWaitS) p.t = -1;
+            else if (Math.hypot(p.x - d.x, p.y - d.y) <= DROP_FX.flareCells) {
+              s.flareAt = p.t;
+              p.t = -1;
+            }
+          }
         }
         s.live = true;
         // A game that keeps the drop's id after a collection (it refills from empty) shows it again at once.
@@ -323,6 +373,37 @@ export class DropLayer {
     return this.near;
   }
   private readonly near = { id: 0, x: 0, y: 0 };
+
+  /**
+   * A creature died at grid (gx, gy) and its light joined its drop (bus 'deathBurst'): the drop there flares now,
+   * or the next one to appear there within flareWaitS (the view may bring it a moment later).
+   */
+  flareAt(gx: number, gy: number, now: number): void {
+    let best: DropState | null = null;
+    let bd: number = DROP_FX.flareCells;
+    for (const s of this.states.values()) {
+      const d = Math.hypot(s.gx - gx, s.gy - gy);
+      if (d <= bd) {
+        bd = d;
+        best = s;
+      }
+    }
+    if (best) {
+      best.flareAt = now;
+      return;
+    }
+    let slot = this.pending[0];
+    for (const p of this.pending) if (p.t < 0 || p.t < slot.t) slot = p;
+    slot.x = gx;
+    slot.y = gy;
+    slot.t = now;
+  }
+
+  /** Flare 0..1 of drop `id` at `now` (tests). */
+  flaring(id: number, now: number): number {
+    const s = this.states.get(id);
+    return s ? flareGlow(now - s.flareAt) : 0;
+  }
 
   /** Hue of drop `id` (its species), or the default. */
   hueOf(id: number): number {
@@ -414,7 +495,14 @@ export class DropLayer {
         this.onRipe?.(x, y);
       }
       if (vis <= 0.02) continue;
-      this.drawBead(ctx, atlas, s.hue, x, y, r, s.shown, s.owner === null, now, rm, vis, 1);
+      const fl = flareGlow(now - s.flareAt);
+      if (fl > 0) {
+        // The light of a death joined it: a flare of its own glow, the bead swelling a little (not with Reduce motion).
+        ctx.globalCompositeOperation = 'lighter';
+        atlas.draw(ctx, SPR.disc, this.glow(atlas, s.hue), x, y, r * 9, 0.6 * DROP_FX.flareGlow * fl * vis);
+        ctx.globalCompositeOperation = 'source-over';
+      }
+      this.drawBead(ctx, atlas, s.hue, x, y, rm ? r : r * (1 + DROP_FX.flareSwell * fl), s.shown, s.owner === null, now, rm, vis, 1);
     }
     // Collected: the bead draws in (a meniscus ring opens once), or is sipped into the glass.
     const ms = DROP_FX.popMs / 1000;
@@ -493,6 +581,7 @@ export class DropLayer {
     for (const s of this.states.values()) this.spare.push(s);
     this.states.clear();
     for (const p of this.pops) p.on = false;
+    for (const p of this.pending) p.t = -1;
     this.tapCount = 0;
   }
 }
