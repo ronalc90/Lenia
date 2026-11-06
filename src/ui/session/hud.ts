@@ -17,14 +17,14 @@
  *    what this session is worth BEFORE it ends and the next node it reaches); a tap opens the Datos
  *    sum (summary.ts datosExplain in the shared price sheet).
  *
- * ADR-031 (docs/MECANICAS.md §3.2): the streak chip beside the Luz counter, «Racha ×1,2» with ten dots that
+ * ADR-031 (docs/MECANICAS.md §3.2): the streak chip beside the Luz counter, «Racha +20 %» with ten dots that
  * fill towards the next ¡Chispazo!, «¡Racha máxima!» when full, grey while it drains (createStreakChip).
  *
  * Pure DOM, no game imports beyond the session types: the host feeds `update()` from SessionState.
  */
 import type { GameView, Lang, Text } from '../../core/types';
 import { TEXT } from '../../game/content';
-import { multText } from '../../game/format';
+import { multWords } from '../../game/format';
 import * as C from '../../game/cycleBalance';
 import { countdownSeconds, warnSeconds, type SessionState } from '../../game/session';
 import { SESSION_UI } from '../../game/treeText';
@@ -446,7 +446,7 @@ export function createSessionHud(container: HTMLElement, opts: SessionHudOptions
 
 /** What the streak chip shows (pure). */
 export interface StreakChipView {
-  /** «Racha ×1,2», or «¡Racha máxima! ×1,2» when full. */
+  /** «Racha +20 %», or «¡Racha máxima! +25 %» when full. */
   text: string;
   /** Dots lit towards the next ¡Chispazo! (0 right after one) out of `every`. */
   dots: number;
@@ -454,32 +454,25 @@ export interface StreakChipView {
   full: boolean;
   /** No hit for a moment: it greys and goes down slowly (never at once). */
   draining: boolean;
-  /** Under the counter: «×1,2 por tu racha» (null while it rounds to ×1). */
+  /** Its spoken label: «+25 % por tu racha» (null at ×1). */
   line: string | null;
-}
-
-/**
- * The streak's multiplier as the main flow says it: one decimal at most, rounded down (docs/CLARIDAD2.md §2.13: no
- * two-decimal multipliers; ×1,25 reads ×1,2, never more than it pays).
- */
-export function streakShown(mult: number): number {
-  return Math.floor(mult * 10 + 1e-9) / 10;
 }
 
 export function streakChip(s: GameView['streak'] | undefined, l: Lang): StreakChipView | null {
   if (!s || !(s.hits > 0)) return null;
   const every = Math.max(1, Math.round(s.every));
-  const shown = streakShown(s.mult);
+  // The main flow's multiplier words (docs/CLARIDAD2.md §2.13, format.ts multWords): «+25 %», never «×1,25».
+  const shown = s.mult;
   const full = s.hits >= s.max;
   // Hits left to the next one (every … 1): every − left are lit; right after a ¡Chispazo! (left = every) none.
   const dots = (every - (Math.max(0, Math.round(s.toChispazo)) % every)) % every;
   return {
-    text: full ? `${TEXT.streakMax[l]} ${multText(shown)[l]}` : TEXT.streak(shown)[l],
+    text: full ? `${TEXT.streakMax[l]} ${multWords(shown)[l]}` : TEXT.streak(shown)[l],
     dots,
     every,
     full,
     draining: !!s.draining,
-    line: shown > 1 ? TEXT.streakLine(shown)[l] : null,
+    line: shown > 1.005 ? TEXT.streakLine(shown)[l] : null,
   };
 }
 

@@ -16,7 +16,7 @@
  *   (fewer Datos than the session before: why, on a neutral line, and what to do)
  *   Colección 3/7 · la siguiente vive en el Mundo 4
  *   Láminas de hoy: [LÁMINA 07 · Dos especies] …
- *   Tu dedo: 74 toques · mejor racha ×1,2 · 4 Chispazos · +96 de luz      (ADR-031: fingerLines)
+ *   Tu dedo: 74 toques · mejor racha +25 % · 4 Chispazos · +96 de luz     (ADR-031: fingerLines)
  *   Semillas que no prendieron: 2 (te devolví 8 de luz) · Salvaste a 1 · se juntaron 1 · su luz: +18
  *   VELA's line · [Ir al Árbol · 3 mejoras listas] [Nueva sesión]
  *
@@ -30,7 +30,6 @@ import type { DatosBreakdown, RecordHit, SessionGoal, SessionSummary } from '../
 import { velaLine } from '../../game/session';
 import { DATO_NAME, DATOS_NAME, NODE_TEXT, SESSION_UI, TREE_UI, WORLD_TEXT } from '../../game/treeText';
 import { fmt, fmtClock, fmtMult, fmtPerSec } from '../format';
-import { streakShown } from './hud';
 import type { PriceExplain } from '../moments/price';
 import { plateLabel, plateOf, scaleBar, scaleText } from '../moments/plates';
 import { mountPortrait } from '../portrait';
@@ -409,7 +408,7 @@ export function fingerLines(data: ReportData, l: Lang): string[] {
   const out: string[] = [];
   const f = data.finger;
   if (f && f.taps > 0) {
-    let line = SESSION_UI.finger(f.taps, streakShown(f.bestStreak), f.chispazos, fmt(Math.round(f.luz), l))[l];
+    let line = SESSION_UI.finger(f.taps, f.bestStreak, f.chispazos, fmt(Math.round(f.luz), l))[l];
     if (f.motes && f.motes.thrown > 0) line += ` · ${REPORT_TEXT.glimmers(f.motes.caught, f.motes.thrown)[l]}`;
     out.push(line);
   }

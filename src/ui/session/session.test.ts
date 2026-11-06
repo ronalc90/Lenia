@@ -325,9 +325,9 @@ describe('the finger in the report (ADR-031, docs/MECANICAS.md §6.1 step 11, §
     expect(data.finger).toMatchObject({ taps: 74, bestStreak: 1.25, chispazos: 4, luz: 96 });
     const es = fingerLines(data, 'es');
     const en = fingerLines(data, 'en');
-    // Whole numbers and one decimal at most on the streak (docs/CLARIDAD2.md §2.13: ×1,25 reads ×1,2).
-    expect(es[0]).toBe('Tu dedo: 74 toques · mejor racha ×1,2 · 4 Chispazos · +96 de luz');
-    expect(en[0]).toBe('Your finger: 74 taps · best streak ×1.2 · 4 Flashes · +96 glow');
+    // The main flow's multiplier words (docs/CLARIDAD2.md §2.13): «+25 %», never «×1,25».
+    expect(es[0]).toBe('Tu dedo: 74 toques · mejor racha +25 % · 4 Chispazos · +96 de luz');
+    expect(en[0]).toBe('Your finger: 74 taps · best streak +25% · 4 Flashes · +96 glow');
     // Session 2: the glimmers caught out of the ones thrown.
     const s2 = fingerLines({ finger: { taps: 160, bestStreak: 1.25, chispazos: 9, luz: 300, motes: { caught: 27, thrown: 45 } } }, 'es');
     expect(s2[0]).toMatch(/· chispitas 27 de 45$/);
@@ -373,16 +373,16 @@ describe('the streak chip by the counter (ADR-031, docs/MECANICAS.md §3.2)', ()
     expect(streakChip(undefined, 'es')).toBeNull();
     expect(streakChip(st(0), 'es')).toBeNull();
     const three = streakChip(st(3), 'es')!;
-    expect(three.text).toBe('Racha ×1');
+    expect(three.text).toBe('Racha +8 %');
     expect(three.dots).toBe(3);
     expect(three.every).toBe(10);
-    expect(streakChip(st(8), 'es')!.text).toBe('Racha ×1,2');
-    expect(streakChip(st(8), 'en')!.text).toBe('Streak ×1.2');
+    expect(streakChip(st(8), 'es')!.text).toBe('Racha +20 %');
+    expect(streakChip(st(8), 'en')!.text).toBe('Streak +20%');
     // Full: «¡Racha máxima!» and what it does to all the light, under the counter.
     const full = streakChip(st(10, { toChispazo: 10 }), 'es')!;
     expect(full.full).toBe(true);
-    expect(full.text).toBe('¡Racha máxima! ×1,2');
-    expect(full.line).toBe('×1,2 por tu racha');
+    expect(full.text).toBe('¡Racha máxima! +25 %');
+    expect(full.line).toBe('+25 % por tu racha');
     expect(full.dots).toBe(0);
     for (let n = 1; n <= 30; n++)
       for (const l of ['es', 'en'] as const) {
