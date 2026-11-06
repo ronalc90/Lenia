@@ -83,3 +83,26 @@ describe('every loss is named where it happens and says what it left (ADR-031, d
     for (const t of all) for (const l of ['es', 'en'] as const) expect(t![l]).not.toMatch(/Muy cerca|se fundirían|¡Cuidado!|Too close:|Careful!/);
   });
 });
+
+describe('a refund names the real cause (QA-3 §3: three swimmers that crashed read «No prendió»)', () => {
+  it('a seed that formed and crashed says so, with what came back', () => {
+    expect(refundLabel({ amount: 4, free: false }).es).toMatch(/No prendió/);
+    expect(refundLabel({ amount: 4, free: false, cause: 'faded' }).es).toMatch(/No prendió/);
+    const crowd = refundLabel({ amount: 4, free: false, cause: 'crowd' });
+    expect(crowd.es).toMatch(/Chocó con otra/);
+    expect(crowd.es).toMatch(/\+4/);
+    expect(crowd.en).toMatch(/\+4/);
+    expect(refundLabel({ amount: 0, free: true, cause: 'glass' }).es).toMatch(/cristal.*gratis/);
+    for (const r of [crowd, refundLabel({ amount: 0, free: true, cause: 'glass' })]) expect(r.es).not.toMatch(/No prendió/);
+  });
+
+  it('a planted creature lost before it lived says why and that a sure seed came back', () => {
+    for (const cause of ['crowd', 'glass', 'faded'] as const) {
+      const t = refundLabel({ amount: 0, free: true, cause, plant: true });
+      expect(t.es, cause).toMatch(/segura/);
+      expect(t.en, cause).toMatch(/sure/);
+      expect(t.es).not.toMatch(/No prendió/);
+    }
+    expect(refundLabel({ amount: 0, free: true, cause: 'crowd', plant: true }).es).toMatch(/Chocó/);
+  });
+});

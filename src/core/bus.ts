@@ -81,8 +81,13 @@ export interface GameEvents {
   pulse: { id: number; x: number; y: number; amount: number; hits: number; chispazo: boolean };
   /** A ¡Chispazo! glimmer was caught. */
   moteCaught: { id: number; x: number; y: number; amount: number };
-  /** A seed that never took gave back what it cost (`free`: it was a free seed, so a free seed came back). */
-  seedRefund: { x: number; y: number; amount: number; free: boolean };
+  /**
+   * A seed that never took gave back what it cost (`free`: it was a free seed, so a free seed came back), said where
+   * it went dark. (QA-3 §3) `cause`: 'faded' = it never formed, 'crowd' = it formed and ran into another body, 'glass' =
+   * it formed and reached the glass. `plant`: it was the run's starter / Nevera creature, lost before it lived: a free
+   * SURE seed came back (amount 0, free true). Optional: absent = an older game ('faded').
+   */
+  seedRefund: { x: number; y: number; amount: number; free: boolean; cause?: 'faded' | 'glass' | 'crowd'; plant?: boolean };
   /** A stable creature died (glass, fusion, lost shape): `amount` Luz (DEATH_BURST_SECONDS of its light) joined its drop. */
   deathBurst: { id: number; x: number; y: number; amount: number; cause: 'glass' | 'touch' | 'lost' };
   /** A warned contact (an `actionable` danger) passed without touching after the player steered one of the two. */

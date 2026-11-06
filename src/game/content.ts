@@ -493,6 +493,17 @@ export const TEXT = {
   /** A seed that never took gave its price back (bus 'seedRefund'); `refundFree` when it was a free seed. */
   refund: (n: number) => t(`No prendió · +${f(n)} de vuelta`, `Didn’t take · +${f(n)} back`),
   refundFree: t('No prendió · semilla gratis de vuelta', 'Didn’t take · free seed back'),
+  /** (QA-3 §3) A seed that did form, then ran into another body or reached the glass: its real cause, and what came back. */
+  refundCrowd: (n: number) => t(`Chocó con otra · +${f(n)} de vuelta`, `Bumped into another · +${f(n)} back`),
+  refundCrowdFree: t('Chocó con otra · semilla gratis de vuelta', 'Bumped into another · free seed back'),
+  refundGlass: (n: number) => t(`Tocó el cristal · +${f(n)} de vuelta`, `Touched the glass · +${f(n)} back`),
+  refundGlassFree: t('Tocó el cristal · semilla gratis de vuelta', 'Touched the glass · free seed back'),
+  /** (QA-3 §3) The run's starter / Nevera creature lost before it lived: why, and the free sure seed that came back. */
+  plantLostCrowd: t('Chocó con otra · te doy otra segura', 'Bumped into another · here is a sure one'),
+  plantLostGlass: t('Tocó el cristal · te doy otra segura', 'Touched the glass · here is a sure one'),
+  plantLostFaded: t('No llegó a despertar · te doy otra segura', 'Never woke up · here is a sure one'),
+  /** (ADR-027 v0.027) The clock waits for the run's planted creature to wake (SessionClockView.wakeHold). */
+  wakeHold: t('El reloj espera a que despierte', 'The clock waits for it to wake'),
   /** A forming seed losing matter (only if the measured rule is ≥ 85 % right, MECANICAS §7.3): the amber arc. */
   struggling: t('Le cuesta…', 'Struggling…'),
   /** A warned contact the player can act on (GameView.dangers[].actionable); `saved` when it passed (`n` = hits added). */

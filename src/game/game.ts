@@ -446,9 +446,12 @@ export function createGame(deps: GameDeps, save?: string): Game {
   let recentSeeds: { x: number; y: number; t: number; r: number; step: number }[] = [];
   /**
    * (ADR-031) Seeds sown this session the detector has not settled yet: what each cost (refunded if it never takes),
-   * and the creature it became (`id`, linked on its first report near the spot).
+   * and the creature it became (`id`, linked on its first report near the spot). `at`: where that creature was last
+   * seen (QA-3 §3: a seed that formed and swam into another went dark far from where it was sown, and is said there).
    */
-  let ledger: { x: number; y: number; cost: number; free: boolean; step: number; id: number | null; r: number; plant?: boolean }[] = [];
+  let ledger: { x: number; y: number; cost: number; free: boolean; step: number; id: number | null; r: number; plant?: boolean; at?: { x: number; y: number; r: number } }[] = [];
+  /** (ADR-027 v0.027) Dish seconds this run's clock has waited for its planted creatures to wake (WAKE_HOLD_MAX_S at most). */
+  let wakeHeld = 0;
   /** (ADR-031) Creatures the player erased (no death light), by id, with the report step they were marked at. */
   const erased = new Map<number, number>();
   /** Where the eraser touched lately (creatures there are marked as erased on the next report). */
@@ -1004,7 +1007,32 @@ export function createGame(deps: GameDeps, save?: string): Game {
   }
 
   /** The nursery is full: a new spore would wait (QA2 H-05 "⏳ Espera…"); too many at once fuse into a maze. */
-  const nurseryFull = (): boolean => forming() >= (sessions ? fx.nurseryMax : B.SEED_NURSERY_MAX);
+  const nurseryFull = (): boolean => forming() >= (sessions ? fx.nurseryMax : B.SEED_NURSERY_MAX) || plantWaking();
+
+  /**
+   * (ADR-027 v0.027, QA-3 §3) The run's starter / Nevera creature has not lived yet (a slow device lit it with part of its
+   * incubation): it holds the nursery, so no seed is sown into its path while it is young, and the first seed (which
+   * starts the clock) waits for it. The tutorial's first creature does not: VELA starts session 1's clock herself.
+   */
+  function plantWaking(): boolean {
+    if (!sessions || !ledger.length) return false;
+    const se = ses();
+    if (!se || se.phase === 'over' || (tutorial && se.n === 1)) return false;
+    return ledger.some(waking);
+  }
+
+  /** A planted creature the detector sees forming (linked, not stable yet, not gone): it is waking. */
+  function waking(e: (typeof ledger)[number]): boolean {
+    if (!e.plant || e.id === null) return false;
+    const id = e.id;
+    return creatures.some((c) => c.id === id && c.state === 'born');
+  }
+
+  /** (ADR-027 v0.027) A started clock waits for the run's planted creatures to live, WAKE_HOLD_MAX_S of dish time at most. */
+  function wakeHolding(): boolean {
+    const se = ses();
+    return !!se && se.phase === 'running' && wakeHeld < C.WAKE_HOLD_MAX_S && ledger.some(waking);
+  }
 
   /**
    * (sessions) A template and its turn. A pure template, and any seed of a thin world (Frío), turns by
@@ -1285,22 +1313,45 @@ export function createGame(deps: GameDeps, save?: string): Game {
     ledger.push({ x, y, cost, free, step: reportStep, id: null, r, ...(plant ? { plant: true } : {}) });
   }
 
-  /** A sown seed never took: its price (or its free seed) comes back, and one more bad-luck dot. */
-  function seedFailed(e: (typeof ledger)[number]): void {
+  /**
+   * A sown seed went dark before it lived: its price (or its free seed) comes back, and one more bad-luck dot. QA-3 §3:
+   * with its real cause — a seed that formed and then ran into another body, or reached the glass, did take; only one
+   * the detector never saw form «did not take» — said where it went dark. A planted creature (the run's starter /
+   * Nevera, promised alive) lost before it lived gives back a free SURE seed: the same creature, sown again.
+   */
+  function seedFailed(e: (typeof ledger)[number], cause: 'faded' | 'glass' | 'crowd' = 'faded'): void {
     ledger = ledger.filter((x) => x !== e);
     const se = ses();
-    if (!se || se.phase === 'over' || e.plant) return; // a Nevera plant cost nothing: nothing to give back
+    if (!se || se.phase === 'over') return;
     const l = losses(se);
+    const where = e.at ?? e;
+    if (e.plant) {
+      if (!e.at) return; // never seen on the dish (no report of it): nothing went dark in front of the player
+      l.plantsLost = (l.plantsLost ?? 0) + 1;
+      s.charges.free++;
+      s.charges.guaranteed++;
+      bus.emit('seedRefund', { x: where.x, y: where.y, amount: 0, free: true, cause, plant: true });
+      learn(cause === 'crowd' ? 'touch' : cause === 'glass' ? 'glass' : 'lost'); // a pure template that faded lost its shape
+      return;
+    }
     l.fails++;
     l.refunds++;
+    if (cause !== 'faded') l.crashed = (l.crashed ?? 0) + 1;
     const amount = e.free ? 0 : e.cost * C.SEED_REFUND_SHARE;
     if (e.free) s.charges.free++;
     if (amount > 0) {
       s.essence += amount;
       l.refunded += amount;
     }
-    bus.emit('seedRefund', { x: e.x, y: e.y, amount, free: e.free });
-    learn('faded');
+    bus.emit('seedRefund', { x: where.x, y: where.y, amount, free: e.free, cause });
+    learn(cause === 'crowd' ? 'touch' : cause);
+  }
+
+  /** Why a seed's creature went dark before it lived (contact.ts deathCause on its last body; fused into a blob = 'crowd'). */
+  function seedLossCause(e: (typeof ledger)[number], c: Creature | undefined): 'faded' | 'glass' | 'crowd' {
+    if (!e.at) return 'faded'; // the detector never saw it form
+    if (c?.state === 'exploded') return explodeCause(e.at, neighbours(e.id ?? -1), overgrown, 0.5 * s.calib.R) ? 'crowd' : 'faded';
+    return deathCause(e.at, neighbours(e.id ?? -1), s.calib.R, dish);
   }
 
   /** Settle the ledger against the latest report: link new creatures to their seed, refund the ones that never took. */
@@ -1310,16 +1361,16 @@ export function createGame(deps: GameDeps, save?: string): Game {
     for (const e of [...ledger]) {
       if (reportStep < e.step) e.step = reportStep; // a fresh dish restarted the step count
       if (e.id === null) {
-        if (reportStep - e.step >= C.STABLE_AGE_STEPS) seedFailed(e); // the detector never saw it: it never took
+        if (reportStep - e.step >= C.STABLE_AGE_STEPS) seedFailed(e, 'faded'); // the detector never saw it: it never took
         continue;
       }
       const c = byId.get(e.id);
-      if (!c || c.state === 'dead' || c.state === 'exploded') seedFailed(e);
+      if (!c || c.state === 'dead' || c.state === 'exploded') seedFailed(e, seedLossCause(e, c));
       else if (c.state === 'stable') {
         ledger = ledger.filter((x) => x !== e);
         const se = ses();
         if (se && !e.plant) losses(se).fails = 0;
-      }
+      } else e.at = { x: c.x, y: c.y, r: outline(c.radius) }; // forming: where it is now (it may swim away)
     }
   }
 
@@ -1335,7 +1386,10 @@ export function createGame(deps: GameDeps, save?: string): Game {
         best = e;
       }
     }
-    if (best) best.id = c.id;
+    if (best) {
+      best.id = c.id;
+      best.at = { x: c.x, y: c.y, r: outline(c.radius) };
+    }
   }
 
   function autoSeed(): void {
@@ -2574,6 +2628,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     s.autoSeedTimer = 0;
     s.pipetteTimer = 0;
     s.archiveTimer = 0;
+    wakeHeld = 0;
     s.eraTime = 0;
     s.eraHadStable = false;
     s.eraStablePeak = 0;
@@ -2730,6 +2785,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
             endedEarly: se.endedEarly,
             first: se.n === 1,
             tutorialHold: se.hold === true,
+            wakeHold: wakeHolding(),
           }
         : null,
       research: {
@@ -3757,9 +3813,12 @@ export function createGame(deps: GameDeps, save?: string): Game {
       bus.emit('upgradeBought', { id: 'microscope', level: 1 });
     }
 
-    // The session clock (runs only while the session runs and the game is not paused).
+    // The session clock (runs only while the session runs and the game is not paused). ADR-027 v0.027: it waits
+    // while the run's planted creatures are still waking (a slow device lit them early), WAKE_HOLD_MAX_S at most.
     const se = ses();
-    if (se) sessionEvents(tickSession(se, dt, fx));
+    const waiting = wakeHolding();
+    if (waiting) wakeHeld += dt;
+    if (se) sessionEvents(tickSession(se, dt, fx, { paused: waiting }));
   }
 
   // ───────────────────────────── save / offline ──────────────────────

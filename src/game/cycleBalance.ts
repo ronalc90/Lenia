@@ -121,6 +121,17 @@ export const PREINCUBATE_STEPS = 1250;
  */
 export const INCUBATE_MAX_S = 5;
 /**
+ * Dish seconds the run's clock may wait, at most, for its planted creatures (starter / Nevera) to come alive
+ * (ADR-027 amendment v0.027, QA-3 §3). On a device the cap above cuts (software GL, ~5 fps: ~50 of the 1250 steps)
+ * the plant is lit still forming («Naciendo…») although the start card said «Ya viva desde el principio»; it needs
+ * STABLE_AGE_STEPS detector steps to live, i.e. 400 / (30 × 1.5) = 8.9 s of dish time from no incubation at all. Until
+ * then the plant holds the nursery (no seed is sown into its path: in the reproduction its young swimmers and the
+ * player's fused within seconds) and a clock already started waits; this covers the whole wake from zero steps, so
+ * the run's clock always counts from a living plant. A device that finishes the incubation never waits.
+ * [QA-3; STABLE_AGE_STEPS / (SIM_STEPS_PER_SEC × SESSION_SIM_PACE), rounded up]
+ */
+export const WAKE_HOLD_MAX_S = 10;
+/**
  * Seconds the start card's «¡Empezar!» may wait for the culture at most, counting down on the button
  * (QA-CLARIDAD-2 B1: «que nunca haya un botón gris sin una cuenta atrás visible»). The cap above plus the
  * 700 ms light-up, rounded up: normally the culture is lit first; this only covers a stalled readback.

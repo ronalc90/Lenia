@@ -577,6 +577,21 @@ ADR that supersedes the old one.
   6 s, the seconds counting down on the grey button. Tests: `src/sim/incubate.test.ts` (pacer + reveal on the
   model GPU), `src/sim/reveal.test.ts`, `src/ui/session/clockGate.test.ts`; e2e `release-checks.mjs` (start card
   on a 6× throttled CPU). Session bot before/after: identical (it models whole steps, not wall time).
+- **Amendment v0.027 (QA-3 §3, deaths #3 and #4: the whole dish dark in ~3 s, Nevera creature included, on software
+  GL at ~5 fps):** reproduced on the real pipeline (`tests/unit/slow-nevera.test.ts`; CDP 6× CPU throttling in the
+  browser): the cap lit the Nevera's creature after ~50 of its 1250 steps, so it was still forming («Naciendo…») when
+  the first seed started the clock; the player's seeds became swimmers too, and the young swimmers fused (CPU dish:
+  the Nevera creature lost in 3 of 8 kid-like runs of 30 s, with or without the cap — the cap only took away its
+  name, its pay and the finger's help: contact warnings and steering need a living swimmer). Every one of those
+  deaths read «No prendió» (a seed refund) or nothing (the plant cost nothing). Now: (a) a planted creature the
+  detector sees forming **holds the nursery** (`seedsGrowing`, «Espera…»), so the first seed — and with it the clock
+  — waits until it lives and nothing is sown into its path while it is young; a clock started otherwise (the
+  tutorial's, a reload) **waits** for it, at most `WAKE_HOLD_MAX_S` = 10 s of dish time (`SessionClockView.wakeHold`).
+  A device that finishes the incubation never waits. (b) A seed that formed and then ran into another body or the
+  glass is refunded with that cause (`seedRefund.cause`, «Chocó con otra · +4 de vuelta»), said where it went dark;
+  only one never seen forming «did not take». (c) A planted creature lost before it lived gives back a free **sure**
+  seed with its cause («Chocó con otra · te doy otra segura»). The detector's gates, «only stable pays» and the
+  incubation cap are unchanged. Session bot before/after: identical (its plants are stable before the clock).
 
 
 ## ADR-028: Contract removals of the sessions cycle (d9da2ef) and the retired classic loop

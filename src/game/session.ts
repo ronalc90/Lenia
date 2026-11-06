@@ -156,6 +156,10 @@ export interface LossStats {
   saved: number;
   /** Datos of "aprendiste por qué" (the first death of each cause ever). */
   learned: number;
+  /** (QA-3 §3) Of `refunds`, seeds that did form and then ran into another body or the glass (not «no prendió»). */
+  crashed?: number;
+  /** (QA-3 §3) Planted creatures (starter / Nevera) lost before they lived: each gave back a free sure seed. */
+  plantsLost?: number;
 }
 
 export function freshLosses(): LossStats {

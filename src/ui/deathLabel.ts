@@ -12,14 +12,22 @@ import type { Text } from '../core/types';
 import { TEXT } from '../game/content';
 import { STRINGS } from './i18n';
 
-/** What a seed that never took gave back (bus 'seedRefund'). */
+/** What a seed that never took gave back (bus 'seedRefund'), and why it went dark (QA-3 §3). */
 export interface Refund {
   amount: number;
   free: boolean;
+  cause?: GameEvents['seedRefund']['cause'];
+  plant?: boolean;
 }
 
 export function refundLabel(r: Refund): Text {
-  return r.free ? TEXT.refundFree : TEXT.refund(Math.round(r.amount));
+  // QA-3 §3: the run's starter / Nevera creature, lost before it lived, came back as a sure seed.
+  if (r.plant) return r.cause === 'crowd' ? TEXT.plantLostCrowd : r.cause === 'glass' ? TEXT.plantLostGlass : TEXT.plantLostFaded;
+  const n = Math.round(r.amount);
+  // A seed that formed and crashed did take: its cause, not «No prendió».
+  if (r.cause === 'crowd') return r.free ? TEXT.refundCrowdFree : TEXT.refundCrowd(n);
+  if (r.cause === 'glass') return r.free ? TEXT.refundGlassFree : TEXT.refundGlass(n);
+  return r.free ? TEXT.refundFree : TEXT.refund(n);
 }
 
 /**
