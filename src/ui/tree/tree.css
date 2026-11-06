@@ -1571,16 +1571,26 @@
   text-overflow: clip;
 }
 .rt-nightchip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 5px;
   margin-left: auto;
   padding: 3px 9px 3px 6px;
+  border: 0;
   border-radius: var(--bl-r-pill);
   background: color-mix(in srgb, var(--bl-gold) 16%, transparent);
   color: var(--bl-gold);
   font: 700 var(--bl-fs-caption)/1.2 var(--bl-font-ui);
   white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+/* A 48-px target around the small chip (QA-3 N7: it is the night's button now). */
+.rt-nightchip::before {
+  content: '';
+  position: absolute;
+  inset: -13px -6px;
 }
 .rt-nightchip[hidden] {
   display: none;

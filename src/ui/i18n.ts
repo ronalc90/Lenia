@@ -76,6 +76,9 @@ const S = {
   // ADR-031 (docs/MECANICAS.md §4): a living creature crowded out; like every loss, it says what it left.
   crowdLeft: { es: 'Le faltó sitio · su luz quedó aquí', en: 'Ran out of room · its glow stayed here' },
   deniedShort: { es: 'Te faltan {n} de luz', en: 'You need {n} more glow' },
+  // QA-3 N9: «Te faltan 1 de luz» → «Te falta 1 de luz» (boostWhy deniedShortKey).
+  deniedShortOne: { es: 'Te falta {n} de luz', en: 'You need {n} more glow' },
+  boostNoTimeWhy: { es: 'Ya no da tiempo: la sesión está acabando.', en: 'No time left: the session is ending.' },
   deniedWait: { es: 'Espera a tus criaturas.', en: 'Wait for your creatures.' },
   seedWaitWhy: { es: 'Hay semillas naciendo: espera a que terminen.', en: 'Seeds are hatching: wait until they finish.' },
   behaviorGuide: { es: 'Maneras de moverse', en: 'Ways of moving' },

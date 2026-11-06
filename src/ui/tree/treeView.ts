@@ -152,7 +152,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     <div class="rt-vp"><div class="rt-world"></div></div>
     <header class="rt-top">
       <div class="rt-datos" role="status"><span class="rt-dic">${treeIcon('datos', 30)}</span><div><b>0</b><small></small></div><span class="rt-tick"></span></div>
-      <div class="rt-title"><h2></h2><p></p><span class="rt-nightchip" hidden></span></div>
+      <div class="rt-title"><h2></h2><p></p><button type="button" class="rt-nightchip" hidden></button></div>
       <button type="button" class="rt-go">${treeIcon('play', 22)}<span></span></button>
     </header>
     <div class="rt-tools">
@@ -747,6 +747,13 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     strip.hidden = !stripH.textContent;
     strip.setAttribute('aria-label', stripH.textContent ?? '');
   }
+  // «¡La noche puede avanzar!» opens the night's sheet (QA-3 N7: it opened another sheet or nothing; the real
+  // button was the centre node).
+  nightChip.addEventListener('click', () => {
+    sound('open');
+    el.classList.add('touched');
+    api.select('lab');
+  });
   stripRow.addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest('[data-pick]') as HTMLElement | null;
     if (!b?.dataset.pick) return;

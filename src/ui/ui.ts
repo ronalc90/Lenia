@@ -18,6 +18,7 @@ import { behaviorName, getLang, setLang, stateName, t, tx } from './i18n';
 import { icon, logo } from './icons';
 import { DishInput } from './input';
 import { dropAt, dropsOnSegment, motesOnSegment, pillTapRoute, routeTap, SweepHits, type TapReach } from './dishTap';
+import { boostDenial, deniedShortKey } from './boostWhy';
 import { copyPick } from './copyPick';
 import { installScreenGuard, PressGuard, screenChanged } from './pressGuard';
 import { stackLabel, type LabelObstacles, type LabelPlacement, type StackRequest } from './labelPlace';
@@ -1646,17 +1647,23 @@ class BiolumaUI implements UI {
       this.dock.querySelector('.dock-tip')?.remove();
       return;
     }
-    // Not yet: say why where the finger is (still waiting for the clock, or Essence short).
+    // Not yet: say the true reason where the finger is (QA-3 N9: «Ya no da tiempo» with light to spare said
+    // «Te faltan 1 de luz»).
     this.sound('deny');
     retriggerClass(this.boostBtn, 'shake');
-    const wait = Math.ceil(b.wait ?? 0);
-    const short = Math.max(1, Math.ceil(b.cost - (this.v?.essence ?? 0)));
-    this.toasts.push(
-      wait > 0 ? tx(SESSION_UI.boostIn(fmtClock(wait))) : b.needsLife ? tx(SESSION_UI.boostNeedsLifeWhy) : t('deniedShort', { n: fmt(short, this.lang) }),
-      'info',
-      'nutrient',
-    );
-    if (wait === 0) this.showDockTip(this.boostBtn, this.boostTip());
+    const why = boostDenial(b, this.v?.essence ?? 0);
+    const text =
+      why.kind === 'wait'
+        ? tx(SESSION_UI.boostIn(fmtClock(why.s)))
+        : why.kind === 'noTime'
+          ? t('boostNoTimeWhy')
+          : why.kind === 'needsLife'
+            ? tx(SESSION_UI.boostNeedsLifeWhy)
+            : why.kind === 'short'
+              ? t(deniedShortKey(why.n), { n: fmt(why.n, this.lang) })
+              : '';
+    if (text) this.toasts.push(text, 'info', 'nutrient');
+    if (why.kind !== 'wait' && why.kind !== 'noTime') this.showDockTip(this.boostBtn, this.boostTip());
   }
 
   // ───────────────────────────── pause card ─────────────────────────────
@@ -2781,7 +2788,7 @@ class BiolumaUI implements UI {
       const v = this.v;
       const short = v ? Math.max(1, Math.ceil(e.cost - v.essence)) : 0;
       const waiting = !!v?.creatures.some((c) => c.state === 'stable');
-      ov.denied(e.x, e.y, fmtShort(e.cost, this.lang), short > 0 ? { text: t('deniedShort', { n: fmt(short, this.lang) }), sub: waiting ? t('deniedWait') : '' } : undefined);
+      ov.denied(e.x, e.y, fmtShort(e.cost, this.lang), short > 0 ? { text: t(deniedShortKey(short), { n: fmt(short, this.lang) }), sub: waiting ? t('deniedWait') : '' } : undefined);
       retriggerClass(this.modePill, 'shake');
       retriggerClass(this.sowBtn.el, 'shake');
       this.vibrate([10, 30, 10]);
