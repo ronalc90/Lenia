@@ -2803,7 +2803,9 @@ class BiolumaUI implements UI {
       // «¡Muy cerca! Si se tocan, se juntan y se apagan.» (docs/CLARIDAD2.md §6 #4): what would happen. Never in a
       // session (ADR-031): the Sembrar button always finds a safe spot, so there is nothing to scold.
       const sessions = this.v?.cycle === 'sessions';
-      const msg = e.reason === 'tooClose' ? (sessions ? '' : t('tooCloseSeed')) : e.reason === 'full' && room ? tx(TEXT.dishFull(room)) : '';
+      // (ADR-027 v0.027) The run's Nevera creature is still waking: the true reason, where the finger is.
+      const waking = e.reason === 'growing' && !!this.v?.session?.wakeHold;
+      const msg = waking ? tx(TEXT.wakeSow) : e.reason === 'tooClose' ? (sessions ? '' : t('tooCloseSeed')) : e.reason === 'full' && room ? tx(TEXT.dishFull(room)) : '';
       if (msg) {
         const cut = msg.search(/[.!] /);
         ov.seedBlocked(e.x, e.y, cut > 0 ? msg.slice(0, cut + 1) : msg, cut > 0 ? msg.slice(cut + 2) : '', e.near);

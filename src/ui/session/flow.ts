@@ -295,7 +295,7 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
         pausedShown = paused;
         hud.setPaused?.(paused);
       }
-      hud.update(hudViewOf(s, v.session?.sprint ?? 1));
+      hud.update({ ...hudViewOf(s, v.session?.sprint ?? 1), wakeHold: !!v.session?.wakeHold });
       const p = v.sessionPreview;
       hud.preview(p ? { datos: p.datos, goal: p.goal ? { name: nodeText(p.goal.id).name, missing: p.goal.missing } : null, minimum: !!p.minimum } : null);
     },

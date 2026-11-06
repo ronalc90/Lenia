@@ -91,8 +91,10 @@ export interface ReportData {
    * finger added (pulses, Chispazos, glimmers and the streak's extra) and, from session 2, the glimmers caught.
    */
   finger?: FingerStats | null;
-  /** (PA, ADR-031) Seeds that never took this session and the Luz they gave back. */
-  refunds?: { seeds: number; luz: number } | null;
+  /** (PA, ADR-031) Seeds that never took this session and the Luz they gave back; `crashed` of them formed and then crashed. */
+  refunds?: { seeds: number; luz: number; crashed?: number } | null;
+  /** (PA, QA-3 §3) The run's Nevera creatures lost before they lived (each gave a free sure seed back). */
+  plantsLost?: number;
   /** (PA, ADR-031) Swimmers saved from a warned contact, fusions, and the Luz the living deaths left. */
   losses?: { saved: number; merged: number; luz: number } | null;
 }
@@ -118,7 +120,8 @@ export function reportDataOf(sum: SessionSummary): ReportData {
   const f = sum.finger;
   if (f) out.finger = { taps: f.taps, bestStreak: f.bestMult, chispazos: f.chispazos, luz: f.luz, motes: { caught: f.motesCaught, thrown: f.motesThrown } };
   const lo = sum.losses;
-  if (lo && lo.refunds > 0) out.refunds = { seeds: lo.refunds, luz: lo.refunded };
+  if (lo && lo.refunds > 0) out.refunds = { seeds: lo.refunds, luz: lo.refunded, ...((lo.crashed ?? 0) > 0 ? { crashed: lo.crashed } : {}) };
+  if (lo && (lo.plantsLost ?? 0) > 0) out.plantsLost = lo.plantsLost;
   if (lo && (lo.saved > 0 || lo.merged > 0)) out.losses = { saved: lo.saved, merged: lo.merged, luz: lo.burst };
   if ((sum.light?.sweep ?? 0) > 0) out.swept = Math.round(sum.light!.sweep);
   if (sum.behaviors?.length) out.behaviorNames = sum.behaviors.map((b) => BEHAVIOR_NAMES[b]);
@@ -193,6 +196,18 @@ export const REPORT_TEXT = {
   glimmers: (caught: number, thrown: number) => tx(`chispitas ${caught} de ${thrown}`, `glimmers ${caught} of ${thrown}`),
   /** Free seeds that never took came back as free seeds (no Luz to name: «te devolví 0 de luz» read as nothing). */
   refundFree: (seeds: number) => tx(`Semillas que no prendieron: ${seeds} (volvieron como semillas gratis)`, `Seeds that didn’t take: ${seeds} (back as free seeds)`),
+  /** QA-3 §3: `faded` never formed, `crashed` formed and then hit another body or the glass; `luz` null = free seeds back. */
+  refundCrashed: (faded: number, crashed: number, luz: string | null) => {
+    const back = luz ? { es: `(te devolví ${luz} de luz)`, en: `(${luz} glow back)` } : { es: '(volvieron como semillas gratis)', en: '(back as free seeds)' };
+    return faded > 0
+      ? tx(`Semillas que no prendieron: ${faded} · chocaron: ${crashed} ${back.es}`, `Seeds that didn’t take: ${faded} · crashed: ${crashed} ${back.en}`)
+      : tx(`Semillas que chocaron: ${crashed} ${back.es}`, `Seeds that crashed: ${crashed} ${back.en}`);
+  },
+  /** QA-3 §3: the run's Nevera creature lost before it lived; each gave a free sure seed back. */
+  plantsLost: (n: number) =>
+    n === 1
+      ? tx('La de la nevera no llegó a vivir: te di una semilla segura', 'The fridge creature didn’t make it: here is a sure seed')
+      : tx(`${n} de la nevera no llegaron a vivir: te di ${n} semillas seguras`, `${n} fridge creatures didn’t make it: ${n} sure seeds back`),
   today: tx('Especies de hoy', 'Today’s species'),
   scientific: tx('nombre científico', 'scientific name'),
 };
@@ -414,7 +429,13 @@ export function fingerLines(data: ReportData, l: Lang): string[] {
     out.push(line);
   }
   const r = data.refunds;
-  if (r && r.seeds > 0) out.push(Math.round(r.luz) > 0 ? SESSION_UI.refundLine(r.seeds, fmt(Math.round(r.luz), l))[l] : REPORT_TEXT.refundFree(r.seeds)[l]);
+  const crashed = Math.min(r?.seeds ?? 0, r?.crashed ?? 0);
+  if (r && r.seeds > 0 && crashed > 0) {
+    // QA-3 §3: a seed that formed and crashed did take: never counted as «no prendió».
+    const luz = Math.round(r.luz);
+    out.push(REPORT_TEXT.refundCrashed(r.seeds - crashed, crashed, luz > 0 ? fmt(luz, l) : null)[l]);
+  } else if (r && r.seeds > 0) out.push(Math.round(r.luz) > 0 ? SESSION_UI.refundLine(r.seeds, fmt(Math.round(r.luz), l))[l] : REPORT_TEXT.refundFree(r.seeds)[l]);
+  if ((data.plantsLost ?? 0) > 0) out.push(REPORT_TEXT.plantsLost(data.plantsLost!)[l]);
   const d = data.losses;
   if (d && (d.saved > 0 || d.merged > 0)) out.push(SESSION_UI.savedLine(d.saved, d.merged, fmt(Math.round(d.luz), l))[l]);
   return out;

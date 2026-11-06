@@ -13,6 +13,7 @@
  * classic loop (PHASE-2B-REMOVE) folds its crowding into the price instead of naming the living as a cost.
  */
 import type { GameView, Lang, SeedPriceView, Text } from '../core/types';
+import { TEXT } from '../game/content';
 import { NODE_TEXT, SESSION_UI } from '../game/treeText';
 import { moIcon } from './moments/icons';
 import { PriceTicker, type PriceExplain, type PriceReason, type PriceRowView, type PriceTermView } from './moments/price';
@@ -148,7 +149,9 @@ export function seedPriceSheetExplain(v: GameView, lang: Lang, o: { onSeeDish?()
   if (slots) rows.push({ icon: 'slot', label: tr(T.wells, lang), dots: slots, text: roomText(slots, lang), tone: slots.over > 0 ? 'cost' : undefined });
   const freeSeeds = p.freeSeeds ?? 0;
   if (freeSeeds > 0) rows.push({ icon: 'gift', text: SESSION_UI.freeSeeds(freeSeeds, fmt(baseOf(p), lang))[lang], tone: 'gain' });
-  if (v.seedsGrowing) rows.push({ icon: 'clock', text: tr(T.growing, lang), tone: 'grey' });
+  // (ADR-027 v0.027) The run's Nevera creature is still waking: that is why the seeds wait, not other seeds hatching.
+  if (v.session?.wakeHold) rows.push({ icon: 'clock', text: TEXT.wakeSow[lang], tone: 'grey' });
+  else if (v.seedsGrowing) rows.push({ icon: 'clock', text: tr(T.growing, lang), tone: 'grey' });
   if (active(p.bigMult) && v.tools.longPress) rows.push({ icon: 'big', text: tr(T.big, lang, { m: fmtMult(p.bigMult, lang) }), tone: 'cost' });
   const full = !!p.full || (slots !== null && slots.used >= slots.free);
   const crowded = (slots?.over ?? 0) > 0 || active(p.satMult) || (p.capacity !== undefined && full);

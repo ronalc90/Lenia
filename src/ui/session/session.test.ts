@@ -4,7 +4,7 @@ import { beginSession, computeDatos, freshResearch, noteEncargo, noteEssence, no
 import { treeEffects } from '../../game/tree';
 import { nodePriceExplain } from '../tree/treeView';
 import { fmt } from '../format';
-import { NEEDLE, dialTarget, extendChip, hudSub, stepNeedle, streakChip } from './hud';
+import { NEEDLE, dialTarget, extendChip, hudSub, hudWaitSub, stepNeedle, streakChip } from './hud';
 import { TEXT } from '../../game/content';
 import { hudState } from './hud';
 import { datosExplain, fingerLines, reportDataOf, reportHeadline, reportRows, velaTip, type ReportData } from './summary';
@@ -355,6 +355,36 @@ describe('the finger in the report (ADR-031, docs/MECANICAS.md §6.1 step 11, §
     expect(velaTip({ losses: { saved: 0, merged: 2, luz: 30 } }, 'es')).toBe('¡Guiar a las nadadoras las salva!');
     expect(velaTip({ merged: 2 }, 'en')).toBe('Steering swimmers saves them!');
     expect(velaTip({}, 'es')).toBeNull();
+  });
+});
+
+// QA-3 §3 (game package v0.027): seeds that formed and then crashed were reported as «no prendieron», and the Nevera
+// creature lost before it lived was not in the report at all.
+describe('the report tells crashed seeds and lost Nevera creatures apart, in one short line each', () => {
+  it('crashed seeds are not «no prendieron»; a lost Nevera creature says a sure seed came back', () => {
+    const fx = treeEffects({});
+    const { session } = beginSession(freshResearch(), fx);
+    const losses = { fails: 0, refunds: 3, refunded: 12, deaths: 0, merged: 0, burst: 0, saved: 0, learned: 0, crashed: 2, plantsLost: 1 };
+    const data = reportDataOf(summaryOf({ datos: computeDatos(session, fx, 0), losses }));
+    expect(fingerLines(data, 'es')).toEqual(['Semillas que no prendieron: 1 · chocaron: 2 (te devolví 12 de luz)', 'La de la nevera no llegó a vivir: te di una semilla segura']);
+    expect(fingerLines(data, 'en')).toEqual(['Seeds that didn’t take: 1 · crashed: 2 (12 glow back)', 'The fridge creature didn’t make it: here is a sure seed']);
+    // All of them crashed: never «no prendieron: 0».
+    const all = reportDataOf(summaryOf({ datos: computeDatos(session, fx, 0), losses: { ...losses, refunds: 2, crashed: 2, plantsLost: 0 } }));
+    expect(fingerLines(all, 'es')).toEqual(['Semillas que chocaron: 2 (te devolví 12 de luz)']);
+    // Two Nevera creatures, nothing else lost.
+    const two = reportDataOf(summaryOf({ datos: computeDatos(session, fx, 0), losses: { ...losses, refunds: 0, refunded: 0, crashed: 0, plantsLost: 2 } }));
+    expect(fingerLines(two, 'es')).toEqual(['2 de la nevera no llegaron a vivir: te di 2 semillas seguras']);
+    expect(fingerLines(two, 'en')).toEqual(['2 fridge creatures didn’t make it: 2 sure seeds back']);
+  });
+});
+
+describe('the clock pill while the Nevera creature wakes (SessionClockView.wakeHold)', () => {
+  it('it says the clock waits for it, instead of «Siembra para empezar» or «Sesión 3»', () => {
+    const v = { phase: 'ready' as const, remaining: 20, total: 20, n: 3, sprint: null, wakeHold: true };
+    expect(hudWaitSub(v, 'es')).toBe(TEXT.wakeHold.es);
+    expect(hudSub({ ...v, phase: 'running' }, false, 'en')).toBe(TEXT.wakeHold.en);
+    expect(hudWaitSub({ ...v, wakeHold: false }, 'es')).not.toBe(TEXT.wakeHold.es);
+    expect(hudSub({ ...v, phase: 'running', wakeHold: false }, false, 'es')).toBe('Sesión 3');
   });
 });
 

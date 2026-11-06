@@ -102,3 +102,12 @@ describe('the seed price card (docs/CLARIDAD2.md §2.11)', () => {
       }
   });
 });
+
+describe('the seed sheet while the Nevera creature wakes (SessionClockView.wakeHold)', () => {
+  it('it gives that reason, never «Hay semillas naciendo»', () => {
+    const session = { n: 3, world: 'classic', phase: 'ready', limit: 20, bonus: 0, elapsed: 0, remaining: 20, progress: 0, essence: 0, seeds: 0, sprint: null, newSpecies: 0, endedEarly: false, wakeHold: true } as GameView['session'];
+    const es = words(view(ses, 4, { session, seedsGrowing: true }), 'es');
+    expect(es).toContain('la de la nevera se está despertando');
+    expect(es).not.toContain('Hay semillas naciendo');
+  });
+});

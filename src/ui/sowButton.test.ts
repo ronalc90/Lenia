@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GameView } from '../core/types';
+import { TEXT } from '../game/content';
 import { NODE_TEXT } from '../game/treeText';
 import { creature, makeView } from '../story/testUtil';
 import { sowModel, sowRequest } from './sowButton';
@@ -96,5 +97,21 @@ describe('the Sembrar button (ADR-031, docs/MECANICAS.md §3.1)', () => {
     const held = sessionView({ session: { ...sessionView().session!, n: 1, first: true, phase: 'ready', tutorialHold: true } });
     expect(sowModel(held).state).toBe('wait');
     expect(sowModel(sessionView({ canSeed: false, essence: 1 })).state).toBe('poor');
+  });
+});
+
+// QA-3 §3 / ADR-027 v0.027 (game package): the run's planted creature is still waking on a slow device and the clock
+// waits for it. The button must say so instead of offering a seed the game refuses.
+describe('the Sembrar button while the Nevera creature wakes (SessionClockView.wakeHold)', () => {
+  it('it says «Espera…», why, and does not offer a seed', () => {
+    const base = sessionView().session!;
+    for (const phase of ['ready', 'running'] as const) {
+      const m = sowModel(sessionView({ session: { ...base, phase, wakeHold: true }, charges: { free: 1, guaranteed: 0 } }));
+      expect(m.state, phase).toBe('wait');
+      expect(m.sub.es, phase).toBe('Espera…');
+      expect(m.hint, phase).toEqual(TEXT.wakeSow);
+      expect(m.disabled, phase).toBe(true);
+    }
+    expect(sowModel(sessionView({ session: { ...base, wakeHold: false } })).state).toBe('ready');
   });
 });

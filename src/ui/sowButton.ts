@@ -67,6 +67,8 @@ export function sowModel(v: GameView): SowModel {
   const base = { label: TEXT.sow, luck, sure, big };
   // Session 1, the first seed planted: VELA talks before the clock starts (a calm wait, never red).
   if (se.phase === 'ready' && se.tutorialHold) return { ...base, state: 'wait', sub: STRINGS.seedWait, hint: null, disabled: true };
+  // (ADR-027 v0.027) The run's Nevera creature is still waking (a slow device): the game holds the seeds and the clock.
+  if (se.wakeHold) return { ...base, state: 'wait', sub: STRINGS.seedWait, hint: TEXT.wakeSow, disabled: true };
   const room = v.seedPrice?.capacity ?? v.seedPrice?.freeSlots ?? 0;
   if (v.seedPrice?.full) return { ...base, state: 'full', sub: TEXT.sowFull(room), hint: TEXT.dishFull(room), disabled: true };
   if (v.seedsGrowing) return { ...base, state: 'growing', sub: STRINGS.seedWait, hint: null, disabled: true };

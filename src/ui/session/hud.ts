@@ -101,6 +101,8 @@ export interface SessionHudView {
   n: number;
   /** Production multiplier of the sprint while it runs (null = no sprint now). */
   sprint: number | null;
+  /** (ADR-027 v0.027) The clock waits for the run's Nevera creature to wake (SessionClockView.wakeHold). */
+  wakeHold?: boolean;
 }
 
 export interface SessionHud {
@@ -148,7 +150,13 @@ export function dialTarget(v: SessionHudView): number {
 
 /** The small line under the digits: "Sesión 3", or "⏸ En pausa" while the clock waits for the player. */
 export function hudSub(v: SessionHudView, paused: boolean, l: Lang): string {
+  if (v.wakeHold) return TEXT.wakeHold[l];
   return paused ? SESSION_UI.paused[l] : SESSION_UI.session(v.n)[l];
+}
+
+/** The line while the clock waits for the first seed: «Siembra para empezar», or why it cannot yet (wakeHold). */
+export function hudWaitSub(v: SessionHudView, l: Lang): string {
+  return v.wakeHold ? TEXT.wakeHold[l] : SESSION_UI.waiting[l];
 }
 
 /** The stopwatch face in a 40-unit box: 60 hair ticks, 12 major ticks, the needle and its cap. */
@@ -321,7 +329,7 @@ export function createSessionHud(container: HTMLElement, opts: SessionHudOptions
       // "Sesión 3" always ("⏸ En pausa" while the clock waits); "Siembra para empezar" while waiting (CSS
       // shows one or the other: a narrow HUD keeps the short one).
       sub.textContent = hudSub(v, paused, l);
-      waitSub.textContent = SESSION_UI.waiting[l];
+      waitSub.textContent = hudWaitSub(v, l);
       el.classList.toggle('sprint', !!v.sprint && st !== 'over');
       sprintEl.textContent = v.sprint ? `${SESSION_UI.sprint[l]} ×${String(Math.round(v.sprint * 10) / 10).replace('.', l === 'es' ? ',' : '.')}` : '';
       el.setAttribute('aria-label', `${SESSION_UI.session(v.n)[l]}: ${text}`);
