@@ -401,9 +401,11 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
    * and jumped to the top a frame later, once its target had been measured).
    */
   function sideFor(ids: TargetId[] | null, r0: DOMRect): boolean {
+    // The host's hold as it is now (the Tree docks her at the top), not as the last frame saw it.
+    if ((opts.hold?.(scene?.id ?? null) ?? null) === 'dock') return true;
     const tg = targetRect(ids, r0);
     const big = !!tg && (tg.id === 'dish' || tg.rect.w * tg.rect.h > r0.width * r0.height * 0.3);
-    return held === 'dock' || (!!tg && !big && tg.rect.y + tg.rect.h / 2 > r0.height * 0.55);
+    return !!tg && !big && tg.rect.y + tg.rect.h / 2 > r0.height * 0.55;
   }
 
   function applySide(): void {
