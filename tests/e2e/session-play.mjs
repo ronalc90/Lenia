@@ -198,6 +198,18 @@ async function runCase(c) {
       /* ignore */
     }
   }, c.theme);
+  // Owner: «los mensajes rebotan y no paran de rebotar»: count how often each toast enters the screen.
+  await ctx.addInitScript(() => {
+    window.__toastIn = {};
+    new MutationObserver((ms) => {
+      for (const m of ms)
+        for (const n of m.addedNodes)
+          if (n.nodeType === 1 && n.classList?.contains('toast')) {
+            const k = (n.dataset.text || n.textContent || '').trim().slice(0, 60);
+            (window.__toastIn[k] ||= []).push(performance.now());
+          }
+    }).observe(document, { childList: true, subtree: true });
+  });
   const page = await ctx.newPage();
   page.on('console', (m) => {
     if (m.type() === 'info' && m.text().startsWith('[dish]')) say(m.text());
@@ -1016,6 +1028,15 @@ async function runCase(c) {
     }
   }
   await shot('end');
+  // A toast enters, may step aside once for VELA and come back: twice. A third entry of the same words within
+  // 20 s is the bounce (separate news with the same words, like two Journal notes minutes apart, are fine).
+  const toastIn = await page.evaluate(() => window.__toastIn ?? {}).catch(() => ({}));
+  for (const [text, ts] of Object.entries(toastIn))
+    for (let i = 2; i < ts.length; i++)
+      if (ts[i] - ts[i - 2] < 20000) {
+        problems.push(`[${c.name}] the toast «${text}» entered the screen ${ts.length} times, 3 within 20 s (it bounces)`);
+        break;
+      }
   await ctx.close();
 }
 
