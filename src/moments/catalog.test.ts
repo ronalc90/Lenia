@@ -127,3 +127,17 @@ describe('the LIFE card and the creature label say the same rate (RF-10)', () =>
     expect(life.build!({ id: 7, x: 10, y: 10 }, ctxFor('running', 0)).chips ?? []).toEqual([]);
   });
 });
+
+describe('«¡Luz recogida!» never pops on every tap (integrator review of mb-shots/3-chispazo, ADR-031)', () => {
+  it('a hand collection during a streak opens no brief or card; without a streak it may teach once', async () => {
+    const { harness } = await import('./testUtil');
+    const run = (hits: number) => {
+      const h = harness({}, { streak: hits ? { hits, max: 10, mult: 1 + 0.025 * hits, toChispazo: 10 - hits, every: 10, draining: false } : undefined });
+      h.bus.emit('lightCollected', { x: 50, y: 50, amount: 0.4, by: 'hand' });
+      h.advance(1500);
+      return h.m.current()?.id ?? null;
+    };
+    expect(run(3)).toBeNull();
+    expect(run(0)).toBe('collect');
+  });
+});

@@ -719,6 +719,9 @@ export const MOMENTS: MomentDef[] = [
     trigger: onEvent('lightCollected', (p) => p.by === 'hand' && p.amount > 0),
     build: from('lightCollected', (p) => ({ focus: at(p.x, p.y, 1.6, null, ['hud.essence']), chips: [essenceChip(p.amount, '+')], data: { amount: p.amount } })),
     delayMs: 300,
+    // ADR-031: never while a streak runs. With the pulse every hand collection is a hit of the streak, so the pulse
+    // lesson (t_pulse) teaches it instead; a brief per tap covered the ¡Chispazo! (a run defers it, unseen, each time).
+    valid: (_d, c) => !(c.view().streak?.hits ?? 0),
   },
   {
     id: 'steer',
