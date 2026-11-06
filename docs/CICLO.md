@@ -243,6 +243,11 @@ En pantalla, cada número es entero y se puede comprobar:
 `src/game/tree.ts` (datos y lógica, puros) · `src/ui/tree/` (pantalla). **60 nodos**: el **centro** (la noche) y **8
 rutas rectas** de 6 a 9 pasos (la 8.ª, ↓ Recoger, la añadió el ADR-030 en la dirección que estaba libre). Reglas fijas (con test):
 
+> **(Corrección v1.5, [ADR-031](../DECISIONS.md#adr-031-the-tap-is-a-pulse-tapping-never-sows-streaks-pay-and-every-loss-gives-something-back))** **63 nodos** (62 comprables): la ruta ✨ Destello pasa a llamarse **✦ Pulso** (la del
+> jugador que toca; el id sigue siendo `spark`, sin migración del guardado) y gana **Pulso**, **Racha larga** y **Chispazo
+> seguido**, entretejidos por anillo entre los 7 del Destello (10 pasos). Los nodos del Pulso se venden desde la sesión 1; los
+> del Destello siguen con su «?» hasta que acaba la sesión 3. ↓ Recoger sigue siendo la ruta de quien mira.
+
 - **Cadena estricta:** el paso *k* solo necesita el paso *k − 1* de su ruta (nivel ≥ 1); el primero, el centro. Sin
   cruces, sin dos requisitos, sin caminos sin salida.
 - **Siempre más:** cada nivel de cada nodo mejora estrictamente **un número** que se enseña como **«antes → después»**
@@ -261,7 +266,7 @@ rutas rectas** de 6 a 9 pasos (la 8.ª, ↓ Recoger, la añadió el ADR-030 en l
 | ↓ | 🧪 **Recoger** | plata de instrumento | pipetas que recogen la luz por ti (ADR-030) |
 | ↙ | 🔬 **Descubrir** | naranja | más Datos por cada cosa nueva |
 | ← | 🌍 **Mundos** | violeta | reglas nuevas donde nacen otras especies (sustituye a Calibrar) |
-| ↖ | ✨ **Destello** | dorado | la chispa dorada viene más y regala más |
+| ↖ | ✦ **Pulso** (antes ✨ Destello, ADR-031) | dorado | tocar da más luz, y la chispa dorada regala más |
 
 ### 4.2 Todas las mejoras
 
@@ -355,17 +360,20 @@ de la ruta comprados). Tablas generadas del código: `npx vite-node scripts/tree
 | 5 | Mundo 6 · Patas | 4 · 3 | 1 | 12.000 (×2) | 5 especies para encontrar → 6 especies para encontrar |
 | 6 | Mundo 7 · Gigantes | 5 · 4 | 1 | 80.000 (×2) | 6 especies para encontrar → 7 especies para encontrar |
 
-**Destello** — La chispa dorada viene más y regala más.
+**Pulso** (antes Destello; ADR-031) — Tocar da más luz, y la chispa dorada regala más.
 
 | # | Nodo | Anillo · 🌙 | Niveles | Precios (×factor) | Antes → después (de 0 al máximo) |
 |---|---|---|---|---|---|
-| 1 | Destello frecuente | 1 · 1 | 3 | 2 · 4 · 8 (×2) | El primero llega a los 6–12 s → El primero llega a los 5–10 s → El primero llega a los 4–9 s → El primero llega a los 4–7 s |
-| 2 | Destello lento | 2 · 1 | 2 | 15 · 30 (×2) | Se queda 8 s → Se queda 11 s → Se queda 14 s |
-| 3 | Destello del tiempo | 2 · 1 | 2 | 15 · 30 (×2) | +0 s por chispa → +2 s por chispa → +4 s por chispa |
-| 4 | Primer destello | 3 · 2 | 1 | 200 (×2) | La primera a los 4–7 s → La primera a los 1–2 s |
-| 5 | Regalos mejores | 3 · 2 | 3 | 200 · 400 · 800 (×2) | Regalo: 10 s de luz → Regalo: 12 s de luz → Regalo: 14 s de luz → Regalo: 16 s de luz |
-| 6 | Destello sabio | 3 · 2 | 2 | 200 · 400 (×2) | +0 Datos por chispa → +1 Dato por chispa → +2 Datos por chispa |
-| 7 | Semillas mágicas | 4 · 3 | 1 | 12.000 (×2) | 1 semilla segura por chispa → 3 semillas seguras por chispa |
+| 1 | Pulso | 1 · 1 | 3 | 2 · 4 · 8 (×2) | Un toque ×1 → Un toque ×1,5 → Un toque ×2 → Un toque ×2,5 |
+| 2 | Destello frecuente | 1 · 1 | 3 | 2 · 4 · 8 (×2) | El primero llega a los 6–12 s → El primero llega a los 5–10 s → El primero llega a los 4–9 s → El primero llega a los 4–7 s |
+| 3 | Racha larga | 2 · 1 | 2 | 15 · 30 (×2) | La racha llega a ×1,25 → La racha llega a ×1,5 → La racha llega a ×1,75 |
+| 4 | Destello lento | 2 · 1 | 2 | 15 · 30 (×2) | Se queda 8 s → Se queda 11 s → Se queda 14 s |
+| 5 | Destello del tiempo | 2 · 1 | 2 | 15 · 30 (×2) | +0 s por chispa → +2 s por chispa → +4 s por chispa |
+| 6 | Chispazo seguido | 3 · 2 | 2 | 200 · 400 (×2) | Un Chispazo cada 10 toques → Un Chispazo cada 8 toques → Un Chispazo cada 6 toques |
+| 7 | Primer destello | 3 · 2 | 1 | 200 (×2) | La primera a los 4–7 s → La primera a los 1–2 s |
+| 8 | Regalos mejores | 3 · 2 | 3 | 200 · 400 · 800 (×2) | Regalo: 10 s de luz → Regalo: 12 s de luz → Regalo: 14 s de luz → Regalo: 16 s de luz |
+| 9 | Destello sabio | 3 · 2 | 2 | 200 · 400 (×2) | +0 Datos por chispa → +1 Dato por chispa → +2 Datos por chispa |
+| 10 | Semillas mágicas | 4 · 3 | 1 | 12.000 (×2) | 1 semilla segura por chispa → 3 semillas seguras por chispa |
 
 Diferencias con la página del plan: **Placa más grande tiene 3 niveles** (sitio para 5 → 7 → 9 → 12; Placa gigante, 15);
 **Más sitio** y **Sin apretujones** dan sitio (+1 criatura por nivel) en lugar de abaratar; **Guardería** deja crecer más

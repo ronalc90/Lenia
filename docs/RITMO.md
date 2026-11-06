@@ -23,6 +23,7 @@ los números viven en [`src/game/cycleBalance.ts`](../src/game/cycleBalance.ts) 
 7. [Cambios en archivos de otros (lista de parches)](#7-cambios-en-archivos-de-otros-lista-de-parches)
 8. [Preguntas abiertas](#8-preguntas-abiertas)
 9. [Recoger la luz (ADR-030): el bot antes y después](#9-recoger-la-luz-adr-030-el-bot-antes-y-después)
+10. [Tocar emociona (ADR-031): el bot antes y después](#10-tocar-emociona-adr-031-el-bot-antes-y-después)
 
 ---
 
@@ -398,3 +399,81 @@ Se queda la regla del plan, y Vida eterna vuelve a ser «sin final» de verdad (
 - **El final crece más deprisa que en B0:** ×2,1–2,3 por sesión en las noches 6–7 (B0: ×1,7–1,9) y 10¹⁴ de luz en la S44
   (B0: 10¹⁰). La regla dura se cumple y el final llega a la misma sesión; si los números molestan, lo natural es
   `BOOST_SECONDS` de 8 a 12–16 s (no probado).
+
+## 10. Tocar emociona (ADR-031): el bot antes y después
+
+Plan: [`MECANICAS.md`](MECANICAS.md) §5. Corridas: `npx vite-node scripts/session-bot.ts 80 7 --runs --baseline=<informe de antes>`
+(todas las políticas), y `80 15 --policy=idle` / `--policy=planner` para la regla dura y la puerta G2. «Antes» es v0.025
+(`437793e`) con el mismo bot de medida (los contadores nuevos no gastan azar: las cifras de §9 salen idénticas).
+
+**El modelo del dedo** (`scripts/sessionBotCore.ts`). Todo toque pasa por las acciones reales del juego (`pulse`,
+`collect`, `catchMote`, `sow`): la racha, el Chispazo, las chispitas y el tope de 10 toques/s son los del juego.
+- **planner:** las gotas maduras como antes (≤ 3/s) y **1 Pulso/s** en la criatura con más luz; compra solo **Pulso I**.
+- **tapper** (nueva): **5 aciertos/s** toda la partida, chispitas con p = 0,6, Destello con 0,5; la ruta ✦ Pulso justo
+  después de la Pipeta y de Más tiempo, Racha larga en cuanto la abre Destello frecuente, Chispazo seguido con la Noche 2.
+- **kid:** ráfagas de 3 s a 8 toques/s (70 % sobre una criatura), 2 s de descanso; chispitas con p = 0,35.
+- **idle:** no toca nunca; no compra ningún nodo del Pulso.
+- **Todos siembran con el botón** (`sow`: el hueco más seguro). Columnas nuevas: `tap %` (luz del dedo: Pulsos,
+  Chispazos, chispitas y el extra de la racha), `streak` (mejor racha), `⚡` (Chispazos), `refund` (luz devuelta por
+  semillas que no prendieron), `deaths` (criaturas vivas que se apagaron), `fused` (choques del modelo).
+- **G3 con el mismo Árbol:** cada sesión del idle se juega otra vez, desde la misma partida guardada, con un *tapper* que
+  solo toca la placa (sin Nutrientes ni Destello, como el idle): una vez con el Árbol del idle (sin ruta Pulso) y otra con
+  un idle que además compra la ruta Pulso. `÷` = luz del tapper ÷ luz del idle en esa sesión.
+
+### 10.1 Las corridas
+
+| # | Cambio (además del anterior) | Resultado |
+|---|---|---|
+| A0 | v0.025 (antes) | §9 B4: planner 72 · 21 · 4, ×1,77, 1,99 h, 0 bajones; idle con 4–5 bajones desde su Pipeta |
+| A1 | Pulso, racha, Chispazo, chispitas, botón Sembrar, muertes que devuelven, ruta ✦ Pulso | El planner compraba la ruta entera (cada entrada del plan quiere «hasta el último nivel») y el idle compraba Pulso III sin tocar nunca. Tapper y greedy completaron los 199 niveles de Vida eterna en S23 / S29 y jugaron 20 sesiones sin nada que comprar: **10 y 9 bajones**. |
+| A2 | El planner se queda en Pulso I; el idle no compra el Pulso; el gemelo de G3 sin Nutrientes ni Destello | Planner 0 bajones, 1,83 h. G3c ×3,58: las chispitas atrapadas contaban para el siguiente Chispazo (cadena: más chispitas → más Chispazos → más chispitas). |
+| **A3** | **Las chispitas no cuentan para el Chispazo; Vida eterna 199 → 999 niveles** | **Final** (abajo). |
+
+Mandos probados y descartados: `PULSE_MIN` 1 → 0,5 dejaba G3b dentro (S8 ×1,80) pero bajaba la sesión 1 del tapper de
+×3,2 a ×2,4 la luz de antes (el dueño aprobó «unas 3 veces» en la sesión 1) y enseñaba «+0,5» a un niño: se queda en 1.
+
+### 10.2 Antes → después (mediana de 7 corridas por sesión; luz de la sesión)
+
+| Política | S1 | S2 | S5 | S10 | S20 | S44 | Fin de la historia | Bajones (mediana) |
+|---|---|---|---|---|---|---|---|---|
+| planner | 72 → **113** | 140 → 337 | 422 → 2 174 | 16 247 → 153 140 | 3,6 M → 14,4 M | 1,0·10¹⁴ → 6,9·10¹⁴ | 1,99 h → **1,83 h** | 0 → **0** (15 corridas) |
+| greedy | 72 → 113 | 270 → 421 | 1 174 → 2 772 | 23 428 → 1,2 M | 3,4 M → 1,4·10¹⁰ | 9·10¹³ → 1,8·10²⁴ | 2,00 h → 2,29 h | 0 → 0 |
+| kid | 68 → **172** | 158 → 292 | 493 → 815 | 1 245 → 6 257 | 6 566 → 121 670 | 1,6·10⁵ → 8,0·10⁶ | 1,40 h → 1,59 h | 12 → 10 |
+| idle | 33 → **33** | 19 → 21 | 134 → 239 | 1 115 → 1 312 | 7 218 → 8 156 | 2,3·10⁵ → 3,6·10⁵ | 1,22 h → 1,24 h | 4 → 6 (15 corridas; S2 aparte) |
+| tapper | (72) → **233** | 770 | 18 134 | 1,1·10⁷ | 1,3·10¹² | 7,5·10²⁹ | **2,40 h** | 0 (15 corridas) |
+
+(El tapper no existía: entre paréntesis, la luz del planner de antes.) Sesión 1: el tapper hace **×3,2** la luz de hoy, el
+kid ×2,4 y el planner ×1,6. A media partida, sobre el **mismo Árbol**, el tapper hace **×1,5** la luz del idle (de S11 a S46:
+×1,49–1,63, mediana ×1,54) y **×3,0** con la ruta Pulso completa (desde S34: ×2,99–3,09).
+
+### 10.3 Las puertas G1–G8 (`MECANICAS.md` §5.5)
+
+| Puerta | Meta | Después |
+|---|---|---|
+| G1 regla dura (mediana) | 0 bajones: planner, tapper, greedy; idle desde su 1.ª Pipeta | ❌ planner ✅ 0 (15 corridas; corridas sueltas 6 de 645 parejas, antes 15) · greedy ✅ 0 · tapper ✅ 0 (15 corridas; con 7, 1 de −1 % en S12) · idle ❌ S4 −17 % y 3–4 bajones ≤ 1 % al final (antes ya ❌: 4, con S16 −9 %) |
+| G2 el idle no pierde | luz del idle ≥ antes en cada sesión | ❌ **por ruido** (15 corridas antes y después): S14 ×0,984 y S4 ×0,989; las otras 44 sesiones ≥ ×1, mediana ×1,20 |
+| G3a tocar paga, S1–S5 | tapper ÷ idle (mismo Árbol) ≥ ×1,8 | ✅ ×7,0 / ×25,7 / ×4,5 / ×5,7 / ×4,0 |
+| G3b media partida sin ruta | ×1,3–2 en las noches 3+ | ❌ **por poco**: S8 ×2,15 y S9 ×2,01 (la Noche 3 empieza en S8, con 15–20 luz/s el mínimo de 1 por toque aún manda); de S10 a S46 ×1,49–1,90, mediana ×1,54 |
+| G3c con la ruta completa | ≤ ×3,2 | ✅ máx. ×3,09 (desde S34, cuando el idle termina de comprarla) |
+| G4 tocar a lo loco paga | kid ≥ planner en S1–S5; noche 3 en S12 | ❌ ×1,52 / ×0,87 / ×0,67 / ×1,00 / ×0,37 · ✅ noche 3 en S12 |
+| G5 ritmo | planner 1,5–2,2 h; tapper ≥ 1,3 h | ✅ 1,83 h · 2,40 h |
+| G6 sesión 1 (planner) | ≥ 60 luz, ≥ 15 Datos, ≥ 3 compras, 1.ª compra ≤ 45 s | ✅ 113 · 23 · 4 · 27 s |
+| G7 menos muertes | fusiones que causa sembrar: kid −50 %, planner sin subir | ⚪ **no medible en el modelo**: 0 antes y 0 después (la placa modelo ya no dejaba sembrar encima: el juego movía o rechazaba el toque con «Muy cerca», que es lo que se quita). Todos los choques, para el registro: kid 1,78 → 3,46 por sesión, planner 3,94 → 3,28 (más criaturas en placas más grandes) |
+| G8 crecimiento noches 1–2 (planner) | ×1,5–3 | ✅ ×2,36 |
+
+**Lo que no cumple, sin esconderlo:**
+- **G1 / G2, el idle:** su Pipeta llega una sesión antes (S3 ×2,3 de antes, con las devoluciones y la siembra segura) y la S4
+  queda igual que antes (×0,99): el «bajón» de S4 es la S3 que mejoró. Los otros bajones son de ≤ 1 % en la Noche 6–7, como
+  antes. G2 queda por debajo en 2 de 46 sesiones por 1,1–1,6 %: dentro del ruido de 15 corridas (el idle no gana menos por
+  ninguna regla nueva: sin toques no hay racha; devoluciones, luz de las muertes y semilla segura solo suman).
+- **G3b (S8–S9):** el mínimo de 1 de luz por toque (`PULSE_MIN`) pesa mientras la placa hace menos de 40 luz/s; al empezar
+  la Noche 3 el tapper aún saca ×2,0–2,15. Bajarlo a 0,5 lo arregla pero rompe la sesión 1 aprobada (§10.1).
+- **G4:** el kid gana **más luz por segundo** que el planner (S3: 17,9/s frente a 13,5/s), pero sus partidas son más cortas
+  (compra al azar: 0:20 frente a 0:40) y no compra Nutrientes (el planner lleva 3–4 en S3–S5, ×1,9–2,4 de producción). En
+  v0.025 el kid ya estaba al 95–123 % del planner; el dedo da más al planner sensato (×2–5 en S2–S5) que al kid.
+- **Lo que crece el final:** Vida eterna multiplica cualquier multiplicador de luz sesión a sesión (cada nivel cuesta ×1,1 y da
+  ×1,1, así que los niveles por sesión crecen con la luz): el tapper compra 17–19 niveles por sesión (×5,3 por sesión) y llega a
+  10²⁹–10³¹ en S44–S46 (planner 10¹⁵). No rompe ninguna puerta ni el validador del ranking (`tests/unit/ranking-sessions.test.ts`
+  en verde), pero los números del tapper se leen en notación exponencial desde la Noche 5.
+- **greedy:** su fin pasa de 2,00 h a 2,29 h (fuera del 1:30–2:15 de §6) porque con Vida eterna sin final compra 13–15 niveles en
+  cada visita y el bot cobra 2,5 s por compra (tope 45 s).

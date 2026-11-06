@@ -744,3 +744,10 @@ ADR that supersedes the old one.
     loop only.
   - The one-touch double-tap wait leaves the dish (the big seed is a double tap or a hold on the button).
   - GDD v1.5 notes «(Corrección v1.5, ADR-031)» at §1, §7, §20, §23.4, §23.5 and a new §23.6 «Muertes que enseñan».
+  - Settled while building it (bot report in `docs/RITMO.md` §10): the streak chip reads like every main-flow
+    multiplier («Racha +25 %», CLARIDAD2 §2.13; the exact ×1,25 only behind «Ver cuentas»); a caught glimmer raises
+    the streak but does not count towards the next Chispazo (it fed a runaway chain); a death of a living creature
+    adds its burst to its own drop; Nevera plants not yet reported stay in the Sembrar button's way; Vida eterna
+    offers 999 levels (with the finger the tapper completed all 199 at session 23 and then had nothing to buy).
+  - G3 ("tapping pays") is measured with the same tree: each session of the idle player is replayed by the tapper
+    (no Nutrientes, no Spark: the taps on the dish alone).

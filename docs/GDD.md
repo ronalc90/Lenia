@@ -20,7 +20,7 @@
 > | — | Kernel y crecimiento exactos de Chan (kn = 1, gn = 1, polinomiales) en lugar de gaussianos | §4, §22 |
 > | — | Corrección de la reducción de lecturas por simetría de 8 pliegues | §4, §17 |
 >
-> **Correcciones v1.2, v1.3 y v1.4 (marcadas en el lugar):**
+> **Correcciones v1.2, v1.3, v1.4 y v1.5 (marcadas en el lugar):**
 >
 > | ADR | Corrección | Dónde |
 > |---|---|---|
@@ -29,6 +29,7 @@
 > | [ADR-027](../DECISIONS.md#adr-027-time-lapse-in-the-session-runs-and-incubation-under-the-start-card) | **(v1.3)** Cámara rápida en las sesiones (×1,5 pasos por segundo) e incubación de la criatura inicial bajo la tarjeta de inicio; el reloj de la sesión cuenta tiempo de placa. | §4, §6, §17 |
 > | [ADR-029](../DECISIONS.md#adr-029-realismo-científico-vela-the-mc-7-instrument-documentary-doctors-archive-photographs) | **(v1.4)** **Realismo científico**: VELA es el monitor de cultivo MC-7, los doctores van en encuadre documental sin caras, se permiten fotografías de archivo humanas en planos fijos y el arte se dibuja con el método vectorial de 8 capas. Detalle en [`ARTE-REALISTA.md`](ARTE-REALISTA.md). | §14 |
 > | [ADR-030](../DECISIONS.md#adr-030-collected-light-a-clock-that-waits-for-the-player-and-explained-accidents-clarity-pass-2) | **(v1.4)** **Claridad**: la Esencia se llama **Luz** en pantalla y el Abono **Nutrientes**; la luz se **recoge** tocando las gotas (o con las **pipetas** de la ruta nueva **↓ Recoger**) y nada se pierde; el **reloj espera** mientras VELA habla o hay una hoja abierta; la sesión 1 empieza vacía y el primer toque planta la primera criatura; las muertes y fusiones avisan antes y dicen su causa. Detalle en [`CLARIDAD2.md`](CLARIDAD2.md). | §1, §2, §3, §5, §6, §7, §8, §9, §13, §20, §23.5 |
+> | [ADR-031](../DECISIONS.md#adr-031-the-tap-is-a-pulse-tapping-never-sows-streaks-pay-and-every-loss-gives-something-back) | **(v1.5)** **Tocar emociona**: tocar una criatura es un **Pulso** que brilla y da luz; los toques seguidos forman una **racha** que multiplica toda la luz que entra, y cada 10.º es un **¡Chispazo!**; se siembra con el **botón Sembrar** (sitio seguro, nunca se rechaza) y un dedo en la placa nunca siembra; cada muerte deja algo (la semilla que no prende devuelve su precio, la criatura que muere deja 3 s de su luz, la primera de cada causa da 2 Datos); la ruta ✦ Destello pasa a **✦ Pulso** con 3 nodos nuevos. Detalle en [`MECANICAS.md`](MECANICAS.md). | §1, §7, §20, §23.4, §23.5, §23.6 |
 
 ## Índice
 
@@ -63,6 +64,8 @@
 Bioluma (nombre de trabajo) es un juego incremental donde la vida artificial de una placa de Lenia produce el recurso, y el jugador progresa descubriendo y estabilizando criaturas, no tocando más rápido. En una frase: **siembra materia, descubre especies, provoca una extinción y vuelve con mejores genes.**
 
 > **(Corrección v1.4, [ADR-030](../DECISIONS.md#adr-030-collected-light-a-clock-that-waits-for-the-player-and-explained-accidents-clarity-pass-2))** La frase vigente, para una niña de 9 años: **«Siembra criaturas de luz, recoge la luz que hacen y úsala para descubrir las 7 especies de la doctora Albor.»** La meta visible es la colección («3/7»). El pilar 4 («un pulgar basta… sin precisión fina») se cumple con un toque de 64 px sobre cada gota y con el barrido; el pilar 5 («idle honesto») lo cumplen las pipetas, que recogen por ti pero más despacio que tu dedo.
+
+> **(Corrección v1.5, [ADR-031](../DECISIONS.md#adr-031-the-tap-is-a-pulse-tapping-never-sows-streaks-pay-and-every-loss-gives-something-back))** «Se progresa descubriendo y estabilizando criaturas, no tocando más rápido» pasa a: **se progresa descubriendo criaturas; tocarlas las hace brillar y da más luz, y quien prefiere mirar avanza con las pipetas.** El pilar 4 se lee así: un pulgar basta y **tocar mucho emociona, nunca castiga** (el dedo en la placa nunca siembra, nunca cuesta y nunca mata). Al pilar 5 se añade: **quien no toca nunca gana menos que antes** (el bot lo comprueba sesión a sesión, puerta G2). Plan: [`MECANICAS.md`](MECANICAS.md).
 
 > **Principio rector añadido en v1.1.** El dueño del proyecto lo resume así: *"es un juego, tiene que ser un incremental DIVERTIDO; no tiene que ser 100 % químicamente exacto"*. Cuando la fidelidad científica y la diversión choquen, gana la diversión: feedback claro y jugoso, y progresión legible, antes que pureza. Ver [§23](#23-capa-de-diversión-añadida-en-v11).
 
@@ -370,6 +373,20 @@ Todo se controla con un pulgar sobre la placa y un panel inferior; no hay gestos
 
 > **(Corrección v1.4, [ADR-030](../DECISIONS.md#adr-030-collected-light-a-clock-that-waits-for-the-player-and-explained-accidents-clarity-pass-2))** Gestos nuevos en las sesiones: **toque en una gota o en una criatura con luz → recoge** (nunca siembra; radio de 32 px a cualquier zoom); **arrastre que empieza en un hueco vacío → barrido** (recoge las gotas del camino); **mantener 400 ms sobre una criatura → su ficha** (sustituye a «Toque sobre criatura»); **arrastrar desde una nadadora → guiarla** (gira con el mismo giro rígido del desviador del cristal, nunca hacia el cristal). El toque en un hueco vacío sigue sembrando.
 
+> **(Corrección v1.5, [ADR-031](../DECISIONS.md#adr-031-the-tap-is-a-pulse-tapping-never-sows-streaks-pay-and-every-loss-gives-something-back))** En las sesiones **un dedo en la placa nunca siembra**: se siembra con el **botón «Sembrar»**. Gestos vigentes ([`MECANICAS.md`](MECANICAS.md) §3.1):
+>
+> | Gesto | Dónde | Qué hace |
+> |---|---|---|
+> | Toque | Criatura estable | **Pulso**: brilla, recoge su gota y suma `max(1, 2,5 % de tu luz/s)` × la racha; +1 a la **racha**. Cada 10.º toque seguido, **¡Chispazo!** (×5) y, desde la sesión 2, chispitas que atrapar. Como mucho 10 toques/s cuentan. |
+> | Toque | Semilla que nace, mancha | Un parpadeo gris; no suma, no rompe la racha. |
+> | Toque | Gota suelta, chispita | La recoge (× racha), +1 a la racha. |
+> | Toque | Agar vacío | Una onda; recoge lo que haya a ≤ 48 px. Nunca siembra ni rompe la racha. |
+> | Pasar el dedo | Placa | Barrido: recoge las gotas del camino y hace brillar cada criatura que cruza (una vez cada 0,3 s). |
+> | Toque | Botón Sembrar | La semilla va al **hueco más seguro** (lejos de cuerpos, caminos y cristal). |
+> | Arrastrar | Del botón a la placa | Eliges sitio; se **ajusta** al sitio seguro más cercano. **Nunca se rechaza** por estar cerca. |
+>
+> La racha nunca cae de golpe: tras 1 s sin acertar baja 8 toques por segundo, y se congela con la placa en pausa.
+
 | Gesto | Dónde | Acción | Desde cuándo |
 |---|---|---|---|
 | Toque corto | Placa | Siembra con la semilla actual del Gotero en ese punto (cuesta Esencia). | Inicio |
@@ -389,7 +406,7 @@ Todo se controla con un pulgar sobre la placa y un panel inferior; no hay gestos
 ### Reglas de interacción
 
 - Zonas táctiles de 48 × 48 px mínimo; el panel inferior ocupa como máximo el 45 % de la altura y se puede colapsar al 15 %. **(Corrección v1.1)** Colapsar o expandir el panel **solo cambia el zoom** de la placa; la grilla es de aspecto fijo (§4).
-- La placa nunca se desplaza por accidente: el paneo requiere dos dedos; un dedo siempre siembra.
+- La placa nunca se desplaza por accidente: el paneo requiere dos dedos; un dedo siempre siembra. **(Corrección v1.5, ADR-031: en las sesiones un dedo nunca siembra; se siembra con el botón.)**
 - Una siembra sin Esencia suficiente no hace nada y muestra el costo en rojo junto al dedo durante 1 s; no hay modales.
 - Toda acción destructiva (Borrar, Extinguir) tiene vibración y color de advertencia; solo Extinguir pide confirmación.
 - En escritorio: clic = toque, clic derecho = borrar, rueda = zoom, teclas 1 a 4 = pestañas, espacio = pausa.
@@ -886,6 +903,8 @@ La primera versión es gratis, **sin anuncios y sin compras**: eso es lo que per
 
 > **(Corrección v1.4, [ADR-030](../DECISIONS.md#adr-030-collected-light-a-clock-that-waits-for-the-player-and-explained-accidents-clarity-pass-2))** El bot modela las gotas y las pipetas y añade la política **`idle`** (no toca nunca una gota: solo recogen sus pipetas y la recogida final). Las puertas de la recogida están en [`CLARIDAD2.md`](CLARIDAD2.md) §3.3 (regla dura sin bajones en el planner, producción perdida por gotas llenas ≤ 10 % en S1–S5, el idle nunca bajo `DATOS_MIN`) y el informe B0–B4, en [`RITMO.md`](RITMO.md) §9.
 
+> **(Corrección v1.5, [ADR-031](../DECISIONS.md#adr-031-the-tap-is-a-pulse-tapping-never-sows-streaks-pay-and-every-loss-gives-something-back))** Todas las políticas siembran con el botón (`sow`). Política nueva **`tapper`**: 5 aciertos/s toda la partida, chispitas con p = 0,6, Destello con 0,5, y la ruta ✦ Pulso justo después de la Pipeta. El *kid* toca a ráfagas (3 s a 8 toques/s, 70 % de aciertos, 2 s de descanso). Puertas **G1–G8** ([`MECANICAS.md`](MECANICAS.md) §5.5): regla dura sin bajones; el idle nunca gana menos que antes; tocar paga (×1,8 en S1–S5, ×1,3–2 a media partida sin la ruta, ≤ ×3,2 con ella, medido con el mismo Árbol); el kid ≥ el planner en S1–S5; ritmo de la historia; sesión 1; fusiones del kid −50 %; crecimiento de las noches 1–2. Informe en [`RITMO.md`](RITMO.md) §10.
+
 Todos los números del juego viven en un solo archivo (`src/game/balance.ts`, antes `src/balance.ts`) con comentario de origen por valor, y un bot juega el juego acelerado cada noche para verificar que la curva de la §11 se cumple. Ningún número se cambia a mano sin una corrida del bot antes y después.
 
 **El bot de progresión.** Corre la simulación en CPU a 64 × 64 (misma regla, misma economía, misma rareza empírica medida antes; **128 × 128 si intervienen especies de R = 18, Corrección v1.1, ADR-011**) a 50 veces la velocidad real, con tres políticas: `greedy` (compra siempre lo más barato), `explorer` (prioriza Calibrador y mueve μ cada 2 min), `idle` (siembra lo mínimo, deja el Sembrador). Registra Esencia/s, especies, compras y Eras por minuto simulado durante 8 horas de juego y escribe `reports/balance/YYYY-MM-DD.json` con gráficos.
@@ -1053,6 +1072,7 @@ Cada acción debe sentirse física y legible:
 - **Sonidos** afinados en la escala del drone para cada evento relevante (§15).
 - **Partículas y zoom suave** al registrar una especie nueva (el momento más celebrado), más intensas si es rara.
 - **Vibración** leve en móviles para destructivas y logros (apagable en ajustes).
+- **(Corrección v1.5, ADR-031) El toque y su racha:** cada Pulso brilla 250 ms, saca un «+N» que crece un 4 % por toque de racha (tope ×1,4) y una nota un grado más alta en la escala del dron; el chip «Racha +N %» con 10 puntitos cuenta hacia el **¡Chispazo!**, que tiene acorde, hit-stop de 60 ms y la **única sacudida** del toque (trauma 0,15, por debajo del Destello). La vibración también suena solo en el Chispazo.
 
 **Límites.** Las partículas y números son decoración *alrededor* de las criaturas, nunca las sustituyen (pilar 1). **Reducir movimiento** apaga estelas, partículas, zoom automático y la animación de los números flotantes (el valor sigue mostrándose). Toda recompensa de esta capa respeta las compuertas del Balanceador: se mide en el bot y en `golden_collected` / `objective_done` (§18).
 
@@ -1064,3 +1084,17 @@ Cada acción debe sentirse física y legible:
 - Las **pipetas** (ruta ↓ Recoger) van a la gota más madura (≥ 50 %), la sorben y vuelven; si el jugador toca antes la gota, la pipeta elige otra. Son instrumentos, no seres vivos (pilar 1).
 - Accesibilidad: «Recoger la luz sola» equivale a una pipeta de nivel 1 gratis desde la sesión 1.
 - *Hard gates* (ADR-030): ninguna gota se llena en una criatura que no es estable; la luz hecha nunca se pierde.
+- **(Corrección v1.5, ADR-031)** Mientras dura la **racha**, toda la luz que entra vale su multiplicador (+2,5 % por toque, tope +25 %; +50 % y +75 % con Racha larga): las gotas a mano **y las de las pipetas**, los Pulsos, las chispitas y el Destello. No multiplica la recogida final ni los premios fijos de los encargos. Una **chispita** que no se atrapa **se posa** como gota suelta: lo que brilla nunca se quita. Los Datos siguen contando la luz hecha ÷ 25; la del dedo es luz hecha.
+
+### 23.6 Muertes que enseñan **(Corrección v1.5, [ADR-031](../DECISIONS.md#adr-031-the-tap-is-a-pulse-tapping-never-sows-streaks-pay-and-every-loss-gives-something-back))**
+
+Cada muerte se avisa antes (si el jugador puede hacer algo), se nombra donde pasa y **deja algo**; nunca se resta lo ganado. La primera vez de cada causa en toda la partida da **+2 Datos** («Aprendiste por qué pasa»). Detalle en [`MECANICAS.md`](MECANICAS.md) §4.
+
+| Causa | Aviso | Qué deja |
+|---|---|---|
+| Semilla que no prende | — (barata) | **Devuelve lo que costó** (o la semilla gratis); tras 2 fallos seguidos, la siguiente prende seguro. |
+| Choque y fusión | Enlace rojo; texto «¡Van a chocar! Arrastra una» solo si una es una nadadora que se puede guiar | Su gota + **3 s de su luz**. Si el jugador guía a una y no chocan: **«¡Salvada! Racha +5»**. |
+| Cristal | El borde se ilumina | Su gota + 3 s de su luz. |
+| Perdió la forma | — | Su gota + 3 s de su luz. |
+| Mancha que crece sin parar (lisis) | Contorno ámbar «VELA la vigila» | Nada (nunca fue criatura: solo paga lo estable). |
+| Goma, esterilizar | Es el jugador | Solo su gota (borrar no es negocio). |
