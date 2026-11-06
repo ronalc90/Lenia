@@ -191,6 +191,8 @@ export const REPORT_TEXT = {
   plates: tx('Láminas de hoy', 'Today’s plates'),
   /** Session 2 on: the ¡Chispazo! glimmers caught out of the ones thrown (MECANICAS §6.2). */
   glimmers: (caught: number, thrown: number) => tx(`chispitas ${caught} de ${thrown}`, `glimmers ${caught} of ${thrown}`),
+  /** Free seeds that never took came back as free seeds (no Luz to name: «te devolví 0 de luz» read as nothing). */
+  refundFree: (seeds: number) => tx(`Semillas que no prendieron: ${seeds} (volvieron como semillas gratis)`, `Seeds that didn’t take: ${seeds} (back as free seeds)`),
   today: tx('Especies de hoy', 'Today’s species'),
   scientific: tx('nombre científico', 'scientific name'),
 };
@@ -412,7 +414,7 @@ export function fingerLines(data: ReportData, l: Lang): string[] {
     out.push(line);
   }
   const r = data.refunds;
-  if (r && r.seeds > 0) out.push(SESSION_UI.refundLine(r.seeds, fmt(Math.round(r.luz), l))[l]);
+  if (r && r.seeds > 0) out.push(Math.round(r.luz) > 0 ? SESSION_UI.refundLine(r.seeds, fmt(Math.round(r.luz), l))[l] : REPORT_TEXT.refundFree(r.seeds)[l]);
   const d = data.losses;
   if (d && (d.saved > 0 || d.merged > 0)) out.push(SESSION_UI.savedLine(d.saved, d.merged, fmt(Math.round(d.luz), l))[l]);
   return out;

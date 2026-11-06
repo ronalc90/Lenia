@@ -349,6 +349,8 @@ describe('the finger in the report (ADR-031, docs/MECANICAS.md §6.1 step 11, §
     expect(reportDataOf(summaryOf({ datos: computeDatos(session, fx, 0), losses: { ...losses, refunds: 0, merged: 0, saved: 0 } })).losses).toBeUndefined();
     expect(fingerLines(data, 'es')).toEqual(['Semillas que no prendieron: 2 (te devolví 8 de luz)', 'Salvaste a 1 · se juntaron 1 · su luz: +18']);
     expect(fingerLines(data, 'en')).toEqual(['Seeds that didn’t take: 2 (8 glow back)', 'You saved 1 · 1 merged · their glow: +18']);
+    // Free seeds come back as free seeds: no «0 de luz».
+    expect(fingerLines({ refunds: { seeds: 3, luz: 0 } }, 'es')).toEqual(['Semillas que no prendieron: 3 (volvieron como semillas gratis)']);
     // VELA's line after a fusion: positive, never «Siembra más lejos» (sowing is always safe now).
     expect(velaTip({ losses: { saved: 0, merged: 2, luz: 30 } }, 'es')).toBe('¡Guiar a las nadadoras las salva!');
     expect(velaTip({ merged: 2 }, 'en')).toBe('Steering swimmers saves them!');
