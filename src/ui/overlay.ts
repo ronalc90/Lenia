@@ -722,6 +722,8 @@ export class Overlay {
     this.drops.setView(view.drops, (owner) => this.creatures.get(owner)?.hue, this.now, (id) => this.pipettes.sipping(id));
     this.scene.collecting = this.drops.active;
     this.scene.pulsing = this.pulseMode;
+    // QA-3 §2: no card by long press while the finger is on a streak.
+    this.scene.streaking = !!view.streak && view.streak.hits > 0;
     this.pulses.setMotes(view.motes, this.now, this.ownerGrid, this.hueOfOwner);
     this.dangers = view.dangers ?? NO_DANGERS;
     for (const d of this.dangers) {

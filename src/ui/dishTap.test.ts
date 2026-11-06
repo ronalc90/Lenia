@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   dropsOnSegment,
   motesOnSegment,
+  pillTapRoute,
   routeTap,
   SweepHits,
   SWEEP_REHIT_S,
@@ -173,5 +174,35 @@ describe('the tap is a pulse (dishTap.ts, ADR-031, MECANICAS §3.1)', () => {
     let n = motesOnSegment(s, 10, 100, 200, 100, out, 0);
     n = motesOnSegment(s, 200, 100, 10, 100, out, n);
     expect(out.slice(0, n).sort()).toEqual([1, 2]);
+  });
+});
+
+// QA-3 §2 (v0.026, shots 035, 185): tapping fast, a creature's card «Aún sin nombre / Nadadora celeste · VIVA · Seguir»
+// sometimes popped up over 40 % of the dish and the next taps landed on it (once on «Seguir»: it zoomed and followed).
+describe('the creature card is a long press only, never during a streak (QA-3 §2)', () => {
+  it('QA-3: during a streak a long press on a creature opens nothing (a slow tap counted as a press)', () => {
+    const s = { ...session([], [orbium(1, 100, 100)]), streaking: true };
+    expect(routeTap('long', 100, 100, s)).toEqual({ kind: 'none' });
+  });
+
+  it('without a streak the long press still opens it', () => {
+    expect(routeTap('long', 100, 100, { ...session([], [orbium(1, 100, 100)]), streaking: false })).toEqual({ kind: 'card', id: 1 });
+  });
+
+  it('QA-3: in a session a tap on a creature\'s pill pulses it; it never opens the card', () => {
+    const stable = { state: 'stable' as const, behavior: null };
+    expect(pillTapRoute(stable, { pulsing: true, streaking: false, easyPulse: false })).toBe('pulse');
+    expect(pillTapRoute(stable, { pulsing: true, streaking: true, easyPulse: false })).toBe('pulse');
+    // A behaviour pill explains itself, but not in the middle of a streak (the finger is tapping, not reading).
+    expect(pillTapRoute({ state: 'stable', behavior: 'swimmer' }, { pulsing: true, streaking: false, easyPulse: false })).toBe('behavior');
+    expect(pillTapRoute({ state: 'stable', behavior: 'swimmer' }, { pulsing: true, streaking: true, easyPulse: false })).toBe('pulse');
+  });
+
+  it('«Pulso fácil» keeps the card on the pill (MECANICAS §3.5), but not during a streak; the classic loop as before', () => {
+    const stable = { state: 'stable' as const, behavior: null };
+    expect(pillTapRoute(stable, { pulsing: true, streaking: false, easyPulse: true })).toBe('card');
+    expect(pillTapRoute(stable, { pulsing: true, streaking: true, easyPulse: true })).toBe('pulse');
+    expect(pillTapRoute(stable, { pulsing: false, streaking: false, easyPulse: false })).toBe('card');
+    expect(pillTapRoute({ state: 'born', behavior: null }, { pulsing: true, streaking: false, easyPulse: false })).toBe('none');
   });
 });

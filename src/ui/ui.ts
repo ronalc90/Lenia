@@ -17,7 +17,7 @@ import { fmt, fmtClock, fmtDuration, fmtRate, fmtShort } from './format';
 import { behaviorName, getLang, setLang, stateName, t, tx } from './i18n';
 import { icon, logo } from './icons';
 import { DishInput } from './input';
-import { dropAt, dropsOnSegment, motesOnSegment, routeTap, SweepHits, type TapReach } from './dishTap';
+import { dropAt, dropsOnSegment, motesOnSegment, pillTapRoute, routeTap, SweepHits, type TapReach } from './dishTap';
 import { copyPick } from './copyPick';
 import { installScreenGuard, PressGuard, screenChanged } from './pressGuard';
 import { stackLabel, type LabelObstacles, type LabelPlacement, type StackRequest } from './labelPlace';
@@ -2173,10 +2173,25 @@ class BiolumaUI implements UI {
     const scene = this.overlay.tapScene();
     const pill = scene.collecting && dropAt(scene, px, py) >= 0 ? null : this.overlay.statusHit(px, py);
     if (pill) {
-      if (pill.behavior && this.deps.onBehaviorInfo) {
+      const sessions = scene.pulsing || this.v.cycle === 'sessions';
+      const r = pillTapRoute(pill, { pulsing: sessions, streaking: !!scene.streaking, easyPulse: !!this.v.settings.easyPulse });
+      if (r === 'behavior' && this.deps.onBehaviorInfo) {
         this.sound('open');
-        this.deps.onBehaviorInfo(pill.behavior);
-      } else if (pill.state === 'stable') this.openCard(pill.id);
+        this.deps.onBehaviorInfo(pill.behavior!);
+      } else if (r === 'card') this.openCard(pill.id);
+      else if (r === 'pulse' && sessions) {
+        // The pill is its creature's: the tap pulses it, where it is drawn (QA-3 §2: never its card). Once, away from
+        // a streak, it says how the card opens (MECANICAS §3.4: «mantener» is told on the pill).
+        if (!scene.streaking && !this.prefs.hints.includes('holdCard')) {
+          this.prefs.hints.push('holdCard');
+          this.savePrefs();
+          this.showGestureHint(t('hintHoldCard'), 'hand');
+        }
+        for (let i = 0; i < scene.creatureCount; i++) {
+          const c = scene.creatures[i];
+          if (c.id === pill.id) return this.sessionTap(c.x, c.y, g);
+        }
+      }
       return;
     }
     // ADR-031 (docs/MECANICAS.md §3.1): in the sessions cycle a finger on the dish never sows.

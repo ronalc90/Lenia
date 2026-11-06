@@ -11,7 +11,9 @@
  *   tap on a forming seed or a shapeless blob     → grey: «aún no brilla»; nothing paid, the streak kept
  *   tap on empty agar                             → a water ripple that gathers the drops and glimmers
  *                                                    within TAP_REACH_PX; never a seed, never a cost
- *   long press on a creature                      → its card
+ *   long press on a creature                      → its card (never during a streak: QA-3 §2)
+ *   tap on a creature's pill                      → its pulse (the card is a long press only; a behaviour
+ *                                                    pill explains itself while no streak runs: pillTapRoute)
  *   drag that starts on a swimmer                 → guide it (§2.5)
  *   drag that starts anywhere else                → sweep: drops and glimmers on the path are collected and
  *                                                    every creature it crosses is pulsed (SweepHits)
@@ -81,6 +83,11 @@ export interface TapScene {
   motePx: number;
   /** Empty agar gathers what lies this close (CSS px, TAP_REACH_PX). */
   reachPx: number;
+  /**
+   * A tap streak runs (GameView.streak with hits): the finger is tapping fast, and a slow tap on a slow phone must
+   * not open a card over the dish (QA-3 §2). Absent = no streak.
+   */
+  streaking?: boolean;
 }
 
 /** What a tap on empty agar gathered (ids; caller's scratch, reused). */
@@ -205,7 +212,7 @@ function routeSession(g: Gesture, x: number, y: number, s: TapScene, reach?: Tap
   const ci = creatureAt(s, x, y, true);
   const c = ci >= 0 ? s.creatures[ci] : null;
   const stable = c && c.state === 'stable' ? c : null;
-  if (g === 'long') return stable ? { kind: 'card', id: stable.id } : NONE;
+  if (g === 'long') return stable && !s.streaking ? { kind: 'card', id: stable.id } : NONE;
   if (g === 'drag') return stable && stable.behavior === 'swimmer' ? { kind: 'steer', id: stable.id } : SWEEP;
   // A glimmer flies over the creature that threw it: the finger that lands on it wants the glimmer.
   const mi = moteAt(s, x, y);
@@ -224,6 +231,24 @@ function routeSession(g: Gesture, x: number, y: number, s: TapScene, reach?: Tap
   if (c) return { kind: 'grey', id: c.id };
   if (reach) gather(s, x, y, reach);
   return RIPPLE;
+}
+
+/**
+ * A tap on a creature's status pill (its name, «Gira»…). Outside sessions: a behaviour pill explains itself, a stable
+ * creature's opens its card. In a session (ADR-031) the card is a long press only (QA-3 §2: fast taps on a swimmer
+ * landed on its pill and the card swallowed the next ones): the pill pulses its creature; a behaviour pill explains
+ * itself only while no streak runs; «Pulso fácil» keeps the card on the pill (MECANICAS §3.5), not during a streak.
+ */
+export function pillTapRoute(
+  pill: { state: CreatureState; behavior: Behavior | null },
+  s: { pulsing: boolean; streaking: boolean; easyPulse: boolean },
+): 'pulse' | 'card' | 'behavior' | 'none' {
+  const stable = pill.state === 'stable';
+  if (!s.pulsing) return pill.behavior ? 'behavior' : stable ? 'card' : 'none';
+  if (s.streaking) return stable ? 'pulse' : 'none';
+  if (pill.behavior) return 'behavior';
+  if (!stable) return 'none';
+  return s.easyPulse ? 'card' : 'pulse';
 }
 
 /** Drops and glimmers within the scene's reach of (x, y), into `out` (ids). */
