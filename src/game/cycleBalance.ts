@@ -429,6 +429,15 @@ export const SESSION_OBJECTIVE_MIN = 5;
  * there also waits for its new species to be registered. [owner; bot]
  */
 export const WORLD_ESSENCE_STEP = 0.1;
+/**
+ * First-level price of a World node when it is not its ring's (TREE_RING_START), by world id. QA-3 N10/N11: World 4
+ * cost a ring-3 200 Datos while a child earned 3–20 a session and the collection sat at 3/7 for six sessions; in the
+ * bot the kid bought it at session 14 and the idle player at 18, the longest wait for a species 9 and 7 sessions
+ * (scripts/goal-ladder.ts). The next World is the next species (one per world): it is priced at about two or three
+ * sessions of a slow player's Datos when its ring opens, World 5 at twice that. Ring 4–5 Worlds keep their ring's
+ * price (the late nights earn thousands). Bot before/after: docs/RITMO.md §11. [QA-3; bot]
+ */
+export const WORLD_NODE_START: Readonly<Partial<Record<string, number>>> = { shields: 60, helix: 120 };
 
 // ───────────────────────────── Datos (permanent currency) ──────────
 

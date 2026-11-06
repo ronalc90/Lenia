@@ -509,6 +509,12 @@ ADR that supersedes the old one.
     its HARD rule (the median player never earns less than in the session before) gates every balance change.
   - Encargos and the story change their era / Extinción / Calibrar conditions to nights, worlds and the tree.
   - The contract changes this needed are recorded in ADR-028.
+- **Amendment v0.027 (QA-3 N10/N11: the collection at 3/7 for six sessions, World 4 at 200 Datos for a child earning
+  3–20 a session):** a World node may have its own first price instead of its ring's (`WORLD_NODE_START`, like Vida
+  eterna's): World 4 · Escudos 60, World 5 · Hélices 120, about two or three sessions of a slow player's Datos when ring
+  3 opens; Worlds 6–7 keep their ring's. Session bot before/after (docs/RITMO.md §11, `scripts/goal-ladder.ts`): the
+  kid buys World 4 at session 8 instead of 14 and its longest wait for a species drops from 9 to 5 sessions; the idle
+  player earns no less in any session; no new dips (the tapper's S12 −1 % is gone); planner story 1.83 → 1.85 h.
 
 ## ADR-027: Time-lapse in the session runs and incubation under the start card
 

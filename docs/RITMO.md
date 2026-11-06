@@ -477,3 +477,34 @@ kid ×2,4 y el planner ×1,6. A media partida, sobre el **mismo Árbol**, el tap
   en verde), pero los números del tapper se leen en notación exponencial desde la Noche 5.
 - **greedy:** su fin pasa de 2,00 h a 2,29 h (fuera del 1:30–2:15 de §6) porque con Vida eterna sin final compra 13–15 niveles en
   cada visita y el bot cobra 2,5 s por compra (tope 45 s).
+
+## 11. La siguiente especie a 2–3 sesiones (QA-3 N10, v0.027): el bot antes y después
+
+QA-3 (v0.026, caja negra): en las sesiones 5–10 el niño ganaba 3–20 Datos por sesión, el Mundo 4 costaba 200 y la colección
+se quedó en 3/7 seis sesiones seguidas. Cada Mundo trae una especie nueva, así que el precio del siguiente Mundo es la meta
+que el jugador ve («La siguiente vive en el Mundo 4 · Escudos (Árbol, 200 Datos)»). El anillo 3 empieza en 200 Datos y los
+dos Mundos del anillo 3 costaban eso; ahora tienen su propio precio de salida (`WORLD_NODE_START`): **Mundo 4 = 60, Mundo 5 =
+120** (unas 2–3 sesiones de Datos de un jugador lento cuando se abre el anillo, en la Noche 2). Los Mundos 6 y 7 conservan el
+precio de su anillo (12 000 y 80 000), porque las noches 3–4 ganan miles.
+
+Medido con `npx vite-node scripts/goal-ladder.ts 24 7` (mediana de 7 corridas; «espera» = sesiones seguidas sin especie
+nueva antes de la 5.ª):
+
+| Política | Datos/sesión S5–10 | Espera más larga | Especie 3 · 4 · 5 en la sesión | Mundo 3 · 4 · 5 comprado en |
+|---|---|---|---|---|
+| kid, antes | 202 | 9 | 6 · 15 · 20 | 5 · 14 · 18 |
+| **kid, después** | 197 | **5** | 8 · **10** · **15** | 5 · **8** · **13** |
+| idle, antes | 40 | 7 | 11 · 19 · 22 | 10 · 18 · 21 |
+| **idle, después** | 40 | 7 | 11 · **16** · **16** | 10 · **15** · **15** |
+| planner, antes | 2 063 | 3 | 6 · 9 · 10 | 5 · 8 · 9 |
+| planner, después | 4 477 | 3 | 6 · 7 · 11 | 5 · 6 · 7 |
+| tapper, antes / después | 134 K / 135 K | 3 / 3 | 6 · 7 · 9 | 5 · 6 · 6 |
+
+`npx vite-node scripts/session-bot.ts 80 7 --runs`, antes → después:
+- **G1 (sin bajones):** planner 0 → 0, greedy 0 → 0, **tapper 1 (S12 −1 %) → 0**, idle (desde S3) 5 → 4 (queda el de S4, −17 %, igual
+  que antes: §10). **El idle no gana menos en ninguna sesión** (mejora en 32 de 46); planner y greedy tampoco (mejoran en 40 y 39).
+- **G5:** planner 1,83 → 1,85 h, tapper 2,40 → 2,40 h (dentro de 1,5–2,2 h y ≥ 1,3 h). G6 y G8 siguen en verde (×2,36 → ×2,42).
+- **G3b y G4** siguen como en §10 (máximo ×2,15 en la Noche 3; el kid por debajo del planner en S2, S3 y S5): no dependen de
+  los Mundos.
+- Lo que queda: la espera del idle es su Mundo 3 (15 Datos, comprado en S10 porque su plan compra antes reloj, pipetas y
+  Gotero), no un precio; la del kid, que compra al azar y juega un Mundo al azar la mitad de las veces.

@@ -264,11 +264,13 @@ export function birthSeconds(fx: Pick<TreeEffects, 'simPace' | 'matureSpeed'>): 
 
 /** Every world node: opens one world (in order) and its species. */
 function worldNode(world: WorldId, ring: number, icon: string): NodeSpec {
+  const start = C.WORLD_NODE_START[world];
   return {
     id: WORLD_BY_ID[world].node!,
     ring,
     icon,
     maxLevel: 1,
+    ...(start !== undefined ? { start } : {}),
     world,
     apply: (fx) => void fx.worlds.push(world),
     measure: (fx) => possibleSpecies(fx),

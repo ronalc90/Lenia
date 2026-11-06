@@ -355,8 +355,8 @@ de la ruta comprados). Tablas generadas del código: `npx vite-node scripts/tree
 |---|---|---|---|---|---|
 | 1 | Mundo 2 · Frío | 1 · 1 | 1 | 2 (×2) | 1 especie para encontrar → 2 especies para encontrar |
 | 2 | Mundo 3 · Remolinos | 2 · 1 | 1 | 15 (×2) | 2 especies para encontrar → 3 especies para encontrar |
-| 3 | Mundo 4 · Escudos | 3 · 2 | 1 | 200 (×2) | 3 especies para encontrar → 4 especies para encontrar |
-| 4 | Mundo 5 · Hélices | 3 · 2 | 1 | 200 (×2) | 4 especies para encontrar → 5 especies para encontrar |
+| 3 | Mundo 4 · Escudos | 3 · 2 | 1 | 60 (×2) (Corrección v0.027: QA-3 N10, RITMO §11) | 3 especies para encontrar → 4 especies para encontrar |
+| 4 | Mundo 5 · Hélices | 3 · 2 | 1 | 120 (×2) (Corrección v0.027) | 4 especies para encontrar → 5 especies para encontrar |
 | 5 | Mundo 6 · Patas | 4 · 3 | 1 | 12.000 (×2) | 5 especies para encontrar → 6 especies para encontrar |
 | 6 | Mundo 7 · Gigantes | 5 · 4 | 1 | 80.000 (×2) | 6 especies para encontrar → 7 especies para encontrar |
 

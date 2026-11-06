@@ -191,7 +191,10 @@ describe('prices: one rule, nothing hidden', () => {
     for (const n of TREE_NODES) {
       if (n.id === 'lab') continue;
       const r = priceRule(n.id);
-      expect(r.start, n.id).toBe(n.id === 'eternalLife' ? C.ETERNAL_LIFE_START : C.TREE_RING_START[n.ring]);
+      // Worlds 4–5 have their own first price (QA-3 N10: the next species within 2–3 sessions), the rest their ring's.
+      const world = WORLDS.find((w) => w.node === n.id)?.id;
+      const own = world ? C.WORLD_NODE_START[world] : undefined;
+      expect(r.start, n.id).toBe(n.id === 'eternalLife' ? C.ETERNAL_LIFE_START : (own ?? C.TREE_RING_START[n.ring]));
       for (let l = 0; l < Math.min(n.maxLevel, 8); l++) expect(nodeCost(n.id, l), `${n.id}@${l}`).toBe(niceRound(r.start * r.growth ** l));
     }
     expect(nodeCost('clock', 0)).toBe(C.TREE_RING_START[1]);
@@ -201,6 +204,10 @@ describe('prices: one rule, nothing hidden', () => {
     expect(nodeCost('dish', 1)).toBe(3 * C.TREE_RING_START[1]);
     expect(nodeCost('dish', 2)).toBe(Infinity); // Ø128 → Ø160 → Ø192, then Placa gigante
     expect(nodeCost('stabilizer', 1)).toBe(niceRound(C.TREE_RING_START[3] * 1.5));
+    // World 4 costs less than its ring, World 5 more than World 4 (one new species each).
+    expect(nodeCost('worldShields', 0)).toBeLessThan(C.TREE_RING_START[3]);
+    expect(nodeCost('worldHelix', 0)).toBeGreaterThan(nodeCost('worldShields', 0));
+    expect(nodeCost('worldShields', 0)).toBeGreaterThan(nodeCost('worldGyro', 0));
   });
 
   it('every price climbs level after level and the same input gives the same price', () => {
