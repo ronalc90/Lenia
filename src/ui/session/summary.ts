@@ -106,19 +106,20 @@ export interface FingerStats {
   motes?: { caught: number; thrown: number } | null;
 }
 
-/** PA's SessionSummary with the ADR-031 tallies (optional until game/session.ts carries them). */
-export type SummaryIn = SessionSummary & Pick<ReportData, 'finger' | 'refunds' | 'losses'>;
 
 /**
  * PA's SessionSummary (game/session.ts, ADR-030) as the report's data: the goals by name, the final sweep,
  * the session before, what to do about a smaller payout and the collection with the next species' World.
  */
-export function reportDataOf(sum: SummaryIn): ReportData {
+export function reportDataOf(sum: SessionSummary): ReportData {
   const next = sum.collection?.next ?? null;
   const out: ReportData = { goals: sum.goals, previous: sum.previous ?? null, lessAction: sum.lessAction ?? null };
-  if (sum.finger) out.finger = sum.finger;
-  if (sum.refunds) out.refunds = sum.refunds;
-  if (sum.losses) out.losses = sum.losses;
+  // ADR-031: the finger's line and what the losses gave back (game/session.ts summarize: finger, losses).
+  const f = sum.finger;
+  if (f) out.finger = { taps: f.taps, bestStreak: f.bestMult, chispazos: f.chispazos, luz: f.luz, motes: { caught: f.motesCaught, thrown: f.motesThrown } };
+  const lo = sum.losses;
+  if (lo && lo.refunds > 0) out.refunds = { seeds: lo.refunds, luz: lo.refunded };
+  if (lo && (lo.saved > 0 || lo.merged > 0)) out.losses = { saved: lo.saved, merged: lo.merged, luz: lo.burst };
   if ((sum.light?.sweep ?? 0) > 0) out.swept = Math.round(sum.light!.sweep);
   if (sum.behaviors?.length) out.behaviorNames = sum.behaviors.map((b) => BEHAVIOR_NAMES[b]);
   if (sum.collection) out.collection = { have: sum.collection.have, total: sum.collection.total, nextWorld: next ? (WORLD_TEXT[next.world]?.name ?? null) : null, nextCost: next?.cost ?? null };
@@ -154,7 +155,7 @@ export interface SessionSummaryOptions {
 export interface SessionSummaryView {
   readonly el: HTMLElement;
   readonly isOpen: boolean;
-  show(sum: SummaryIn, extras: SummaryExtras): void;
+  show(sum: SessionSummary, extras: SummaryExtras): void;
   hide(): void;
   dispose(): void;
 }

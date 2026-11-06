@@ -319,10 +319,10 @@ describe('the finger in the report (ADR-031, docs/MECANICAS.md §6.1 step 11, §
     const fx = treeEffects({});
     const { session } = beginSession(freshResearch(), fx);
     noteEssence(session, 210);
-    // PA's summary carries the finger's session (optional until it lands; the report reads it as it comes).
-    const sum = { ...summaryOf({ n: 1, datos: computeDatos(session, fx, 0) }), finger: { taps: 74, bestStreak: 1.25, chispazos: 4, luz: 96 } };
+    // The game's summary carries the finger's session (game/session.ts summarize, ADR-031).
+    const sum = summaryOf({ n: 1, datos: computeDatos(session, fx, 0), finger: { taps: 74, bestMult: 1.25, chispazos: 4, motesCaught: 0, motesThrown: 0, luz: 96 } });
     const data = reportDataOf(sum);
-    expect(data.finger).toEqual({ taps: 74, bestStreak: 1.25, chispazos: 4, luz: 96 });
+    expect(data.finger).toMatchObject({ taps: 74, bestStreak: 1.25, chispazos: 4, luz: 96 });
     const es = fingerLines(data, 'es');
     const en = fingerLines(data, 'en');
     // Whole numbers and one decimal at most on the streak (docs/CLARIDAD2.md §2.13: ×1,25 reads ×1,2).
@@ -339,7 +339,14 @@ describe('the finger in the report (ADR-031, docs/MECANICAS.md §6.1 step 11, §
   });
 
   it('losses that gave back are told as gifts, and the tip after a fusion is to steer', () => {
-    const data: ReportData = { refunds: { seeds: 2, luz: 8 }, losses: { saved: 1, merged: 1, luz: 18 } };
+    const fx = treeEffects({});
+    const { session } = beginSession(freshResearch(), fx);
+    const losses = { fails: 0, refunds: 2, refunded: 8, deaths: 1, merged: 1, burst: 18, saved: 1, learned: 0 };
+    const data = reportDataOf(summaryOf({ datos: computeDatos(session, fx, 0), losses }));
+    expect(data.refunds).toEqual({ seeds: 2, luz: 8 });
+    expect(data.losses).toEqual({ saved: 1, merged: 1, luz: 18 });
+    // Nothing lost, nothing to tell.
+    expect(reportDataOf(summaryOf({ datos: computeDatos(session, fx, 0), losses: { ...losses, refunds: 0, merged: 0, saved: 0 } })).losses).toBeUndefined();
     expect(fingerLines(data, 'es')).toEqual(['Semillas que no prendieron: 2 (te devolví 8 de luz)', 'Salvaste a 1 · se juntaron 1 · su luz: +18']);
     expect(fingerLines(data, 'en')).toEqual(['Seeds that didn’t take: 2 (8 glow back)', 'You saved 1 · 1 merged · their glow: +18']);
     // VELA's line after a fusion: positive, never «Siembra más lejos» (sowing is always safe now).
