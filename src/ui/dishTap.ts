@@ -22,6 +22,7 @@
  * Every point is in CSS px of the dish (overlay coordinates). No allocation: callers pass their scratch.
  */
 import type { Behavior, CreatureState } from '../core/types';
+import { SWEEP_REHIT_S } from '../game/cycleBalance';
 
 /**
  * A tap on empty agar in a session gathers drops and glimmers this close (CSS px, MECANICAS §3.1: «un radio
@@ -29,11 +30,10 @@ import type { Behavior, CreatureState } from '../core/types';
  */
 export const TAP_REACH_PX = 48;
 /**
- * A sweep pulses the same creature again only after this long (s). Mirrors the game's SWEEP_REHIT_S
- * (MECANICAS §5.2, src/game/cycleBalance.ts once PA lands it; the game enforces it too): here it only keeps
- * the glow and the sound from firing on every pointer move.
+ * A sweep pulses the same creature again only after this long (s): the game's SWEEP_REHIT_S (MECANICAS §5.2;
+ * the game enforces it in pulseMany too). Here it keeps the glow and the sound from firing on every pointer move.
  */
-export const SWEEP_REHIT_S = 0.3;
+export { SWEEP_REHIT_S };
 
 /** A drop as drawn this frame (overlay coordinates). */
 export interface TapDrop {
