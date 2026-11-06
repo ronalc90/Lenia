@@ -1457,10 +1457,13 @@ class BiolumaUI implements UI {
         this.chipDy[i] = 0;
         continue;
       }
-      const r = el.getBoundingClientRect();
-      if (r.width < 1) continue;
-      // Its home: where the CSS puts it (the box as drawn, minus this solver's own step).
-      const top = r.top - this.chipDy[i];
+      // Its home: where the CSS lays it out (offsets ignore the transform, so a slide under way never moves it).
+      const p = el.offsetParent as HTMLElement | null;
+      if (!p || el.offsetWidth < 1) continue;
+      const pr = p.getBoundingClientRect();
+      const left = pr.left + p.clientLeft + el.offsetLeft;
+      const r = { left, right: left + el.offsetWidth, width: el.offsetWidth, height: el.offsetHeight };
+      const top = pr.top + p.clientTop + el.offsetTop;
       const rq = this.chipReq;
       rq.x = r.left + r.width / 2;
       rq.y = top + r.height / 2;
