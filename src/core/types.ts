@@ -433,6 +433,11 @@ export interface Settings {
    * session 1 for players who cannot tap often. Off by default.
    */
   autoCollect?: boolean;
+  /**
+   * (game, ADR-031, docs/MECANICAS.md §3.5) Accessibility: "Pulso fácil" / "Easy pulse": a finger held still on a
+   * creature pulses it a few times a second (Egg, Inc.'s "Hold to Hatch"); its card opens from its pill. Off by default.
+   */
+  easyPulse?: boolean;
 }
 
 export interface GameView {
@@ -555,8 +560,26 @@ export interface GameView {
   /**
    * (game, ADR-030, game/contact.ts) Two creatures (ids `a`, `b`) whose outlines will touch in `inS` seconds of
    * dish time (≤ CONTACT_WARN_S) unless the glass deflector turns one: the red warning link.
+   * `actionable` (game, ADR-031): one of the two is a swimmer the finger can steer, so the warning is worded
+   * («¡Van a chocar! Arrastra una»); otherwise only the link is drawn, without alarm text.
    */
-  dangers?: { a: number; b: number; inS: number }[];
+  dangers?: { a: number; b: number; inS: number; actionable?: boolean }[];
+  // ── (game, ADR-031, docs/MECANICAS.md §10.3): the tap is a pulse, sowing is a button ──
+  /**
+   * The tap streak (absent outside a running session). `hits` in a row (0..max), `mult` = 1 + STREAK_STEP·hits
+   * (it multiplies all Luz that comes in while it lasts), `toChispazo` = hits left to the next ¡Chispazo! (every
+   * `every`-th hit), `draining` = no hit for STREAK_GRACE_S: it is going down slowly (never reset at once).
+   */
+  streak?: { hits: number; max: number; mult: number; toChispazo: number; every: number; draining: boolean };
+  /**
+   * Glimmers a ¡Chispazo! threw (grid cells), to be caught with a tap (actions.catchMote). `age` / `life` in seconds of
+   * dish time; one not caught settles as a loose drop. `owner`: the creature that threw it (its colour), if any.
+   */
+  motes?: { id: number; x: number; y: number; age: number; life: number; owner: number | null }[];
+  /** Where the Sembrar button would sow right now (grid cells; null = no room on the dish). */
+  sowSpot?: { x: number; y: number } | null;
+  /** Seed luck on the Sembrar button: failed seeds in a row and how many make the next one sure (SEED_FAIL_PITY). */
+  seedLuck?: { fails: number; need: number };
 }
 
 /** (game, sessions) The lab session clock (docs/CICLO.md §2). */
@@ -765,4 +788,22 @@ export interface GameActions {
   collectPath?(pts: { x: number; y: number }[], rCells: number): number;
   /** (game, ADR-030) Session 1 tutorial: start the clock of a 'ready' session (once; no-op otherwise). */
   startClock?(): void;
+  // ── (game, ADR-031, docs/MECANICAS.md §10.3): the tap is a pulse, sowing is a button ──
+  /**
+   * A tap on a creature: a pulse. It collects its drop and adds `PULSE_MULT · max(PULSE_MIN, PULSE_SECONDS · P)` × the
+   * streak; +1 hit. Returns the Luz it paid (0: not stable, over the rate cap, or no running session). Never writes to
+   * the field.
+   */
+  pulse?(creatureId: number): number;
+  /** A swipe across creatures: one pulse each (SWEEP_REHIT_S apart per creature). Returns the Luz paid. */
+  pulseMany?(creatureIds: number[]): number;
+  /** Catch a ¡Chispazo! glimmer (GameView.motes): one pulse × the streak, +1 hit. Returns the Luz (0 if it is gone). */
+  catchMote?(moteId: number): number;
+  /**
+   * The Sembrar button: sow at the safest free spot, or (with `at`, a drag) at the nearest safe spot to it. Never
+   * refused for spacing; null only when the dish is full, the nursery is busy or the Luz is short (bus says why).
+   */
+  sow?(opts?: { at?: { x: number; y: number }; big?: boolean }): SeedSpec | null;
+  /** The player is steering this swimmer with the finger (for «¡Salvada!» when a warned contact is avoided). */
+  noteSteer?(creatureId: number): void;
 }

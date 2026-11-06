@@ -76,6 +76,19 @@ export interface GameEvents {
   lightCollected: { x: number; y: number; amount: number; by: 'hand' | 'pipette' | 'sweep' };
   /** Luz entered the wallet without a drop (Spark, Encargo, a first step…): the counter shows "+N · reason". */
   luzGift: { amount: number; reason: Text };
+  // ── (game, ADR-031, docs/MECANICAS.md §10.3: the tap is a pulse, every loss gives something back) ──
+  /** A pulse paid `amount` Luz at creature `id`; `hits` = the streak after it; `chispazo` = it was a ¡Chispazo!. */
+  pulse: { id: number; x: number; y: number; amount: number; hits: number; chispazo: boolean };
+  /** A ¡Chispazo! glimmer was caught. */
+  moteCaught: { id: number; x: number; y: number; amount: number };
+  /** A seed that never took gave back what it cost (`free`: it was a free seed, so a free seed came back). */
+  seedRefund: { x: number; y: number; amount: number; free: boolean };
+  /** A stable creature died (glass, fusion, lost shape): `amount` Luz (DEATH_BURST_SECONDS of its light) joined its drop. */
+  deathBurst: { id: number; x: number; y: number; amount: number; cause: 'glass' | 'touch' | 'lost' };
+  /** A warned contact (an `actionable` danger) passed without touching after the player steered one of the two. */
+  contactSaved: { a: number; b: number };
+  /** The first death of this cause ever: its card, and `datos` (FIRST_ACCIDENT_DATOS) for "aprendiste por qué". */
+  accidentLearned: { cause: 'faded' | 'touch' | 'glass' | 'lost' | 'runaway'; datos: number };
 }
 
 type Handler<T> = (payload: T) => void;

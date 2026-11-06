@@ -703,3 +703,44 @@ ADR that supersedes the old one.
     removal. Tokens (step 0): the route colour `collect` (instrument silver, `#c3c8cc` dark / `#55606b` light) and the
     meaning colours `MEANING` → `--bl-cost`, `--bl-gain`, `--bl-off`; `--bl-danger` is the palette's existing role.
   - Save format v2 gains optional session fields (drops, pipettes); a save mid-run sweeps its drops on load.
+
+## ADR-031: The tap is a pulse: tapping never sows, streaks pay, and every loss gives something back
+
+- **Status:** Accepted (2026-11-06, v0.025 plan [`docs/MECANICAS.md`](docs/MECANICAS.md)). The owner approved the
+  plan's three recommendations (§9): sowing moves to a «Sembrar» button with safe auto-placement and a tap on the dish
+  never sows; active tapping earns about ×1.5 mid-game and at most ×3 with the new «✦ Pulso» route maxed, while an
+  idle player never earns less than before; the «¡Chispazo!» is fixed, every 10th hit in a row (not a random crit).
+  Source: owner («es algo aburrido que se mueran sin entender por qué … dar muchos click debería ser emocionante y no
+  un castigo, re plantea las mecánicas»); QA-CLARIDAD-2 §2c, §4. Amends ADR-030 (gestures, Destello reveal), GDD §1,
+  §7, §20, §23.4, §23.5.
+- **Context:** a tap on empty agar sowed a seed: it cost Luz, filled the nursery, and was refused with «Muy cerca: se
+  fundirían» next to other matter. A random seed takes 24 % of the time at Gotero 0 (`SEED_SUCCESS`). Tapping a drop
+  twice gained nothing (a drop holds what its creature made). Tapping fast was risky and never rewarding, and most
+  deaths were the player's own taps.
+- **Decision:**
+  - In sessions a finger on the dish never sows. A tap on a **stable** creature is a *pulse*: it adds
+    `PULSE_MULT · max(PULSE_MIN, PULSE_SECONDS · P)` Luz (`P` = the dish's Luz/s), collects its drop and adds one hit
+    to a **streak**. The streak multiplies all Luz that comes in while it lasts (`1 + STREAK_STEP · n`, capped), drains
+    after `STREAK_GRACE_S` and never resets at once. Every `CHISPAZO_EVERY`-th hit pays ×`CHISPAZO_MULT` and throws
+    glimmers; a glimmer not caught settles as a loose drop. At most `TAP_HITS_MAX_PER_S` hits a second pay.
+  - Sowing is a button: the game picks the safest free spot (`findFreeSpot`), or the nearest safe spot to where the
+    seed is dragged; it is never refused for spacing.
+  - A seed that never becomes stable refunds its price, and after `SEED_FAIL_PITY` failures the next seed is sure. A
+    stable creature that dies of glass, fusion or lost shape adds `DEATH_BURST_SECONDS` of its Luz/s to its drop. The
+    first death of each cause ever pays `FIRST_ACCIDENT_DATOS`. A contact is worded only when the player can act.
+  - The ✦ route is renamed «Pulso» (code id stays `spark`, no save migration) and gains Pulso, Racha larga and
+    Chispazo seguido (visible from session 1); the 7 Destello nodes stay on it.
+  - **No simulation or detector change:** the pulse is drawing plus economy. It writes nothing to the field. Only
+    stable creatures pay, and uniform soup yields 0 under any number of taps.
+- **Consequences:**
+  - New hard gates: «a tap on anything but a stable creature pays nothing», «an idle player never earns less than
+    before».
+  - The session bot gains the `tapper` policy and gates G1–G8 (`docs/MECANICAS.md` §5.5). The kid and the planner sow
+    through `sow()`.
+  - Contracts: optional additions only (`docs/MECANICAS.md` §10.3): `GameActions.pulse`, `pulseMany`, `catchMote`,
+    `sow`, `noteSteer`; `GameView.streak`, `motes`, `sowSpot`, `seedLuck` and `dangers[].actionable`; bus events
+    `pulse`, `moteCaught`, `seedRefund`, `deathBurst`, `contactSaved`, `accidentLearned`; plus `Settings.easyPulse`
+    for «Pulso fácil» (§3.5). `seedAt` stays (Copiadora, bot, classic loop). `TEXT.seedTooClose` stays for the classic
+    loop only.
+  - The one-touch double-tap wait leaves the dish (the big seed is a double tap or a hold on the button).
+  - GDD v1.5 notes «(Corrección v1.5, ADR-031)» at §1, §7, §20, §23.4, §23.5 and a new §23.6 «Muertes que enseñan».
