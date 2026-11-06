@@ -14,8 +14,11 @@
 // Fails on console/page errors, horizontal overflow, a HUD / dish / dock that moves, a session that
 // never ends, a summary or tree that never shows, or a purchase that does not land.
 // ADR-030 (docs/CLARIDAD2.md §2.2–§2.4): the player collects the light by tapping its drops; session 1
-// starts on an empty dish, the first tap plants the first creature where it landed and the clock waits for
-// VELA; the clock does not move while the Bestiary is open.
+// starts on an empty dish, the first seed plants the first creature and the clock waits for VELA; the clock
+// does not move while the Bestiary is open.
+// ADR-031 (docs/MECANICAS.md §6.1): sowing is the Sembrar button (a tap on the dish never sows: a child who taps
+// the dish thirty times in a row never sows a seed); a tap on a creature is a pulse, ten in a row a ¡Chispazo!.
+// Session 1's steps are saved as s1-step<N>-… shots.
 import { spawn, spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -406,7 +409,7 @@ async function runCase(c) {
    */
   let sheets = 0;
   const seenSecrets = new Set();
-  const settle = async (label = '') => {
+  const settle = async (label = '', opts = { shots: true }) => {
     let did = false;
     sheets = 0;
     let drawers = 0;
@@ -425,9 +428,11 @@ async function runCase(c) {
       if (st.phase === 'lines' && (await visible('.sty-box'))) {
         if (!seenScenes.has(st.scene)) {
           seenScenes.add(st.scene);
-          await page.waitForTimeout(500);
-          await shot(`scene-${st.scene}`);
-          await overlapCheck(`scene ${st.scene}`);
+          if (opts.shots) {
+            await page.waitForTimeout(500);
+            await shot(`scene-${st.scene}`);
+            await overlapCheck(`scene ${st.scene}`);
+          }
           say(`VELA scene «${st.scene}»${label ? ` (${label})` : ''}`);
         }
         await tapSel('.sty-box');
@@ -580,6 +585,71 @@ async function runCase(c) {
     }
     return false;
   };
+  /** ADR-031: sow like a player, with the Sembrar button (never a tap on the dish). Returns where the game meant it to go. */
+  const sowOnce = async () => {
+    if (!(await visible('[data-testid="sow"]'))) return false;
+    const spot = await page.evaluate(() => {
+      const v = window.bioluma.game.view();
+      return v.sowSpot ?? (v.dish ? { x: v.dish.cx, y: v.dish.cy } : null);
+    });
+    await tapSel('[data-testid="sow"]');
+    await page.waitForTimeout(250);
+    return spot ?? false;
+  };
+  /**
+   * «A child who taps the dish thirty times in a row never sows a seed» (ADR-031): 30 quick taps all over the glass
+   * (empty agar and creatures alike); not one manual seed may land.
+   */
+  const childTaps = async (label) => {
+    const circle = await page.evaluate(() => {
+      const b = window.bioluma;
+      const dd = b.game.view().dish;
+      if (!dd) return null;
+      const c = b.ui.gridToClient(dd.cx, dd.cy);
+      const e = b.ui.gridToClient(dd.cx + dd.radius, dd.cy);
+      return c && e ? { x: c.x, y: c.y, r: Math.abs(e.x - c.x) } : null;
+    });
+    if (!circle) return problems.push(`[${c.name}] ${label}: no dish to tap`);
+    const before = await page.evaluate(() => ({ seeds: window.__manualSeeds, stats: window.bioluma.game.view().stats.seeds }));
+    for (let i = 0; i < 30; i++) {
+      // A spiral over the glass: the centre, free agar, the rim, whatever lives there.
+      const a = i * 2.39996;
+      const r = circle.r * 0.8 * Math.sqrt((i + 0.5) / 30);
+      await tap(circle.x + Math.cos(a) * r, circle.y + Math.sin(a) * r);
+      await page.waitForTimeout(70);
+    }
+    await page.waitForTimeout(400);
+    const after = await page.evaluate(() => ({ seeds: window.__manualSeeds, stats: window.bioluma.game.view().stats.seeds }));
+    if (after.seeds !== before.seeds || after.stats !== before.stats)
+      problems.push(`[${c.name}] ${label}: a child who tapped the dish 30 times sowed ${after.seeds - before.seeds} seed(s) (ADR-031: a dish tap never sows)`);
+    else say(`${label}: 30 taps in a row on the dish, not one seed sown.`);
+  };
+  /**
+   * Taps on the first stable creature at a child's pace, `gap` ms apart, dispatched in the page: a software-GL test
+   * browser acknowledges each Playwright touch in over a second, further apart than the streak's grace
+   * (STREAK_GRACE_S), so a streak could never build. The dish's own pointer handlers get the same events. Returns the
+   * taps made (it stops when no creature is drawn).
+   */
+  const pulseBurst = (n, gap) =>
+    page.evaluate(
+      async ({ n, gap }) => {
+        const dish = document.querySelector('.bl-dish');
+        let made = 0;
+        for (let i = 0; i < n && dish; i++) {
+          const t = window.bioluma.ui.targetRect('creature');
+          const d = dish.getBoundingClientRect();
+          if (!t || (t.width === d.width && t.height === d.height)) break;
+          const o = { pointerId: 41, pointerType: 'touch', isPrimary: true, button: 0, buttons: 1, clientX: t.x + t.width / 2, clientY: t.y + t.height / 2, bubbles: true, cancelable: true };
+          dish.dispatchEvent(new PointerEvent('pointerdown', o));
+          dish.dispatchEvent(new PointerEvent('pointerup', { ...o, buttons: 0 }));
+          made++;
+          await new Promise((r) => setTimeout(r, gap));
+        }
+        return made;
+      },
+      { n, gap },
+    );
+
   /** A dock button with nothing on top of it for half a second (the phantom-tap guard's 350 ms, QA#17). */
   const dockReady = async (sel) => {
     for (let i = 0; i < 25; i++) {
@@ -623,6 +693,17 @@ async function runCase(c) {
     window.bioluma.bus.on('lightCollected', (e) => {
       const n = window.bioluma.game.view().session?.n ?? 0;
       if (e.by === 'hand') window.__hand[n] = (window.__hand[n] ?? 0) + 1;
+    });
+    // ADR-031: every seed a player's gesture planted (the Sembrar button), to prove a dish tap never sows.
+    window.__manualSeeds = 0;
+    window.__chispazos = 0;
+    window.__maxHits = 0;
+    window.bioluma.bus.on('pulse', (e) => {
+      if (e.chispazo) window.__chispazos++;
+      window.__maxHits = Math.max(window.__maxHits, e.hits);
+    });
+    window.bioluma.bus.on('seed', (e) => {
+      if (e.manual) window.__manualSeeds++;
     });
   });
   await page.waitForTimeout(900);
@@ -689,6 +770,12 @@ async function runCase(c) {
         else say(`Session ${k}: the round dish grew Ø${dishGrewFrom} → Ø${d} before the first tap.`);
         dishGrewFrom = null;
       }
+      // ADR-031: the child again, with the Nevera's creature on the dish and the clock waiting for the first seed:
+      // thirty taps (pulses, ripples) sow nothing and do not start the clock.
+      if (k === 2) {
+        await childTaps(`Session ${k}, before the first seed`);
+        if ((await view()).session?.phase !== 'ready') problems.push(`[${c.name}] session ${k}: taps on the dish started the clock (only a seed does)`);
+      }
       // VELA's request "Mira tu criatura en el Bestiario": the Bestiary from the dock, one species card.
       if (k === 2 && (await visible('.bl-dock [data-tab="bestiary"]'))) {
         await settle(`bestiary ${k}`);
@@ -720,14 +807,20 @@ async function runCase(c) {
       // QA#4 (docs/CLARIDAD2.md §2.4): the very first session starts on an empty dish.
       const before = await page.evaluate(() => window.bioluma.game.view().creatures.filter((x) => x.state !== 'dead').length);
       if (before !== 0) problems.push(`[${c.name}] session 1 started with ${before} creature(s) on the dish (QA#4: the player sows the first one)`);
-      const at = await seedOnce();
-      if (at) {
-        const grid = await page.evaluate(({ x, y }) => {
-          const b = window.bioluma;
-          const d = document.querySelector('.bl-dish').getBoundingClientRect();
-          return b.camera.screenToGrid(x - d.x, y - d.y);
-        }, at);
-        // The planted creature appears where the finger landed (incubating, its body within a radius or two).
+      // §6.1 steps 1–2: VELA's hello is read; her task points at the Sembrar button, «Gratis».
+      await shot('s1-step1-2-sow-button');
+      if (!(await visible('[data-testid="sow"]'))) problems.push(`[${c.name}] session 1: no Sembrar button on the dish (ADR-031)`);
+      // ADR-031: a child taps the empty dish 30 times while VELA waits: nothing is sown, VELA still waits.
+      await childTaps('Session 1, before the first seed');
+      await settle(`seed ${k}`);
+      // While the clock waits the dish may run at the fast pace (no second of the run is spent): the first creature
+      // incubates in a moment, as on a phone, and VELA's tutorial fits in its failsafe (clockGate.ts).
+      await page.evaluate((s) => (window.bioluma.debugTime.scale = s), SCALE);
+      // The tutorial's hold starts with the first seed (clockGate.ts counts its failsafe from there).
+      const held0 = Date.now();
+      const grid = await sowOnce();
+      if (grid) {
+        // The planted creature appears where the button meant it (incubating, its body within a radius or two).
         const near = await page
           .waitForFunction(
             (g) => {
@@ -740,17 +833,68 @@ async function runCase(c) {
             { timeout: 60000, polling: 250 },
           )
           .then(() => true, () => false);
-        if (!near) problems.push(`[${c.name}] QA#4: the first creature is not where the player tapped (${JSON.stringify(grid)})`);
+        if (!near) problems.push(`[${c.name}] QA#4: the first creature is not where the Sembrar button sowed it (${JSON.stringify(grid)})`);
+        else await shot('s1-step3-born');
         const ph = (await view()).session?.phase;
-        // QA#7: the first tap does not start the clock; VELA's line does.
-        if (ph !== 'ready') problems.push(`[${c.name}] QA#7: the first tap started the clock (${ph}); it waits for VELA`);
-        else say('Session 1: the dish was empty; the first tap planted the first creature there; the clock waits for VELA.');
+        // QA#7: the first seed does not start the clock; VELA's line does.
+        if (ph !== 'ready') problems.push(`[${c.name}] QA#7: the first seed started the clock (${ph}); it waits for VELA`);
+        else say('Session 1: the dish was empty; the Sembrar button planted the first creature; the clock waits for VELA.');
+      } else problems.push(`[${c.name}] session 1: the Sembrar button could not be pressed`);
+      // Read VELA's lines (born, alive, «Tócala», «¡Más!», «Tu reloj empieza ahora») until the clock runs; when she
+      // asks to tap the creature, tap it like a child (§6.1 steps 5–6: the pulse pays with the dish still). No scene
+      // screenshots while the clock is held (each costs seconds on software GL; the step shots tell the same).
+      let pulsed = 0;
+      let shotStable = false;
+      let shotStreak = false;
+      const order = [];
+      for (let i = 0; i < 80 && (await view()).session?.phase === 'ready'; i++) {
+        const cur = await page.evaluate(() => {
+          const s = window.bioluma.story.current();
+          return s ? { id: s.scene.id, phase: s.phase } : null;
+        });
+        if (cur && order[order.length - 1] !== cur.id) order.push(cur.id);
+        if (cur?.id === 't_stable' && !shotStable) {
+          shotStable = true;
+          await shot('s1-step4-alive');
+        }
+        if (cur?.id === 't_pulse' && pulsed < 6) {
+          pulsed += await pulseBurst(3, 220);
+          if (pulsed > 0 && pulsed <= 3) await shot('s1-step5-pulse');
+          continue;
+        }
+        if (cur?.id === 't_streak' && !shotStreak) {
+          shotStreak = true;
+          // «¡Más!»: the child keeps tapping, and the chip by the counter counts it.
+          pulsed += await pulseBurst(4, 150);
+          await shot('s1-step6-streak');
+          if (!(await visible('.streak-chip'))) problems.push(`[${c.name}] session 1: «¡Más! Toques seguidos…» with no streak chip by the counter`);
+        }
+        await settle(`seed ${k}`, { shots: false });
+        await page.waitForTimeout(250);
       }
-      // Read VELA's lines (born, alive, «Tu reloj empieza ahora») until the clock runs.
-      for (let i = 0; i < 40 && (await view()).session?.phase === 'ready'; i++) {
-        await settle(`seed ${k}`);
-        await page.waitForTimeout(400);
-      }
+      await page.evaluate((s) => (window.bioluma.debugTime.scale = s), Math.min(SCALE, S1_SCALE));
+      const heldS = (Date.now() - held0) / 1000;
+      const taught = await page.evaluate(() => ['t_pulse', 't_streak', 't_clock'].map((id) => window.bioluma.story.serialize().done.includes(id)));
+      const seenOrder = order.filter((id) => ['t_born', 't_stable', 't_pulse', 't_streak', 't_clock'].includes(id));
+      const inOrder = seenOrder.every((id, i) => i === 0 || ['t_born', 't_stable', 't_pulse', 't_streak', 't_clock'].indexOf(seenOrder[i - 1]) < ['t_born', 't_stable', 't_pulse', 't_streak', 't_clock'].indexOf(id));
+      if (!inOrder) problems.push(`[${c.name}] session 1: the tutorial ran out of order (${seenOrder.join(' → ')})`);
+      if (taught.every(Boolean)) say(`Session 1: VELA taught ${seenOrder.join(' → ')} (${pulsed} pulses), then the clock started.`);
+      // clockGate.ts's failsafe (30 s of wall time from the first seed) starts a held clock on a machine this slow:
+      // what was taught so far must still be in order; the full order is proven by src/story/script.test.ts.
+      else if (heldS > 28) say(`Session 1: the clock's 30-s failsafe started it after ${seenOrder.join(' → ')} (held ${heldS.toFixed(0)} s on software GL).`);
+      else problems.push(`[${c.name}] session 1: the tutorial did not teach pulse → streak → clock (${JSON.stringify(taught)}, held ${heldS.toFixed(0)} s)`);
+      await shot('s1-step7-clock');
+      // §6.1 step 8: ten taps in a row on the creature, a ¡Chispazo! (TAP_HITS_MAX_PER_S: at most 10 a second).
+      const before8 = await page.evaluate(() => window.__chispazos ?? 0);
+      await pulseBurst(11, 110);
+      await shot('s1-step8-chispazo');
+      const chis = (await page.evaluate(() => window.__chispazos ?? 0)) - before8;
+      const maxHits = await page.evaluate(() => window.__maxHits ?? 0);
+      // A streak that reached ten hits and paid no ¡Chispazo! is a bug; one that never got there is a slow machine
+      // (its taps landed further apart than STREAK_GRACE_S).
+      if (chis < 1 && maxHits >= 10) problems.push(`[${c.name}] session 1: the streak reached ${maxHits} hits and paid no ¡Chispazo!`);
+      else if (maxHits < 1 && (await view()).session?.phase === 'running') problems.push(`[${c.name}] session 1: taps on a creature never pulsed it`);
+      else say(`Session 1: a burst of taps on the creature → best streak ${maxHits} hits, ${chis} ¡Chispazo!.`);
     }
     // QA#3 (docs/CLARIDAD2.md §2.12): with the Copiadora bought, the seed pill shows «Copiar»; it lists this
     // world's species and a pick enters the copy mode.
@@ -785,7 +929,9 @@ async function runCase(c) {
     for (let i = 0; i < 4; i++) {
       await settle(`seed ${k}`);
       await collectOnce();
-      await seedOnce();
+      await sowOnce();
+      // §6.1 step 9: the button says its price once it can be paid.
+      if (k === 1 && i === 0 && (await visible('[data-testid="sow"][data-state="ready"]'))) await shot('s1-step9-sow-price');
     }
     await settle(`seed ${k}`);
     v = await view();
@@ -842,7 +988,7 @@ async function runCase(c) {
       const answered = await settle(`run ${k}`);
       // A player collects the ripe light (ADR-030) and keeps sowing while there is room and light.
       if (!answered) await collectOnce();
-      if (!answered && v.creatures < 4) await seedOnce();
+      if (!answered && v.creatures < 4) await sowOnce();
       // Nutrientes when it glows.
       if (boosted < 1 && (await visible('.dock-boost.can'))) {
         const before = await page.evaluate(() => window.bioluma.game.view().boost?.count ?? 0);
@@ -918,6 +1064,7 @@ async function runCase(c) {
     }
     await page.waitForTimeout(500);
     await shot(`s${k}-times-up`);
+    if (k === 1) await shot('s1-step10-times-up');
     v = await view();
     const turns = await page.evaluate(() => window.bioluma.dishStats?.turns ?? 0);
     const hand = await page.evaluate((n) => window.__hand?.[n] ?? 0, k);
@@ -937,6 +1084,15 @@ async function runCase(c) {
     }
     await page.waitForTimeout(4500); // the staged tally
     await shot(`s${k}-summary`);
+    if (k === 1) {
+      await page.evaluate(() => document.querySelector('[data-testid="report-finger"]')?.scrollIntoView({ block: 'center' }));
+      await page.waitForTimeout(300);
+      await shot('s1-step11-summary-finger');
+      // §6.1 step 11: the report tells what the finger did («Tu dedo: 74 toques · mejor racha ×1,2 · 4 Chispazos…»).
+      const finger = await page.$$eval('[data-testid="report-finger"] p', (ps) => ps.map((p) => p.textContent).join(' | ')).catch(() => null);
+      if (!finger || !/(toque|tap)/.test(finger)) problems.push(`[${c.name}] summary 1: no «Tu dedo» line after a session of taps`);
+      else say(`Summary 1: ${finger.trim()}`);
+    }
     await overlapCheck(`summary ${k}`);
     v = await view();
     say(`Summary ${k}: ${v.datos} Datos in the wallet; tap "Ir al Árbol".`);
