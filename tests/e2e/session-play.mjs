@@ -205,7 +205,8 @@ async function runCase(c) {
       for (const m of ms)
         for (const n of m.addedNodes)
           if (n.nodeType === 1 && n.classList?.contains('toast')) {
-            const k = (n.dataset.text || n.textContent || '').trim().slice(0, 60);
+            // Per toast (data-toast-id), not per words: two Journal notes in a row are two toasts.
+            const k = `${n.dataset.toastId ?? '?'} ${(n.dataset.text || n.textContent || '').trim().slice(0, 60)}`;
             (window.__toastIn[k] ||= []).push(performance.now());
           }
     }).observe(document, { childList: true, subtree: true });
@@ -1028,15 +1029,9 @@ async function runCase(c) {
     }
   }
   await shot('end');
-  // A toast enters, may step aside once for VELA and come back: twice. A third entry of the same words within
-  // 20 s is the bounce (separate news with the same words, like two Journal notes minutes apart, are fine).
+  // A toast enters, may step aside once for VELA and come back: twice. A third entry of the same toast is the bounce.
   const toastIn = await page.evaluate(() => window.__toastIn ?? {}).catch(() => ({}));
-  for (const [text, ts] of Object.entries(toastIn))
-    for (let i = 2; i < ts.length; i++)
-      if (ts[i] - ts[i - 2] < 20000) {
-        problems.push(`[${c.name}] the toast «${text}» entered the screen ${ts.length} times, 3 within 20 s (it bounces)`);
-        break;
-      }
+  for (const [key, ts] of Object.entries(toastIn)) if (ts.length > 2) problems.push(`[${c.name}] the toast «${key}» entered the screen ${ts.length} times (it bounces)`);
   await ctx.close();
 }
 

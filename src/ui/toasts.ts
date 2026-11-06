@@ -17,6 +17,8 @@ interface ToastItem {
   group?: { key: string; n: number; text: (n: number) => string };
   /** It already stepped aside once for VELA: it never does a second round trip. */
   yielded?: boolean;
+  /** One number per toast (its element carries it as `data-toast-id`: tests count its entries). */
+  id?: number;
 }
 
 /** What a finger did to a toast (pointerdown → pointerup): `dx`, `dy` in px, `onAction` = on its "Ver" button. */
@@ -126,7 +128,9 @@ export class Toasts {
     this.enqueue({ text: text(1), kind, icon: icon ?? DEFAULT_ICON[kind], onClick, group: { key, n: 1, text } });
   }
 
+  private nextId = 1;
   private enqueue(item: ToastItem): void {
+    item.id = this.nextId++;
     this.queue.push(item);
     while (this.queue.length > 3) this.queue.shift();
     if (!this.current) this.next();
@@ -196,6 +200,7 @@ export class Toasts {
     const see = item.onClick ? h('button', { type: 'button', class: 'toast-see' }, SEE[this.lang()]) : null;
     const el = h('div', { class: `toast k-${item.kind}${see ? ' has-action' : ''}` }, ic(item.icon, 24), h('span', { class: 'tt' }, item.text), see, life);
     el.dataset.text = item.text;
+    el.dataset.toastId = String(item.id ?? 0);
     // Tap anywhere closes it; a swipe up closes it; its «Ver» runs the action (B-10.4).
     let down: { x: number; y: number; id: number; onAction: boolean } | null = null;
     el.addEventListener('pointerdown', (e) => {
