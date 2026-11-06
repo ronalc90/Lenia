@@ -15,6 +15,8 @@ interface ToastItem {
   onClick?: () => void;
   /** Toasts of one group merge into a single counter ("+3 new species"). */
   group?: { key: string; n: number; text: (n: number) => string };
+  /** It already stepped aside once for VELA: it never does a second round trip. */
+  yielded?: boolean;
 }
 
 /** What a finger did to a toast (pointerdown → pointerup): `dx`, `dy` in px, `onAction` = on its "Ver" button. */
@@ -33,6 +35,27 @@ const SWIPE_UP_PX = 24;
  * What a tap or a swipe does to a toast (owner bug, docs/ARTE-PULIDO.md B-10.4): every toast closes
  * when tapped; one with an action runs it only from its own button.
  */
+/**
+ * After the screen was busy (VELA talking, a brief), a waiting toast enters only once it has been calm this
+ * long: «talking» flickers between lines, and a toast that followed it bounced in and out ~100 times in a
+ * run (owner: «los mensajes rebotan y no paran de rebotar»).
+ */
+export const TOAST_CALM_MS = 800;
+
+/** May a waiting toast enter now? Warnings always may; the rest wait for a calm screen. */
+export function toastMayEnter(critical: boolean, now: number, lastBusyAt: number): boolean {
+  return critical || now - lastBusyAt >= TOAST_CALM_MS;
+}
+
+/**
+ * A toast on screen while something starts talking: it stays (nothing talks, or it is a warning), steps
+ * aside to wait once, or, asked a second time, is dropped. It never ping-pongs.
+ */
+export function toastYieldAction(kind: ToastKind, held: boolean, yielded: boolean): 'stay' | 'wait' | 'drop' {
+  if (!toastYields(kind, held)) return 'stay';
+  return yielded ? 'drop' : 'wait';
+}
+
 /** Does a showing toast of this kind step aside while something else talks? Warnings never do. */
 export function toastYields(kind: ToastKind, held: boolean): boolean {
   if (kind === 'warn' || kind === 'bad') return false;
@@ -119,17 +142,38 @@ export class Toasts {
    * «.sty-box × .toast»); warnings stay.
    */
   yieldIfHeld(): void {
+    const held = this.hold();
+    if (held) this.lastBusyAt = performance.now();
     const item = this.currentItem;
     const el = this.current;
-    if (!item || !el || el.classList.contains('out') || !toastYields(item.kind, this.hold())) return;
-    this.queue.unshift(item);
-    while (this.queue.length > 3) this.queue.pop();
+    if (!item || !el || el.classList.contains('out')) return;
+    const act = toastYieldAction(item.kind, held, !!item.yielded);
+    if (act === 'stay') return;
+    if (act === 'wait') {
+      item.yielded = true;
+      this.queue.unshift(item);
+      while (this.queue.length > 3) this.queue.pop();
+    }
     this.dismiss();
   }
+  /** When something last talked over the dish (performance.now() ms): see TOAST_CALM_MS. */
+  private lastBusyAt = -Infinity;
 
   private next(): void {
     let i = 0;
-    if (this.hold()) {
+    const now = performance.now();
+    const held = this.hold();
+    if (held) this.lastBusyAt = now;
+    // Talking just stopped: a non-critical toast waits for a calm screen (TOAST_CALM_MS), so a «talking»
+    // that flickers between lines cannot bounce it in and out.
+    if (!held && this.queue.length && !toastMayEnter(this.critical(this.queue[0]), now, this.lastBusyAt) && !this.queue.some((q) => this.critical(q))) {
+      this.current = null;
+      this.currentItem = null;
+      clearTimeout(this.holdTimer);
+      this.holdTimer = window.setTimeout(() => !this.current && this.next(), Math.max(50, TOAST_CALM_MS - (now - this.lastBusyAt)));
+      return;
+    }
+    if (held) {
       i = this.queue.findIndex((q) => this.critical(q));
       if (i < 0) {
         // Everything waiting is non-critical: try again shortly.
