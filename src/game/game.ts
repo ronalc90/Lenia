@@ -1028,10 +1028,14 @@ export function createGame(deps: GameDeps, save?: string): Game {
     return creatures.some((c) => c.id === id && c.state === 'born');
   }
 
-  /** (ADR-027 v0.027) A started clock waits for the run's planted creatures to live, WAKE_HOLD_MAX_S of dish time at most. */
+  /**
+   * (ADR-027 v0.027) A clock already started (a run reloaded without its dish replants its creatures) waits for the run's
+   * planted creatures to live, WAKE_HOLD_MAX_S of dish time at most. Not session 1's tutorial: VELA says «tu reloj empieza
+   * ahora», and its first creature was never promised alive.
+   */
   function wakeHolding(): boolean {
     const se = ses();
-    return !!se && se.phase === 'running' && wakeHeld < C.WAKE_HOLD_MAX_S && ledger.some(waking);
+    return !!se && se.phase === 'running' && !(tutorial && se.n === 1) && wakeHeld < C.WAKE_HOLD_MAX_S && ledger.some(waking);
   }
 
   /**

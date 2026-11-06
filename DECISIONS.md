@@ -591,8 +591,10 @@ ADR that supersedes the old one.
   name, its pay and the finger's help: contact warnings and steering need a living swimmer). Every one of those
   deaths read «No prendió» (a seed refund) or nothing (the plant cost nothing). Now: (a) a planted creature the
   detector sees forming **holds the nursery** (`seedsGrowing`, «Espera…»), so the first seed — and with it the clock
-  — waits until it lives and nothing is sown into its path while it is young; a clock started otherwise (the
-  tutorial's, a reload) **waits** for it, at most `WAKE_HOLD_MAX_S` = 10 s of dish time (`SessionClockView.wakeHold`).
+  — waits until it lives and nothing is sown into its path while it is young; a clock started otherwise (a run
+  reloaded without its dish replants it) **waits** for it, at most `WAKE_HOLD_MAX_S` = 10 s of dish time
+  (`SessionClockView.wakeHold`, also true while the button waits). Session 1's tutorial keeps v0.024: VELA starts its
+  clock and its first creature was never promised alive.
   A device that finishes the incubation never waits. (b) A seed that formed and then ran into another body or the
   glass is refunded with that cause (`seedRefund.cause`, «Chocó con otra · +4 de vuelta»), said where it went dark;
   only one never seen forming «did not take». (c) A planted creature lost before it lived gives back a free **sure**
