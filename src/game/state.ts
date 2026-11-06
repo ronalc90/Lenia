@@ -156,9 +156,10 @@ export interface GameState {
   /**
    * (sessions cycle) Encargos and objectives finished while no session runs (in the tree, on the start
    * card): their Esencia goes into the next session's wallet (and counts as earned there), each one
-   * counts as an Encargo of that session (+time, +Datos). Cleared when its clock starts.
+   * counts as an Encargo of that session (+time, +Datos). Cleared when its clock starts. `goals`: what each one was,
+   * by name (QA-3 N1: a backlog of 12 steps carried as a bare count read as 12 × «Un encargo»).
    */
-  carry?: { essence: number; encargos: number };
+  carry?: { essence: number; encargos: number; goals?: { kind: 'step' | 'encargo'; name: Text }[] };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -513,7 +514,14 @@ export function validateState(x: unknown): GameState | null {
       if (ses) state.session = ses;
     }
     if (isObj(x.carry)) {
-      const carry = { essence: numOr(x.carry.essence, 0), encargos: Math.floor(numOr(x.carry.encargos, 0, 0, 1000)) };
+      const carry: NonNullable<GameState['carry']> = { essence: numOr(x.carry.essence, 0), encargos: Math.floor(numOr(x.carry.encargos, 0, 0, 1000)) };
+      if (Array.isArray(x.carry.goals)) {
+        const goals = x.carry.goals.slice(0, 64).flatMap((g) => {
+          if (!isObj(g) || !isObj(g.name) || typeof g.name.es !== 'string' || typeof g.name.en !== 'string') return [];
+          return [{ kind: g.kind === 'step' ? ('step' as const) : ('encargo' as const), name: { es: g.name.es.slice(0, 120), en: g.name.en.slice(0, 120) } }];
+        });
+        if (goals.length) carry.goals = goals;
+      }
       if (carry.essence > 0 || carry.encargos > 0) state.carry = carry;
     }
     return state;

@@ -174,7 +174,7 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
       if (carry > 0)
         gifts.push(
           `<span class="ss-gift" style="--c:var(--bl-accent)">${treeIcon('drop', 20)}${esc(
-            SESSION_UI.startCarry(fmt(start.startEssence, l), fmt(carry, l), fmt(start.startEssence + carry, l))[l],
+            SESSION_UI.startCarry(fmt(start.startEssence, l), fmt(carry, l), fmt(start.startEssence + carry, l), start.carryEncargos ?? 1)[l],
           )}</span>`,
         );
       else if (start.startEssence > 0)

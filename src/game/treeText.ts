@@ -529,9 +529,12 @@ export const SESSION_UI = {
   /** VELA's tip on the summary after fusions ("Hoy se juntaron 2"). */
   mergedTip: (n: number) => t(`Hoy se juntaron ${n}. Siembra más lejos de las demás.`, `${n} merged today. Sow further from the others.`),
   /** Start card: where every Luz of the wallet comes from (QA-CLARIDAD #26). */
-  startCarry: (base: string, extra: string, total: string) =>
-    // An Encargo met between sessions (in the Tree, the Bestiary…): said without naming the screen.
-    t(`${base} luz + ${extra} de un encargo que cumpliste entre sesiones = ${total}`, `${base} glow + ${extra} from a request you finished between sessions = ${total}`),
+  startCarry: (base: string, extra: string, total: string, n = 1) =>
+    // An Encargo met between sessions (in the Tree, the Bestiary…): said without naming the screen. `n` =
+    // SessionStart.carryEncargos (QA-3 N1: 12 steps cleared at once read «de un encargo»).
+    n > 1
+      ? t(`${base} luz + ${extra} de ${n} encargos que cumpliste entre sesiones = ${total}`, `${base} glow + ${extra} from ${n} requests you finished between sessions = ${total}`)
+      : t(`${base} luz + ${extra} de un encargo que cumpliste entre sesiones = ${total}`, `${base} glow + ${extra} from a request you finished between sessions = ${total}`),
   /** Start card (Semillas de regalo): "1 semilla gratis · las demás, 4 de luz". */
   freeSeeds: (n: number, price: string) =>
     t(`${plural(n, 'semilla gratis', 'semillas gratis')} · las demás, ${price} de luz`, `${plural(n, 'free seed', 'free seeds')} · others ${price} glow`),

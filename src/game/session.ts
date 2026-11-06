@@ -262,6 +262,8 @@ export interface SessionStart {
   fresh: string[];
   /** (ADR-030, QA-CLARIDAD #26) Luz in the wallet from an Encargo met between sessions (on top of startEssence). */
   carry?: number;
+  /** (QA-3 N1) How many Encargos / steps that Luz came from («288 de 12 encargos», not «de un encargo»). */
+  carryEncargos?: number;
   /** (ADR-030, QA-CLARIDAD #36) Species still to discover in each open world ("Te falta 1 por descubrir"). */
   worldsLeft?: Record<string, number>;
 }
@@ -907,5 +909,8 @@ export function validateSession(x: unknown): SessionState | null {
 
 function validateLosses(x: Record<string, unknown>): LossStats {
   const int = (v: unknown) => Math.floor(num(v, 0, 0, 1e9));
-  return { fails: int(x.fails), refunds: int(x.refunds), refunded: num(x.refunded), deaths: int(x.deaths), merged: int(x.merged), burst: num(x.burst), saved: int(x.saved), learned: int(x.learned) };
+  const out: LossStats = { fails: int(x.fails), refunds: int(x.refunds), refunded: num(x.refunded), deaths: int(x.deaths), merged: int(x.merged), burst: num(x.burst), saved: int(x.saved), learned: int(x.learned) };
+  if (int(x.crashed) > 0) out.crashed = int(x.crashed);
+  if (int(x.plantsLost) > 0) out.plantsLost = int(x.plantsLost);
+  return out;
 }

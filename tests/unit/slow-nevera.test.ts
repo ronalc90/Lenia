@@ -17,7 +17,7 @@ function slowRun(incubated: number, seed = 1) {
   const g = d.game;
   g.actions.startClock!();
   d.run(0.5, 30);
-  g.actions.endSessionNow();
+  g.actions.endSessionNow!();
   d.run(0.2, 30);
   const r = g.state.research as unknown as { levels: Record<string, number>; sessions: number; fridge: string[]; world: string };
   r.levels = { lab: 2, clock: 3, fridge: 1, dropper: 2, culture: 3, pipette: 2, notebook: 1, dish: 1, worldCold: 1, worldGyro: 1, pulse: 3 };
@@ -26,7 +26,7 @@ function slowRun(incubated: number, seed = 1) {
   r.world = 'classic';
   const plants: number[] = [];
   d.bus.on('creatureBorn', ({ id }) => plants.length === 0 && plants.push(id));
-  g.actions.startSession();
+  g.actions.startSession!();
   d.flush();
   d.preincubate(incubated);
   return { d, g, plant: () => plants[0] };

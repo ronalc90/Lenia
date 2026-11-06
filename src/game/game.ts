@@ -2437,7 +2437,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       giftLight(x, reason);
       return;
     }
-    s.carry = { essence: (s.carry?.essence ?? 0) + x, encargos: s.carry?.encargos ?? 0 };
+    s.carry = { ...(s.carry ?? { encargos: 0 }), essence: (s.carry?.essence ?? 0) + x };
     if (se?.phase === 'ready') {
       s.essence += x;
       if (sessionStartInfo) sessionStartInfo.carry = s.carry.essence;
@@ -2451,8 +2451,10 @@ export function createGame(deps: GameDeps, save?: string): Game {
       sessionEvents(noteEncargo(se, fx, goal));
       return;
     }
-    s.carry = { essence: s.carry?.essence ?? 0, encargos: (s.carry?.encargos ?? 0) + 1 };
-    if (se?.phase === 'ready') sessionEvents(noteEncargo(se, fx, goal));
+    // QA-3 N1: each one waits with its name (a bare count read as «Un encargo» every time).
+    const named = goal ?? { kind: 'encargo' as const, name: SESSION_UI.encargoName };
+    s.carry = { essence: s.carry?.essence ?? 0, encargos: (s.carry?.encargos ?? 0) + 1, goals: [...(s.carry?.goals ?? []), { kind: named.kind, name: named.name }] };
+    if (se?.phase === 'ready') sessionEvents(noteEncargo(se, fx, named));
   }
 
   /** A first step of the game's own chain, by name (the summary's "Primeros pasos", QA-CLARIDAD #9). */
@@ -2614,7 +2616,13 @@ export function createGame(deps: GameDeps, save?: string): Game {
     const b = beginSession(s.research!, fx);
     s.research = b.research;
     s.session = b.session;
-    sessionStartInfo = { ...b.start, fresh: again ? [...new Set([...prevFresh, ...b.start.fresh])] : b.start.fresh, carry: s.carry?.essence ?? 0, worldsLeft: left };
+    sessionStartInfo = {
+      ...b.start,
+      fresh: again ? [...new Set([...prevFresh, ...b.start.fresh])] : b.start.fresh,
+      carry: s.carry?.essence ?? 0,
+      carryEncargos: s.carry?.encargos ?? 0,
+      worldsLeft: left,
+    };
     lastSummary = null;
     const se = b.session;
     const first = se.n === 1;
@@ -2622,7 +2630,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
     // Every session's first drop takes (SESSION_SURE_SEEDS); the very first session also gets the
     // tutorial's free seeds (QA2 H-04).
     s.charges = { free: first ? Math.max(fx.freeSeeds, B.START_FREE_SEEDS) : fx.freeSeeds, guaranteed: first ? Math.max(B.START_GUARANTEED_SEEDS, C.FIRST_SESSION_SURE_SEEDS) : C.SESSION_SURE_SEEDS };
-    for (let i = 0; i < (s.carry?.encargos ?? 0); i++) noteEncargo(se, fx);
+    // What waited for this session, each by its name (QA-3 N1); an older save's bare count stays «Un encargo».
+    for (let i = 0; i < (s.carry?.encargos ?? 0); i++) noteEncargo(se, fx, s.carry?.goals?.[i]);
     s.buffs = [];
     s.goldenTimer = -1;
     s.autoSeedTimer = 0;
