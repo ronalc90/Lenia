@@ -223,3 +223,32 @@ describe('the pulse layer (fx/pulse.ts)', () => {
     expect(L.capacity()).toEqual({ glows: PULSE_FX.maxGlows, nums: PULSE_FX.maxNums, motes: PULSE_FX.maxMotes, bursts: PULSE_FX.maxBursts, marks: PULSE_FX.maxMarks });
   });
 });
+
+describe('the ¡Chispazo! label never sits under another message (integrator review of mb-shots/3-chispazo)', () => {
+  it('it goes through the shared label placer: off the Momento brief', async () => {
+    const { placeLabel } = await import('../labelPlace');
+    const L = layer();
+    L.paid(1, 50, 50, 7, 10, true, 0);
+    // Where it would go on its own: above creature 1 (150, 150), r 30. The brief covers exactly that band.
+    const brief = [0, 60, 400, 125];
+    const placed: { x: number; y: number; w: number; h: number }[] = [];
+    const placer = (x: number, y: number, w: number, h: number, gap: number, slot: number) => {
+      const out = { x: 0, y: 0, slot: -1, clear: false };
+      const ok = placeLabel({ x, y, w, h, gap, slot, bounds: { l: 0, t: 0, r: 400, b: 600 } }, { boxes: brief, nBoxes: 1, discs: [], nDiscs: 0 }, out);
+      if (!ok) return null;
+      placed.push({ x: out.x, y: out.y, w, h });
+      return out;
+    };
+    const at: { t: string; x: number; y: number }[] = [];
+    const ctx = fakeCtx();
+    (ctx as unknown as { fillText: (t: string, x: number, y: number) => void }).fillText = (t, x, y) => void at.push({ t, x, y });
+    L.drawText(ctx, 0.2, false, 1, map, creatures, false, 400, null, placer);
+    const label = at.find((a) => a.t.startsWith('¡CHISPAZO!'))!;
+    expect(label).toBeTruthy();
+    expect(placed.length).toBe(1);
+    const p = placed[0];
+    const overlaps = p.x - p.w / 2 < brief[2] && p.x + p.w / 2 > brief[0] && p.y - p.h / 2 < brief[3] && p.y + p.h / 2 > brief[1];
+    expect(overlaps).toBe(false);
+    expect(label.y).toBeCloseTo(p.y);
+  });
+});

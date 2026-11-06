@@ -225,7 +225,16 @@ interface Burst {
   text: string;
   /** Width of `text` at chispazoPx (measured once, when first drawn): the label is kept on screen. */
   tw: number;
+  /** The shared label placer's slot last frame (-1: none yet), so the label keeps its side. */
+  slot: number;
 }
+
+/**
+ * Where a label of w × h px wants to go around anchor (x, y) at `gap` px: the overlay's shared placer
+ * (src/ui/labelPlace.ts: off every other message, the Momento brief included, and off bodies while there is room).
+ * Returns its centre and slot, or null when no slot is free (then it keeps its own place).
+ */
+export type BurstPlacer = (x: number, y: number, w: number, h: number, gap: number, slot: number) => { x: number; y: number; slot: number } | null;
 
 interface Mote {
   /** In use (live, or playing its catch / settle). */
@@ -310,7 +319,7 @@ export class PulseLayer {
   constructor() {
     this.glows = Array.from({ length: PULSE_FX.maxGlows }, () => ({ on: false, id: 0, gx: 0, gy: 0, t0: 0, charge: 0 }));
     this.nums = Array.from({ length: PULSE_FX.maxNums }, () => ({ on: false, id: 0, gx: 0, gy: 0, t0: 0, amount: 0, text: '', size: PULSE_FX.numPx, jitter: 0, free: false, fx: 0, fy: 0, hue: DEFAULT_HUE }));
-    this.bursts = Array.from({ length: PULSE_FX.maxBursts }, () => ({ on: false, id: 0, gx: 0, gy: 0, t0: 0, text: '', tw: 0 }));
+    this.bursts = Array.from({ length: PULSE_FX.maxBursts }, () => ({ on: false, id: 0, gx: 0, gy: 0, t0: 0, text: '', tw: 0, slot: -1 }));
     this.motes = Array.from({ length: PULSE_FX.maxMotes }, () => ({
       used: false,
       live: false,
@@ -403,6 +412,7 @@ export class PulseLayer {
       b.t0 = now;
       b.text = this.burstText(amount);
       b.tw = 0;
+      b.slot = -1;
       // The label says what it paid: this creature's numbers in flight make way for it.
       if (id >= 0) for (const n of this.nums) if (n.on && !n.free && n.id === id) n.on = false;
       return true;
@@ -845,6 +855,7 @@ export class PulseLayer {
     light: boolean,
     viewW = Infinity,
     liftOf: ((id: number) => number) | null = null,
+    placer: BurstPlacer | null = null,
   ): void {
     const w = this.where;
     ctx.textAlign = 'center';
@@ -907,7 +918,14 @@ export class PulseLayer {
       let y = w.y - w.r - 34 - rise - (liftOf ? liftOf(b.id) : 0);
       if (y < PULSE_FX.labelTopPx) y = w.y + w.r + 30 + rise;
       const half = b.tw / 2 + 8;
-      const x = viewW > 2 * half ? Math.min(viewW - half, Math.max(half, w.x)) : w.x;
+      let x = viewW > 2 * half ? Math.min(viewW - half, Math.max(half, w.x)) : w.x;
+      // With the overlay's placer, the label takes the shared slots: never under the Momento brief or a label.
+      const at = placer ? placer(w.x, w.y, b.tw * s + 16, PULSE_FX.chispazoPx * s + 10, w.r + 18 + rise, b.slot) : null;
+      if (at) {
+        b.slot = at.slot;
+        x = at.x;
+        y = at.y;
+      }
       // Over bright matter a fine dark edge keeps it legible (AA on any culture).
       ctx.lineWidth = 3;
       ctx.strokeStyle = 'rgba(8,10,14,0.8)';

@@ -598,9 +598,9 @@ export class Overlay {
     if (this.pulseLang !== this.lang) {
       const lang = this.lang;
       this.pulseLang = lang;
-      // Whole numbers on the dish (docs/CLARIDAD2.md §2.13); a sliver below 1 keeps one decimal.
+      // Whole numbers on the dish (docs/CLARIDAD2.md §2.13): a pulse pays at least PULSE_MIN (1), never «+0,4».
       this.pulses.setText(
-        (n) => '+' + fmt(n, lang),
+        (n) => '+' + fmt(Math.max(1, Math.round(n)), lang),
         (n) => TEXT.chispazo(n)[lang],
         lang,
       );
@@ -1338,7 +1338,7 @@ export class Overlay {
     this.drawFloats();
     ctx.restore();
     // The finger's numbers and the Chispazo label: unclipped like the labels (a creature at the rim keeps them).
-    this.pulses.drawText(ctx, this.now, rm, dishFx.matterFade, this.map, this.resolveCreature, this.light, this.w, this.pillLift);
+    this.pulses.drawText(ctx, this.now, rm, dishFx.matterFade, this.map, this.resolveCreature, this.light, this.w, this.pillLift, this.placeBurst);
     // Pipettes rest on the rim, half over the glass: drawn unclipped, above the dish's own light.
     if (round && this.pipettes.count) this.pipettes.draw(ctx, this.atlas, nowMs, rm, dcx, dcy, round.radius * scale, this.dpr, dishFx.matterFade);
     if (this.guide.on || this.guide.out >= 0) this.drawGuide(rm);
@@ -1671,11 +1671,12 @@ export class Overlay {
    */
   deathBurst(e: GameEvents['deathBurst']): void {
     this.drops.flareAt(e.x, e.y, this.now);
-    if (!(e.amount > 0)) return;
+    // Below 1 the flare says it: no «+0,4» in the main flow (docs/CLARIDAD2.md §2.13).
+    if (!(e.amount >= 1)) return;
     let hue: number = DROP_FX.defaultHue;
     for (const g of this.ghosts) if (g.on && Math.hypot(g.x - e.x, g.y - e.y) < 8) hue = g.hue;
     const lang = this.lang;
-    const f = this.pushFloat(e.x, e.y, 1.3, '+' + fmt(e.amount >= 1 ? Math.round(e.amount) : e.amount, lang), hueHex(hue, 82), INCOME_PX + 3, this.reduceMotion ? 0 : 30, false, 0);
+    const f = this.pushFloat(e.x, e.y, 1.3, '+' + fmt(Math.round(e.amount), lang), hueHex(hue, 82), INCOME_PX + 3, this.reduceMotion ? 0 : 30, false, 0);
     f.lift = 10;
   }
 
@@ -2116,6 +2117,31 @@ export class Overlay {
     }
     return true;
   }
+
+  /**
+   * The ¡Chispazo! label through the shared placer (./labelPlace), like every other message: the Momento brief and
+   * the labels already placed this frame are kept clear, and its box is taken so the later ones keep off it.
+   */
+  private readonly placeBurst = (x: number, y: number, w: number, h: number, gap: number, slot: number): { x: number; y: number; slot: number } | null => {
+    const rq = this.labelReq;
+    rq.x = x;
+    rq.y = y;
+    rq.w = w;
+    rq.h = h;
+    rq.gap = gap;
+    rq.bounds.l = 6;
+    rq.bounds.t = 6;
+    rq.bounds.r = this.w - 6;
+    rq.bounds.b = this.h - 6;
+    rq.slot = slot;
+    const ob = this.labelObs;
+    ob.nBoxes = this.occN;
+    ob.nDiscs = this.bodyN;
+    const at = this.labelOut;
+    if (!placeLabel(rq, ob, at)) return null;
+    this.occupy(at.x - w / 2, at.y - h / 2, at.x + w / 2, at.y + h / 2);
+    return at;
+  };
 
   private occupy(x0: number, y0: number, x1: number, y1: number): void {
     if (this.occN * 4 >= this.occ.length) return;
