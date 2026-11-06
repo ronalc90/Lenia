@@ -67,3 +67,48 @@ describe('living camera (trauma shake)', () => {
     expect(Math.abs(s.zoom - 1)).toBeLessThan(0.0005);
   });
 });
+
+/** ADR-031, MECANICAS §3.2: the ¡Chispazo! is felt (a small kick of the dish), never makes you dizzy. */
+describe('the Chispazo kick', () => {
+  it('is felt under a tapping finger, stays under 2 px and settles within 300 ms', () => {
+    const s = new Shake();
+    s.kick(false);
+    let worst = 0;
+    let t = 0;
+    // The finger is on the glass for most of a fast run of taps: the kick still lands.
+    for (; t < 0.3; t += 1 / 240) {
+      s.update(1 / 240, true);
+      worst = Math.max(worst, Math.hypot(s.x, s.y));
+    }
+    expect(worst).toBeGreaterThan(0.8);
+    expect(worst).toBeLessThanOrEqual(SHAKE.kickPx + 1e-9);
+    expect(Math.hypot(s.x, s.y)).toBeLessThan(0.05);
+    expect(Math.abs(s.zoom - 1)).toBeLessThan(0.0005);
+  });
+
+  it('never kicks with Reduce motion', () => {
+    const s = new Shake();
+    s.kick(true);
+    for (let f = 0; f < 30; f++) {
+      s.update(1 / 60, false);
+      expect(Math.hypot(s.x, s.y)).toBeLessThan(0.1); // only the breathing, no kick
+    }
+    expect(s.kicking).toBe(false);
+  });
+
+  it('a Chispazo shakes less than the Destello', () => {
+    expect(SHAKE.chispazo).toBeLessThan(SHAKE.spark);
+    expect(SHAKE.chispazo).toBeCloseTo(0.15, 9);
+  });
+
+  it('ten Chispazos in a row never add up past the cap', () => {
+    const s = new Shake();
+    let worst = 0;
+    for (let f = 0; f < 240; f++) {
+      if (f % 24 === 0) s.kick(false);
+      s.update(1 / 240, true);
+      worst = Math.max(worst, Math.hypot(s.x, s.y));
+    }
+    expect(worst).toBeLessThanOrEqual(SHAKE.kickPx + 1e-9);
+  });
+});
