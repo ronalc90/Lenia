@@ -5823,6 +5823,7 @@ button.chip {
   font-weight: 700;
 }
 .sow-btn .sow-sub {
+  white-space: nowrap;
   font-size: var(--bl-fs-small);
   color: var(--c-essence);
   font-variant-numeric: tabular-nums;
@@ -5918,6 +5919,10 @@ button.chip {
 }
 .bl.sow-on .copy-btn {
   bottom: 86px;
+}
+/* A gesture hint sits above the Sembrar button and its price chip (64 px + the chip), not on them. */
+.bl.sow-on .dish-hint.small {
+  bottom: 118px;
 }
 .bl.sow-on .copy-strip {
   bottom: 142px;
