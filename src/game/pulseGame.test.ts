@@ -187,4 +187,14 @@ describe('the pulse in the game (ADR-031)', () => {
     expect(sum.finger).toMatchObject({ taps: 25 + 2, chispazos: 2, motesCaught: 2, motesThrown: 2 * C.CHISPAZO_MOTES });
     expect(sum.finger!.bestMult).toBeCloseTo(1 + C.STREAK_STEP * C.STREAK_HITS_BY_LEVEL[0], 9);
   });
+
+  it('Settings can turn on «Pulso fácil» and it survives a save', () => {
+    const t = tapGame();
+    t.g.actions.setSetting('easyPulse', true);
+    expect(t.g.state.settings.easyPulse).toBe(true);
+    const again = createGame({ bus: t.bus, rng: seededRng(2), cycle: 'sessions' }, t.g.serialize());
+    expect(again.state.settings.easyPulse).toBe(true);
+    t.g.actions.setSetting('easyPulse', false);
+    expect(t.g.state.settings.easyPulse).toBe(false);
+  });
 });

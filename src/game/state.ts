@@ -418,6 +418,7 @@ function settings(x: unknown): Settings {
     quality: QUALITIES.includes(x.quality as Quality) ? (x.quality as Settings['quality']) : d.quality,
     analytics: bool(x.analytics, d.analytics),
     ...(x.autoCollect === true ? { autoCollect: true } : {}),
+    ...(x.easyPulse === true ? { easyPulse: true } : {}),
   };
 }
 
