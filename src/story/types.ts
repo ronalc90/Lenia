@@ -124,7 +124,9 @@ export type CounterKey =
   | 'prints'
   | 'offline'
   /** (ADR-030) Drops of Luz collected by the player's own hand (tap or swipe). */
-  | 'collected';
+  | 'collected'
+  /** (ADR-031) Taps that counted as a hit of the streak (bus 'pulse'): a pulse, a drop, a glimmer. */
+  | 'pulses';
 
 export const COUNTER_KEYS: readonly CounterKey[] = [
   'seeds',
@@ -148,6 +150,7 @@ export const COUNTER_KEYS: readonly CounterKey[] = [
   'prints',
   'offline',
   'collected',
+  'pulses',
 ];
 
 /** Read-only context handed to scene conditions. */

@@ -314,8 +314,10 @@ export const SCENES: SceneDef[] = [
     when: (c) => firstSession(c) && clockWaits(c) && pulseLesson(c),
     // Her line moves on by itself: the step ends on three taps on the creature, not on a tap on her box (§6.1).
     lines: [vela('happy', TEXT.tutPulse.es, TEXT.tutPulse.en, { target: ['creature', 'dish'], auto: 1.5 })],
+    // Taps that pulsed since she started, counted even while she talks (the streak itself may drain meanwhile).
     wait: {
-      until: (c) => (c.v.streak?.hits ?? 0) >= PULSE_LESSON_HITS,
+      event: 'pulses',
+      count: PULSE_LESSON_HITS,
       text: t('Toca tu criatura.', 'Tap your creature.'),
       target: ['creature', 'dish'],
       timeoutSec: 6,

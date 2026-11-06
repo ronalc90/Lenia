@@ -726,6 +726,8 @@ export function createStory(deps: StoryDeps): Story {
   on('lightCollected', ({ by }) => {
     if (by === 'hand') bump('collected');
   });
+  // ADR-031: the session-1 tutorial counts the taps that pulsed, also while VELA is still talking.
+  on('pulse', () => bump('pulses'));
 
   // ───────────── boot ─────────────
 

@@ -200,7 +200,8 @@ function playSession1(pulse: boolean) {
     step(0.5);
     const cur = story.current();
     if (cur?.phase === 'lines') story.advance();
-    else if (pulse && cur?.scene.id === 't_pulse' && cur.phase === 'wait') set({ streak: { ...v.streak!, hits: 3, mult: 1.075, toChispazo: 7 } });
+    else if (pulse && cur?.scene.id === 't_pulse' && cur.phase === 'wait')
+      for (let h = 1; h <= 3; h++) bus.emit('pulse', { id: 1, x: 116, y: 116, amount: 1, hits: h, chispazo: false });
   }
   step(1);
   return { seen, task, phase: v.session!.phase, holds: story.holdsClock() };
@@ -232,6 +233,19 @@ describe('session 1 teaches the Sembrar button and the pulse (ADR-031, docs/MECA
     expect(lines.join(' ')).not.toMatch(/Toca la placa/);
     // The pulse is the creature's: VELA's «Tócala» points at it.
     expect(r.seen.find((x) => x.id === 't_pulse')!.target[0]).toBe('creature');
+  });
+
+  it('three taps while VELA still says «Tócala» end the step at once (the streak may drain meanwhile)', async () => {
+    const v = s1({ creatures: [creature(1, 'stable', 116, 116)], session: { ...s1().session!, tutorialHold: true } });
+    const bus = new Bus<GameEvents>();
+    const story = createStory({ bus, getView: () => v, storage: memoryStorage(), now: () => 1_000_000, random: () => 0.99, pollMs: 0 });
+    story.play('t_pulse');
+    expect(story.current()?.phase).toBe('lines');
+    // The child taps while she is still talking; the streak is gone again by the time her line ends.
+    for (let h = 1; h <= 3; h++) bus.emit('pulse', { id: 1, x: 116, y: 116, amount: 1, hits: 1, chispazo: false });
+    await Promise.resolve();
+    story.tick();
+    expect(story.serialize().done).toContain('t_pulse');
   });
 
   it('a game without the pulse is never taught it (the clock comes right after «¡Vive!»)', () => {
