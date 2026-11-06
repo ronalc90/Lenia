@@ -60,7 +60,8 @@ const PLAN: Record<string, [string, number, number, number][]> = {
   discovery: [['notebook', 1, 3, 2], ['print', 2, 1, 2], ['cataloguing', 3, 5, 1.5], ['archive', 3, 2, 2], ['microscope', 3, 2, 2], ['discoBonus', 4, 2, 2], ['rareSpores', 4, 1, 2], ['mutations', 4, 1, 2], ['encyclopedia', 5, 3, 2]],
   // Plan rings and node count; the world order follows the measured yield (docs/CICLO.md §4.3).
   worlds: [['worldCold', 1, 1, 2], ['worldGyro', 2, 1, 2], ['worldShields', 3, 1, 2], ['worldHelix', 3, 1, 2], ['worldLegs', 4, 1, 2], ['worldGiants', 5, 1, 2]],
-  spark: [['spark', 1, 3, 2], ['sparkLife', 2, 2, 2], ['sparkTime', 2, 2, 2], ['sparkFirst', 3, 1, 2], ['sparkGift', 3, 3, 2], ['sparkDatos', 3, 2, 2], ['sparkMutagen', 4, 1, 2]],
+  // ✦ Pulso (ADR-031): the Destello's 7 nodes with Pulso, Racha larga and Chispazo seguido woven in by ring.
+  spark: [['pulse', 1, 3, 2], ['spark', 1, 3, 2], ['streakLong', 2, 2, 2], ['sparkLife', 2, 2, 2], ['sparkTime', 2, 2, 2], ['chispazoOften', 3, 2, 2], ['sparkFirst', 3, 1, 2], ['sparkGift', 3, 3, 2], ['sparkDatos', 3, 2, 2], ['sparkMutagen', 4, 1, 2]],
   // ↓ Recoger (ADR-030, docs/CLARIDAD2.md §2.2.4): the pipettes.
   collect: [['pipette', 1, 3, 2], ['pipetteFast', 2, 3, 2], ['dropBig', 2, 3, 2], ['pipetteMore', 3, 5, 1.5], ['pipetteMagnet', 3, 2, 2], ['pipetteMaster', 4, 1, 2]],
 };
@@ -70,7 +71,7 @@ describe('research tree data: 8 straight routes', () => {
     // ↓ Recoger closes the star in the free direction (docs/CLARIDAD2.md §2.2.4): straight down.
     expect(BRANCHES).toEqual(['time', 'dropper', 'dish', 'life', 'collect', 'discovery', 'worlds', 'spark']);
     expect(branchAngle('collect')).toBe(90);
-    expect(TREE_NODES.filter((n) => n.id !== 'lab')).toHaveLength(59);
+    expect(TREE_NODES.filter((n) => n.id !== 'lab')).toHaveLength(62);
     for (const b of BRANCHES) {
       const got = routeNodes(b).map((n) => [n.id, n.ring, n.maxLevel, n.growth]);
       expect(got, b).toEqual(PLAN[b]);
@@ -473,10 +474,22 @@ describe('the Destello route waits for its first Spark (QA-CLARIDAD #13)', () =>
   it('the Destello route is hidden until session 3 ends', () => {
     const before = treeStates(ctx({}, 1e6, C.SPARK_FROM_SESSION - 2, 1));
     expect(before.get('spark')).toMatchObject({ status: 'mystery', block: 'later', sessionNeeded: C.SPARK_FROM_SESSION, affordable: false });
-    const after = treeStates(ctx({}, 1e6, C.SPARK_FROM_SESSION - 1, 1));
+    const after = treeStates(ctx({ pulse: 1 }, 1e6, C.SPARK_FROM_SESSION - 1, 1));
     expect(after.get('spark')).toMatchObject({ status: 'available', block: null, sessionNeeded: null });
     // Other routes are not touched.
     expect(before.get('clock')!.affordable).toBe(true);
+  });
+
+  it('the ✦ Pulso nodes are on sale from session 1, and read as taps (ADR-031)', () => {
+    const s1 = treeStates(ctx({}, 1e6, 0, 0));
+    expect(s1.get('pulse')).toMatchObject({ status: 'available', block: null, sessionNeeded: null, cost: C.TREE_RING_START[1] });
+    expect(s1.get('spark')!.block).toBe('later');
+    expect(beforeAfter({}, 'pulse')).toMatchObject({ before: { es: 'Un toque ×1' }, after: { es: 'Un toque ×1,5', en: 'A tap ×1.5' } });
+    expect(beforeAfter(ownPath('streakLong'), 'streakLong')).toMatchObject({ before: { es: 'La racha llega a ×1,5' }, after: { es: 'La racha llega a ×1,75' } });
+    expect(beforeAfter({}, 'chispazoOften')).toMatchObject({ before: { es: 'Un Chispazo cada 10 toques' }, after: { es: 'Un Chispazo cada 8 toques' } });
+    // Racha larga waits behind Destello frecuente like any node of the route, but never for the first Spark.
+    const s4 = treeStates(ctx({ pulse: 1, spark: 1 }, 1e6, 0, 0));
+    expect(s4.get('streakLong')).toMatchObject({ status: 'available', sessionNeeded: null });
   });
 
   it('Destello frecuente reads as the first Spark coming sooner too', () => {

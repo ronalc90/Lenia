@@ -263,11 +263,15 @@ describe('the pulse-pass texts exist in both languages before anyone wires them 
       expect(x.es, 'new texts say Luz, never Esencia').not.toMatch(/esencia|essence|undefined|NaN/i);
       expect(x.en).not.toMatch(/esencia|essence|undefined|NaN/i);
     }
-    expect(TEXT.streak(1.25)).toEqual({ es: 'Racha ×1,25', en: 'Streak ×1.25' });
+    // CLARIDAD2 §2.13: no two-decimal multipliers in the main flow (the exact ×1,25 is for «Ver cuentas»).
+    expect(TEXT.streak(1.25)).toEqual({ es: 'Racha +25 %', en: 'Streak +25%' });
+    expect(TEXT.streak(1.075)).toEqual({ es: 'Racha +8 %', en: 'Streak +8%' });
+    expect(TEXT.streak(1)).toEqual({ es: 'Racha ×1', en: 'Streak ×1' });
+    expect(TEXT.streakLine(1.75).es).toBe('+75 % por tu racha');
     expect(TEXT.chispazo(5)).toEqual({ es: '¡CHISPAZO! +5', en: 'FLASH! +5' });
     expect(TEXT.refund(4).es).toBe('No prendió · +4 de vuelta');
     expect(TEXT.learned(2).es).toBe('Aprendiste por qué pasa: +2 Datos');
-    expect(SESSION_UI.finger(74, 1.25, 4, '96').es).toBe('Tu dedo: 74 toques · mejor racha ×1,25 · 4 Chispazos · +96 de luz');
+    expect(SESSION_UI.finger(74, 1.25, 4, '96').es).toBe('Tu dedo: 74 toques · mejor racha +25 % · 4 Chispazos · +96 de luz');
     expect(SESSION_UI.finger(1, 1, 1, '1').en).toBe('Your finger: 1 tap · best streak ×1 · 1 Flash · +1 glow');
     // VELA's tutorial lines and the tree's names stay kid-short (script.test.ts: ≤ 12 words; tree.test.ts: names ≤ 4).
     for (const x of [TEXT.tutSow, TEXT.tutPulse, TEXT.tutStreak, TEXT.tutDrag])

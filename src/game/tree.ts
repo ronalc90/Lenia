@@ -376,11 +376,14 @@ export const TREE_NODES: TreeNodeDef[] = [
     worldNode('giants', 5, 'worldGiants'),
   ]),
 
-  // ───── ✨ Destello ─────
+  // ───── ✦ Pulso (ADR-031: the route of the player who taps; code id stays 'spark', the 7 Destello nodes stay on it) ─────
   ...route('spark', [
+    { id: 'pulse', ring: 1, icon: 'pulse', maxLevel: C.PULSE_MULT_BY_LEVEL.length - 1, apply: (fx, l) => void (fx.pulseMult = C.PULSE_MULT_BY_LEVEL[l] ?? fx.pulseMult), measure: (fx) => fx.pulseMult, show: (fx) => V.tapMult(multText(fx.pulseMult)) },
     { id: 'spark', ring: 1, icon: 'spark', maxLevel: 3, lower: true, apply: (fx, l) => void (fx.goldenIntervalMult *= Math.pow(C.GOLDEN_INTERVAL_FACTOR, l)), measure: (fx) => fx.goldenIntervalMult, show: (fx) => V.firstSoon(firstSpark(fx)) },
+    { id: 'streakLong', ring: 2, icon: 'streakLong', maxLevel: C.STREAK_HITS_BY_LEVEL.length - 1, apply: (fx, l) => void (fx.streakHits = C.STREAK_HITS_BY_LEVEL[l] ?? fx.streakHits), measure: (fx) => fx.streakHits, show: (fx) => V.streakTop(multText(1 + C.STREAK_STEP * fx.streakHits)) },
     { id: 'sparkLife', ring: 2, icon: 'sparkLife', maxLevel: 2, apply: (fx, l) => void (fx.goldenLifeBonus += l * C.GOLDEN_LIFE_BONUS), measure: (fx) => fx.goldenLifeBonus, show: (fx) => V.sparkStays(C.SESSION_GOLDEN_LIFE + fx.goldenLifeBonus) },
     { id: 'sparkTime', ring: 2, icon: 'sparkTime', maxLevel: 2, apply: (fx, l) => void (fx.timePerGolden += l * C.TIME_PER_GOLDEN), measure: (fx) => fx.timePerGolden, show: (fx) => V.perSpark(fx.timePerGolden) },
+    { id: 'chispazoOften', ring: 3, icon: 'chispazoOften', maxLevel: C.CHISPAZO_EVERY_BY_LEVEL.length - 1, lower: true, apply: (fx, l) => void (fx.chispazoEvery = C.CHISPAZO_EVERY_BY_LEVEL[l] ?? fx.chispazoEvery), measure: (fx) => fx.chispazoEvery, show: (fx) => V.chispazoEvery(fx.chispazoEvery) },
     { id: 'sparkFirst', ring: 3, icon: 'sparkFirst', maxLevel: 1, apply: (fx) => void (fx.goldenFirstDelay = [...C.GOLDEN_FIRST_FAST]), measure: (fx) => (fx.goldenFirstDelay ? 1 : 0), show: (fx) => V.firstSpark(firstSpark(fx)) },
     { id: 'sparkGift', ring: 3, icon: 'sparkGift', maxLevel: 3, apply: (fx, l) => void (fx.goldenRewardMult *= 1 + l * C.GOLDEN_GIFT_BONUS), measure: (fx) => fx.goldenRewardMult, show: (fx) => V.gifts(Math.round(C.SPARK_GIFT_SECONDS * fx.goldenRewardMult)) },
     { id: 'sparkDatos', ring: 3, icon: 'sparkDatos', maxLevel: 2, apply: (fx, l) => void (fx.datosPerGolden += l * C.GOLDEN_DATOS), measure: (fx) => fx.datosPerGolden, show: (fx) => V.datosPerSpark(fx.datosPerGolden) },
@@ -389,6 +392,9 @@ export const TREE_NODES: TreeNodeDef[] = [
 ];
 
 export const TREE_BY_ID: Readonly<Record<string, TreeNodeDef>> = Object.fromEntries(TREE_NODES.map((n) => [n.id, n]));
+
+/** (ADR-031) The ✦ Pulso nodes of the route: on sale from session 1 (the Destello ones wait for the first Spark). */
+export const PULSE_NODES: ReadonlySet<string> = new Set(['pulse', 'streakLong', 'chispazoOften']);
 
 /** The nodes of one route, centre outwards. */
 export function routeNodes(b: BranchId): TreeNodeDef[] {
@@ -719,8 +725,9 @@ export function treeStates(ctx: TreeCtx): Map<string, NodeState> {
     const ringOpen = night >= ringNight(def.ring);
     let status: NodeStatus;
     let nightNeeded: number | null = null;
-    // The Destello route stays "?" until the run before the first Spark has been played (QA-CLARIDAD #13).
-    const sessionNeeded = def.branch === 'spark' && level < 1 && ctx.sessions < C.SPARK_FROM_SESSION - 1 ? C.SPARK_FROM_SESSION : null;
+    // The Destello nodes stay "?" until the run before the first Spark has been played (QA-CLARIDAD #13); the
+    // Pulso nodes of the same route are for tapping, which works from session 1 (ADR-031).
+    const sessionNeeded = def.branch === 'spark' && !PULSE_NODES.has(def.id) && level < 1 && ctx.sessions < C.SPARK_FROM_SESSION - 1 ? C.SPARK_FROM_SESSION : null;
     if (level >= 1) status = 'owned';
     else if (sessionNeeded !== null && !missingRequires.length) status = 'mystery';
     else if (!missingRequires.length && !ringOpen) {

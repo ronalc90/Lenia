@@ -21,6 +21,28 @@ export function multText(x: number): Text {
   return { es: `×${s.replace('.', ',')}`, en: `×${s}` };
 }
 
+/**
+ * A multiplier for the main flow, never with decimals (docs/CLARIDAD2.md §2.13; the same rule as ui/format.ts
+ * fmtMult): "+25 %" / "+25%" under ×2 (a bonus a child reads as a percent), "×3" from there, "casi ×3" /
+ * "almost ×3" when it rounds UP by more than 0,05, "×1" when it does nothing. Exact factors (multText) only
+ * behind «Ver cuentas» and in the tree's before → after.
+ */
+export function multWords(x: number): Text {
+  const SNAP = 0.05;
+  if (!Number.isFinite(x) || x <= 0) return { es: '×0', en: '×0' };
+  if (Math.abs(x - 1) < 0.005) return { es: '×1', en: '×1' };
+  if (x < 1) {
+    const p = Math.max(1, Math.round((1 - x) * 100));
+    return { es: `−${p} %`, en: `−${p}%` };
+  }
+  if (x < 2 - SNAP) {
+    const p = Math.max(1, Math.round((x - 1) * 100 + 1e-9)); // 1,075 reads +8 %, not a float 7,4999…
+    return { es: `+${p} %`, en: `+${p}%` };
+  }
+  const n = Math.round(x);
+  return n - x > SNAP ? { es: `casi ×${n}`, en: `almost ×${n}` } : { es: `×${n}`, en: `×${n}` };
+}
+
 /** 0.1 → "10%", 0.025 → "2.5%". */
 export function formatPct(x: number): string {
   const p = x * 100;

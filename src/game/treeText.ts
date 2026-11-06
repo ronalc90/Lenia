@@ -6,7 +6,7 @@
  */
 import type { Text } from '../core/types';
 import * as C from './cycleBalance';
-import { multText } from './format';
+import { multWords } from './format';
 
 const t = (es: string, en: string): Text => ({ es, en });
 
@@ -29,7 +29,8 @@ export const BRANCH_TEXT: Record<BranchId | 'core', { name: Text; desc: Text }> 
   life: { name: t('Vida', 'Life'), desc: t('Cada criatura da más luz por segundo.', 'Every creature gives more glow per second.') },
   discovery: { name: t('Descubrir', 'Discover'), desc: t('Más Datos por cada cosa nueva que encuentras.', 'More Data for everything new you find.') },
   worlds: { name: t('Mundos', 'Worlds'), desc: t('Reglas nuevas en las que nacen otras especies.', 'New rules where other species are born.') },
-  spark: { name: t('Destello', 'Spark'), desc: t('La chispa dorada viene más y regala más.', 'The golden spark comes more often and gives more.') },
+  // ADR-031: ✦ Pulso, the route of the player who taps (code id stays `spark`); the golden Spark's nodes stay on it.
+  spark: { name: t('Pulso', 'Pulse'), desc: t('Tocar da más luz, y la chispa dorada regala más.', 'Tapping gives more glow, and the golden spark gives more.') },
   collect: { name: t('Recoger', 'Collect'), desc: t('Pipetas que recogen la luz por ti.', 'Pipettes that collect the glow for you.') },
 };
 
@@ -190,6 +191,10 @@ export const VALUE_TEXT = {
   gifts: (sec: number) => t(`Regalo: ${sec} s de luz`, `Gift: ${sec} s of glow`),
   datosPerSpark: (n: number) => t(`+${n} ${n === 1 ? 'Dato' : 'Datos'} por chispa`, `+${n} Data per spark`),
   sureSeeds: (n: number) => t(n === 1 ? '1 semilla segura por chispa' : `${n} semillas seguras por chispa`, n === 1 ? '1 sure seed per spark' : `${n} sure seeds per spark`),
+  // ✦ Pulso (ADR-031): "Un toque ×1 → ×1,5", "La racha llega a ×1,25 → ×1,5", "Un Chispazo cada 10 toques → 8"
+  tapMult: (m: Text) => t(`Un toque ${m.es}`, `A tap ${m.en}`),
+  streakTop: (m: Text) => t(`La racha llega a ${m.es}`, `The streak reaches ${m.en}`),
+  chispazoEvery: (n: number) => t(`Un Chispazo cada ${n} toques`, `A Flash every ${n} taps`),
   // ↓ Recoger (ADR-030): "Recoges tú → 1 pipeta", "Una gota cada 2,5 s → 2 s", "La gota guarda 4 s de luz → 6 s"…
   pipettes: (n: number) => (n ? t(plural(n, 'pipeta', 'pipetas'), plural(n, 'pipette', 'pipettes')) : t('Recoges tú', 'You collect')),
   /** One pipette's trip (go, take, come back), by Pipetas rápidas level. */
@@ -562,9 +567,9 @@ export const SESSION_UI = {
     );
   },
   // ── ADR-031 (docs/MECANICAS.md §6, §10.4): the finger's report, the losses that gave back, the start card ──
-  /** Summary: `taps` hits, best streak ×`best` (a multiplier), `flashes` Chispazos and the Luz the finger added (formatted). */
+  /** Summary: `taps` hits, the best streak (a multiplier, read «+25 %»), `flashes` Chispazos and the Luz the finger added (formatted). */
   finger: (taps: number, best: number, flashes: number, luz: string) => {
-    const m = multText(best);
+    const m = multWords(best);
     return t(
       `Tu dedo: ${taps} ${taps === 1 ? 'toque' : 'toques'} · mejor racha ${m.es} · ${flashes} ${flashes === 1 ? 'Chispazo' : 'Chispazos'} · +${luz} de luz`,
       `Your finger: ${taps} ${taps === 1 ? 'tap' : 'taps'} · best streak ${m.en} · ${flashes} ${flashes === 1 ? 'Flash' : 'Flashes'} · +${luz} glow`,

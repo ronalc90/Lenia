@@ -4,7 +4,7 @@
  */
 import type { Behavior, Text } from '../core/types';
 import { DISH_BONUS } from './balance';
-import { formatNumber as f, formatPct as pct, multText } from './format';
+import { formatNumber as f, formatPct as pct, multWords } from './format';
 
 const t = (es: string, en: string): Text => ({ es, en });
 
@@ -450,7 +450,8 @@ export const TEXT = {
   contactSoon: t('¡Cuidado! Se van a tocar', 'Careful! They’re about to touch'),
   contactSteer: t('¡Cuidado! Arrástrala para desviarla', 'Careful! Drag it to steer it away'),
   // ── ADR-031 (docs/MECANICAS.md §10.4): the tap is a pulse, sowing is a button, every loss leaves something ──
-  // Numbers arrive as numbers (they are formatted here for each language); multipliers too («×1,25» / "×1.25").
+  // Numbers arrive as numbers (they are formatted here for each language). Multipliers read as in the main flow
+  // (CLARIDAD2 §2.13, format.ts multWords): «+25 %», never «×1,25»; the exact factor is for «Ver cuentas».
   /** The Sembrar button (bottom bar): its label and what the next seed costs. */
   sow: t('Sembrar', 'Sow'),
   sowFree: t('Gratis', 'Free'),
@@ -468,12 +469,12 @@ export const TEXT = {
   tutDrag: t('También puedes arrastrarla.', 'You can drag it too.'),
   /** The streak chip next to the counter (`m` = GameView.streak.mult), its full state, and the line under the counter. */
   streak: (m: number) => {
-    const x = multText(m);
+    const x = multWords(m);
     return t(`Racha ${x.es}`, `Streak ${x.en}`);
   },
   streakMax: t('¡Racha máxima!', 'Max streak!'),
   streakLine: (m: number) => {
-    const x = multText(m);
+    const x = multWords(m);
     return t(`${x.es} por tu racha`, `${x.en} from your streak`);
   },
   /** The every-N-th hit (`n` = the Luz it paid). */

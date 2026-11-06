@@ -587,6 +587,7 @@ describe('clear prices (ADR-030, docs/CLARIDAD2.md §2.7, §2.11)', () => {
       fast.g.actions.endSessionNow!();
     }
     st(fast.g).research!.datos = 1e4;
+    expect(fast.g.buyNode('pulse').ok).toBe(true); // ADR-031: ✦ Pulso opens the route
     for (let k = 0; k < 3; k++) expect(fast.g.buyNode('spark').ok).toBe(true);
     fast.g.actions.startSession!();
     fast.g.actions.seedAt(150, 200);

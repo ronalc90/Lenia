@@ -260,6 +260,10 @@ export const ICONS: Record<string, IconDef> = {
   sparkGift: { f: 'M5 11h10.5a1.5 1.5 0 0 1 1.5 1.5v6.25a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5V12.5A1.5 1.5 0 0 1 5 11z', s: R(3.5, 11, 13.5, 9.25, 1.5) + P('M2.75 11h15M10.25 11v9.25') + P(bow(10.25, 11)) + SP(star4(19.25, 4.75, 3, 0.22)) },
   sparkDatos: { f: star4(8.5, 8.5, 5.75), s: P(star4(8.5, 8.5, 5.75)) + R(12.25, 12.25, 8.5, 8.5, 2.25) + P('M14.75 18.5v-1.5M16.5 18.5v-3M18.25 18.5V14.5') },
   sparkMutagen: { f: flaskLiquid, s: P(flaskBody) + P('M6.93 14.25h10.14') + SP(star4(12, 17.25, 2.6, 0.22)) },
+  // ✦ Pulso (ADR-031): a creature that lights up when touched, a streak that climbs, a Flash after a Flash.
+  pulse: { f: circlePath(10.5, 13.5, 4), s: C(10.5, 13.5, 4) + P('M4.25 9.25a7.5 7.5 0 0 1 12.5 0') + P('M3.5 18.75a8.5 8.5 0 0 0 14 0') + SP(star4(19.25, 5.25, 2.5)) },
+  streakLong: { s: P('M3.75 18.5l4.5-4.25 3.75 2.75 8.25-8.5') + P('M15 8.25h5.25v5.25') + D(8.25, 14.25, 1.15) + D(12, 17, 1.15) },
+  chispazoOften: { f: star4(9, 13, 6), s: P(star4(9, 13, 6)) + P(star4(18, 7, 3.25)) + P('M15.25 15.75h4.5M17.5 19.5h3.5') },
 
   // ══════════ HUD & settings ══════════
   settings: { f: gear(12, 12, 6.6, 9, 8), s: P(gear(12, 12, 6.6, 9, 8)) + C(12, 12, 2.75) },
@@ -468,7 +472,7 @@ export const ICON_GROUPS: Record<string, string[]> = {
   life: ['culture', 'nutrient', 'culture2', 'swimAffinity', 'sessileAffinity', 'colonyAffinity', 'symbiosis', 'abundance', 'eternalLife'],
   discovery: ['notebook', 'print', 'cataloguing', 'archive', 'microscope', 'discoBonus', 'rareSpores', 'mutations', 'encyclopedia'],
   worlds: ['worldClassic', 'worldCold', 'worldGyro', 'worldShields', 'worldHelix', 'worldLegs', 'worldGiants'],
-  spark: ['spark', 'sparkLife', 'sparkTime', 'sparkFirst', 'sparkGift', 'sparkDatos', 'sparkMutagen'],
+  spark: ['pulse', 'spark', 'streakLong', 'sparkLife', 'sparkTime', 'chispazoOften', 'sparkFirst', 'sparkGift', 'sparkDatos', 'sparkMutagen'],
   behaviours: ['still', 'pulsing', 'swimmer', 'spinner', 'divider', 'colony', 'behavior'],
   moments: ['sow', 'fade', 'burst', 'split', 'upgrade', 'dosingArm', 'sliders', 'tag', 'slot', 'gift', 'eye', 'up', 'down'],
   hud: ['settings', 'sound', 'mute', 'music', 'vibrate', 'motion', 'contrast', 'textsize', 'globe', 'pause', 'play', 'speed', 'stop', 'journal', 'trophy', 'leaderboard', 'help', 'info', 'warning', 'question', 'menu', 'share'],
