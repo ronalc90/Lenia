@@ -14,7 +14,7 @@
 import { wrapDelta, type Camera } from '../core/camera';
 import { BEHAVIOR_COLOR, UI as C } from '../core/palette';
 import type { Behavior, CreatureState, CreatureView, GameView, Lang } from '../core/types';
-import type { TapCreature, TapScene } from './dishTap';
+import { TAP_REACH_PX, type TapCreature, type TapMote, type TapScene } from './dishTap';
 import { DROP_FX, DropLayer, type CreatureResolver } from './fx/drops';
 import { PipetteLayer } from './fx/pipettes';
 import { behaviorName, stateName } from './i18n';
@@ -410,7 +410,21 @@ export class Overlay {
   private guide = { on: false, id: -1, x: 0, y: 0, t0: 0, out: -1 };
   /** Creatures as drawn this frame, for the tap router (reused objects). */
   private readonly tapCreatures: TapCreature[] = [];
-  private readonly scene: TapScene = { drops: this.drops.tap, dropCount: 0, creatures: this.tapCreatures, creatureCount: 0, collecting: false, dropPx: DROP_FX.tapPx, creaturePadPx: 16 };
+  private readonly tapMotes: TapMote[] = [];
+  private readonly scene: TapScene = {
+    drops: this.drops.tap,
+    dropCount: 0,
+    creatures: this.tapCreatures,
+    creatureCount: 0,
+    collecting: false,
+    dropPx: DROP_FX.tapPx,
+    creaturePadPx: 16,
+    pulsing: false,
+    motes: this.tapMotes,
+    moteCount: 0,
+    motePx: DROP_FX.tapPx,
+    reachPx: TAP_REACH_PX,
+  };
   /** Places an owned drop on its creature (no allocation: writes the caller's object). */
   private readonly resolveCreature: CreatureResolver = (id, out) => {
     const s = this.creatures.get(id);

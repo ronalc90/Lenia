@@ -1,11 +1,42 @@
 import { describe, expect, it } from 'vitest';
-import { dropsOnSegment, routeTap, type TapCreature, type TapDrop, type TapScene } from './dishTap';
+import {
+  dropsOnSegment,
+  motesOnSegment,
+  routeTap,
+  SweepHits,
+  SWEEP_REHIT_S,
+  TAP_REACH_PX,
+  type TapCreature,
+  type TapDrop,
+  type TapMote,
+  type TapReach,
+  type TapScene,
+} from './dishTap';
 
-function scene(drops: TapDrop[], creatures: TapCreature[], collecting = true): TapScene {
-  return { drops, dropCount: drops.length, creatures, creatureCount: creatures.length, collecting, dropPx: 32, creaturePadPx: 16 };
+function scene(drops: TapDrop[], creatures: TapCreature[], collecting = true, motes: TapMote[] = [], pulsing = false): TapScene {
+  return {
+    drops,
+    dropCount: drops.length,
+    creatures,
+    creatureCount: creatures.length,
+    collecting,
+    dropPx: 32,
+    creaturePadPx: 16,
+    pulsing,
+    motes,
+    moteCount: motes.length,
+    motePx: 36,
+    reachPx: TAP_REACH_PX,
+  };
 }
+/** A session dish (ADR-031): the game pulses creatures and a finger never sows. */
+const session = (drops: TapDrop[], creatures: TapCreature[], motes: TapMote[] = []) => scene(drops, creatures, true, motes, true);
 const orbium = (id: number, x: number, y: number, behavior: TapCreature['behavior'] = 'swimmer'): TapCreature => ({ id, x, y, r: 24, state: 'stable', behavior });
+const forming = (id: number, x: number, y: number): TapCreature => ({ id, x, y, r: 20, state: 'born', behavior: null });
+const blob = (id: number, x: number, y: number): TapCreature => ({ id, x, y, r: 30, state: 'exploded', behavior: null });
 const drop = (id: number, x: number, y: number, owner: number | null = null, amount = 5): TapDrop => ({ id, x, y, amount, owner });
+const mote = (id: number, x: number, y: number): TapMote => ({ id, x, y });
+const reach = (): TapReach => ({ drops: [], dropN: 0, motes: [], moteN: 0 });
 
 describe('a finger on the dish (dishTap.ts, ADR-030 §2.2.1)', () => {
   it('a tap on a drop collects and never sows', () => {
@@ -51,5 +82,96 @@ describe('a finger on the dish (dishTap.ts, ADR-030 §2.2.1)', () => {
     expect(routeTap('drag', 300, 300, s)).toEqual({ kind: 'sweep' });
     // Without collection a drag from empty agar is left to the brush / eraser.
     expect(routeTap('drag', 10, 10, scene([], [], false))).toEqual({ kind: 'none' });
+  });
+});
+
+describe('the tap is a pulse (dishTap.ts, ADR-031, MECANICAS §3.1)', () => {
+  it('a tap on empty agar never sows', () => {
+    const s = session([], [orbium(1, 100, 100)]);
+    // Anywhere off the creature: a water ripple, never a seed, however many times.
+    for (const [x, y] of [
+      [300, 300],
+      [20, 200],
+      [200, 20],
+      [160, 160],
+    ])
+      expect(routeTap('tap', x, y, s).kind).toBe('ripple');
+    // A long press on the agar is no big seed either (it moved to the Sembrar button).
+    expect(routeTap('long', 300, 300, s)).toEqual({ kind: 'none' });
+    // Nor without drops in the view: a session finger never sows.
+    expect(routeTap('tap', 300, 300, scene([], [], false, [], true)).kind).toBe('ripple');
+  });
+
+  it('a tap on empty agar gathers the drops and glimmers within reach', () => {
+    const s = session([drop(4, 140, 100), drop(5, 400, 400)], [], [mote(9, 100, 145)]);
+    const r = reach();
+    // 40 px from the drop and 45 px from the glimmer: past their own touch radius, inside the 48 px reach.
+    expect(routeTap('tap', 100, 100, s, r).kind).toBe('ripple');
+    expect(r.drops.slice(0, r.dropN)).toEqual([4]);
+    expect(r.motes.slice(0, r.moteN)).toEqual([9]);
+    // Nothing near: only the ripple.
+    const far = reach();
+    expect(routeTap('tap', 250, 250, s, far).kind).toBe('ripple');
+    expect(far.dropN + far.moteN).toBe(0);
+  });
+
+  it('a tap on a stable creature is a pulse', () => {
+    const s = session([drop(3, 160, 60, 1)], [orbium(1, 100, 100)]);
+    // On its body: a pulse, which also takes its own drop (the game's pulse collects it).
+    expect(routeTap('tap', 90, 110, s)).toEqual({ kind: 'pulse', id: 1, drop: 3 });
+    // On its own drop: the same pulse (the finger went for its light).
+    expect(routeTap('tap', 160, 60, s)).toEqual({ kind: 'pulse', id: 1, drop: 3 });
+    // With no light yet it is still a pulse: no «mantén pulsado» hint any more.
+    expect(routeTap('tap', 100, 100, session([], [orbium(1, 100, 100)]))).toEqual({ kind: 'pulse', id: 1, drop: null });
+    // The long press still opens its card.
+    expect(routeTap('long', 100, 100, s)).toEqual({ kind: 'card', id: 1 });
+    // A loose drop (its creature went dark) is collected as before.
+    expect(routeTap('tap', 300, 300, session([drop(8, 300, 300)], [orbium(1, 100, 100)]))).toEqual({ kind: 'collect', drop: 8, creature: null });
+  });
+
+  it('a tap on a forming seed is grey and never sows', () => {
+    const s = session([], [forming(2, 100, 100), blob(3, 300, 300)]);
+    expect(routeTap('tap', 105, 95, s)).toEqual({ kind: 'grey', id: 2 });
+    // Shapeless matter too: «aún no brilla», nothing paid, nothing sown.
+    expect(routeTap('tap', 300, 300, s)).toEqual({ kind: 'grey', id: 3 });
+    // Neither has a card.
+    expect(routeTap('long', 100, 100, s)).toEqual({ kind: 'none' });
+  });
+
+  it('a glimmer under the finger is caught before the creature behind it', () => {
+    const s = session([drop(3, 125, 75, 1)], [orbium(1, 100, 100)], [mote(9, 118, 92)]);
+    expect(routeTap('tap', 115, 95, s)).toEqual({ kind: 'catch', mote: 9 });
+    // Away from the glimmer, the creature is pulsed as usual.
+    expect(routeTap('tap', 85, 115, s).kind).toBe('pulse');
+  });
+
+  it('a swipe pulses each creature it crosses once per 0.3 s', () => {
+    const s = session([], [orbium(1, 100, 100), orbium(2, 220, 104), forming(3, 340, 100), orbium(4, 220, 300)]);
+    expect(routeTap('drag', 10, 100, s)).toEqual({ kind: 'sweep' });
+    const hits = new SweepHits();
+    const out: number[] = [];
+    // Across 1 and 2 (the forming seed 3 and the far 4 are not pulsed).
+    let n = hits.cross(s, 10, 100, 400, 100, 0, SWEEP_REHIT_S, out);
+    expect(out.slice(0, n).sort()).toEqual([1, 2]);
+    // Back over them 0.1 s later: nothing new.
+    n = hits.cross(s, 400, 100, 10, 100, 0.1, SWEEP_REHIT_S, out);
+    expect(n).toBe(0);
+    // Again after 0.3 s: each one once more.
+    n = hits.cross(s, 10, 100, 400, 100, 0.31, SWEEP_REHIT_S, out);
+    expect(out.slice(0, n).sort()).toEqual([1, 2]);
+    // A new sweep starts afresh.
+    hits.reset();
+    n = hits.cross(s, 90, 100, 110, 100, 0.32, SWEEP_REHIT_S, out);
+    expect(out.slice(0, n)).toEqual([1]);
+    // A swipe that starts on a swimmer still steers it.
+    expect(routeTap('drag', 100, 100, s)).toEqual({ kind: 'steer', id: 1 });
+  });
+
+  it('a swipe catches the glimmers on its path', () => {
+    const s = session([], [], [mote(1, 50, 100), mote(2, 150, 120), mote(3, 150, 300)]);
+    const out: number[] = [];
+    let n = motesOnSegment(s, 10, 100, 200, 100, out, 0);
+    n = motesOnSegment(s, 200, 100, 10, 100, out, n);
+    expect(out.slice(0, n).sort()).toEqual([1, 2]);
   });
 });
