@@ -551,11 +551,18 @@ function boot(): void {
       sim?.resizeCanvas(Math.round(cssW * r), Math.round(cssH * r));
     },
     onDishTap(x, y, opts) {
+      if (game.cycle === 'sessions') return; // ADR-031: a finger on the dish never sows in a session
       const spec = game.actions.seedAt(x, y, opts);
       if (spec) sim?.seed(spec);
     },
+    // ADR-031: the Sembrar button (the safest spot, or the nearest safe one to a drag); the game may still say no.
+    onSow(req) {
+      const spec = game.actions.sow ? game.actions.sow({ big: req.big, ...(req.dragged ? { at: req.spot } : {}) }) : game.actions.seedAt(req.spot.x, req.spot.y, req);
+      if (spec) bus.emit('dishSeed', { specs: [spec] });
+    },
     onErase(x, y) {
       sim?.erase(x, y, sim.params.R * 1.2);
+      game.noteErased(x, y, (sim?.params.R ?? 0) * 1.2); // ADR-031: erasing leaves only the drop
       strokesRef?.point(x, y);
     },
     onBrush(x, y) {
@@ -1377,6 +1384,8 @@ function boot(): void {
    * forma" Momento at that spot (when explanations are on); after that, a short toast now and then.
    */
   function noteDissolved(at: { x: number; y: number }): void {
+    game.noteLysis(at.x, at.y); // ADR-031: the first lysis ever teaches; the dish says it where it was
+    ui.lysed?.(at.x, at.y);
     const now = performance.now();
     if (now - lysisToastAt < LYSIS_TOAST_MS) return;
     // First time: the card (or its brief label) says it, queued now or already on its way. Never also a toast.
@@ -1384,6 +1393,7 @@ function boot(): void {
       lysisToastAt = now;
       return;
     }
+    if (game.cycle === 'sessions') return; // ADR-031: the dish's label is the one message
     // The long "why" only when no Momento card already explained shapeless matter (a brief label does not).
     const told = moments.mode === 'full' && moments.seen('explode');
     const first = lysisToastAt === -Infinity && !told;
