@@ -16,6 +16,7 @@ import type { Behavior, Text } from '../core/types';
 import * as C from './cycleBalance';
 import { TREE_BY_ID, buyNode, nextGoal, nightInfo, nodeLevel, treeEffects, type BuyResult, type TreeCtx, type TreeEffects } from './tree';
 import { freshCollect, validateCollect, type CollectState } from './collect';
+import { validatePulse, type PulseState } from './pulse';
 import { SESSION_UI, VELA_LINES } from './treeText';
 import { BASE_WORLD, isWorldId, type WorldId } from './worlds';
 
@@ -134,6 +135,31 @@ export interface SessionState {
   boostBase?: number;
   /** (ADR-030, QA-CLARIDAD #24/#9) The goals met this session, by name (summary rows). */
   goals?: SessionGoal[];
+  /** (ADR-031) The finger: streak, Chispazo count, glimmers and this session's tapping stats (pulse.ts). */
+  pulse?: PulseState;
+  /** (ADR-031) What the losses gave back this session, and the seed luck on the Sembrar button. */
+  losses?: LossStats;
+}
+
+/** (ADR-031, docs/MECANICAS.md §4) Losses that give something back, counted per session. */
+export interface LossStats {
+  /** Failed seeds in a row (SEED_FAIL_PITY of them make the next one sure). */
+  fails: number;
+  /** Seeds that never took, and the Luz they gave back (free seeds come back as free seeds). */
+  refunds: number;
+  refunded: number;
+  /** Living creatures that went dark (glass, fusion, lost shape), fusions among them, and the Luz their deaths left. */
+  deaths: number;
+  merged: number;
+  burst: number;
+  /** Swimmers saved from a warned contact («¡Salvada!»). */
+  saved: number;
+  /** Datos of "aprendiste por qué" (the first death of each cause ever). */
+  learned: number;
+}
+
+export function freshLosses(): LossStats {
+  return { fails: 0, refunds: 0, refunded: 0, deaths: 0, merged: 0, burst: 0, saved: 0, learned: 0 };
 }
 
 export type SessionEvent =
@@ -577,8 +603,10 @@ export interface SessionSummary {
   /**
    * (ADR-030) Where the Luz of the run came from: `made` by the drops (collected by hand, by pipette, or
    * swept at the end: `sweep` is the "Recogida final"), `gifts` without a drop; `capped` waited in full drops.
+   * `finger` (ADR-031): what the finger added on top — pulses, Chispazos, glimmers caught and the streak's extra on
+   * drops. The Luz of the session is made + gifts + finger.
    */
-  light?: { made: number; gifts: number; hand: number; pipette: number; sweep: number; capped: number };
+  light?: { made: number; gifts: number; hand: number; pipette: number; sweep: number; capped: number; finger?: number };
   /** (ADR-030) Every goal met, by name: the first steps and the Encargos (their Datos add up to the 'encargos' term). */
   goals: SessionGoal[];
   /** (ADR-030) Datos the light gave (= datos.fromEssence) and the one-time discovery prizes (species, variants, ways of moving). */
@@ -600,6 +628,13 @@ export interface SessionSummary {
   previous?: { total: number; fromLight: number; prize: number } | null;
   /** (ADR-030, §2.9) New ways of moving of this session, so the report names them («Manera de moverse nueva · gira»). */
   behaviors?: Behavior[];
+  /**
+   * (ADR-031) The finger's line («Tu dedo: 74 toques · mejor racha ×1,25 · 4 Chispazos · +96 de luz»): counted hits,
+   * the best streak multiplier, Chispazos, glimmers caught of thrown, and the Luz the finger added. Null without a tap.
+   */
+  finger?: { taps: number; bestMult: number; chispazos: number; motesCaught: number; motesThrown: number; luz: number } | null;
+  /** (ADR-031) Losses that gave back: refunded seeds, saved swimmers, fusions and the light deaths left, "aprendiste" Datos. */
+  losses?: LossStats;
 }
 
 /** Datos of the one-time discovery terms of a breakdown. */
@@ -703,7 +738,15 @@ export function summarize(s: SessionState, r: ResearchState, fx: TreeEffects, sp
     lessReason: lessReasonOf(r, datos),
     previous: previousOf(r),
     behaviors: s.newBehaviors.slice(),
+    finger: fingerOf(s),
+    losses: { ...(s.losses ?? freshLosses()) },
   };
+}
+
+function fingerOf(s: SessionState): SessionSummary['finger'] {
+  const p = s.pulse;
+  if (!p || p.taps <= 0) return null;
+  return { taps: p.taps, bestMult: 1 + C.STREAK_STEP * p.best, chispazos: p.chispazos, motesCaught: p.motesCaught, motesThrown: p.motesThrown, luz: p.finger };
 }
 
 function previousOf(r: ResearchState): SessionSummary['previous'] {
@@ -720,7 +763,7 @@ function lessReasonOf(r: ResearchState, d: DatosBreakdown): SessionSummary['less
 
 function lightOf(s: SessionState): NonNullable<SessionSummary['light']> {
   const l = s.light ?? freshCollect();
-  return { made: l.made, gifts: l.gifts, hand: l.hand, pipette: l.pipette, sweep: l.sweep, capped: l.capped };
+  return { made: l.made, gifts: l.gifts, hand: l.hand, pipette: l.pipette, sweep: l.sweep, capped: l.capped, finger: s.pulse?.finger ?? 0 };
 }
 
 function applySummaryCore(r: ResearchState, s: SessionState, d: DatosBreakdown, records: RecordHit[], fx: TreeEffects): ResearchState {
@@ -846,6 +889,8 @@ export function validateSession(x: unknown): SessionState | null {
     ...(x.planted === true ? { planted: true } : {}),
     ...(x.hold === true && phase === 'ready' ? { hold: true } : {}),
     ...(num(x.boostBase) > 0 ? { boostBase: num(x.boostBase) } : {}),
+    ...(isObj(x.pulse) ? { pulse: validatePulse(x.pulse) } : {}),
+    ...(isObj(x.losses) ? { losses: validateLosses(x.losses) } : {}),
     ...(Array.isArray(x.goals) ? { goals: x.goals
           .filter(isObj)
           .slice(0, 64)
@@ -854,4 +899,9 @@ export function validateSession(x: unknown): SessionState | null {
             return nm ? [{ kind: g.kind === 'step' ? ('step' as const) : ('encargo' as const), name: nm, datos: num(g.datos, 0, 0, 1000) }] : [];
           }) } : {}),
   };
+}
+
+function validateLosses(x: Record<string, unknown>): LossStats {
+  const int = (v: unknown) => Math.floor(num(v, 0, 0, 1e9));
+  return { fails: int(x.fails), refunds: int(x.refunds), refunded: num(x.refunded), deaths: int(x.deaths), merged: int(x.merged), burst: num(x.burst), saved: int(x.saved), learned: int(x.learned) };
 }

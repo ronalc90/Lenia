@@ -99,7 +99,8 @@ describe('collected light: the drops (ADR-030)', () => {
     b.g.actions.endSessionNow!();
     for (const x of [a, b]) {
       const sum = x.g.lastSummary!;
-      expect(sum.datos.essence).toBeCloseTo(sum.light!.made + sum.light!.gifts, 6);
+      // ADR-031: plus what the finger added (the streak's extra on the drops it tapped).
+      expect(sum.datos.essence).toBeCloseTo(sum.light!.made + sum.light!.gifts + (sum.light!.finger ?? 0), 6);
       expect(sum.light!.made).toBeCloseTo(sum.light!.hand + sum.light!.pipette + sum.light!.sweep, 6);
     }
   });

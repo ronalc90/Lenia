@@ -213,6 +213,24 @@ function collectWhere(st: CollectState, hit: (d: LightDrop) => boolean): Pickup[
   return out;
 }
 
+/**
+ * (ADR-031) Light made away from a creature's own filling — a glimmer nobody caught, a death's last light: a loose
+ * drop where it is (`owner` null), or added to the drop of `owner` when it has one (it goes loose with it). It
+ * counts as made. Returns the drop.
+ */
+export function addLight(st: CollectState, x: number, y: number, amount: number, owner: number | null = null): LightDrop | null {
+  if (!(amount > 0) || !Number.isFinite(amount)) return null;
+  let d = owner !== null ? st.drops.find((q) => q.owner === owner) : undefined;
+  if (!d) {
+    d = { id: st.next++, owner: null, x, y, amount: 0, cap: 0 };
+    st.drops.push(d);
+  }
+  d.amount += amount;
+  d.cap = Math.max(d.cap, d.amount);
+  st.made += amount;
+  return d;
+}
+
 /** "¡Tiempo!", or a session restored from a save: every drop left flies to the wallet. */
 export function sweepAll(st: CollectState): Pickup[] {
   const out: Pickup[] = [];

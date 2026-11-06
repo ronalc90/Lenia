@@ -124,6 +124,13 @@ export interface TreeEffects {
   goldenRewardMult: number;
   datosPerGolden: number;
   mutagenSeeds: number;
+  // ── ✦ Pulso (ADR-031) ──
+  /** Pulso: a pulse ×this (PULSE_MULT_BY_LEVEL). */
+  pulseMult: number;
+  /** Racha larga: hits the streak can hold (STREAK_HITS_BY_LEVEL). */
+  streakHits: number;
+  /** Chispazo seguido: every N-th hit is a ¡Chispazo! (CHISPAZO_EVERY_BY_LEVEL). */
+  chispazoEvery: number;
   // ── ↓ Recoger (ADR-030) ──
   /** Pipettes on the rim (Pipeta, Más pipetas). */
   pipettes: number;
@@ -435,6 +442,9 @@ export function baseEffects(): TreeEffects {
     goldenRewardMult: 1,
     datosPerGolden: 0,
     mutagenSeeds: C.SPARK_SURE_SEEDS,
+    pulseMult: C.PULSE_MULT_BY_LEVEL[0],
+    streakHits: C.STREAK_HITS_BY_LEVEL[0],
+    chispazoEvery: C.CHISPAZO_EVERY_BY_LEVEL[0],
     pipettes: C.PIPETTES_BY_LEVEL[0],
     pipetteCycle: C.PIPETTE_CYCLE_S[0],
     dropCapSeconds: C.LIGHT_CAP_BY_LEVEL[0],

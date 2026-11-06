@@ -226,6 +226,64 @@ export const PIPETTE_MAGNET_R = [0, 2, 4];
 /** Session 1 tutorial: the clock starts by itself if VELA's line has not started it after this many seconds of dish (a fail-safe). [design] */
 export const TUTORIAL_HOLD_MAX_S = 45;
 
+// ───────────────────────────── Pulso: the tap (ADR-031, docs/MECANICAS.md §5) ──
+
+/**
+ * A tap on a STABLE creature (a "pulse") makes it flash and adds this many seconds of the dish's current Luz/s.
+ * Scale-free, like Cookie Clicker's mouse upgrades (+1 % of CpS per click): a tap never goes stale as the
+ * dish grows. 1/40 s: 5 taps a second at the base streak add ≈ +15 % of production (the drops' ×1,25 does
+ * the rest). [owner: "dar muchos click debería ser emocionante"; design; bot]
+ */
+export const PULSE_SECONDS = 0.025;
+/** …at least this much Luz (only with a stable creature): session 1 shows "+1", not "+0". [design: a child reads integers] */
+export const PULSE_MIN = 1;
+/** Pulso (3 levels): the pulse ×this by level, floor included ("Un toque ×1 → ×1,5 → ×2 → ×2,5"). [design; bot] */
+export const PULSE_MULT_BY_LEVEL = [1, 1.5, 2, 2.5];
+/** Hits counted per second, sliding 1 s window (human tapping tops out at ~7–10/s); more = juice only. [design: anti-autoclicker] */
+export const TAP_HITS_MAX_PER_S = 10;
+/** Swipe: a creature the finger crosses counts as one hit, again only after this many seconds. [design] */
+export const SWEEP_REHIT_S = 0.3;
+
+/** Streak: +this per hit in a row (a creature, a drop, a glimmer). [design] */
+export const STREAK_STEP = 0.025;
+/** Racha larga (2 levels): hits the streak can hold, by level: ×1,25 → ×1,5 → ×1,75. [design; bot: ≤ ×3 over idle at the end of the route] */
+export const STREAK_HITS_BY_LEVEL = [10, 20, 30];
+/** No hit for this long: the streak starts to drain (it is frozen while the dish is paused). [design: kids pause] */
+export const STREAK_GRACE_S = 1.0;
+/** …then it loses this many hits a second: never a reset, never a "fail" sound. [design] */
+export const STREAK_DRAIN_PER_S = 8;
+/** The Spark caught adds this many hits to the streak; a swimmer saved from a warned contact too. [design] */
+export const SPARK_STREAK_HITS = 5;
+export const SAVE_STREAK_HITS = 5;
+
+/** ¡Chispazo!: every N-th hit of a streak pays ×CHISPAZO_MULT (Chispazo seguido: 10 → 8 → 6). Fixed, not random: it is seen coming. [owner, ADR-031; RITMO "a rhythm, not a lottery"] */
+export const CHISPAZO_EVERY_BY_LEVEL = [10, 8, 6];
+/** A Chispazo is worth this many pulses (× the streak). [design] */
+export const CHISPAZO_MULT = 5;
+/** Glimmers a Chispazo throws (from session MOTES_FROM_SESSION), each worth one pulse × streak and +1 hit; they live this long (s of dish). [design] */
+export const CHISPAZO_MOTES = 5;
+export const MOTES_FROM_SESSION = 2;
+export const MOTE_LIFE_S = 2.5;
+/** Glimmers land this far from the creature that threw them, in kernel radii R (≈ 40–60 px at the default zoom). [design: MECANICAS §3.2] */
+export const MOTE_SPREAD_R: [number, number] = [1.4, 2.1];
+/** Most glimmers on the dish at once (the oldest settles first). [design: overlay pool, MECANICAS §7.3] */
+export const MOTES_MAX = 15;
+/** A glimmer not caught settles as a loose drop worth this share of one pulse (light on screen is never taken away). [ADR-030 principle] */
+export const MOTE_SETTLE_SHARE = 1;
+
+// ───────────────────────────── Losses that give something back (ADR-031) ──
+
+/** A seed that never became stable gives back this share of what it cost (Luz, or the free seed). Failing costs only time. [owner: "no castigar"] */
+export const SEED_REFUND_SHARE = 1;
+/** After this many failed seeds in a row, the next one is sure (a pure template). [design; bot: the Gotero still pays: fewer waits] */
+export const SEED_FAIL_PITY = 2;
+/** A STABLE creature that dies (glass, fusion, lost shape) adds this many seconds of its last Luz/s to its drop. Not for Goma / sterilise. [design: < LIGHT_CAP_SECONDS, a loss stays a loss] */
+export const DEATH_BURST_SECONDS = 3;
+/** The first time ever a cause is seen (faded, touch, glass, lost, runaway): its card and this many Datos ("aprendiste por qué"). [design: a failed experiment is data] */
+export const FIRST_ACCIDENT_DATOS = 2;
+/** «¡Salvada!»: a warned pair that has not touched this many seconds after its predicted contact, one of them steered. [design: MECANICAS §4] */
+export const SAVE_GRACE_S = 1;
+
 // ───────────────────────────── Seeds and room (sessions) ───────────
 
 /**

@@ -104,6 +104,7 @@ import { computeProduction, wrapDist, type YieldDetail } from './economy';
 import { deathCause, explodeCause, predictContacts } from './contact';
 import { DEFLECT } from '../sim/deflect';
 import {
+  addLight,
   collectAt as collectAtDrops,
   collectDrop,
   collectPath as collectPathDrops,
@@ -120,6 +121,20 @@ import {
 import { clampToDish, DISH_DIAMETERS, insideDish, moveInDish, randomPointInDish, rimDistance, type DishShape } from '../core/dish';
 import { clipGraphemes } from './format';
 import * as C from './cycleBalance';
+import {
+  addBonusHits,
+  catchMote as catchMoteIn,
+  freshPulse,
+  pulseFx,
+  registerHit,
+  settleMotes,
+  streakMult,
+  streakView,
+  swipeMayHit,
+  tickStreak,
+  type PulseFx,
+  type PulseState,
+} from './pulse';
 import { migrateLegacy, type MigrationReport } from './legacy';
 import { averageEps, offlineEssence } from './offline';
 import {
@@ -145,6 +160,7 @@ import {
   boostWait,
   freezeBoost,
   endSession,
+  freshLosses,
   freshResearch,
   noteBehavior,
   noteBest,
@@ -171,6 +187,7 @@ import {
   summarize,
   tickSession,
   treeCtxOf,
+  type LossStats,
   type ResearchState,
   type SessionEvent,
   type SessionGoal,
@@ -417,6 +434,13 @@ export function createGame(deps: GameDeps, save?: string): Game {
   /** Seeds placed lately (t = seconds left in memory) and the radius of matter they stamped. */
   /** Seeds placed lately: `step` = the last report's step when placed (the detector sees it after that). */
   let recentSeeds: { x: number; y: number; t: number; r: number; step: number }[] = [];
+  /**
+   * (ADR-031) Seeds sown this session the detector has not settled yet: what each cost (refunded if it never takes),
+   * and the creature it became (`id`, linked on its first report near the spot).
+   */
+  let ledger: { x: number; y: number; cost: number; free: boolean; step: number; id: number | null }[] = [];
+  /** (ADR-031) The Sembrar button's spot, recomputed only when the dish changes (view() runs every frame). */
+  let sowCache: { key: string; spot: { x: number; y: number } | null } | null = null;
   /** State of each creature in the previous report (a 'died' creature that was exploded dissolved). */
   let lastStates = new Map<number, Creature['state']>();
   /** Where every body was in the previous report, outline radius included (accident causes, ADR-030). */
@@ -725,22 +749,93 @@ export function createGame(deps: GameDeps, save?: string): Game {
     if (se) noteEssence(se, x);
   }
 
-  /** Collected drops fly to the wallet (by hand, by pipette or swept). Returns the Luz pocketed. */
-  function pocket(ps: readonly Pickup[]): number {
+  /**
+   * Collected drops fly to the wallet (by hand, by pipette or swept). Returns the Luz pocketed. ADR-031: while a
+   * streak lasts, a drop that comes in by hand or by pipette is worth its multiplier (`mult`: the one a hit was paid
+   * with); the extra is new light (wallet and Datos). The final sweep is never multiplied.
+   */
+  function pocket(ps: readonly Pickup[], mult?: number): number {
     let total = 0;
+    const streak = ses()?.pulse ?? null;
     for (const p of ps) {
       if (!(p.amount > 0)) continue;
+      const m = p.by === 'sweep' ? 1 : (mult ?? (streak ? streakMult(streak) : 1));
+      const extra = m > 1 ? p.amount * (m - 1) : 0;
       s.essence += p.amount;
-      total += p.amount;
+      if (extra > 0) {
+        addEssence(extra);
+        if (streak) streak.finger += extra;
+      }
+      total += p.amount + extra;
       if (p.by === 'hand' && !s.flags.collected) {
         // A first step by name in the summary (no Datos of its own: the light it collects already counts).
         s.flags.collected = true;
         const se = ses();
         if (se) (se.goals ??= []).push({ kind: 'step', name: SESSION_UI.firstStepNames.collect, datos: 0 });
       }
-      bus.emit('lightCollected', { x: p.x, y: p.y, amount: p.amount, by: p.by });
+      bus.emit('lightCollected', { x: p.x, y: p.y, amount: p.amount + extra, by: p.by });
     }
     return total;
+  }
+
+  // ── The pulse, the streak and the glimmers (ADR-031, pulse.ts) ──
+
+  /** The finger works while the clock runs, and in the session-1 tutorial while the clock waits for VELA. */
+  const pulseOpen = (se: SessionState): boolean => se.phase === 'running' || (se.phase === 'ready' && !!se.hold);
+  /** The running session's finger (made on its first hit), or null when the finger does nothing. */
+  function fingerOf(): { se: SessionState; ps: PulseState; pf: PulseFx } | null {
+    const se = ses();
+    if (!se || !pulseOpen(se)) return null;
+    return { se, ps: (se.pulse ??= freshPulse()), pf: pulseFx(fx, se.n) };
+  }
+  /** The dish's light for a pulse: production of stable creatures (buffs included); 0 on soup or a flooded dish. */
+  function pulseLight(): number {
+    if (overgrown) return 0;
+    if (eps > 0) return eps;
+    // The tutorial's dish is paused while VELA talks: the economy has not ticked since the creature lit up.
+    return stableCount() > 0 ? production().total * buffMult() : 0;
+  }
+  /** Glimmers stay inside the glass (or wrap on the torus). */
+  function motePlace(x: number, y: number): { x: number; y: number } {
+    if (dish) return clampToDish(dish, x, y, 0.5 * s.calib.R);
+    return { x: ((x % grid.w) + grid.w) % grid.w, y: ((y % grid.h) + grid.h) % grid.h };
+  }
+  /** A hit that collected a drop (a tap on a drop or near one): +1 to the streak, and a Chispazo's pulses on its turn. */
+  function dropHit(at: { x: number; y: number; owner: number | null }): { mult: number; amount: number } | null {
+    const f = fingerOf();
+    if (!f) return null;
+    const r = registerHit(f.ps, { kind: 'drop', P: pulseLight(), fx: f.pf, nowMs: now(), at, R: s.calib.R, place: motePlace });
+    if (!r) return null;
+    if (r.amount > 0) addEssence(r.amount);
+    if (r.counted) bus.emit('pulse', { id: at.owner ?? -1, x: at.x, y: at.y, amount: r.amount, hits: f.ps.hits, chispazo: r.chispazo });
+    return { mult: r.mult, amount: r.amount };
+  }
+  /** A pulse on stable creature `c`: its drop (× the streak) and one pulse (CHISPAZO_MULT on a Chispazo). */
+  function pulseCreature(c: Creature): number {
+    const f = fingerOf();
+    if (!f || c.state !== 'stable') return 0;
+    const r = registerHit(f.ps, { kind: 'pulse', P: pulseLight(), fx: f.pf, nowMs: now(), at: { x: c.x, y: c.y, owner: c.id }, R: s.calib.R, place: motePlace });
+    if (!r) return 0; // nothing pays on this dish: not even a hit
+    let got = 0;
+    const L = collectable();
+    const d = L?.drops.find((q) => q.owner === c.id && q.amount > 0);
+    const p = L && d ? collectDrop(L, d.id) : null;
+    if (p) got += pocket([p], r.mult);
+    if (r.amount > 0) addEssence(r.amount);
+    if (r.counted) bus.emit('pulse', { id: c.id, x: c.x, y: c.y, amount: r.amount + got, hits: f.ps.hits, chispazo: r.chispazo });
+    return r.amount + got;
+  }
+  /** Glimmers whose time is up (or every one, at "¡Tiempo!") land as loose drops: light on screen is never taken away. */
+  function settleGlimmers(se: SessionState, dt: number): void {
+    if (!se.pulse) return;
+    const L = lightState();
+    for (const m of settleMotes(se.pulse, dt)) {
+      if (!L || !addLight(L, m.x, m.y, m.amount)) continue;
+      // Light made now counts now, also in the instant the clock ran out (the phase is already 'over').
+      s.stats.totalEssence += m.amount;
+      s.eraEssence += m.amount;
+      se.essence += m.amount;
+    }
   }
 
   /** Luz that comes in without a drop (Spark, Encargo, a first step): wallet and Datos at once, with its reason. */
@@ -1084,6 +1179,141 @@ export function createGame(deps: GameDeps, save?: string): Game {
     return bestD > minD && best && seedFits(best.x, best.y, B.SEED_RADIUS * R * 1.3, obstacles) ? best : null;
   }
 
+  // ── The Sembrar button (ADR-031): the safest spot, never refused for spacing ──
+
+  /** Body radius the button plans for: a spore, or the biggest template of this world (its seeds are templates). */
+  function sowBodyR(big = false): number {
+    const R = s.calib.R;
+    let r = R * B.SEED_RADIUS * (big ? B.SEED_BIG_RADIUS : 1);
+    const w = WORLD_BY_ID[worldNow()];
+    for (const code of [...w.species, ...(w.variants ?? [])]) {
+      const e = catalogByCode(code);
+      if (e) {
+        const t = scaledTemplate(e, R);
+        r = Math.max(r, Math.max(t.w, t.h) / 2);
+      }
+    }
+    return r;
+  }
+
+  /**
+   * The safest spot for a seed of body radius `bodyR`: on a fixed lattice (R/2 apart, centred on the dish; no
+   * randomness, so the button can show it before the tap), the point farthest from every body, its path, every
+   * fresh seed and the glass. With `near` (a drag): that point if it has room, else the nearest spot with room
+   * (clearSpotNear, then the lattice), else the safest. Null only when no lattice point lies inside the glass.
+   */
+  function safeSpot(bodyR: number, near?: { x: number; y: number }): { x: number; y: number } | null {
+    const R = s.calib.R;
+    const hasNear = !!near && Number.isFinite(near.x) && Number.isFinite(near.y);
+    if (hasNear) {
+      const c = clearSpotNear(near!.x, near!.y, bodyR);
+      if (c) return c;
+    }
+    const obstacles = seedObstacles();
+    const rimMargin = bodyR + B.SEED_RIM_MARGIN * R;
+    const step = Math.max(1, R / 2);
+    const cx = dish ? dish.cx : grid.w / 2;
+    const cy = dish ? dish.cy : grid.h / 2;
+    const n = Math.ceil((dish ? dish.radius : Math.max(grid.w, grid.h) / 2) / step);
+    let best: { x: number; y: number } | null = null;
+    let bestClear = -Infinity;
+    let fit: { x: number; y: number } | null = null;
+    let fitD = Infinity;
+    for (let j = -n; j <= n; j++) {
+      for (let i = -n; i <= n; i++) {
+        const x = cx + i * step;
+        const y = cy + j * step;
+        if (dish ? !insideDish(dish, x, y, rimMargin) : x < 0 || y < 0 || x >= grid.w || y >= grid.h) continue;
+        let clear = dish ? rimDistance(dish, x, y) - bodyR : Infinity;
+        for (const o of obstacles) clear = Math.min(clear, gdist(x, y, o.x, o.y) - o.r - bodyR);
+        if (clear > bestClear + 1e-9) {
+          bestClear = clear;
+          best = { x, y };
+        }
+        if (hasNear && seedFits(x, y, bodyR, obstacles)) {
+          const d = gdist(x, y, near!.x, near!.y);
+          if (d < fitD - 1e-9) {
+            fitD = d;
+            fit = { x, y };
+          }
+        }
+      }
+    }
+    return (hasNear ? fit : null) ?? best;
+  }
+
+  /** Where the Sembrar button would sow a normal seed now (GameView.sowSpot): null when the dish is full. */
+  function sowSpotNow(): { x: number; y: number } | null {
+    if (!sessions || dishFull()) return null;
+    const key = `${reportStep}|${recentSeeds.length}|${creatures.length}|${dish ? `${dish.cx},${dish.cy},${dish.radius}` : `${grid.w}x${grid.h}`}|${s.calib.R}|${worldNow()}`;
+    if (sowCache?.key !== key) sowCache = { key, spot: safeSpot(sowBodyR()) };
+    return sowCache.spot ? { ...sowCache.spot } : null;
+  }
+
+  // ── Seed luck (ADR-031): a seed that never takes gives back what it cost ──
+
+  function losses(se: SessionState): LossStats {
+    return (se.losses ??= freshLosses());
+  }
+
+  /** A seed was sown (paid `cost` Luz, or a free seed): remember it until the detector says whether it took. */
+  function noteSown(x: number, y: number, cost: number, free: boolean): void {
+    if (!sessions || !ses()) return;
+    ledger.push({ x, y, cost, free, step: reportStep, id: null });
+  }
+
+  /** A sown seed never took: its price (or its free seed) comes back, and one more bad-luck dot. */
+  function seedFailed(e: (typeof ledger)[number]): void {
+    ledger = ledger.filter((x) => x !== e);
+    const se = ses();
+    if (!se || se.phase === 'over') return;
+    const l = losses(se);
+    l.fails++;
+    l.refunds++;
+    const amount = e.free ? 0 : e.cost * C.SEED_REFUND_SHARE;
+    if (e.free) s.charges.free++;
+    if (amount > 0) {
+      s.essence += amount;
+      l.refunded += amount;
+    }
+    bus.emit('seedRefund', { x: e.x, y: e.y, amount, free: e.free });
+  }
+
+  /** Settle the ledger against the latest report: link new creatures to their seed, refund the ones that never took. */
+  function settleLedger(): void {
+    if (!ledger.length) return;
+    const byId = new Map(creatures.map((c) => [c.id, c]));
+    for (const e of [...ledger]) {
+      if (reportStep < e.step) e.step = reportStep; // a fresh dish restarted the step count
+      if (e.id === null) {
+        if (reportStep - e.step >= C.STABLE_AGE_STEPS) seedFailed(e); // the detector never saw it: it never took
+        continue;
+      }
+      const c = byId.get(e.id);
+      if (!c || c.state === 'dead' || c.state === 'exploded') seedFailed(e);
+      else if (c.state === 'stable') {
+        ledger = ledger.filter((x) => x !== e);
+        const se = ses();
+        if (se) losses(se).fails = 0;
+      }
+    }
+  }
+
+  /** A creature seen for the first time: the seed sown nearest to it (within R) becomes it. */
+  function linkSeed(c: Creature): void {
+    let best: (typeof ledger)[number] | null = null;
+    let bestD = s.calib.R;
+    for (const e of ledger) {
+      if (e.id !== null) continue;
+      const d = gdist(e.x, e.y, c.x, c.y);
+      if (d <= bestD) {
+        bestD = d;
+        best = e;
+      }
+    }
+    if (best) best.id = c.id;
+  }
+
   function autoSeed(): void {
     if (nurseryFull() || dishFull()) return;
     const cost = seedCost();
@@ -1100,6 +1330,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     s.essence -= cost;
     const spec = buildSeed(spot.x, spot.y, B.SEED_RADIUS, s.shape, false);
     recordSeed(spot.x, spot.y, cost, false, true, seedBodyRadius(spec));
+    noteSown(spot.x, spot.y, cost, false);
     const se = ses();
     if (se) {
       se.bought++;
@@ -1413,6 +1644,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
         if (c.state !== 'dead') {
           s.stats.creaturesBorn++;
           bus.emit('creatureBorn', { id: c.id, x: c.x, y: c.y });
+          if (ledger.length) linkSeed(c);
         }
       }
     }
@@ -1470,6 +1702,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
     }
     processPortraitWatch();
     stableIds = new Set(creatures.filter((c) => c.state === 'stable').map((c) => c.id));
+    // ADR-031: a seed that took clears the bad luck; one that never took gives back what it cost.
+    settleLedger();
     // A creature that went dark, merged or was wiped leaves its drop on the dish, loose (ADR-030).
     const L = collectable();
     if (L) pocket(releaseDrops(L, stableIds));
@@ -1904,7 +2138,11 @@ export function createGame(deps: GameDeps, save?: string): Game {
     const se = ses();
     if (!se || se.phase !== 'running') return;
     const secs = Math.round(C.SPARK_GIFT_SECONDS * fx.goldenRewardMult);
-    const amount = Math.max(C.SPARK_GIFT_MIN, Math.round(secs * eps));
+    const plain = Math.max(C.SPARK_GIFT_MIN, Math.round(secs * eps));
+    // ADR-031: the Spark is light that comes in, × the streak; and it adds SPARK_STREAK_HITS hits to it.
+    const f = fingerOf();
+    const amount = f ? Math.round(plain * streakMult(f.ps)) : plain;
+    if (f) addBonusHits(f.ps, C.SPARK_STREAK_HITS, f.pf); // the gift, extra included, counts as a gift
     giftLight(amount, TEXT.gift.spark);
     const sure = fx.mutagenSeeds;
     if (sure > 0) s.charges.guaranteed += sure;
@@ -1942,6 +2180,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
     perCreature = new Map();
     perDetail = new Map();
     recentSeeds = [];
+    ledger = [];
+    sowCache = null;
     pendingMutations = [];
     portraitWatch.clear();
     portraitQueue = [];
@@ -2233,6 +2473,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
     const se = ses();
     const r = s.research;
     if (!se || !r) return;
+    // ADR-031: the glimmers still in the air land first (light on screen is never taken away), then the sweep.
+    settleGlimmers(se, Infinity);
     se.phase = 'over';
     // "¡Tiempo!": VELA collects every drop left (ADR-030: light made is never lost).
     if (se.light) pocket(sweepAll(se.light));
@@ -2688,6 +2930,19 @@ export function createGame(deps: GameDeps, save?: string): Game {
     });
   }
 
+  /** (ADR-031) The streak, the glimmers, the button's spot and its bad-luck dots. */
+  function tapViews(): Pick<GameView, 'streak' | 'motes' | 'sowSpot' | 'seedLuck'> {
+    const se = ses();
+    const ps = se?.pulse;
+    const out: Pick<GameView, 'streak' | 'motes' | 'sowSpot' | 'seedLuck'> = {
+      motes: (ps?.motes ?? []).map((m) => ({ id: m.id, x: m.x, y: m.y, age: m.age, life: m.life, owner: m.owner })),
+      sowSpot: se && se.phase !== 'over' ? sowSpotNow() : null,
+      seedLuck: { fails: se?.losses?.fails ?? 0, need: C.SEED_FAIL_PITY },
+    };
+    if (se && pulseOpen(se)) out.streak = streakView(ps ?? freshPulse(), pulseFx(fx, se.n));
+    return out;
+  }
+
   function pipetteViews(): PipetteView[] {
     const L = lightState();
     if (!L) return [];
@@ -2771,7 +3026,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       dish: dish ? { ...dish } : null,
       buffs: s.buffs.map((b) => ({ id: b.id, name: TEXT.bloom, remaining: b.remaining, mult: b.mult })),
       creatures: creatureViews(),
-      ...(sv ? { drops: dropViews(), pipettes: pipetteViews(), dangers: dangerViews() } : {}),
+      ...(sv ? { drops: dropViews(), pipettes: pipetteViews(), dangers: dangerViews(), ...tapViews() } : {}),
       objective: obj ? objectiveText(obj.id, objCur, obj.target, sessions) : null,
       objectiveProgress: obj ? { current: Math.min(objCur, obj.target), target: obj.target, reward: objectiveReward(obj) } : null,
       settings: { ...s.settings },
@@ -2808,62 +3063,126 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
   // ───────────────────────────── actions ─────────────────────────────
 
-  const actions: GameActions = {
-    seedAt(x, y, opts) {
-      const se = ses();
-      if (sessions && (!se || se.phase === 'over')) return null; // the dish is frozen under the end card
-      if (se && tutorial && se.n === 1 && se.phase === 'ready') {
-        if (!se.planted) return plantFirst(se, x, y);
-        bus.emit('seedBlocked', { x, y, reason: 'growing' }); // VELA is talking: the clock has not started
-        return null;
+  /**
+   * Plant one seed: at a tap (`tap`, the classic rule: the nearest spot with room within SEED_RELOCATE·R, else
+   * refused for free), or from the Sembrar button (ADR-031: the safest spot, or the nearest safe spot to a drag;
+   * never refused for spacing). Room, the nursery and the wallet are checked first; nothing is charged when refused.
+   */
+  function plantSeed(opts: { big?: boolean } | undefined, where: { tap: { x: number; y: number } } | { button: true; at?: { x: number; y: number } }): SeedSpec | null {
+    const se = ses();
+    if (sessions && (!se || se.phase === 'over')) return null; // the dish is frozen under the end card
+    const button = 'button' in where;
+    const at = button ? where.at : undefined;
+    const centre = dish ? { x: dish.cx, y: dish.cy } : { x: grid.w / 2, y: grid.h / 2 };
+    const ex = button ? (at ?? sowSpotNow() ?? centre) : where.tap;
+    const { x, y } = ex;
+    if (se && tutorial && se.n === 1 && se.phase === 'ready') {
+      if (!se.planted) {
+        const p = button ? (safeSpot(sowBodyR(), at) ?? centre) : ex;
+        return plantFirst(se, p.x, p.y);
       }
-      const big = !!opts?.big && (sessions ? fx.bigSeed : level('dropper') >= 2);
-      const rf = B.SEED_RADIUS * (big ? B.SEED_BIG_RADIUS : 1);
-      const cost = seedCost(rf);
-      const pay = s.charges.free > 0 ? 'free' : pipetteReady() ? 'pipette' : s.essence >= cost ? 'essence' : null;
-      if (!pay) {
-        bus.emit('seedDenied', { x, y, cost });
-        return null;
-      }
-      if (dishFull()) {
-        bus.emit('seedBlocked', { x, y, reason: 'full' });
-        return null; // nothing charged: "Placa llena: mejora la Placa para más sitio"
-      }
-      if (nurseryFull()) {
-        bus.emit('seedBlocked', { x, y, reason: 'growing' });
-        return null; // nothing charged: "your seeds are still growing"
-      }
-      const charged = s.charges.guaranteed > 0;
-      // Sessions pity: no creature stable after SESSION_PITY_AFTER s of clock → this seed is sure.
-      const guaranteed = charged || (!!se && pityDue(se));
-      const spec = buildSeed(x, y, rf, s.shape, guaranteed);
+      bus.emit('seedBlocked', { x, y, reason: 'growing' }); // VELA is talking: the clock has not started
+      return null;
+    }
+    const big = !!opts?.big && (sessions ? fx.bigSeed : level('dropper') >= 2);
+    const rf = B.SEED_RADIUS * (big ? B.SEED_BIG_RADIUS : 1);
+    const cost = seedCost(rf);
+    const pay = s.charges.free > 0 ? 'free' : pipetteReady() ? 'pipette' : s.essence >= cost ? 'essence' : null;
+    if (!pay) {
+      bus.emit('seedDenied', { x, y, cost });
+      return null;
+    }
+    if (dishFull()) {
+      bus.emit('seedBlocked', { x, y, reason: 'full' });
+      return null; // nothing charged: "Placa llena: mejora la Placa para más sitio"
+    }
+    if (nurseryFull()) {
+      bus.emit('seedBlocked', { x, y, reason: 'growing' });
+      return null; // nothing charged: "your seeds are still growing"
+    }
+    const charged = s.charges.guaranteed > 0;
+    // Sessions pity: no creature stable after SESSION_PITY_AFTER s of clock → this seed is sure. ADR-031: so is the
+    // one after SEED_FAIL_PITY failed seeds in a row.
+    const unlucky = !!se && (se.losses?.fails ?? 0) >= C.SEED_FAIL_PITY;
+    const guaranteed = charged || (!!se && pityDue(se)) || unlucky;
+    const spec = buildSeed(x, y, rf, s.shape, guaranteed);
+    const bodyR = seedBodyRadius(spec);
+    let spot: { x: number; y: number } | null;
+    if (button) {
+      const planR = sowBodyR(big);
+      // The spot the button showed (GameView.sowSpot), whenever this seed fits the body it planned for.
+      spot = !at && !big && bodyR <= planR ? sowSpotNow() : safeSpot(Math.max(bodyR, planR), at);
+      spot ??= clearSpotNear(x, y, bodyR) ?? { x, y };
+    } else {
       // Spacing: never stamp a spore onto or right next to other matter (they fuse into a maze).
-      const spot = clearSpotNear(x, y, seedBodyRadius(spec));
+      spot = clearSpotNear(x, y, bodyR);
       if (!spot) {
         bus.emit('seedBlocked', { x, y, reason: 'tooClose', ...nearOf(x, y) });
         return null; // nothing charged, no charge used
       }
-      let paid = 0;
-      if (pay === 'free') s.charges.free--;
-      else if (pay === 'pipette') {
-        s.pipetteTimer = 0;
-        s.flags.pipetteUsed = true;
-      } else {
-        s.essence -= cost;
-        paid = cost;
-        if (se) {
-          se.bought++;
-          noteSpend(se, cost);
-        }
+    }
+    let paid = 0;
+    if (pay === 'free') s.charges.free--;
+    else if (pay === 'pipette') {
+      s.pipetteTimer = 0;
+      s.flags.pipetteUsed = true;
+    } else {
+      s.essence -= cost;
+      paid = cost;
+      if (se) {
+        se.bought++;
+        noteSpend(se, cost);
       }
-      if (charged) s.charges.guaranteed--;
-      const moved = spot.x !== x || spot.y !== y;
-      spec.x = spot.x;
-      spec.y = spot.y;
-      recordSeed(spot.x, spot.y, paid, true, true, seedBodyRadius(spec), moved ? { x, y } : undefined);
-      if (se) sessionEvents(noteSeed(se)); // the first seed starts the clock
-      checkProgress();
-      return spec;
+    }
+    if (charged) s.charges.guaranteed--;
+    else if (unlucky && se) losses(se).fails = 0; // the sure seed was used up
+    const moved = spot.x !== x || spot.y !== y;
+    spec.x = spot.x;
+    spec.y = spot.y;
+    recordSeed(spot.x, spot.y, paid, true, true, bodyR, !button && moved ? { x, y } : undefined);
+    if (pay !== 'pipette') noteSown(spot.x, spot.y, paid, pay === 'free');
+    if (se) sessionEvents(noteSeed(se)); // the first seed starts the clock
+    checkProgress();
+    return spec;
+  }
+
+  const actions: GameActions = {
+    seedAt(x, y, opts) {
+      return plantSeed(opts, { tap: { x, y } });
+    },
+
+    sow(opts) {
+      if (!sessions) return null;
+      const at = opts?.at && Number.isFinite(opts.at.x) && Number.isFinite(opts.at.y) ? { x: opts.at.x, y: opts.at.y } : undefined;
+      return plantSeed(opts?.big ? { big: true } : undefined, { button: true, ...(at ? { at } : {}) });
+    },
+
+    pulse(creatureId) {
+      if (!Number.isFinite(creatureId)) return 0;
+      const c = creatures.find((q) => q.id === creatureId);
+      return c ? pulseCreature(c) : 0;
+    },
+
+    pulseMany(creatureIds) {
+      const f = fingerOf();
+      if (!f || !Array.isArray(creatureIds)) return 0;
+      const t = now();
+      let sum = 0;
+      for (const id of creatureIds.slice(0, 64)) {
+        const c = creatures.find((q) => q.id === id && q.state === 'stable');
+        if (c && swipeMayHit(f.ps, id, t)) sum += pulseCreature(c);
+      }
+      return sum;
+    },
+
+    catchMote(moteId) {
+      const f = fingerOf();
+      if (!f || !Number.isFinite(moteId)) return 0;
+      const r = catchMoteIn(f.ps, moteId, now(), f.pf, s.calib.R, motePlace);
+      if (!r) return 0;
+      addEssence(r.amount);
+      bus.emit('moteCaught', { id: moteId, x: r.x, y: r.y, amount: r.amount });
+      return r.amount;
     },
 
     brushAt(x, y) {
@@ -3102,15 +3421,22 @@ export function createGame(deps: GameDeps, save?: string): Game {
     collect(dropId) {
       const L = collectable();
       if (!L || !Number.isFinite(dropId)) return 0;
+      const owner = L.drops.find((d) => d.id === dropId)?.owner ?? null;
       const p = collectDrop(L, dropId);
-      return p ? pocket([p]) : 0;
+      if (!p) return 0;
+      // ADR-031: a tap on a drop is a hit of the streak (it is paid with the streak it found).
+      const h = dropHit({ x: p.x, y: p.y, owner });
+      return pocket([p], h?.mult) + (h?.amount ?? 0);
     },
 
     collectAt(x, y, rCells) {
       const L = collectable();
       if (!L || !Number.isFinite(x) || !Number.isFinite(y)) return 0;
       const r = Number.isFinite(rCells) && rCells > 0 ? rCells : 0;
-      return pocket(collectAtDrops(L, x, y, r, bodies(), gdist));
+      const ps = collectAtDrops(L, x, y, r, bodies(), gdist);
+      if (!ps.length) return 0; // a tap on empty agar: nothing, and the streak is not broken
+      const h = dropHit({ x, y, owner: null });
+      return pocket(ps, h?.mult) + (h?.amount ?? 0);
     },
 
     collectPath(pts, rCells) {
@@ -3266,6 +3592,13 @@ export function createGame(deps: GameDeps, save?: string): Game {
     // Pipettes (↓ Recoger): their trips run with the dish.
     const L = running ? collectable() : null;
     if (L) pocket(tickPipettes(L, collectFx(), dt, gdist));
+
+    // The streak drains between hits and the glimmers wait to be caught (ADR-031); both stop while paused.
+    const fse = ses();
+    if (fse?.pulse && pulseOpen(fse)) {
+      tickStreak(fse.pulse, dt);
+      if (running) settleGlimmers(fse, dt);
+    }
 
     // Sembrador.
     const as = sessions ? fx.autoSeeder : level('autoSeeder');
