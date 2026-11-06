@@ -448,7 +448,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
    * (ADR-031) Seeds sown this session the detector has not settled yet: what each cost (refunded if it never takes),
    * and the creature it became (`id`, linked on its first report near the spot).
    */
-  let ledger: { x: number; y: number; cost: number; free: boolean; step: number; id: number | null }[] = [];
+  let ledger: { x: number; y: number; cost: number; free: boolean; step: number; id: number | null; r: number; plant?: boolean }[] = [];
   /** (ADR-031) Creatures the player erased (no death light), by id, with the report step they were marked at. */
   const erased = new Map<number, number>();
   /** Where the eraser touched lately (creatures there are marked as erased on the next report). */
@@ -1096,6 +1096,10 @@ export function createGame(deps: GameDeps, save?: string): Game {
       if (creatures.some((c) => c.state !== 'dead' && gdist(c.x, c.y, r.x, r.y) < R)) continue; // already reported
       out.push({ x: r.x, y: r.y, r: r.r });
     }
+    // (ADR-031) A Nevera / starter plant the detector has not reported yet stays in the way until it does (or for a
+    // few reports): a slow first report must not let the Sembrar button stamp onto it. The player's own seeds keep
+    // the v0.014 rule above (a spore that faded frees its spot as soon as the detector has looked).
+    for (const e of ledger) if (e.plant && e.id === null && reportStep - e.step < 3 * B.SEED_SEEN_STEPS) out.push({ x: e.x, y: e.y, r: e.r });
     return out.concat(extra);
   }
 
@@ -1276,16 +1280,16 @@ export function createGame(deps: GameDeps, save?: string): Game {
   }
 
   /** A seed was sown (paid `cost` Luz, or a free seed): remember it until the detector says whether it took. */
-  function noteSown(x: number, y: number, cost: number, free: boolean): void {
+  function noteSown(x: number, y: number, cost: number, free: boolean, r = s.calib.R, plant = false): void {
     if (!sessions || !ses()) return;
-    ledger.push({ x, y, cost, free, step: reportStep, id: null });
+    ledger.push({ x, y, cost, free, step: reportStep, id: null, r, ...(plant ? { plant: true } : {}) });
   }
 
   /** A sown seed never took: its price (or its free seed) comes back, and one more bad-luck dot. */
   function seedFailed(e: (typeof ledger)[number]): void {
     ledger = ledger.filter((x) => x !== e);
     const se = ses();
-    if (!se || se.phase === 'over') return;
+    if (!se || se.phase === 'over' || e.plant) return; // a Nevera plant cost nothing: nothing to give back
     const l = losses(se);
     l.fails++;
     l.refunds++;
@@ -1314,7 +1318,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       else if (c.state === 'stable') {
         ledger = ledger.filter((x) => x !== e);
         const se = ses();
-        if (se) losses(se).fails = 0;
+        if (se && !e.plant) losses(se).fails = 0;
       }
     }
   }
@@ -1350,7 +1354,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     s.essence -= cost;
     const spec = buildSeed(spot.x, spot.y, B.SEED_RADIUS, s.shape, false);
     recordSeed(spot.x, spot.y, cost, false, true, seedBodyRadius(spec));
-    noteSown(spot.x, spot.y, cost, false);
+    noteSown(spot.x, spot.y, cost, false, seedBodyRadius(spec));
     const se = ses();
     if (se) {
       se.bought++;
@@ -2503,6 +2507,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       const r = Math.max(t.pattern.w, t.pattern.h) / 2;
       out.push({ x: spot.x, y: spot.y, radius: r, density: 1, noise: 0, shape: 'pattern', pattern: t.pattern, bias: 1, rotation: t.rotation, rngSeed: Math.floor(rng() * 2147483647) });
       recentSeeds.push({ x: spot.x, y: spot.y, t: recentMemory(), r, step: reportStep }); // the next plant keeps clear of it
+      noteSown(spot.x, spot.y, 0, false, r, true);
     }
     return out;
   }
@@ -2524,6 +2529,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     se.seeds++;
     holdFor = 0;
     recordSeed(spot.x, spot.y, 0, true, true, r, spot.x !== x || spot.y !== y ? { x, y } : undefined);
+    noteSown(spot.x, spot.y, 0, false, r, true);
     bus.emit('dishSeed', { specs: [spec] });
     checkProgress();
     return null;
@@ -3254,7 +3260,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     spec.x = spot.x;
     spec.y = spot.y;
     recordSeed(spot.x, spot.y, paid, true, true, bodyR, !button && moved ? { x, y } : undefined);
-    if (pay !== 'pipette') noteSown(spot.x, spot.y, paid, pay === 'free');
+    if (pay !== 'pipette') noteSown(spot.x, spot.y, paid, pay === 'free', bodyR);
     if (se) sessionEvents(noteSeed(se)); // the first seed starts the clock
     checkProgress();
     return spec;
@@ -3658,6 +3664,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       bootReplant = null;
       if (dish && sessionStartInfo && s.session?.phase === 'ready') {
         recentSeeds.length = 0;
+        ledger = ledger.filter((e) => !e.plant);
         plants = fridgePlants(sessionStartInfo);
       }
       bus.emit('dishClear', {});
@@ -3975,6 +3982,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       // Set before the first tick: the fresh session-1 dish gets no starter (its plants have not been emitted).
       if (tutorial && se?.n === 1 && se.phase === 'ready' && !se.planted && bootReplant && sessionStartInfo) {
         recentSeeds.length = 0;
+        ledger = ledger.filter((e) => !e.plant);
         bootReplant = fridgePlants(sessionStartInfo);
       }
     },

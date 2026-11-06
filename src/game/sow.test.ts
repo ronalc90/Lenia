@@ -158,4 +158,20 @@ describe('the Sembrar button (ADR-031)', () => {
     expect(g.state.essence).toBeCloseTo(before + gifts(log), 9);
     expect(log.get('seedRefund')).toHaveLength(1);
   });
+
+  it('the button never sows onto a Nevera plant the detector has not reported yet', () => {
+    const rec = recordingBus();
+    const g = createGame({ bus: rec.bus, rng: seededRng(7001), grid: { w: 192, h: 240 }, cycle: 'sessions' });
+    const plants: { x: number; y: number }[] = [];
+    rec.bus.on('dishSeed', ({ specs }) => plants.push(...specs.map((p) => ({ x: p.x, y: p.y }))));
+    // The first report comes late (a coarse detector cadence): the plant is on the dish, not in any report yet.
+    g.tick(0.5, report([], [], 22));
+    expect(plants.length).toBeGreaterThan(0);
+    const spec = g.actions.sow!()!;
+    for (const p of plants) {
+      const dx = Math.min(Math.abs(spec.x - p.x), 192 - Math.abs(spec.x - p.x));
+      const dy = Math.min(Math.abs(spec.y - p.y), 240 - Math.abs(spec.y - p.y));
+      expect(Math.hypot(dx, dy)).toBeGreaterThan(2 * R + B.SEED_GAP * R);
+    }
+  });
 });
