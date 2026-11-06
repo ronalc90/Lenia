@@ -67,7 +67,8 @@ export class PressGuard {
  * or less than `ms` after it, is swallowed whole: its down, moves, up and click.
  *
  * Times are the events' own timestamps: a slow phone handles a tap late, but the finger came down when it did,
- * often before the new screen was even drawn. The change is stamped again on the next frame (when it is drawn).
+ * often before the new screen was even drawn. The change is stamped when the screen's DOM changes (not again at
+ * the next frame: at 1 fps that held every tap for a second more, and a player's deliberate tap was lost).
  */
 export class ScreenGuard {
   private changedAt = -Infinity;
@@ -88,10 +89,9 @@ export class ScreenGuard {
 /** The one guard of every screen of the game (QA-3 §2): the Tree, its sheets, the report, the start card, drawers. */
 export const screenGuard = new ScreenGuard(SCREEN_TAP_GUARD_MS);
 
-/** A screen changed now: taps for SCREEN_TAP_GUARD_MS are ignored (stamped again when the frame is drawn). */
+/** A screen changed now: presses that came down before, or for SCREEN_TAP_GUARD_MS after, are ignored. */
 export function screenChanged(): void {
   screenGuard.changed(performance.now());
-  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => screenGuard.changed(performance.now()));
 }
 
 /**

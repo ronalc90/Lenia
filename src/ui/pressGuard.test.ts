@@ -58,15 +58,14 @@ describe('the dock ignores a tap meant for what covered it', () => {
 describe('a screen that just opened ignores the taps that were not aimed at it (QA-3 §2)', () => {
   it('QA-3: the rest of a burst of taps on «Ir al Árbol» never reaches the Tree under it', () => {
     const g = new ScreenGuard(SCREEN_TAP_GUARD_MS);
-    // Tap 1 came down at 0; the slow phone handled it at 400 ms and opened the Tree, drawn at 650 ms.
+    // Tap 1 came down at 0; the slow phone handled it at 400 ms and opened the Tree.
     expect(g.allows(0)).toBe(true);
     g.changed(400);
-    g.changed(650);
-    // Taps 2–4 came down 150 ms apart, before the Tree was even drawn: none of them may act.
+    // Taps 2–4 came down 150 ms apart, before or just after the Tree opened: none of them may act.
     for (const at of [150, 300, 450, 600]) expect(g.allows(at), `tap at ${at} ms`).toBe(false);
-    // Just after it was drawn, still not; a deliberate tap a moment later works.
-    expect(g.allows(650 + SCREEN_TAP_GUARD_MS - 1)).toBe(false);
-    expect(g.allows(650 + SCREEN_TAP_GUARD_MS)).toBe(true);
+    // A deliberate tap a moment later works.
+    expect(g.allows(400 + SCREEN_TAP_GUARD_MS - 1)).toBe(false);
+    expect(g.allows(400 + SCREEN_TAP_GUARD_MS)).toBe(true);
   });
 
   it('QA-3: «¡Empezar!» tapped twice: the second tap never opens the Árbol tab the card uncovered', () => {
