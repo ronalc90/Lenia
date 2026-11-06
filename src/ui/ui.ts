@@ -70,8 +70,6 @@ const COLLECT_UI = {
   moteShare: [0.04, 0.12],
   /** The reason chip next to the counter ("+5 · primera semilla"), ms. */
   giftMs: 2400,
-  /** A death the player's own tool caused (Goma, cleaning) this recently (ms) says nothing of VELA. */
-  toolMs: 2000,
   /** The «También puedes arrastrarla» hint comes with this tap of the Sembrar button, from session 2 (§6.2). */
   dragHintTap: 3,
 } as const;
@@ -261,6 +259,11 @@ export interface UI {
   hudAnchor?(id: 'essence' | 'datos' | 'clock'): DOMRect | null;
   /** Something landed on a HUD counter (B-6): it pulses (arrivals within 80 ms are one pulse) and ticks. */
   pulseHud?(id: 'essence' | 'datos', amount: number): void;
+  /**
+   * (ADR-031, docs/MECANICAS.md §4) VELA's lysis dissolved a blob that kept growing at grid (x, y) (main.ts, the one
+   * place lysis is known): the dish says so where it was. It pays nothing: it never was a creature.
+   */
+  lysed?(x: number, y: number): void;
 }
 
 export function createUI(root: HTMLElement, deps: UIDeps): UI {
@@ -415,8 +418,6 @@ class BiolumaUI implements UI {
   /** Button presses this session (the drag hint), the run's «Aquí cabe mejor» already said. */
   private sowPresses = 0;
   private snapTold = false;
-  /** When the player last used a tool that removes matter (the Goma, cleaning the dish). */
-  private toolAt = 0;
   /** Slot reserved next to the seed cost for the price meter (src/ui/moments wires it). */
   readonly seedMeterSlot = h('span', { class: 'mp-meter' });
   /** «Copiar» over the seed pill once the Copiadora is bought (QA-CLARIDAD #39), and its species strip. */
@@ -720,7 +721,6 @@ class BiolumaUI implements UI {
     // Overflow banner (view.overgrown): prominent, but the dish stays usable underneath.
     const cleanBig = h('button', { type: 'button', class: 'btn primary og-btn', 'data-testid': 'overgrown-clean' }, ic('broom', 24), h('span', { class: 'og-btn-l' }));
     cleanBig.addEventListener('click', () => {
-      this.toolAt = performance.now();
       this.sound('confirm');
       this.actions.sterilizeDish?.();
     });
@@ -872,8 +872,7 @@ class BiolumaUI implements UI {
       erase: (x, y) => {
         if (!this.camera.isOnDish(x, y)) return;
         const g = this.camera.screenToGrid(x, y);
-        this.toolAt = performance.now();
-        this.deps.onErase(g.x, g.y);
+          this.deps.onErase(g.x, g.y);
         this.overlay.ripple(g.x, g.y, 'erase');
         this.vibrate(6);
       },
@@ -1182,6 +1181,11 @@ class BiolumaUI implements UI {
   restartTutorial(): void {
     this.modals.closeAll();
     this.deps.onRestartTutorial?.();
+  }
+
+  lysed(x: number, y: number): void {
+    const label = dissolvedLabel(true, false);
+    if (label && !this.deps.isNarrating?.()) this.overlay.wentDark(x, y, tx(label), false);
   }
 
   setPaused(p: boolean): void {
@@ -1671,7 +1675,6 @@ class BiolumaUI implements UI {
       this.fabClean.classList.remove('holding');
       this.sound('confirm');
       this.vibrate(20);
-      this.toolAt = performance.now();
       this.actions.sterilizeDish?.();
     }, B.CLEAN_HOLD_MS);
   }
@@ -1753,7 +1756,6 @@ class BiolumaUI implements UI {
       this.fabClean.classList.remove('armed');
       this.sound('confirm');
       this.vibrate(20);
-      this.toolAt = performance.now();
       this.actions.sterilizeDish?.();
       return;
     }
@@ -2080,7 +2082,6 @@ class BiolumaUI implements UI {
       return;
     }
     if (this.mode === 'erase') {
-      this.toolAt = performance.now();
       this.deps.onErase(g.x, g.y);
       this.overlay.ripple(g.x, g.y, 'erase');
       this.vibrate(8);
@@ -2736,11 +2737,9 @@ class BiolumaUI implements UI {
     });
     // Shapeless matter dissolved (lysis, clean-up): it fades like a puff; it was never a creature that died.
     bus.on('creatureDissolved', (e) => {
-      // ADR-031: VELA's lysis of a blob that kept growing says so (it pays nothing: it never was a creature); the
-      // player's own Goma or clean-up says nothing.
-      const label = dissolvedLabel(ov.stateOf(e.id) === 'exploded', performance.now() - this.toolAt < COLLECT_UI.toolMs);
+      // Shapeless matter vanished (lysis, the clean-up, or it fell apart alone): a puff. VELA's lysis says so in its
+      // own words through lysed() (main.ts knows when it was hers).
       ov.puff(e.x, e.y);
-      if (label && !this.deps.isNarrating?.()) ov.wentDark(e.x, e.y, tx(label), false);
       if (this.card?.id === e.id) this.closeCard();
     });
     // ── ADR-031 (docs/MECANICAS.md §3, §4): the pulse, the glimmers, and losses that give something back ──
