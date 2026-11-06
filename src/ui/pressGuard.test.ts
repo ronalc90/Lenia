@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PressGuard } from './pressGuard';
+import { PressGuard, SCREEN_TAP_GUARD_MS, ScreenGuard } from './pressGuard';
 import { DOCK_UNCOVER_GUARD_MS } from '../game/balance';
 
 // QA-CLARIDAD #17 (docs/CLARIDAD2.md §2.7): Nutrientes «se compró solo». It was a tap meant for VELA's
@@ -49,5 +49,42 @@ describe('the dock ignores a tap meant for what covered it', () => {
     // Each press is good for one click.
     expect(g.click(5070)).toBe(false);
     expect(g.click(6000, true)).toBe(true);
+  });
+});
+
+// QA-3 §2 (v0.026): four fast taps on «Ir al Árbol», always on the same spot. Tap 1 opened the Tree, tap 2 landed on
+// «Placa más grande» in «Puedes comprar», tap 3 on its «Comprar», which bought it. The phone ran at 4–5 fps: each tap
+// was handled 0.4–2 s after the finger came down.
+describe('a screen that just opened ignores the taps that were not aimed at it (QA-3 §2)', () => {
+  it('QA-3: the rest of a burst of taps on «Ir al Árbol» never reaches the Tree under it', () => {
+    const g = new ScreenGuard(SCREEN_TAP_GUARD_MS);
+    // Tap 1 came down at 0; the slow phone handled it at 400 ms and opened the Tree, drawn at 650 ms.
+    expect(g.allows(0)).toBe(true);
+    g.changed(400);
+    g.changed(650);
+    // Taps 2–4 came down 150 ms apart, before the Tree was even drawn: none of them may act.
+    for (const at of [150, 300, 450, 600]) expect(g.allows(at), `tap at ${at} ms`).toBe(false);
+    // Just after it was drawn, still not; a deliberate tap a moment later works.
+    expect(g.allows(650 + SCREEN_TAP_GUARD_MS - 1)).toBe(false);
+    expect(g.allows(650 + SCREEN_TAP_GUARD_MS)).toBe(true);
+  });
+
+  it('QA-3: «¡Empezar!» tapped twice: the second tap never opens the Árbol tab the card uncovered', () => {
+    const g = new ScreenGuard(SCREEN_TAP_GUARD_MS);
+    g.changed(1000); // the start card closes
+    expect(g.allows(1080)).toBe(false);
+    expect(g.allows(1000 + SCREEN_TAP_GUARD_MS + 50)).toBe(true);
+  });
+
+  it('the guard is about 350 ms, inside the 300–400 ms the QA asked for', () => {
+    expect(SCREEN_TAP_GUARD_MS).toBeGreaterThanOrEqual(300);
+    expect(SCREEN_TAP_GUARD_MS).toBeLessThanOrEqual(400);
+  });
+
+  it('an older change never shortens a newer one', () => {
+    const g = new ScreenGuard(SCREEN_TAP_GUARD_MS);
+    g.changed(2000);
+    g.changed(1500);
+    expect(g.allows(2100)).toBe(false);
   });
 });

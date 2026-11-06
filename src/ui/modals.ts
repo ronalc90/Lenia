@@ -4,6 +4,7 @@
  * Bottom sheets on mobile, centered dialogs on wide layouts.
  */
 import type { GameView, Settings, SpeciesView } from '../core/types';
+import { screenChanged } from './pressGuard';
 import { BEHAVIOR_COLOR } from '../core/palette';
 import type { Ctx } from './ctx';
 import type { UISound } from './ui';
@@ -93,6 +94,8 @@ export class ModalHost {
       close: () => {
         if (closed) return;
         closed = true;
+        // Taps meant for the sheet never land on what it uncovers (QA-3 §2).
+        screenChanged();
         this.sound('close');
         this.stack = this.stack.filter((m) => m !== handle);
         wrap.classList.add('out');
@@ -104,6 +107,7 @@ export class ModalHost {
     if (opts.dismissable !== false) scrim.addEventListener('click', () => handle.close());
     this.layer.appendChild(wrap);
     this.stack.push(handle);
+    screenChanged();
     this.sound('open');
     // Move focus into the dialog (keyboard users) without showing a ring on a button; its blocks come in
     // one after another (40 ms apart after 80 ms, B-5) — the caller fills `body` right after show().

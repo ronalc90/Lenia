@@ -35,6 +35,7 @@ import { plateLabel, plateOf, scaleBar, scaleText } from '../moments/plates';
 import { mountPortrait } from '../portrait';
 import { Portrait } from '../story/portraits';
 import { treeIcon } from '../tree/icons';
+import { screenChanged } from '../pressGuard';
 import { countUp, DURATION, EASING } from '../art/motion';
 import '../art/art.css';
 import './session.css';
@@ -604,6 +605,7 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
     },
     show(sum, extras) {
       clearTimers();
+      screenChanged();
       const l = opts.lang();
       const data: ReportData = { ...reportDataOf(sum), ...extras };
       plates = extras.plates ?? [];
@@ -668,6 +670,7 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
     hide() {
       if (!open) return;
       open = false;
+      screenChanged();
       clearTimers();
       finish = null;
       layer.classList.remove('show');

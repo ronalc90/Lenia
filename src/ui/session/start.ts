@@ -17,6 +17,7 @@ import { Portrait } from '../story/portraits';
 import { artIcon, WORLD_ICON } from '../art/icons';
 import { worldArt, worldColors } from '../art/worlds';
 import { treeIcon } from '../tree/icons';
+import { screenChanged } from '../pressGuard';
 import '../art/art.css';
 import './session.css';
 
@@ -163,6 +164,7 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
     },
     show(start, extras = {}) {
       const entering = !open;
+      if (entering) screenChanged();
       current = { start, extras };
       const l = opts.lang();
       const gifts: string[] = [];
@@ -219,8 +221,9 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
         ${gifts.length ? `<div class="ss-box"><div class="ss-gifts">${gifts.join('')}</div></div>` : ''}
         ${fresh ? `<div class="ss-box"><h4>${esc(SESSION_UI.startNew[l])}</h4><div class="ss-new">${fresh}</div></div>` : ''}
         ${extras.encargo ? `<div class="ss-box"><h4>${esc(SESSION_UI.startGoal[l])}</h4><div class="ss-goal">${treeIcon('encargo', 24)}<span>${esc(extras.encargo[l])}</span></div></div>` : ''}
-        <p class="ss-hint">${treeIcon('drop', 18)}${esc(SESSION_UI.startHint[l])}</p>
-        <div class="ss-actions"><button type="button" class="ss-btn primary" data-act="go">${treeIcon('play', 24)}<span class="tx">${esc(SESSION_UI.startGo[l])}</span></button></div>`;
+        <div class="ss-actions ss-go-row"><button type="button" class="ss-btn primary" data-act="go">${treeIcon('play', 24)}<span class="tx">${esc(
+          SESSION_UI.startGo[l],
+        )}</span></button><p class="ss-hint">${treeIcon('drop', 18)}${esc(SESSION_UI.startHint[l])}</p></div>`;
       for (const m of card.querySelectorAll<HTMLElement>('[data-sp]')) {
         const info = opts.speciesInfo?.(m.dataset.sp!);
         if (info?.portrait) mountPortrait(m, info.portrait, m.classList.contains('mini') ? 26 : 52, { hue: info.hue, fill: 0.8 });
@@ -264,6 +267,8 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
     hide() {
       if (!open) return;
       open = false;
+      // «¡Empezar!» sat over the Árbol tab: the rest of an impatient double tap opened the Tree (QA-3 §2).
+      screenChanged();
       cancelAnimationFrame(raf);
       layer.classList.remove('show');
       if (!rm() && typeof card.animate === 'function')

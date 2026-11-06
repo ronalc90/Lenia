@@ -406,6 +406,21 @@
   flex: 1 1 0;
   min-width: 0;
 }
+/* «¡Empezar!» sat right over the dock's Árbol tab: the rest of a double tap opened the Tree under it (QA-3 §2).
+   The button stands above the dock's band; the line under it (not a target) covers the band. --bl-dock-h is the
+   dock's height, published by the game UI. */
+.ss-actions.ss-go-row {
+  flex-direction: column;
+  padding-bottom: 0;
+}
+.ss-actions.ss-go-row .ss-btn {
+  flex: none;
+}
+.ss-go-row .ss-hint {
+  min-height: max(var(--bl-dock-h, 72px), calc(16px + env(safe-area-inset-bottom)));
+  margin: 0;
+  padding-bottom: env(safe-area-inset-bottom);
+}
 @media (max-width: 559px) {
   .ss-actions .ss-btn {
     gap: 8px;

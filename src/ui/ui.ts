@@ -19,7 +19,7 @@ import { icon, logo } from './icons';
 import { DishInput } from './input';
 import { dropAt, dropsOnSegment, motesOnSegment, routeTap, SweepHits, type TapReach } from './dishTap';
 import { copyPick } from './copyPick';
-import { PressGuard } from './pressGuard';
+import { installScreenGuard, PressGuard, screenChanged } from './pressGuard';
 import { FlyLayer, flyDuration } from './fx/fly';
 import { Readout, wholeRate } from './fx/readout';
 import { dishFx } from './fx/stage';
@@ -540,6 +540,8 @@ class BiolumaUI implements UI {
       reduceMotion: () => !!this.v?.settings.reduceMotion,
     });
     this.wireCollection();
+    // QA-3 §2: a press that started before a screen changed, or just after, is not aimed at the new one.
+    installScreenGuard(window);
     this.toasts.setHold(() => !!this.deps.isNarrating?.() || !!this.splash?.visible);
     this.toasts.setMaxMs(() => (shortRunRunning(this.v?.session) ? SESSION_TOAST_MAX_MS : Infinity));
     this.bindBus();
@@ -1124,6 +1126,7 @@ class BiolumaUI implements UI {
     const v = this.v;
     if (open && !v) return;
     this.bestiaryOpen = open;
+    screenChanged();
     const p = this.ensureBestiary();
     toggle(this.bestiaryBtn, 'active', open);
     setAttr(this.bestiaryBtn, 'aria-expanded', open ? 'true' : 'false');
@@ -1406,6 +1409,7 @@ class BiolumaUI implements UI {
   }
 
   private topInset = '';
+  private dockH = 0;
   /**
    * Where overlays may start under the floating objective: VELA's dialogue at the top (page
    * coordinates, --sty-top) and the toasts inside the dish (--toast-top). Never covers the objective.
@@ -1426,6 +1430,12 @@ class BiolumaUI implements UI {
       this.topInset = v + toast;
       document.documentElement.style.setProperty('--sty-top', v);
       this.dish.style.setProperty('--toast-top', toast);
+    }
+    // The dock's band: the start card keeps «¡Empezar!» above it, off the Árbol tab (QA-3 §2).
+    const dockH = this.dock.offsetHeight;
+    if (dockH > 0 && dockH !== this.dockH) {
+      this.dockH = dockH;
+      document.documentElement.style.setProperty('--bl-dock-h', `${dockH}px`);
     }
   }
 
@@ -2432,6 +2442,8 @@ class BiolumaUI implements UI {
   private openCard(id: number): void {
     if (this.card?.id === id) return;
     this.closeCard();
+    // The next fast taps never land on its «Seguir» (QA-3 §2: it zoomed in and followed by accident).
+    screenChanged();
     const name = h('div', { class: 'ccard-name' });
     const state = h('span', { class: 'ccard-state' });
     const close = h('button', { type: 'button', class: 'ccard-close', 'aria-label': t('close'), html: icon('close', 18) });

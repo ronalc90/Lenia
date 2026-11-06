@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TREE_LAYOUT, TREE_NODES, treeStates, type TreeCtx } from '../../game/tree';
-import { D, NODE_EXTENT, TAP_QUIET_MS, buyableIds, nodeRect, openingCam, revealCam, tapAllowed, type Area, type Cam, freeTop, gateLabelAngle, LABEL_EDGE } from './camera';
+import { D, NODE_EXTENT, TAP_QUIET_MS, buyPressAllowed, buyableIds, nodeRect, openingCam, revealCam, tapAllowed, type Area, type Cam, freeTop, gateLabelAngle, LABEL_EDGE } from './camera';
 
 /** A 390 × 844 phone: the top bar and VELA take 150 px, the "Puedes comprar" strip 96 px. */
 const PHONE: Area = { left: 0, top: 150, right: 390, bottom: 844 - 96 };
@@ -137,5 +137,24 @@ describe('night labels on their dashed circles', () => {
   it('a circle with no point on screen hides its label instead of showing it cut', () => {
     const cam: Cam = { x: 195, y: 450, z: 1.9 };
     expect(gateLabelAngle(cam, 6 * D, half, PHONE, PREFER)).toBeNull();
+  });
+});
+
+// QA-3 §2: the third of four fast taps landed on a sheet's «Comprar» and bought «Placa más grande». The slow phone
+// handled it more than TAP_QUIET_MS after the sheet opened, but the finger had come down long before.
+describe('«Comprar» needs its sheet on screen first (QA-3 §2)', () => {
+  it('QA-3: a finger that came down before the sheet had been shown for a moment never buys, however late it is handled', () => {
+    const sheetAt = 1000;
+    expect(buyPressAllowed(sheetAt + 120, sheetAt, -Infinity)).toBe(false);
+    expect(buyPressAllowed(sheetAt - 50, sheetAt, -Infinity)).toBe(false);
+  });
+
+  it('a deliberate press once the sheet has been up ≥ 300 ms buys', () => {
+    expect(TAP_QUIET_MS).toBeGreaterThanOrEqual(300);
+    expect(buyPressAllowed(1000 + TAP_QUIET_MS, 1000, -Infinity)).toBe(true);
+  });
+
+  it('nor right after the camera moved under it', () => {
+    expect(buyPressAllowed(5000, 1000, 4900)).toBe(false);
   });
 });

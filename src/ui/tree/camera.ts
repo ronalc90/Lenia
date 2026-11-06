@@ -179,3 +179,12 @@ export function gateLabelAngle(cam: Cam, r: number, half: { w: number; h: number
 export function tapAllowed(now: number, lastMoveAt: number): boolean {
   return now - lastMoveAt >= TAP_QUIET_MS;
 }
+
+/**
+ * May a press on a sheet's «Comprar» buy (QA-3 §2)? Only one whose finger came down (`pressAt`, the event's own
+ * timestamp) once the sheet had been on screen and the camera still for TAP_QUIET_MS. When the tap was handled does
+ * not count: a slow phone handled the third tap of a burst well after the sheet opened, and it bought.
+ */
+export function buyPressAllowed(pressAt: number, sheetShownAt: number, camMovedAt: number): boolean {
+  return tapAllowed(pressAt, Math.max(sheetShownAt, camMovedAt));
+}

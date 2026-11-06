@@ -56,8 +56,9 @@ import { mountPortrait } from '../portrait';
 import { ROUTE_ICON } from '../art/icons';
 import { DURATION, EASING, pop, staggerIn } from '../art/motion';
 import { nodeWhy, WHY_UI } from './why';
-import { D, FAR_Z, Z_MAX, Z_MIN, freeTop, gateLabelAngle, openingCam, revealCam, tapAllowed, type Area, type Cam } from './camera';
+import { D, FAR_Z, Z_MAX, Z_MIN, buyPressAllowed, freeTop, gateLabelAngle, openingCam, revealCam, tapAllowed, type Area, type Cam } from './camera';
 import { treeIcon } from './icons';
+import { screenChanged } from '../pressGuard';
 import { DISH_DIAMETERS } from '../../core/dish';
 import '../art/art.css';
 import './tree.css';
@@ -309,6 +310,8 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
   let peekTimer = 0;
   /** When the sheet last turned to a node (its buy button waits TAP_QUIET_MS like a node tap). */
   let sheetAt = -Infinity;
+  /** When the last finger came down on the sheet (the event's timestamp: QA-3 §2). */
+  let sheetPressAt = -Infinity;
 
   const ctxOf = (d: TreeViewData): TreeCtx => ({ levels: d.levels, datos: d.datos, sessions: d.sessions, species: d.species });
   const vpSize = () => ({ w: vp.clientWidth || window.innerWidth, h: vp.clientHeight || window.innerHeight });
@@ -1022,7 +1025,11 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       }
     }
     const fresh = staggerFor !== selected;
-    if (fresh) sheetAt = performance.now();
+    if (fresh) {
+      // Stamped again when it is drawn: on a slow phone the frame comes well after the DOM change.
+      sheetAt = performance.now();
+      requestAnimationFrame(() => (sheetAt = Math.max(sheetAt, performance.now())));
+    }
     staggerFor = selected;
     sheet.innerHTML = `<div class="rt-grab"></div>
       <div class="rt-sh-head">
@@ -1044,6 +1051,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     if (fresh) staggerIn(sheet.children);
   }
 
+  sheet.addEventListener('pointerdown', (e) => (sheetPressAt = e.timeStamp), { capture: true });
   sheet.addEventListener('click', (e) => {
     const t = e.target as HTMLElement;
     if (t.closest('.rt-x')) {
@@ -1083,9 +1091,11 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       return;
     }
     const buy = t.closest('[data-buy]') as HTMLButtonElement | null;
-    // Buying only with the sheet's button, which names its node, and never right after the camera moved or
-    // the sheet turned to another node (QA-CLARIDAD #12: purchases by accident).
-    if (buy?.dataset.buy && !buy.disabled && tapAllowed(performance.now(), Math.max(lastCamMove, sheetAt))) doBuy(buy.dataset.buy, buy);
+    // Buying only with the sheet's button, which names its node, and never with a finger that came down right
+    // after the camera moved or the sheet turned to another node (QA-CLARIDAD #12, QA-3 §2: purchases by accident).
+    // A keyboard press has no finger: it counts when it happens.
+    const pressAt = (e as MouseEvent).detail === 0 ? performance.now() : sheetPressAt;
+    if (buy?.dataset.buy && !buy.disabled && buyPressAllowed(pressAt, sheetAt, lastCamMove)) doBuy(buy.dataset.buy, buy);
   });
 
   // ───────────── buying ─────────────
@@ -1137,6 +1147,12 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
   }
 
   function doBuy(id: string, btn?: HTMLElement): void {
+    // A Placa level this phone cannot show is never on sale, whatever the game says (QA-CLARIDAD #11, QA-3 §2).
+    const st = states.get(id);
+    if (st && isDeviceMax(st)) {
+      sound('deny');
+      return;
+    }
     // Before onBuy: the host's nodeBought handler calls update() with the new levels synchronously.
     const wasFirst = id !== 'lab' && Object.entries(data.levels).every(([k, n]) => k === 'lab' || !n);
     const res = opts.onBuy(id);
@@ -1309,6 +1325,8 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       if (open) return;
       open = true;
       el.hidden = false;
+      // The taps that opened it (a child taps four times) never buy what is under them now (QA-3 §2).
+      screenChanged();
       el.classList.toggle('rm', rm());
       shownDatos = data.datos;
       datosNum.textContent = fmt(data.datos, lang());
@@ -1322,6 +1340,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       if (!open) return;
       open = false;
       el.hidden = true;
+      screenChanged();
       selected = null;
       homeCam = null;
       playWorld = null;
@@ -1331,6 +1350,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     select(id) {
       const prev = selected;
       selected = id && TREE_BY_ID[id] && states.get(id)?.status !== 'hidden' ? id : null;
+      if (selected !== prev) screenChanged();
       // The camera of the tree as the player left it: the sheet's reveals are undone when it closes.
       if (!prev && selected) homeCam = { ...cam };
       if (selected !== firstBought) firstBought = null;
