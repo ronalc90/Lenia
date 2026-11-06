@@ -118,6 +118,12 @@ try {
       const y = dish.y + dish.height * (0.25 + 0.5 * ((i * 0.381) % 1));
       if (vp.hasTouch) await page.touchscreen.tap(x, y);
       else await page.mouse.click(x, y);
+      // ADR-031: the dish tap pulses or ripples; sowing is the Sembrar button (every other turn, like a player).
+      const sow = i % 2 === 0 ? await page.locator('[data-testid="sow"]').boundingBox().catch(() => null) : null;
+      if (sow) {
+        if (vp.hasTouch) await page.touchscreen.tap(sow.x + sow.width / 2, sow.y + sow.height / 2);
+        else await page.mouse.click(sow.x + sow.width / 2, sow.y + sow.height / 2);
+      }
       i++;
       await page.waitForTimeout(1400);
     }

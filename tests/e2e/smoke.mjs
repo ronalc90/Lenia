@@ -111,7 +111,8 @@ try {
       }
     };
 
-    // Seed by tapping the dish a few times (real input path).
+    // Tap the dish a few times (real input path: in a session they pulse and ripple, ADR-031) and sow with the
+    // Sembrar button after each one, as a player does.
     const box = await page.locator('canvas.gl-dish').boundingBox();
     if (!box) throw new Error('dish canvas not found');
     const taps = [
@@ -128,6 +129,14 @@ try {
       if (vp.hasTouch) await page.touchscreen.tap(x, y);
       else await page.mouse.click(x, y);
       await page.waitForTimeout(250);
+      const sow = await page.locator('[data-testid="sow"]').boundingBox().catch(() => null);
+      if (sow) {
+        const sx = sow.x + sow.width / 2;
+        const sy = sow.y + sow.height / 2;
+        if (vp.hasTouch) await page.touchscreen.tap(sx, sy);
+        else await page.mouse.click(sx, sy);
+        await page.waitForTimeout(250);
+      }
     }
     await page.waitForTimeout(1500);
     if (shotsDir) await page.screenshot({ path: `${shotsDir}/${vp.name}-1-seeded.png` });
@@ -186,7 +195,7 @@ try {
     });
     console.log(`[${vp.name}]`, JSON.stringify(state));
     if (state.step < 100) throw new Error(`[${vp.name}] simulation barely advanced: ${state.step} steps`);
-    if (state.seeds < 1) throw new Error(`[${vp.name}] no seeds registered from taps`);
+    if (state.seeds < 1) throw new Error(`[${vp.name}] no seeds registered from the Sembrar button`);
     // The live game plays lab sessions: the first seed started the clock, shown in the HUD (a first run
     // lasts ~15 s, ADR-027, so by now it may be over already).
     if (!state.session || state.session.phase === 'ready') throw new Error(`[${vp.name}] the session clock is not running: ${JSON.stringify(state.session)}`);

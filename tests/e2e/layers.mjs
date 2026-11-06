@@ -140,20 +140,15 @@ async function runCase(c) {
     window.__blocked = [];
     window.bioluma.bus.on('seedBlocked', (p) => window.__blocked.push(p.reason));
   });
-  for (const [fx, fy] of [
-    [0.2, 0.5],
-    [0.8, 0.5],
-    [0.5, 0.2],
-    [0.5, 0.8],
-  ]) {
+  // ADR-031: a player sows with the Sembrar button (a tap on the dish never sows).
+  for (let k = 0; k < 4; k++) {
     await closeMoments();
-    const p0 = await dishPoint(fx, fy);
-    await tap(p0.x, p0.y);
+    if (!(await tapSel('[data-testid="sow"]'))) problems.push(`[${c.name}] session 1: no Sembrar button to sow with (ADR-031)`);
     await page.waitForTimeout(1200);
-    if ((await state()).phase === 'running') break;
-    say(`tap at ${fx},${fy} refused: ${await page.evaluate(() => window.__blocked.join(',') + ' moment=' + (window.bioluma.moments.current()?.id ?? '-'))}`);
+    if ((await state()).phase === 'running' || (await page.evaluate(() => window.bioluma.game.view().stats.seeds > 0))) break;
+    say(`Sembrar ${k + 1} refused: ${await page.evaluate(() => window.__blocked.join(',') + ' moment=' + (window.bioluma.moments.current()?.id ?? '-'))}`);
   }
-  // ADR-030 §2.4: the first tap plants the first creature and the clock waits for VELA's «Tu reloj empieza
+  // ADR-030 §2.4: the first seed plants the first creature and the clock waits for VELA's «Tu reloj empieza
   // ahora». A player who never taps her bubble still gets the clock (her lines close on their own, or the
   // tutorial's failsafe starts it).
   for (let i = 0; i < 150 && (await state()).phase === 'ready'; i++) {
@@ -500,7 +495,8 @@ async function runCase(c) {
   // F-10: "Limpiar placa" is away from the seed bar and needs a long press.
   const geo = await page.evaluate(() => {
     const a = document.querySelector('[data-testid="clean-dish"]')?.getBoundingClientRect();
-    const b = document.querySelector('.mode-pill')?.getBoundingClientRect();
+    // The seed bar: the Sembrar button in sessions (ADR-031), else the seed pill.
+    const b = (document.querySelector('.sow-btn:not([hidden])') ?? document.querySelector('.mode-pill'))?.getBoundingClientRect();
     return a && b ? Math.hypot(a.x + a.width / 2 - (b.x + b.width / 2), a.y + a.height / 2 - (b.y + b.height / 2)) : -1;
   });
   if (!(geo > 200)) problems.push(`[${c.name}] "Limpiar placa" is ${geo.toFixed(0)} px from the seed bar (F-10)`);
@@ -605,13 +601,13 @@ async function runCase(c) {
   const opens = await page.evaluate(() => window.__treeOpens ?? []);
   if (opens.length) problems.push(`[${c.name}] the Tree reopened by itself: ${opens.join(' || ')}; clicks: ${(await page.evaluate(() => window.__clicks ?? [])).join(' | ')}`);
   await shot('session-2');
-  await mustHit('.mode-pill', 'session 2 ready');
+  await mustHit('[data-testid="sow"]', 'session 2 ready');
 
   // ── Nutrientes in a running session 2 (docs/CLARIDAD2.md §2.7, §2.14) ──
   await closeMoments();
   for (let i = 0; i < 4 && (await state()).phase === 'ready'; i++) {
-    const p1 = await dishPoint([0.25, 0.75, 0.3, 0.7][i], [0.7, 0.3, 0.3, 0.7][i]);
-    await tap(p1.x, p1.y);
+    // ADR-031: the first seed of a session (it starts the clock) comes from the Sembrar button.
+    await tapSel('[data-testid="sow"]');
     await page.waitForTimeout(800);
     await closeMoments();
   }

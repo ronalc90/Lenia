@@ -864,10 +864,12 @@ async function runCase(c) {
         }
         if (cur?.id === 't_streak' && !shotStreak) {
           shotStreak = true;
-          // «¡Más!»: the child keeps tapping, and the chip by the counter counts it.
-          pulsed += await pulseBurst(4, 150);
+          // «¡Más!»: the child keeps tapping, and the chip by the counter counts it (looked at within the streak's
+          // grace: a screenshot on software GL can take longer than that).
+          pulsed += await pulseBurst(5, 120);
+          const chip = await visible('.streak-chip');
           await shot('s1-step6-streak');
-          if (!(await visible('.streak-chip'))) problems.push(`[${c.name}] session 1: «¡Más! Toques seguidos…» with no streak chip by the counter`);
+          if (!chip) problems.push(`[${c.name}] session 1: «¡Más! Toques seguidos…» with no streak chip by the counter`);
         }
         await settle(`seed ${k}`, { shots: false });
         await page.waitForTimeout(250);
