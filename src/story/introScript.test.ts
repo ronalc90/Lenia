@@ -4,6 +4,7 @@ import { INTRO_MAX_WORDS, INTRO_PANELS, INTRO_SECONDS, INTRO_UI } from './introS
 import { INTRO_SEEN_FLAG, MAX_WORDS_TUTORIAL, T_INTRO_AFTER_INTRO, T_INTRO_LINES } from './script';
 import { createStory } from './story';
 import { makeView, memoryStorage } from './testUtil';
+import { CHAIN, SIDE } from './encargoScript';
 
 const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
 
@@ -85,5 +86,25 @@ describe('t_intro after the intro', () => {
     const s = createStory({ bus: new Bus<GameEvents>(), getView: () => makeView(), storage, now: () => 1e6, pollMs: 0 });
     s.setFlag(INTRO_SEEN_FLAG);
     expect(s.serialize().flags).toContain(INTRO_SEEN_FLAG);
+  });
+});
+
+// QA-3 N5 (v0.026, shots 153, 013): Fig. 1 of the intro said «Toca la placa para poner una semilla de luz», which no
+// longer does anything: sowing is the Sembrar button (ADR-031).
+describe('the intro and the Encargos send the finger to the Sembrar button to sow (QA-3 N5)', () => {
+  const sowsOnDish = /Toca la placa|Tap the dish|cada toque pone|lejos del cristal|away from the glass/;
+
+  it('QA-3: the intro\'s «how to sow» panel names the Sembrar button, never a tap on the dish', () => {
+    const sow = INTRO_PANELS.find((p) => p.id === 'sow')!;
+    for (const l of sow.lines) {
+      expect(l.text.es).toMatch(/Sembrar/);
+      expect(l.text.en).toMatch(/Sow/);
+      expect(l.text.es + l.text.en).not.toMatch(/Toca la placa|Tap the dish/);
+    }
+  });
+
+  it('no Encargo of the sessions cycle tells the player to tap the dish to sow', () => {
+    for (const e of [...CHAIN, ...SIDE]) for (const x of [e.how?.es ?? '', e.how?.en ?? '']) expect(x, e.id).not.toMatch(/Toca la placa|Tap the dish|lejos del cristal|away from the glass/);
+    expect(sowsOnDish.test('Toca el botón Sembrar')).toBe(false);
   });
 });

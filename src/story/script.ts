@@ -727,7 +727,8 @@ export const SCENES: SceneDef[] = [
         {
           id: 'answer',
           label: t('Contestarles', 'Answer them'),
-          wait: tapWait('Toca la placa tres veces.', 'Tap the dish three times.', { count: 3, timeoutSec: 60 }),
+          // The 'taps' counter counts seeds (story.ts): in sessions they come from the Sembrar button (QA-3 N5).
+          wait: tapWait('Siembra tres veces.', 'Sow three times.', { count: 3, timeoutSec: 60, target: ['seed', 'dish'] }),
           journal: 's_answer',
         },
         {

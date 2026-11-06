@@ -298,7 +298,7 @@ describe('encargos: persistence and boot', () => {
     expect(cur.line!.text.es).toContain('Siembra');
     t.story.advance();
     // How, then why (CLARIDAD2 §5.3 task 6).
-    expect(t.story.current()!.line!.text.es).toContain('Toca la placa');
+    expect(t.story.current()!.line!.text.es).toContain('Sembrar');
     t.story.advance();
     expect(t.story.current()!.line!.text.es).toContain('despierta');
     t.story.advance();
@@ -321,7 +321,7 @@ describe('encargos: never ask for what cannot be done yet (QA4 F-04)', () => {
 
 describe('encargos: every request says how, in plain words (CLARIDAD2 §5.3 task 6)', () => {
   /** Real buttons and Tree nodes a player can find on screen. */
-  const PLACES = /Árbol|Bestiario|«Copiar»|placa|chispa|Mundo|tarjeta de inicio|Nutrientes|nadadora|la que gira|semilla/;
+  const PLACES = /Árbol|Bestiario|«Copiar»|placa|chispa|Mundo|tarjeta de inicio|Nutrientes|nadadora|la que gira|semilla|Sembrar/;
 
   it('QA#39: every offered Encargo has a how that names a real button or tree node', () => {
     for (const e of [...CHAIN, ...SIDE]) {

@@ -86,7 +86,8 @@ export const INTRO_PANELS: readonly IntroPanel[] = [
     id: 'sow',
     kicker: how(1),
     seconds: 2.5,
-    lines: [{ who: 'narrator', text: t('Toca la placa para poner una semilla de luz.', 'Tap the dish to drop a seed of light.') }],
+    // ADR-031 (QA-3 N5): a tap on the dish never sows any more; the Sembrar button does.
+    lines: [{ who: 'narrator', text: t('Toca el botón Sembrar para poner una semilla de luz.', 'Tap the Sow button to drop a seed of light.') }],
   },
   {
     id: 'essence',
