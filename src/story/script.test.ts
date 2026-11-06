@@ -17,6 +17,7 @@ import {
   T_STABLE_LINES,
   T_STABLE_SESSIONS,
 } from './script';
+import { TEXT } from '../game/content';
 import { createStory } from './story';
 import { creature, makeView, memoryStorage } from './testUtil';
 import { ENDING_IDS, HINT_KINDS, TARGET_IDS, type LineDef, type SceneDef } from './types';
@@ -246,6 +247,53 @@ describe('session 1 teaches the Sembrar button and the pulse (ADR-031, docs/MECA
     await Promise.resolve();
     story.tick();
     expect(story.serialize().done).toContain('t_pulse');
+  });
+
+  // QA-3 N4 (v0.026): on a slow phone the clock started (failsafe) while the first creature still incubated, the
+  // «¡VIDA!» Momento told «¡Vive!» (t_stable consumed), and nobody said «tócala»: 0–1 taps in session 1.
+  it('QA-3: the clock already runs when the creature lives: after «¡VIDA!» VELA still says «Tócala»', async () => {
+    let now = 1_000_000;
+    let v = s1({ creatures: [creature(1, 'born', 116, 116)], session: { ...s1().session!, tutorialHold: true, seeds: 1 } });
+    const bus = new Bus<GameEvents>();
+    const story = createStory({ bus, getView: () => v, storage: memoryStorage(), now: () => now, random: () => 0.99, pollMs: 0 });
+    story.setFlag(INTRO_SEEN_FLAG);
+    story.consume(['t_intro', 't_born']);
+    // The failsafe started the clock; then the creature lived and the Momento told it.
+    v = { ...v, session: { ...v.session!, phase: 'running' } };
+    v = { ...v, creatures: [creature(1, 'stable', 116, 116)] };
+    bus.emit('creatureStable', { id: 1, x: 116, y: 116 });
+    story.consume(['t_stable', 't_essence']);
+    await Promise.resolve();
+    const said: string[] = [];
+    for (let i = 0; i < 40; i++) {
+      now += 250;
+      story.tick();
+      const cur = story.current();
+      if (cur?.phase === 'lines' && cur.line && said[said.length - 1] !== cur.line.text.es) said.push(cur.line.text.es);
+    }
+    expect(said).toContain(TEXT.tutPulse.es);
+    // Once: after a pulse it is never said again.
+    for (let h = 1; h <= 3; h++) bus.emit('pulse', { id: 1, x: 116, y: 116, amount: 1, hits: h, chispazo: false });
+    await Promise.resolve();
+    story.tick();
+    expect(story.serialize().done).toContain('t_pulse');
+  });
+
+  it('a player who already tapped the creature is not told to tap it', async () => {
+    let now = 1_000_000;
+    let v = s1({ creatures: [creature(1, 'stable', 116, 116)], session: { ...s1().session!, tutorialHold: true, seeds: 1, phase: 'running' } });
+    const bus = new Bus<GameEvents>();
+    const story = createStory({ bus, getView: () => v, storage: memoryStorage(), now: () => now, random: () => 0.99, pollMs: 0 });
+    story.setFlag(INTRO_SEEN_FLAG);
+    story.consume(['t_intro', 't_born', 't_stable', 't_essence']);
+    bus.emit('pulse', { id: 1, x: 116, y: 116, amount: 1, hits: 1, chispazo: false });
+    await Promise.resolve();
+    for (let i = 0; i < 40; i++) {
+      now += 250;
+      story.tick();
+      expect(story.current()?.scene.id).not.toBe('t_pulse');
+    }
+    void v;
   });
 
   it('a game without the pulse is never taught it (the clock comes right after «¡Vive!»)', () => {

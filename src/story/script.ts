@@ -311,7 +311,9 @@ export const SCENES: SceneDef[] = [
     after: ['t_stable'],
     title: t('Tócala', 'Tap it'),
     // ADR-031 (MECANICAS §6.1 step 5): the pulse works with the dish still; its first taps pay the floor (+1).
-    when: (c) => firstSession(c) && clockWaits(c) && pulseLesson(c),
+    // QA-3 N4: on a slow phone the clock may already run when the creature lives (the failsafe, «¡VIDA!» told by a
+    // Momento): then she says it anyway, as long as the player never tapped a creature.
+    when: (c) => firstSession(c) && pulseLesson(c) && (clockWaits(c) || c.n('pulses') === 0),
     // Her line moves on by itself: the step ends on three taps on the creature, not on a tap on her box (§6.1).
     lines: [vela('happy', TEXT.tutPulse.es, TEXT.tutPulse.en, { target: ['creature', 'dish'], auto: 1.5 })],
     // Taps that pulsed since she started, counted even while she talks (the streak itself may drain meanwhile).

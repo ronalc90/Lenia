@@ -22,7 +22,7 @@ import { catalogGroup, catalogPortrait } from '../../species';
 import { createTreeView, type TreeSound, type TreeView } from '../tree';
 import { createSessionHud, hudViewOf, type SessionHud, type SessionHudSound } from './hud';
 import { createSessionStart, type SessionStartView } from './start';
-import { shouldStartClock, startGo } from './clockGate';
+import { startGo, TutorialHold } from './clockGate';
 import { celebrateNight } from './night';
 import { createSessionSummary, type SessionSummaryView, type SummarySound } from './summary';
 import { momentPlateKind } from '../moments/plates';
@@ -98,8 +98,8 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
   let celebrating = false;
   const sound = (k: SessionFlowSound) => o.onSound?.(k);
   let stamping = false;
-  /** Wall time the session-1 clock started waiting for the tutorial (-1 = not waiting). */
-  let holdSince = -1;
+  /** The session-1 clock waiting for the tutorial (its failsafe counts the time the dish is lit: QA-3 N4). */
+  const tutorialHold = new TutorialHold();
   /** Last state pushed to the clock pill's pause chip. */
   let pausedShown = false;
   /** Merges of this run (VELA's tip in the report: «Hoy se juntaron 2…», docs/CLARIDAD2.md §2.5). */
@@ -288,11 +288,7 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
         start.setReady(go.ready, go.secondsLeft);
       }
       // Session 1: the first creature is the player's; the clock starts when VELA lets it (§2.4).
-      if (s.phase === 'ready' && v.session?.tutorialHold) {
-        const now = performance.now();
-        if (holdSince < 0) holdSince = now;
-        if (shouldStartClock(v.session, o.clockHold?.() ?? false, now - holdSince)) game.actions.startClock?.();
-      } else holdSince = -1;
+      if (tutorialHold.step(v.session, performance.now(), o.cultureReady?.() ?? true, o.clockHold?.() ?? false)) game.actions.startClock?.();
       // The clock pill says when it waits for the player (VELA talking, a sheet, a card: §2.3).
       const paused = s.phase === 'running' && game.isPaused;
       if (paused !== pausedShown) {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Bus, type GameEvents } from '../../core/bus';
 import { createGame } from '../../game/game';
 import { START_WAKE_MAX_S } from '../../game/cycleBalance';
-import { clockPauses, shouldStartClock, startGo, TUTORIAL_CLOCK_FAILSAFE_MS } from './clockGate';
+import { clockPauses, shouldStartClock, startGo, TUTORIAL_CLOCK_FAILSAFE_MS, TUTORIAL_CLOCK_HARD_MS, TutorialHold } from './clockGate';
 
 describe('the clock waits for the player (ADR-030, CLARIDAD2 §2.3, §2.4)', () => {
   it('session 1: the first creature does not start the clock; VELA’s line does', () => {
@@ -66,5 +66,39 @@ describe('the start card never hangs on «La criatura se está despertando…» 
     expect(startGo(false, START_WAKE_MAX_S * 1000)).toEqual({ ready: true, secondsLeft: 0 });
     expect(startGo(false, 120_000).ready).toBe(true);
     expect(START_WAKE_MAX_S).toBeLessThanOrEqual(6);
+  });
+});
+
+// QA-3 N4 (v0.026, shots 168–175): on a phone at 4–5 fps the first creature incubated in the dark for ~30 s, the
+// 30-s failsafe started the clock, and VELA never said «Tócala»: both players ended session 1 with 0–1 taps.
+describe('the session-1 failsafe counts only the time VELA could talk (QA-3 N4)', () => {
+  const s = { phase: 'ready' as const, tutorialHold: true };
+
+  it('QA-3: 31 s of dark incubation on a slow phone never starts the clock before the tutorial', () => {
+    const h = new TutorialHold();
+    let start = false;
+    for (let t = 0; t <= 31_000; t += 250) start ||= h.step(s, t, false, true);
+    expect(start).toBe(false);
+  });
+
+  it('once the dish is lit, the failsafe runs as before', () => {
+    const h = new TutorialHold();
+    let at = -1;
+    for (let t = 0; t <= 80_000 && at < 0; t += 250) if (h.step(s, t, t >= 20_000, true)) at = t;
+    expect(at).toBeGreaterThan(20_000 + TUTORIAL_CLOCK_FAILSAFE_MS - 500);
+    expect(at).toBeLessThan(20_000 + TUTORIAL_CLOCK_FAILSAFE_MS + 500);
+  });
+
+  it('a dish that never lights still never holds the session forever', () => {
+    const h = new TutorialHold();
+    let at = -1;
+    for (let t = 0; t <= 200_000 && at < 0; t += 250) if (h.step(s, t, false, true)) at = t;
+    expect(at).toBeGreaterThan(0);
+    expect(at).toBeLessThanOrEqual(TUTORIAL_CLOCK_HARD_MS + 250);
+  });
+
+  it('the tutorial done: at once; not held: never', () => {
+    expect(new TutorialHold().step(s, 0, false, false)).toBe(true);
+    expect(new TutorialHold().step({ phase: 'running', tutorialHold: true }, 0, true, false)).toBe(false);
   });
 });
