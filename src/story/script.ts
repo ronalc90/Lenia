@@ -208,8 +208,12 @@ export const T_STABLE_LINES: LineDef[] = [
   vela('awed', '¡Vive! Tiene borde. Tiene forma. ¡Se queda!', 'It\'s alive! It has an edge. A shape. It stays!', at('creature', 'dish')),
   vela('happy', 'Es una criatura. Tu primera. Hola, pequeña.', 'It\'s a creature. Your first one. Hello, little one.', at('creature', 'dish')),
 ];
-/** Session 1 (§2.4 step 4): the creature the player planted is alive; the clock still waits. */
-export const T_STABLE_SESSIONS: LineDef[] = [vela('awed', '¡Vive! Es tu primera criatura.', 'It\'s alive! Your first creature.', at('creature', 'dish'))];
+/**
+ * Session 1 (§2.4 step 4): the creature the player planted is alive. Its line moves on by itself like the rest of the
+ * sequence: on a slow device the creature may light after the clock started (its failsafe), and VELA talking stops a
+ * running clock, so a line that waited for a tap froze the run of a player who never taps her (layers.mjs desktop).
+ */
+export const T_STABLE_SESSIONS: LineDef[] = [vela('awed', '¡Vive! Es tu primera criatura.', 'It\'s alive! Your first creature.', { target: ['creature', 'dish'], auto: 2 })];
 
 /** The Choir's question (final choice). */
 const QUESTION = coro('¿qué  ·  somos  ·  para  ·  ti  ?', 'what  ·  are  ·  we  ·  to  ·  you  ?', { hint: 'echo' });

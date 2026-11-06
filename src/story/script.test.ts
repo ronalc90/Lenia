@@ -305,6 +305,18 @@ describe('session 1 teaches the Sembrar button and the pulse (ADR-031, docs/MECA
     expect(r.phase).toBe('running');
   });
 
+  // tests/e2e/layers.mjs desktop (failed 3/3 on v0.026 too): the first creature lit after the session-1 clock had started
+  // (a slow canvas, its failsafe), so «¡Vive! Es tu primera criatura.» played with the clock running. It was the only
+  // line of the sequence that waited for a tap, and VELA talking stops a running clock: a player who never taps her
+  // bubble had the run frozen at 0:05 for good.
+  it('every line of session 1\'s sequence moves on by itself (a player who never taps VELA still gets the run)', () => {
+    for (const id of ['t_born', 't_stable', 't_pulse', 't_streak', 't_clock']) {
+      const def = SCENE_BY_ID.get(id)!;
+      const lines = id === 't_stable' ? T_STABLE_SESSIONS : staticLines(def);
+      for (const l of lines) expect(l.auto ?? null, `${id}: ${l.text.es}`).not.toBeNull();
+    }
+  });
+
   it('every line has twelve words or fewer', () => {
     const tut = [...T_INTRO_SESSIONS, ...T_INTRO_SESSIONS_AFTER_INTRO, ...['t_pulse', 't_streak', 't_born', 't_clock'].flatMap((id) => staticLines(SCENE_BY_ID.get(id)!))];
     expect(tut.length).toBeGreaterThan(4);
