@@ -17,9 +17,13 @@
  *    what this session is worth BEFORE it ends and the next node it reaches); a tap opens the Datos
  *    sum (summary.ts datosExplain in the shared price sheet).
  *
+ * ADR-031 (docs/MECANICAS.md §3.2): the streak chip beside the Luz counter, «Racha ×1,2» with ten dots that
+ * fill towards the next ¡Chispazo!, «¡Racha máxima!» when full, grey while it drains (createStreakChip).
+ *
  * Pure DOM, no game imports beyond the session types: the host feeds `update()` from SessionState.
  */
-import type { Lang, Text } from '../../core/types';
+import type { GameView, Lang, Text } from '../../core/types';
+import { TEXT } from '../../game/content';
 import * as C from '../../game/cycleBalance';
 import { countdownSeconds, warnSeconds, type SessionState } from '../../game/session';
 import { SESSION_UI } from '../../game/treeText';
@@ -435,4 +439,100 @@ export function createSessionHud(container: HTMLElement, opts: SessionHudOptions
     },
   };
   return api;
+}
+
+// ───────────────────────────── the streak chip (ADR-031) ─────────────────────────────
+
+/** What the streak chip shows (pure). */
+export interface StreakChipView {
+  /** «Racha ×1,2», or «¡Racha máxima!» when full. */
+  text: string;
+  /** Dots lit towards the next ¡Chispazo! (0 right after one) out of `every`. */
+  dots: number;
+  every: number;
+  full: boolean;
+  /** No hit for a moment: it greys and goes down slowly (never at once). */
+  draining: boolean;
+  /** Under the counter: «×1,2 por tu racha» (null while it rounds to ×1). */
+  line: string | null;
+}
+
+/**
+ * The streak's multiplier as the main flow says it: one decimal at most, rounded down (docs/CLARIDAD2.md §2.13: no
+ * two-decimal multipliers; ×1,25 reads ×1,2, never more than it pays).
+ */
+export function streakShown(mult: number): number {
+  return Math.floor(mult * 10 + 1e-9) / 10;
+}
+
+export function streakChip(s: GameView['streak'] | undefined, l: Lang): StreakChipView | null {
+  if (!s || !(s.hits > 0)) return null;
+  const every = Math.max(1, Math.round(s.every));
+  const shown = streakShown(s.mult);
+  const full = s.hits >= s.max;
+  // Hits left to the next one (every … 1): every − left are lit; right after a ¡Chispazo! (left = every) none.
+  const dots = (every - (Math.max(0, Math.round(s.toChispazo)) % every)) % every;
+  return {
+    text: (full ? TEXT.streakMax : TEXT.streak(shown))[l],
+    dots,
+    every,
+    full,
+    draining: !!s.draining,
+    line: shown > 1 ? TEXT.streakLine(shown)[l] : null,
+  };
+}
+
+export interface StreakChip {
+  readonly el: HTMLElement;
+  update(s: GameView['streak'] | undefined): void;
+  dispose(): void;
+}
+
+/** The chip as DOM (mounted by the host next to the Luz counter; hidden while there is no streak). */
+export function createStreakChip(host: HTMLElement, opts: { lang(): Lang; reduceMotion?(): boolean }): StreakChip {
+  const el = document.createElement('div');
+  el.className = 'streak-chip';
+  el.hidden = true;
+  el.setAttribute('role', 'status');
+  el.innerHTML = '<span class="sk-t mono"></span><span class="sk-dots" aria-hidden="true"></span><span class="sk-line mono"></span>';
+  host.appendChild(el);
+  const text = el.querySelector('.sk-t') as HTMLElement;
+  const dotsEl = el.querySelector('.sk-dots') as HTMLElement;
+  const lineEl = el.querySelector('.sk-line') as HTMLElement;
+  let key = '';
+  let dotN = 0;
+  let lastDots = -1;
+  return {
+    el,
+    update(s) {
+      const l = opts.lang();
+      const v = streakChip(s, l);
+      const k = v ? `${v.text}|${v.dots}|${v.every}|${v.full ? 1 : 0}|${v.draining ? 1 : 0}|${v.line ?? ''}` : '';
+      if (k === key) return;
+      key = k;
+      el.hidden = !v;
+      if (!v) {
+        lastDots = -1;
+        return;
+      }
+      if (dotN !== v.every) {
+        dotN = v.every;
+        dotsEl.innerHTML = '<i></i>'.repeat(v.every);
+      }
+      const ds = dotsEl.children;
+      for (let i = 0; i < ds.length; i++) ds[i].classList.toggle('on', i < v.dots);
+      text.textContent = v.text;
+      lineEl.textContent = v.line ?? '';
+      lineEl.hidden = !v.line;
+      el.classList.toggle('full', v.full);
+      el.classList.toggle('draining', v.draining);
+      el.setAttribute('aria-label', v.line ? `${v.text} · ${v.line}` : v.text);
+      // The dots went back to zero: a ¡Chispazo! (the big «+N» and the shake are the dish's, PB).
+      if (lastDots > v.dots && v.dots === 0 && !opts.reduceMotion?.()) pop(el, 1.12);
+      lastDots = v.dots;
+    },
+    dispose() {
+      el.remove();
+    },
+  };
 }

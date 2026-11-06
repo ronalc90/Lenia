@@ -4,10 +4,10 @@ import { beginSession, computeDatos, freshResearch, noteEncargo, noteEssence, no
 import { treeEffects } from '../../game/tree';
 import { nodePriceExplain } from '../tree/treeView';
 import { fmt } from '../format';
-import { NEEDLE, dialTarget, extendChip, hudSub, stepNeedle } from './hud';
+import { NEEDLE, dialTarget, extendChip, hudSub, stepNeedle, streakChip } from './hud';
 import { TEXT } from '../../game/content';
 import { hudState } from './hud';
-import { datosExplain, reportDataOf, reportHeadline, reportRows, type ReportData } from './summary';
+import { datosExplain, fingerLines, reportDataOf, reportHeadline, reportRows, velaTip, type ReportData } from './summary';
 import type { SessionSummary } from '../../game/session';
 
 const NAMES: Record<string, string> = { a: 'Remolino violeta', b: 'Nadadora celeste' };
@@ -309,5 +309,78 @@ describe('a burst of notices is one message (QA-CLARIDAD-2 C9)', () => {
   it('the light of several requests says where it came from («+189 · meta cumplida» meant nothing)', () => {
     expect(TEXT.giftLine(189, TEXT.giftMany(7)).es).toBe('+189 · 7 encargos cumplidos');
     expect(TEXT.giftLine(27, TEXT.gift.goal).es).toBe('+27 · encargo cumplido');
+  });
+});
+
+describe('the finger in the report (ADR-031, docs/MECANICAS.md §6.1 step 11, §6.2, §6.3)', () => {
+  const two = /×\d+[.,]\d\d/;
+
+  it('the report shows taps, best streak and Flashes in both languages', () => {
+    const fx = treeEffects({});
+    const { session } = beginSession(freshResearch(), fx);
+    noteEssence(session, 210);
+    // PA's summary carries the finger's session (optional until it lands; the report reads it as it comes).
+    const sum = { ...summaryOf({ n: 1, datos: computeDatos(session, fx, 0) }), finger: { taps: 74, bestStreak: 1.25, chispazos: 4, luz: 96 } };
+    const data = reportDataOf(sum);
+    expect(data.finger).toEqual({ taps: 74, bestStreak: 1.25, chispazos: 4, luz: 96 });
+    const es = fingerLines(data, 'es');
+    const en = fingerLines(data, 'en');
+    // Whole numbers and one decimal at most on the streak (docs/CLARIDAD2.md §2.13: ×1,25 reads ×1,2).
+    expect(es[0]).toBe('Tu dedo: 74 toques · mejor racha ×1,2 · 4 Chispazos · +96 de luz');
+    expect(en[0]).toBe('Your finger: 74 taps · best streak ×1.2 · 4 Flashes · +96 glow');
+    // Session 2: the glimmers caught out of the ones thrown.
+    const s2 = fingerLines({ finger: { taps: 160, bestStreak: 1.25, chispazos: 9, luz: 300, motes: { caught: 27, thrown: 45 } } }, 'es');
+    expect(s2[0]).toMatch(/· chispitas 27 de 45$/);
+    expect(fingerLines({ finger: { taps: 160, bestStreak: 1.25, chispazos: 9, luz: 300, motes: { caught: 27, thrown: 45 } } }, 'en')[0]).toMatch(/· glimmers 27 of 45$/);
+    for (const l of [...es, ...en, ...s2]) expect(l).not.toMatch(two);
+    // A player who only watched has no finger line (never a «0 toques» that reads like a reproach).
+    expect(fingerLines({ finger: { taps: 0, bestStreak: 1, chispazos: 0, luz: 0 } }, 'es')).toEqual([]);
+    expect(fingerLines({}, 'es')).toEqual([]);
+  });
+
+  it('losses that gave back are told as gifts, and the tip after a fusion is to steer', () => {
+    const data: ReportData = { refunds: { seeds: 2, luz: 8 }, losses: { saved: 1, merged: 1, luz: 18 } };
+    expect(fingerLines(data, 'es')).toEqual(['Semillas que no prendieron: 2 (te devolví 8 de luz)', 'Salvaste a 1 · se juntaron 1 · su luz: +18']);
+    expect(fingerLines(data, 'en')).toEqual(['Seeds that didn’t take: 2 (8 glow back)', 'You saved 1 · 1 merged · their glow: +18']);
+    // VELA's line after a fusion: positive, never «Siembra más lejos» (sowing is always safe now).
+    expect(velaTip({ losses: { saved: 0, merged: 2, luz: 30 } }, 'es')).toBe('¡Guiar a las nadadoras las salva!');
+    expect(velaTip({ merged: 2 }, 'en')).toBe('Steering swimmers saves them!');
+    expect(velaTip({}, 'es')).toBeNull();
+  });
+});
+
+describe('the streak chip by the counter (ADR-031, docs/MECANICAS.md §3.2)', () => {
+  const st = (hits: number, over: Partial<NonNullable<Parameters<typeof streakChip>[0]>> = {}) => ({
+    hits,
+    max: 10,
+    mult: 1 + 0.025 * hits,
+    toChispazo: 10 - (hits % 10),
+    every: 10,
+    draining: false,
+    ...over,
+  });
+
+  it('counts the taps in a row with ten dots to the next Chispazo, never a two-decimal multiplier', () => {
+    expect(streakChip(undefined, 'es')).toBeNull();
+    expect(streakChip(st(0), 'es')).toBeNull();
+    const three = streakChip(st(3), 'es')!;
+    expect(three.text).toBe('Racha ×1');
+    expect(three.dots).toBe(3);
+    expect(three.every).toBe(10);
+    expect(streakChip(st(8), 'es')!.text).toBe('Racha ×1,2');
+    expect(streakChip(st(8), 'en')!.text).toBe('Streak ×1.2');
+    // Full: «¡Racha máxima!» and what it does to all the light, under the counter.
+    const full = streakChip(st(10, { toChispazo: 10 }), 'es')!;
+    expect(full.full).toBe(true);
+    expect(full.text).toBe('¡Racha máxima!');
+    expect(full.line).toBe('×1,2 por tu racha');
+    expect(full.dots).toBe(0);
+    for (let n = 1; n <= 30; n++)
+      for (const l of ['es', 'en'] as const) {
+        const c = streakChip(st(n, { max: 30 }), l)!;
+        expect(`${c.text} ${c.line ?? ''}`).not.toMatch(/×\d+[.,]\d\d/);
+      }
+    // Draining after a pause: it greys and goes down slowly (the game never resets it at once).
+    expect(streakChip(st(6, { draining: true }), 'es')!.draining).toBe(true);
   });
 });

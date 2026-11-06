@@ -16,6 +16,8 @@
  *   (fewer Datos than the session before: why, on a neutral line, and what to do)
  *   Colección 3/7 · la siguiente vive en el Mundo 4
  *   Láminas de hoy: [LÁMINA 07 · Dos especies] …
+ *   Tu dedo: 74 toques · mejor racha ×1,2 · 4 Chispazos · +96 de luz      (ADR-031: fingerLines)
+ *   Semillas que no prendieron: 2 (te devolví 8 de luz) · Salvaste a 1 · se juntaron 1 · su luz: +18
  *   VELA's line · [Ir al Árbol · 3 mejoras listas] [Nueva sesión]
  *
  * Every row that adds says how much, and the rows add up to the total (tested). The only "prize animation" is
@@ -28,6 +30,7 @@ import type { DatosBreakdown, RecordHit, SessionGoal, SessionSummary } from '../
 import { velaLine } from '../../game/session';
 import { DATO_NAME, DATOS_NAME, NODE_TEXT, SESSION_UI, TREE_UI, WORLD_TEXT } from '../../game/treeText';
 import { fmt, fmtClock, fmtMult, fmtPerSec } from '../format';
+import { streakShown } from './hud';
 import type { PriceExplain } from '../moments/price';
 import { plateLabel, plateOf, scaleBar, scaleText } from '../moments/plates';
 import { mountPortrait } from '../portrait';
@@ -83,15 +86,39 @@ export interface ReportData {
   goals?: SessionGoal[];
   /** (PA) What to do about a smaller payout, already worded («compra Mundo 2 en el Árbol» / «juega en…»). */
   lessAction?: Text | null;
+  /**
+   * (PA, ADR-031) The finger's session: hits that paid, the best streak (its multiplier), ¡Chispazos!, the Luz the
+   * finger added (pulses, Chispazos, glimmers and the streak's extra) and, from session 2, the glimmers caught.
+   */
+  finger?: FingerStats | null;
+  /** (PA, ADR-031) Seeds that never took this session and the Luz they gave back. */
+  refunds?: { seeds: number; luz: number } | null;
+  /** (PA, ADR-031) Swimmers saved from a warned contact, fusions, and the Luz the living deaths left. */
+  losses?: { saved: number; merged: number; luz: number } | null;
 }
+
+/** The finger's session (ADR-031, docs/MECANICAS.md §6.1 step 11). */
+export interface FingerStats {
+  taps: number;
+  bestStreak: number;
+  chispazos: number;
+  luz: number;
+  motes?: { caught: number; thrown: number } | null;
+}
+
+/** PA's SessionSummary with the ADR-031 tallies (optional until game/session.ts carries them). */
+export type SummaryIn = SessionSummary & Pick<ReportData, 'finger' | 'refunds' | 'losses'>;
 
 /**
  * PA's SessionSummary (game/session.ts, ADR-030) as the report's data: the goals by name, the final sweep,
  * the session before, what to do about a smaller payout and the collection with the next species' World.
  */
-export function reportDataOf(sum: SessionSummary): ReportData {
+export function reportDataOf(sum: SummaryIn): ReportData {
   const next = sum.collection?.next ?? null;
   const out: ReportData = { goals: sum.goals, previous: sum.previous ?? null, lessAction: sum.lessAction ?? null };
+  if (sum.finger) out.finger = sum.finger;
+  if (sum.refunds) out.refunds = sum.refunds;
+  if (sum.losses) out.losses = sum.losses;
   if ((sum.light?.sweep ?? 0) > 0) out.swept = Math.round(sum.light!.sweep);
   if (sum.behaviors?.length) out.behaviorNames = sum.behaviors.map((b) => BEHAVIOR_NAMES[b]);
   if (sum.collection) out.collection = { have: sum.collection.have, total: sum.collection.total, nextWorld: next ? (WORLD_TEXT[next.world]?.name ?? null) : null, nextCost: next?.cost ?? null };
@@ -127,7 +154,7 @@ export interface SessionSummaryOptions {
 export interface SessionSummaryView {
   readonly el: HTMLElement;
   readonly isOpen: boolean;
-  show(sum: SessionSummary, extras: SummaryExtras): void;
+  show(sum: SummaryIn, extras: SummaryExtras): void;
   hide(): void;
   dispose(): void;
 }
@@ -161,6 +188,8 @@ export const REPORT_TEXT = {
   total: tx('Total', 'Total'),
   registered: tx('Registrado', 'Recorded'),
   plates: tx('Láminas de hoy', 'Today’s plates'),
+  /** Session 2 on: the ¡Chispazo! glimmers caught out of the ones thrown (MECANICAS §6.2). */
+  glimmers: (caught: number, thrown: number) => tx(`chispitas ${caught} de ${thrown}`, `glimmers ${caught} of ${thrown}`),
   today: tx('Especies de hoy', 'Today’s species'),
   scientific: tx('nombre científico', 'scientific name'),
 };
@@ -369,6 +398,30 @@ export function datosExplain(d: DatosBreakdown, l: Lang, night: number, goal?: {
   };
 }
 
+/**
+ * What the finger did and what the losses gave back (ADR-031, docs/MECANICAS.md §6.1–§6.3), one line each, after
+ * the sheet: they add no Datos (their Luz is already in «Luz recogida»). A player who only watched gets none.
+ */
+export function fingerLines(data: ReportData, l: Lang): string[] {
+  const out: string[] = [];
+  const f = data.finger;
+  if (f && f.taps > 0) {
+    let line = SESSION_UI.finger(f.taps, streakShown(f.bestStreak), f.chispazos, fmt(Math.round(f.luz), l))[l];
+    if (f.motes && f.motes.thrown > 0) line += ` · ${REPORT_TEXT.glimmers(f.motes.caught, f.motes.thrown)[l]}`;
+    out.push(line);
+  }
+  const r = data.refunds;
+  if (r && r.seeds > 0) out.push(SESSION_UI.refundLine(r.seeds, fmt(Math.round(r.luz), l))[l]);
+  const d = data.losses;
+  if (d && (d.saved > 0 || d.merged > 0)) out.push(SESSION_UI.savedLine(d.saved, d.merged, fmt(Math.round(d.luz), l))[l]);
+  return out;
+}
+
+/** VELA's tip after a fusion: steering saves swimmers (sowing is always safe now: never «Siembra más lejos»). */
+export function velaTip(data: ReportData, l: Lang): string | null {
+  return (data.losses?.merged ?? 0) > 0 || (data.merged ?? 0) > 0 ? SESSION_UI.tipSteer[l] : null;
+}
+
 /** The report's sheet as markup (spreadsheet rows with leader dots; sections as small capitals). */
 function rowsHtml(rows: ReportRow[], staged: boolean): string {
   return rows
@@ -559,8 +612,8 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
       const total = rows.find((r) => r.kind === 'total')!;
       const less = rows.find((r) => r.kind === 'less');
       const staged = !rm() && !opts.instant;
-      const merged = (data.merged ?? 0) > 0 ? SESSION_UI.mergedTip(data.merged!)[l] : '';
-      const vela = merged || velaLine(sum.vela)[l];
+      const vela = velaTip(data, l) ?? velaLine(sum.vela)[l];
+      const finger = fingerLines(data, l);
       const now = opts.now?.() ?? new Date();
       const stamp = REPORT_TEXT.head(sum.n, `${two(now.getDate())}/${two(now.getMonth() + 1)}`, `${two(now.getHours())}:${two(now.getMinutes())}`)[l];
       const treeFirst = extras.affordable > 0;
@@ -588,6 +641,7 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
           ${less ? `<p class="ss-rp-less">${esc(less.label)}${less.note ? `<b>${esc(less.note)}</b>` : ''}</p>` : ''}
           <p class="ss-rp-kept">${esc(SESSION_UI.datosKept[l])}</p>
         </div>
+        ${finger.length ? `<div class="ss-rp-finger" data-testid="report-finger">${finger.map((x) => `<p>${esc(x)}</p>`).join('')}</div>` : ''}
         <div class="ss-rp-side">
           ${coll}
           ${todayHtml(sum, head, l)}
