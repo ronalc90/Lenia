@@ -201,18 +201,45 @@ async function runCase(c) {
       /* ignore */
     }
   }, c.theme);
-  // Owner: «los mensajes rebotan y no paran de rebotar»: count how often each toast enters the screen.
+  // Owner: «los mensajes rebotan y no paran de rebotar»: count how often each toast enters the screen, and how
+  // long each entry is seen before it starts to leave (QA-3 §1a: the second copy left within 0–15 ms).
   await ctx.addInitScript(() => {
     window.__toastIn = {};
+    window.__toastSeen = [];
+    const key = (n) => `${n.dataset.toastId ?? '?'} ${(n.dataset.text || n.textContent || '').trim().slice(0, 60)}`;
+    /** One record per toast element: in, when it started to leave (`.out`) or went, and whether a finger closed it. */
+    const live = new Map();
+    const end = (n, t) => {
+      const r = live.get(n);
+      if (!r || r.out !== null) return;
+      r.out = t;
+      window.__toastSeen.push(r);
+    };
     new MutationObserver((ms) => {
-      for (const m of ms)
+      const t = performance.now();
+      for (const m of ms) {
+        if (m.type === 'attributes' && m.target.classList?.contains('toast') && m.target.classList.contains('out')) end(m.target, t);
         for (const n of m.addedNodes)
           if (n.nodeType === 1 && n.classList?.contains('toast')) {
             // Per toast (data-toast-id), not per words: two Journal notes in a row are two toasts.
-            const k = `${n.dataset.toastId ?? '?'} ${(n.dataset.text || n.textContent || '').trim().slice(0, 60)}`;
-            (window.__toastIn[k] ||= []).push(performance.now());
+            const k = key(n);
+            (window.__toastIn[k] ||= []).push(t);
+            live.set(n, { key: k, in: t, out: n.classList.contains('out') ? t : null, tapped: false });
+            if (n.classList.contains('out')) window.__toastSeen.push(live.get(n));
           }
-    }).observe(document, { childList: true, subtree: true });
+        for (const n of m.removedNodes) if (n.nodeType === 1 && n.classList?.contains('toast')) end(n, t);
+      }
+    }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    // A toast the player tapped or swiped away was read as long as they wanted.
+    window.addEventListener(
+      'pointerdown',
+      (e) => {
+        const n = e.target instanceof Element ? e.target.closest('.toast') : null;
+        const r = n && live.get(n);
+        if (r) r.tapped = true;
+      },
+      { capture: true },
+    );
   });
   const page = await ctx.newPage();
   page.on('console', (m) => {
@@ -1187,9 +1214,14 @@ async function runCase(c) {
     }
   }
   await shot('end');
-  // A toast enters, may step aside once for VELA and come back: twice. A third entry of the same toast is the bounce.
+  // A toast enters once (QA-3 §1a: a second entry of the same toast is the bounce) and is seen at least 1 s before it
+  // starts to leave, unless the player closed it.
   const toastIn = await page.evaluate(() => window.__toastIn ?? {}).catch(() => ({}));
-  for (const [key, ts] of Object.entries(toastIn)) if (ts.length > 2) problems.push(`[${c.name}] the toast «${key}» entered the screen ${ts.length} times (it bounces)`);
+  for (const [key, ts] of Object.entries(toastIn)) if (ts.length > 1) problems.push(`[${c.name}] the toast «${key}» entered the screen ${ts.length} times (it bounces)`);
+  const toastSeen = await page.evaluate(() => window.__toastSeen ?? []).catch(() => []);
+  for (const r of toastSeen)
+    if (!r.tapped && r.out - r.in < 1000) problems.push(`[${c.name}] the toast «${r.key}» was on screen ${Math.round(r.out - r.in)} ms (less than 1 s: unreadable)`);
+  say(`toasts: ${Object.keys(toastIn).length} shown, ${toastSeen.length} gone, shortest unclosed ${Math.round(Math.min(Infinity, ...toastSeen.filter((r) => !r.tapped).map((r) => r.out - r.in)))} ms.`);
   await ctx.close();
 }
 

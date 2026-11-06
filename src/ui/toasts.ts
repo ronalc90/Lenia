@@ -9,7 +9,7 @@ import { h, ic } from './dom';
 import { DURATION, EASING, reduceMotion } from './art/motion';
 import { ToastQueue } from './toastQueue';
 
-export { TOAST_CALM_MS, toastMayEnter, toastYieldAction, toastYields } from './toastQueue';
+export { TOAST_CALM_MS, TOAST_READ_MS, TOAST_SETTLE_MS, toastMayEnter, toastYieldAction, toastYields } from './toastQueue';
 
 interface ToastItem {
   text: string;
@@ -111,8 +111,8 @@ export class Toasts {
   }
 
   /**
-   * Call every frame: the queue decides whether the toast on screen leaves (its time is up, or VELA started
-   * talking over it) and whether a waiting one may enter.
+   * Call every frame: the queue decides whether the toast on screen leaves (its time is up, or VELA talks and
+   * it has been read) and whether a waiting one may enter (./toastQueue: a toast never enters twice).
    */
   yieldIfHeld(): void {
     this.pump();
