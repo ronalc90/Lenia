@@ -7,6 +7,9 @@
 import type { ToastKind } from './ctx';
 import { h, ic } from './dom';
 import { DURATION, EASING, reduceMotion } from './art/motion';
+import { ToastQueue } from './toastQueue';
+
+export { TOAST_CALM_MS, toastMayEnter, toastYieldAction, toastYields } from './toastQueue';
 
 interface ToastItem {
   text: string;
@@ -15,8 +18,6 @@ interface ToastItem {
   onClick?: () => void;
   /** Toasts of one group merge into a single counter ("+3 new species"). */
   group?: { key: string; n: number; text: (n: number) => string };
-  /** It already stepped aside once for VELA: it never does a second round trip. */
-  yielded?: boolean;
   /** One number per toast (its element carries it as `data-toast-id`: tests count its entries). */
   id?: number;
 }
@@ -37,33 +38,6 @@ const SWIPE_UP_PX = 24;
  * What a tap or a swipe does to a toast (owner bug, docs/ARTE-PULIDO.md B-10.4): every toast closes
  * when tapped; one with an action runs it only from its own button.
  */
-/**
- * After the screen was busy (VELA talking, a brief), a waiting toast enters only once it has been calm this
- * long: «talking» flickers between lines, and a toast that followed it bounced in and out ~100 times in a
- * run (owner: «los mensajes rebotan y no paran de rebotar»).
- */
-export const TOAST_CALM_MS = 800;
-
-/** May a waiting toast enter now? Warnings always may; the rest wait for a calm screen. */
-export function toastMayEnter(critical: boolean, now: number, lastBusyAt: number): boolean {
-  return critical || now - lastBusyAt >= TOAST_CALM_MS;
-}
-
-/**
- * A toast on screen while something starts talking: it stays (nothing talks, or it is a warning), steps
- * aside to wait once, or, asked a second time, is dropped. It never ping-pongs.
- */
-export function toastYieldAction(kind: ToastKind, held: boolean, yielded: boolean): 'stay' | 'wait' | 'drop' {
-  if (!toastYields(kind, held)) return 'stay';
-  return yielded ? 'drop' : 'wait';
-}
-
-/** Does a showing toast of this kind step aside while something else talks? Warnings never do. */
-export function toastYields(kind: ToastKind, held: boolean): boolean {
-  if (kind === 'warn' || kind === 'bad') return false;
-  return held;
-}
-
 export function toastGestureResult(g: ToastGesture, hasAction: boolean): 'action' | 'dismiss' | 'none' {
   if (g.dy <= -SWIPE_UP_PX && Math.abs(g.dy) > Math.abs(g.dx)) return 'dismiss';
   if (Math.hypot(g.dx, g.dy) > TAP_SLOP_PX) return 'none';
@@ -83,11 +57,10 @@ const SEE = { es: 'Ver', en: 'View' } as const;
 
 export class Toasts {
   readonly el = h('div', { class: 'toasts bl-nodish', role: 'status', 'aria-live': 'polite' });
-  private queue: ToastItem[] = [];
+  private readonly q = new ToastQueue<ToastItem>();
+  /** The element on screen (also while it plays its exit). */
   private current: HTMLElement | null = null;
-  private currentItem: ToastItem | null = null;
   private timer = 0;
-  private holdTimer = 0;
   /** While true (a story scene or an explainer is talking), only warnings show; the rest waits. */
   private hold: () => boolean = () => false;
   private lang: () => 'es' | 'en' = () => (typeof document !== 'undefined' && document.documentElement.lang === 'en' ? 'en' : 'es');
@@ -106,14 +79,16 @@ export class Toasts {
   push(text: string, kind: ToastKind = 'info', icon?: string, onClick?: () => void): void {
     if (!text) return;
     // Skip exact duplicates of what is showing or queued.
-    if (this.current?.dataset.text === text || this.queue.some((q) => q.text === text)) return;
+    const q = this.q;
+    if (q.showing?.text === text || q.leaving?.text === text || q.waiting.some((w) => w.text === text)) return;
     this.enqueue({ text, kind, icon: icon ?? DEFAULT_ICON[kind], onClick });
   }
 
   /** A toast that merges with others of the same group while they wait or show (count goes up). */
   pushGroup(key: string, text: (n: number) => string, kind: ToastKind, icon?: string, onClick?: () => void): void {
-    const cur = this.currentItem?.group?.key === key ? this.currentItem : null;
-    const waiting = this.queue.find((q) => q.group?.key === key);
+    const shown = this.q.showing;
+    const cur = shown?.group?.key === key ? shown : null;
+    const waiting = this.q.waiting.find((q) => q.group?.key === key);
     const item = cur ?? waiting;
     if (item?.group) {
       item.group.n++;
@@ -131,71 +106,29 @@ export class Toasts {
   private nextId = 1;
   private enqueue(item: ToastItem): void {
     item.id = this.nextId++;
-    this.queue.push(item);
-    while (this.queue.length > 3) this.queue.shift();
-    if (!this.current) this.next();
-  }
-
-  private critical(item: ToastItem): boolean {
-    return toastYields(item.kind, false) === false;
+    this.q.push(item, performance.now());
+    this.pump();
   }
 
   /**
-   * Call every frame: a non-critical toast already on screen when VELA (or an explainer) starts talking
-   * steps aside and waits at the head of the queue, so it never sits on her line (session-play,
-   * «.sty-box × .toast»); warnings stay.
+   * Call every frame: the queue decides whether the toast on screen leaves (its time is up, or VELA started
+   * talking over it) and whether a waiting one may enter.
    */
   yieldIfHeld(): void {
-    const held = this.hold();
-    if (held) this.lastBusyAt = performance.now();
-    const item = this.currentItem;
-    const el = this.current;
-    if (!item || !el || el.classList.contains('out')) return;
-    const act = toastYieldAction(item.kind, held, !!item.yielded);
-    if (act === 'stay') return;
-    if (act === 'wait') {
-      item.yielded = true;
-      this.queue.unshift(item);
-      while (this.queue.length > 3) this.queue.pop();
-    }
-    this.dismiss();
+    this.pump();
   }
-  /** When something last talked over the dish (performance.now() ms): see TOAST_CALM_MS. */
-  private lastBusyAt = -Infinity;
 
-  private next(): void {
-    let i = 0;
+  private pump(): void {
     const now = performance.now();
-    const held = this.hold();
-    if (held) this.lastBusyAt = now;
-    // Talking just stopped: a non-critical toast waits for a calm screen (TOAST_CALM_MS), so a «talking»
-    // that flickers between lines cannot bounce it in and out.
-    if (!held && this.queue.length && !toastMayEnter(this.critical(this.queue[0]), now, this.lastBusyAt) && !this.queue.some((q) => this.critical(q))) {
-      this.current = null;
-      this.currentItem = null;
-      clearTimeout(this.holdTimer);
-      this.holdTimer = window.setTimeout(() => !this.current && this.next(), Math.max(50, TOAST_CALM_MS - (now - this.lastBusyAt)));
-      return;
-    }
-    if (held) {
-      i = this.queue.findIndex((q) => this.critical(q));
-      if (i < 0) {
-        // Everything waiting is non-critical: try again shortly.
-        this.current = null;
-        this.currentItem = null;
-        clearTimeout(this.holdTimer);
-        if (this.queue.length) this.holdTimer = window.setTimeout(() => !this.current && this.next(), 500);
-        return;
-      }
-    }
-    const item = this.queue.splice(i, 1)[0];
-    if (!item) {
-      this.current = null;
-      this.currentItem = null;
-      return;
-    }
-    this.currentItem = item;
-    const ms = Math.min(this.cap(), this.queue.length ? 2400 : 3000);
+    const s = this.q.step(now, this.hold(), this.cap());
+    if (s && 'enter' in s) this.render(s.enter, s.ms);
+    else if (s && 'leave' in s) this.exit();
+    clearTimeout(this.timer);
+    const at = this.q.nextAt(now);
+    if (at < Infinity) this.timer = window.setTimeout(() => this.pump(), Math.max(16, at - now));
+  }
+
+  private render(item: ToastItem, ms: number): void {
     const life = h('i', { class: 'toast-life', 'aria-hidden': 'true' });
     const see = item.onClick ? h('button', { type: 'button', class: 'toast-see' }, SEE[this.lang()]) : null;
     const el = h('div', { class: `toast k-${item.kind}${see ? ' has-action' : ''}` }, ic(item.icon, 24), h('span', { class: 'tt' }, item.text), see, life);
@@ -213,14 +146,14 @@ export class Toasts {
       if (r === 'none') return;
       e.stopPropagation();
       if (r === 'action') item.onClick?.();
-      this.dismiss();
+      this.dismiss(el);
     });
     el.addEventListener('pointercancel', () => (down = null));
     // Keyboard: the «Ver» button is a real button; Escape-free toasts still go by themselves.
     see?.addEventListener('click', (e) => {
       if ((e as MouseEvent).detail !== 0) return; // pointer clicks are handled on pointerup
       item.onClick?.();
-      this.dismiss();
+      this.dismiss(el);
     });
     this.el.textContent = '';
     this.el.appendChild(el);
@@ -234,18 +167,29 @@ export class Toasts {
       // The time left, as a line that empties (linear: it is a clock, not a movement).
       life.animate([{ transform: 'scaleX(1)' }, { transform: 'scaleX(0)' }], { duration: ms, easing: 'linear', fill: 'forwards' });
     }
-    this.timer = window.setTimeout(() => this.dismiss(), ms);
   }
 
-  private dismiss(): void {
+  /** A tap or a swipe on the toast on screen. */
+  private dismiss(el: HTMLElement): void {
+    if (this.current !== el || el.classList.contains('out')) return;
+    if (this.q.dismiss()) this.exit();
+  }
+
+  /** The toast on screen plays its exit; the slot frees when it ends. */
+  private exit(): void {
     const el = this.current;
-    if (!el || el.classList.contains('out')) return;
-    clearTimeout(this.timer);
+    if (!el || el.classList.contains('out')) {
+      this.q.gone();
+      return;
+    }
     el.classList.add('out');
     const rm = reduceMotion();
     const done = () => {
       el.remove();
-      if (this.current === el) this.next();
+      if (this.current !== el) return;
+      this.current = null;
+      this.q.gone();
+      this.pump();
     };
     if (typeof el.animate === 'function') {
       const a = el.animate(rm ? [{ opacity: 1 }, { opacity: 0 }] : [{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(-8px)' }], {
