@@ -3302,7 +3302,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     catchMote(moteId) {
       const f = fingerOf();
       if (!f || !Number.isFinite(moteId)) return 0;
-      const r = catchMoteIn(f.ps, moteId, now(), f.pf, s.calib.R, motePlace);
+      const r = catchMoteIn(f.ps, moteId, now(), f.pf);
       if (!r) return 0;
       addEssence(r.amount);
       bus.emit('moteCaught', { id: moteId, x: r.x, y: r.y, amount: r.amount });

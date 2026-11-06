@@ -629,9 +629,11 @@ export const ETERNAL_LIFE_MULT = 1.1;
 /**
  * Vida eterna: levels offered (practically endless; the UI prints ∞ from ENDLESS_LEVELS = 99). [plan; bot B2c:
  * with Nutrientes priced once per run (ADR-030) the planner reached all 99 levels at session 37, bought
- * nothing more and the last nights dipped −6/−7 %; 199 keeps the sink endless to the story's end]
+ * nothing more and the last nights dipped −6/−7 %; 199 kept the sink endless to the story's end. ADR-031 bot
+ * (docs/RITMO.md §10): the tapper buys ~18 levels a session and completed all 199 at session 23, the greedy at 29,
+ * then 20 sessions with nothing to buy and a flat, dipping curve; 999 keeps it endless for every policy]
  */
-export const ETERNAL_LIFE_MAX = 199;
+export const ETERNAL_LIFE_MAX = 999;
 /**
  * Vida eterna: price factor per level = its effect (each level costs 10 % more and gives 10 % more),
  * so the last nights keep growing a steady ~15–20 % per session instead of stalling. [plan: ×1,5; bot:

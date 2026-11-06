@@ -132,6 +132,15 @@ describe('the pulse: a tap on a creature (ADR-031, docs/MECANICAS.md §5.1)', ()
     expect(st.motes).toHaveLength(0);
   });
 
+  it('a caught glimmer raises the streak but does not count towards the next Chispazo (no runaway chain)', () => {
+    const st = freshPulse();
+    tap(st, 10, 1000);
+    const k = st.k;
+    for (const m of [...st.motes]) catchMote(st, m.id, 5000, FX);
+    expect(st.k).toBe(k);
+    expect(st.chispazos).toBe(1);
+  });
+
   it('bonus hits (Spark, a saved swimmer) raise the streak but do not count towards the Chispazo', () => {
     const st = freshPulse();
     tap(st, 2);

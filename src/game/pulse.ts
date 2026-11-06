@@ -28,7 +28,7 @@ export interface PulseState {
   v: 1;
   /** Hits in the streak now (0 … PulseFx.maxHits). */
   hits: number;
-  /** Hits since this streak began (the Chispazo counter; back to 0 only when `hits` drains to 0). */
+  /** Taps since this streak began (the Chispazo counter; glimmers and bonus hits do not count; back to 0 only when `hits` drains to 0). */
   k: number;
   /** Seconds of running dish since the last hit (frozen while paused). */
   idle: number;
@@ -198,39 +198,25 @@ export function addBonusHits(st: PulseState, n: number, fx: PulseFx): void {
 }
 
 /**
- * Catch glimmer `id`: one pulse (its base) × the streak, and one more hit when the rate cap allows (it may be a
- * Chispazo of its own). Null when it is gone. The light is paid even over the cap: what shines is never taken away.
+ * Catch glimmer `id`: one pulse (its base) × the streak, and one more hit of the streak when the rate cap allows.
+ * It does not count towards the next Chispazo (MECANICAS §5.4: Chispazos come from taps; glimmers that made
+ * Chispazos would feed a runaway chain). Null when it is gone. The light is paid even over the cap: what shines
+ * is never taken away.
  */
-export function catchMote(
-  st: PulseState,
-  id: number,
-  nowMs: number,
-  fx: PulseFx,
-  R = 0,
-  place?: (x: number, y: number) => { x: number; y: number },
-): { amount: number; chispazo: boolean; x: number; y: number; owner: number | null } | null {
+export function catchMote(st: PulseState, id: number, nowMs: number, fx: PulseFx): { amount: number; x: number; y: number; owner: number | null } | null {
   const i = st.motes.findIndex((m) => m.id === id);
   if (i < 0) return null;
   const m = st.motes[i];
   st.motes.splice(i, 1);
-  const mult = streakMult(st);
-  let amount = m.base * mult;
-  let chispazo = false;
+  const amount = m.base * streakMult(st);
   if (roomNow(st, nowMs)) {
     st.window.push(nowMs);
-    st.k++;
     st.taps++;
-    chispazo = st.k % fx.every === 0;
-    if (chispazo) {
-      st.chispazos++;
-      amount += m.base * mult * C.CHISPAZO_MULT;
-      if (fx.motes) throwMotes(st, m, m.base, R, place);
-    }
     grow(st, 1, fx);
   }
   st.motesCaught++;
   st.finger += amount;
-  return { amount, chispazo, x: m.x, y: m.y, owner: m.owner };
+  return { amount, x: m.x, y: m.y, owner: m.owner };
 }
 
 /** Age the glimmers by `dt` s of running dish; the ones whose time is up settle (and any pushed out by MOTES_MAX). */
