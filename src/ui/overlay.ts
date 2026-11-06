@@ -10,12 +10,22 @@
  * micro-motion as the dish shader (A-9). Frames allocate nothing (A-10, §6.1): pooled particles,
  * pooled effects, pre-rendered sprites, globalAlpha instead of rgba() strings, no shadowBlur, text
  * measured only when it changes.
+ *
+ * In lab sessions the finger is the game (ADR-031, docs/MECANICAS.md §3): a tap makes a creature glow, the
+ * game's answer (bus 'pulse') rises as a «+N» that grows with the streak, every N-th hit is a ¡Chispazo! (a
+ * hit-stop, a kick of the dish, a ring of light, a chord) and its glimmers fly out to be caught (src/ui/fx/
+ * pulse.ts). The UI calls `pulseTap` / `greyTap` / `agarTap` / `moteTaken` on the tap and `pulsed` /
+ * `moteCaught` on the game's events, and sets `pulseMode` while the dish answers taps that way.
  */
 import { wrapDelta, type Camera } from '../core/camera';
 import { BEHAVIOR_COLOR, UI as C } from '../core/palette';
+import type { GameEvents } from '../core/bus';
 import type { Behavior, CreatureState, CreatureView, GameView, Lang } from '../core/types';
+import { TEXT } from '../game/content';
+import { fmt } from './format';
 import { TAP_REACH_PX, type TapCreature, type TapMote, type TapScene } from './dishTap';
 import { DROP_FX, DropLayer, type CreatureResolver } from './fx/drops';
+import { hitStop, PULSE_FX, PulseLayer, type GridResolver } from './fx/pulse';
 import { PipetteLayer } from './fx/pipettes';
 import { behaviorName, stateName } from './i18n';
 import { placeLabel, type LabelObstacles, type LabelPlacement, type LabelRequest } from './labelPlace';
@@ -398,7 +408,7 @@ export class Overlay {
   /** The collecting pipettes on the rim (src/ui/fx/pipettes.ts). */
   readonly pipettes = new PipetteLayer();
   /** GameView.dangers as last seen (the red link between two creatures about to touch). */
-  private dangers: readonly { a: number; b: number; inS: number }[] = [];
+  private dangers: readonly { a: number; b: number; inS: number; actionable?: boolean }[] = [];
   /** Pairs already labelled "¡Cuidado! Se van a tocar" (once per pair, docs/CLARIDAD2.md §2.5). */
   private dangerSeen = new Set<number>();
   /**
@@ -408,9 +418,29 @@ export class Overlay {
   dangerText: ((steer: boolean) => string | null) | null = null;
   /** The finger guide (§2.5): a 1 px line from the guided swimmer to the finger (overlay px). */
   private guide = { on: false, id: -1, x: 0, y: 0, t0: 0, out: -1 };
+  // ── The tap is a pulse (ADR-031): glows, «+N», ¡Chispazo!, glimmers ──
+  /** The juice of the finger (src/ui/fx/pulse.ts). */
+  readonly pulses = new PulseLayer();
+  /**
+   * The dish answers taps with pulses (a lab session with GameActions.pulse; the UI sets it): the tap router's
+   * session rule (a finger never sows) and the glimmers as targets.
+   */
+  pulseMode = false;
+  /** The latest «+N» of collected light (overlay.collected), so a pulse that includes that drop takes it over. */
+  private lastCollect: { f: Float | null; amount: number; at: number } = { f: null, amount: 0, at: -Infinity };
+  private readonly ownerGrid: GridResolver = (id, out) => {
+    const s = this.creatures.get(id);
+    if (!s) return false;
+    out.x = s.x;
+    out.y = s.y;
+    return true;
+  };
+  private readonly hueOfOwner = (id: number): number | undefined => this.creatures.get(id)?.hue;
+  private pulseLang: Lang | '' = '';
+  private readonly pulsePoint = { x: 0, y: 0, hue: 0 };
   /** Creatures as drawn this frame, for the tap router (reused objects). */
   private readonly tapCreatures: TapCreature[] = [];
-  private readonly tapMotes: TapMote[] = [];
+  private readonly tapMotes: TapMote[] = this.pulses.tap;
   private readonly scene: TapScene = {
     drops: this.drops.tap,
     dropCount: 0,
@@ -422,7 +452,7 @@ export class Overlay {
     pulsing: false,
     motes: this.tapMotes,
     moteCount: 0,
-    motePx: DROP_FX.tapPx,
+    motePx: PULSE_FX.motePx,
     reachPx: TAP_REACH_PX,
   };
   /** Places an owned drop on its creature (no allocation: writes the caller's object). */
@@ -558,6 +588,16 @@ export class Overlay {
     this.pillOpts.earning = earningNow(view);
     this.cviews = view.creatures;
     this.lang = view.settings.lang;
+    if (this.pulseLang !== this.lang) {
+      const lang = this.lang;
+      this.pulseLang = lang;
+      // Whole numbers on the dish (docs/CLARIDAD2.md §2.13); a sliver below 1 keeps one decimal.
+      this.pulses.setText(
+        (n) => '+' + fmt(n, lang),
+        (n) => TEXT.chispazo(n)[lang],
+        lang,
+      );
+    }
     this.markers = !!(view.tools as { markers?: boolean }).markers;
     const R = view.calibration?.R;
     if (typeof R === 'number' && R > 0) this.kernelR = R;
@@ -666,6 +706,8 @@ export class Overlay {
     this.pipettes.setView(view.pipettes, nowMs, (id) => this.drops.posOf(id), (id) => this.drops.hueOf(id));
     this.drops.setView(view.drops, (owner) => this.creatures.get(owner)?.hue, this.now, (id) => this.pipettes.sipping(id));
     this.scene.collecting = this.drops.active;
+    this.scene.pulsing = this.pulseMode;
+    this.pulses.setMotes(view.motes, this.now, this.ownerGrid, this.hueOfOwner);
     this.dangers = view.dangers ?? NO_DANGERS;
     for (const d of this.dangers) {
       const key = Math.min(d.a, d.b) * 65536 + Math.max(d.a, d.b);
@@ -675,7 +717,10 @@ export class Overlay {
       const a = this.creatures.get(d.a);
       const b = this.creatures.get(d.b);
       if (!a || !b) continue;
-      const text = this.dangerText?.(a.behavior === 'swimmer' || b.behavior === 'swimmer') ?? null;
+      // ADR-031: worded only when the player can act (`actionable`, from the game); else only the link, no alarm.
+      const steer = d.actionable ?? (a.behavior === 'swimmer' || b.behavior === 'swimmer');
+      if (d.actionable === false) continue;
+      const text = this.dangerText?.(steer) ?? null;
       // On the link, between the two (it moves with them): a pill on either creature would be hidden by its own.
       if (text) this.pushLabel({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, t0: this.now, dur: 2.2, text, sub: '', color: C.danger, glyph: null, follow: d.a, between: d.b });
     }
@@ -1256,6 +1301,7 @@ export class Overlay {
     this.runLayers('creatures', this.now, dt, rect, scale);
     if (this.dangers.length) this.drawDangers(rm);
     this.drops.draw(ctx, this.atlas, this.now, dt, rm, dishFx.matterFade, this.map.px, this.map.py, this.resolveCreature, cam.zoom);
+    this.pulses.drawLight(ctx, this.atlas, this.now, rm, dishFx.matterFade, this.map, this.resolveCreature);
     this.fillTapScene();
     this.drawFlashes();
     this.drawSows(rm);
@@ -1277,6 +1323,7 @@ export class Overlay {
       ctx.globalAlpha = 1;
     }
     this.drawFloats();
+    this.pulses.drawText(ctx, this.now, rm, dishFx.matterFade, this.map, this.resolveCreature, this.light);
     ctx.restore();
     // Pipettes rest on the rim, half over the glass: drawn unclipped, above the dish's own light.
     if (round && this.pipettes.count) this.pipettes.draw(ctx, this.atlas, nowMs, rm, dcx, dcy, round.radius * scale, this.dpr, dishFx.matterFade);
@@ -1323,6 +1370,7 @@ export class Overlay {
     this.bodyN = this.bodyView.n = Math.min(n, 64);
     this.scene.creatureCount = n;
     this.scene.dropCount = this.drops.tapCount;
+    this.scene.moteCount = this.pulseMode ? this.pulses.tapCount : 0;
   }
 
   /** Living creatures' bodies as drawn in the latest frame (x, y, r triples, canvas CSS px): the brief steps off them. */
@@ -1494,12 +1542,112 @@ export class Overlay {
       f.t0 = this.now - 0.02;
       f.x = gx;
       f.y = gy;
+      this.noteCollect(f, amount, format);
       return;
     }
     const f = this.pushFloat(gx, gy, 0.9, '+' + format(amount), hueHex(hue, 82), INCOME_PX + 1, this.reduceMotion ? 0 : 26, false, 0);
     f.cid = COLLECT_FLOAT;
     f.amount = amount;
     f.lift = 6;
+    this.noteCollect(f, amount, format);
+  }
+
+  private collectFormat: ((n: number) => string) | null = null;
+  private noteCollect(f: Float, amount: number, format: (n: number) => string): void {
+    const c = this.lastCollect;
+    c.f = f;
+    c.amount = amount;
+    c.at = performance.now();
+    this.collectFormat = format;
+  }
+
+  // ───────────────────────────── the tap is a pulse (ADR-031) ─────────────────────────────
+
+  /** Where creature `id` is in the grid now (its exact matter when known), into `out`; false when it is gone. */
+  private gridOf(id: number, out: { x: number; y: number }): boolean {
+    const s = this.creatures.get(id);
+    if (!s) return false;
+    const e = this.exactPos(s, id, performance.now());
+    out.x = e ? e.x : s.x;
+    out.y = e ? e.y : s.y;
+    return true;
+  }
+  private readonly gScratch = { x: 0, y: 0 };
+
+  /** The finger pulsed creature `id` (tap route 'pulse'): it glows at once, before the game answers. */
+  pulseTap(id: number): void {
+    if (!this.gridOf(id, this.gScratch)) return;
+    this.pulses.glow(id, this.gScratch.x, this.gScratch.y, this.now);
+  }
+
+  /** A forming seed or a shapeless blob was tapped (route 'grey'): a dim grey blink, «aún no brilla». */
+  greyTap(id: number): void {
+    if (!this.gridOf(id, this.gScratch)) return;
+    this.pulses.grey(id, this.gScratch.x, this.gScratch.y, this.now);
+  }
+
+  /** Empty agar was tapped at overlay point (px, py) (route 'ripple'): water rings, nothing else. */
+  agarTap(px: number, py: number): void {
+    const g = this.camera.screenToGrid(px, py);
+    this.pulses.ripple(g.x, g.y, this.now);
+  }
+
+  /** The finger caught glimmer `id` (route 'catch'): it pops now. Its point (overlay px, reused) or null. */
+  moteTaken(id: number): { x: number; y: number; hue: number } | null {
+    return this.pulses.take(id, this.now);
+  }
+
+  /**
+   * The game paid a pulse (bus 'pulse'): «+N» over the creature (or at the drop, id −1), sized by the streak; a
+   * ¡Chispazo! gets its label, a 60 ms hit-stop, a kick of the dish, a ring of light, the matter's flare and a
+   * burst of sparks (none of the motion with Reduce motion). A pulse that collected its creature's drop pays
+   * that drop too: the drop's own «+N» of the same instant is folded into this one. Returns where it shows
+   * (overlay px, reused object: the UI flies motes to the counter from there), or null.
+   */
+  pulsed(e: GameEvents['pulse']): { x: number; y: number; hue: number } | null {
+    const rm = this.reduceMotion;
+    const lc = this.lastCollect;
+    if (e.amount > 0 && lc.f && lc.f.on && performance.now() - lc.at < 4) {
+      // The same tap: the drop is part of this pulse's amount.
+      lc.f.amount = (lc.f.amount ?? 0) - lc.amount;
+      if (!(lc.f.amount > 1e-9)) lc.f.on = false;
+      else if (this.collectFormat) this.setFloatText(lc.f, '+' + this.collectFormat(lc.f.amount));
+      lc.f = null;
+    }
+    const id = e.id >= 0 && this.creatures.get(e.id)?.state === 'stable' ? e.id : -1;
+    let gx = e.x;
+    let gy = e.y;
+    if (id >= 0 && this.gridOf(id, this.gScratch)) {
+      gx = this.gScratch.x;
+      gy = this.gScratch.y;
+    }
+    const chispazo = this.pulses.paid(id, gx, gy, e.amount, e.hits, e.chispazo, this.now);
+    const s = id >= 0 ? this.creatures.get(id) : undefined;
+    const hue = s?.hue ?? DROP_FX.defaultHue;
+    if (chispazo) {
+      if (id >= 0) this.pulses.glow(id, gx, gy, this.now);
+      // The matter itself flares (a display pulse of the shader: the field is never written).
+      dishFx.pulse(gx, gy, Math.max(this.kernelR, (s?.r ?? this.kernelR * 0.6) * 2.2), PULSE.birth, PULSE_FX.flareAmount, PULSE_FX.flareS);
+      if (!rm) {
+        this.hold = Math.max(this.hold, hitStop(rm));
+        dishFx.shake.add(SHAKE.chispazo);
+        dishFx.shake.kick(rm);
+        const body = s ? this.bodyRadius(s) : 10;
+        const ci = s?.hue !== undefined ? this.hueColor(s.hue) : this.c.accent;
+        this.pool.burst(gx, gy, PULSE_FX.sparksN, this.now + PULSE_FX.holdS, { speed: [70, 150], life: 0.55, size: 6, sprite: SPR.disc, color: ci, drag: 3, grav: 0, from: body * 0.6 });
+        this.pool.burst(gx, gy, 4, this.now + PULSE_FX.holdS, { speed: [90, 160], life: 0.4, size: 4, sprite: SPR.disc, color: this.c.white, drag: 3, grav: 0, from: body * 0.5 });
+      }
+    }
+    const pt = this.pulsePoint;
+    pt.x = this.map.px(gx);
+    pt.y = this.map.py(gy);
+    pt.hue = hue;
+    return pt;
+  }
+
+  /** The game says glimmer `e.id` was caught (bus 'moteCaught'): «+N» where it was. */
+  moteCaught(e: GameEvents['moteCaught']): void {
+    this.pulses.caught(e.id, e.x, e.y, e.amount, this.now);
   }
 
   /**
@@ -2489,7 +2637,7 @@ export class Overlay {
 
 /** `Float.cid` of a collected-light number (never a creature id: those are ≥ 0). */
 const COLLECT_FLOAT = -7;
-const NO_DANGERS: readonly { a: number; b: number; inS: number }[] = [];
+const NO_DANGERS: readonly { a: number; b: number; inS: number; actionable?: boolean }[] = [];
 
 const NAME_FONT = `600 12px ${SANS}`;
 const LABEL_FONT = `700 14px ${SANS}`;
