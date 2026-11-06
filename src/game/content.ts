@@ -4,7 +4,7 @@
  */
 import type { Behavior, Text } from '../core/types';
 import { DISH_BONUS } from './balance';
-import { formatNumber as f, formatPct as pct } from './format';
+import { formatNumber as f, formatPct as pct, multText } from './format';
 
 const t = (es: string, en: string): Text => ({ es, en });
 
@@ -449,4 +449,60 @@ export const TEXT = {
   /** The warning before two creatures touch (GameView.dangers); `contactSteer` when one is a swimmer. */
   contactSoon: t('¡Cuidado! Se van a tocar', 'Careful! They’re about to touch'),
   contactSteer: t('¡Cuidado! Arrástrala para desviarla', 'Careful! Drag it to steer it away'),
+  // ── ADR-031 (docs/MECANICAS.md §10.4): the tap is a pulse, sowing is a button, every loss leaves something ──
+  // Numbers arrive as numbers (they are formatted here for each language); multipliers too («×1,25» / "×1.25").
+  /** The Sembrar button (bottom bar): its label and what the next seed costs. */
+  sow: t('Sembrar', 'Sow'),
+  sowFree: t('Gratis', 'Free'),
+  sowCost: (n: number) => t(`${f(n)} de luz`, `${f(n)} glow`),
+  /** The dish holds all it can (`n` = its room): the button greys and says so. */
+  sowFull: (n: number) => t(`Llena (${n} de ${n})`, `Full (${n} of ${n})`),
+  /** A seed dragged onto a bad spot snapped to the nearest safe one (once a run, never a scolding). */
+  sowSnap: t('Aquí cabe mejor', 'There’s more room here'),
+  /** After SEED_FAIL_PITY failed seeds in a row: the gold ring on the button. */
+  sowSure: t('¡Esta prende seguro!', 'This one will surely take!'),
+  /** Session 1 tutorial (VELA, ≤ 12 words each; MECANICAS §6.1 steps 2, 5, 6 and §6.2). */
+  tutSow: t('Toca la semilla para sembrar.', 'Tap the seed to sow it.'),
+  tutPulse: t('Tócala: brilla y te da luz.', 'Tap it: it glows and gives you glow.'),
+  tutStreak: t('¡Más! Toques seguidos dan más luz.', 'More! Taps in a row give more glow.'),
+  tutDrag: t('También puedes arrastrarla.', 'You can drag it too.'),
+  /** The streak chip next to the counter (`m` = GameView.streak.mult), its full state, and the line under the counter. */
+  streak: (m: number) => {
+    const x = multText(m);
+    return t(`Racha ${x.es}`, `Streak ${x.en}`);
+  },
+  streakMax: t('¡Racha máxima!', 'Max streak!'),
+  streakLine: (m: number) => {
+    const x = multText(m);
+    return t(`${x.es} por tu racha`, `${x.en} from your streak`);
+  },
+  /** The every-N-th hit (`n` = the Luz it paid). */
+  chispazo: (n: number) => t(`¡CHISPAZO! +${f(n)}`, `FLASH! +${f(n)}`),
+  /** The first Chispazo ever, a 2 s label (`every` = GameView.streak.every: 10, 8 or 6 with Chispazo seguido). */
+  chispazoHint: (every: number) => t(`Cada ${every} toques seguidos, ¡un Chispazo!`, `Every ${every} taps in a row: a Flash!`),
+  /** Glimmers (from session 2): the start card's «Nuevo» line, and the first time they fly. */
+  motesNew: t('Nuevo: un Chispazo suelta chispitas. ¡Atrápalas!', 'New: a Flash throws out glimmers. Catch them!'),
+  motesCatch: t('¡Atrápalas!', 'Catch them!'),
+  /** A seed that never took gave its price back (bus 'seedRefund'); `refundFree` when it was a free seed. */
+  refund: (n: number) => t(`No prendió · +${f(n)} de vuelta`, `Didn’t take · +${f(n)} back`),
+  refundFree: t('No prendió · semilla gratis de vuelta', 'Didn’t take · free seed back'),
+  /** A forming seed losing matter (only if the measured rule is ≥ 85 % right, MECANICAS §7.3): the amber arc. */
+  struggling: t('Le cuesta…', 'Struggling…'),
+  /** A warned contact the player can act on (GameView.dangers[].actionable); `saved` when it passed (`n` = hits added). */
+  contactAct: t('¡Van a chocar! Arrastra una', 'About to bump! Drag one away'),
+  saved: (n: number) => t(`¡Salvada! Racha +${n}`, `Saved! Streak +${n}`),
+  /** What a living creature's death left (bus 'deathBurst'), a 2 s label in place. */
+  mergedLeft: t('Se juntaron · su luz quedó aquí', 'They merged · their glow stayed here'),
+  glassLeft: t('Chocó con el cristal · su luz quedó aquí', 'Hit the glass · its glow stayed here'),
+  lostLeft: t('Perdió la forma · su luz quedó aquí', 'Lost its shape · its glow stayed here'),
+  /** A shapeless blob (exploded matter): the amber outline, and the lysis when it acts. */
+  blobWatched: t('Mancha sin forma · VELA la vigila', 'Shapeless blob · VELA is watching it'),
+  blobDissolved: t('VELA disolvió una mancha que crecía sin parar', 'VELA dissolved a blob that kept growing'),
+  /** The first death of a cause ever (bus 'accidentLearned', `n` = FIRST_ACCIDENT_DATOS); `learnedSeed` for a seed. */
+  learned: (n: number) => t(`Aprendiste por qué pasa: +${n} ${n === 1 ? 'Dato' : 'Datos'}`, `Now you know why: +${n} Data`),
+  learnedSeed: (n: number) => t(`Aprendiste: no todas prenden. +${n} ${n === 1 ? 'Dato' : 'Datos'}`, `You learned: not every seed takes. +${n} Data`),
+  /** The second line of the first-fusion card («¡Se juntaron!»). */
+  mergedCard2: t('Su luz quedó en la placa: ¡recógela!', 'Their glow stayed on the dish: collect it!'),
+  /** Settings, accessibility (Settings.easyPulse, MECANICAS §3.5). */
+  settingEasyPulse: t('Pulso fácil (mantén el dedo)', 'Easy pulse (hold your finger)'),
 };

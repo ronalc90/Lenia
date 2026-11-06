@@ -6,6 +6,7 @@
  */
 import type { Text } from '../core/types';
 import * as C from './cycleBalance';
+import { multText } from './format';
 
 const t = (es: string, en: string): Text => ({ es, en });
 
@@ -105,6 +106,10 @@ export const NODE_TEXT: Record<string, { name: Text; desc: Text }> = {
   pipetteMore: { name: t('Más pipetas', 'More pipettes'), desc: t('Más manos en la placa.', 'More hands on the dish.') },
   pipetteMagnet: { name: t('Pipetas con imán', 'Magnet pipettes'), desc: t('De paso, se llevan las gotas de al lado.', 'They pick up the nearby drops on the way.') },
   pipetteMaster: { name: t('Pipeta maestra', 'Master pipette'), desc: t('Toda la luz llega sola.', 'All the glow arrives on its own.') },
+  // ✦ Pulso (ADR-031, docs/MECANICAS.md §5.2): the route of the player who taps; the 7 Destello nodes stay on it
+  pulse: { name: t('Pulso', 'Pulse'), desc: t('Cada toque saca más luz.', 'Every tap draws more glow.') },
+  streakLong: { name: t('Racha larga', 'Long streak'), desc: t('Tu racha sube más alto.', 'Your streak climbs higher.') },
+  chispazoOften: { name: t('Chispazo seguido', 'Flash after flash'), desc: t('Chispazos más a menudo.', 'Flashes more often.') },
 };
 
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
@@ -330,6 +335,8 @@ export const TREE_UI = {
   sparkLater: (n: number) => t(`Llega en la sesión ${n}`, `Comes in session ${n}`),
   /** "Nueva sesión" after buying a World. */
   playWorld: (name: Text) => t(`¡Juega en el ${name.es}!`, `Play in ${name.en}!`),
+  /** ADR-031: the ✦ route's new name (code id stays `spark`); BRANCH_TEXT.spark takes it with the route's nodes. */
+  routePulse: t('Pulso', 'Pulse'),
 };
 
 /** Session HUD, start and end cards. */
@@ -554,6 +561,24 @@ export const SESSION_UI = {
       `Now ${now} glow/s → with Nutrients ${after} glow/s. Until the session ends. The next one costs ${g.en}.`,
     );
   },
+  // ── ADR-031 (docs/MECANICAS.md §6, §10.4): the finger's report, the losses that gave back, the start card ──
+  /** Summary: `taps` hits, best streak ×`best` (a multiplier), `flashes` Chispazos and the Luz the finger added (formatted). */
+  finger: (taps: number, best: number, flashes: number, luz: string) => {
+    const m = multText(best);
+    return t(
+      `Tu dedo: ${taps} ${taps === 1 ? 'toque' : 'toques'} · mejor racha ${m.es} · ${flashes} ${flashes === 1 ? 'Chispazo' : 'Chispazos'} · +${luz} de luz`,
+      `Your finger: ${taps} ${taps === 1 ? 'tap' : 'taps'} · best streak ${m.en} · ${flashes} ${flashes === 1 ? 'Flash' : 'Flashes'} · +${luz} glow`,
+    );
+  },
+  /** Summary: `seeds` seeds that never took and the Luz they gave back (formatted). */
+  refundLine: (seeds: number, luz: string) => t(`Semillas que no prendieron: ${seeds} (te devolví ${luz} de luz)`, `Seeds that didn’t take: ${seeds} (${luz} glow back)`),
+  /** Summary: swimmers saved from a warned contact, fusions, and the Luz their deaths left (formatted). */
+  savedLine: (saved: number, merged: number, luz: string) =>
+    t(`Salvaste a ${saved} · se juntaron ${merged} · su luz: +${luz}`, `You saved ${saved} · ${merged} merged · their glow: +${luz}`),
+  /** VELA's positive tip after a fusion that steering could have avoided (replaces «Siembra más lejos» in sessions). */
+  tipSteer: t('¡Guiar a las nadadoras las salva!', 'Steering swimmers saves them!'),
+  /** Start card after the first level of Pulso. */
+  pulseThanks: t('Gracias a Pulso, cada toque da más.', 'Thanks to Pulse, every tap gives more.'),
 };
 
 /** VELA's line on the end card (≤ 14 words each). Picked by session.ts `velaLine`. */

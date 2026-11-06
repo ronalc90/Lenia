@@ -25,11 +25,12 @@ import type { Text } from '../core/types';
 import { DISH_DIAMETERS } from '../core/dish';
 import { SEED_NURSERY_MAX } from './balance';
 import * as C from './cycleBalance';
-import { formatDuration, formatNumber } from './format';
+import { formatDuration, formatNumber, multText } from './format';
 import { NODE_TEXT, TREE_UI, VALUE_TEXT as V, type BranchId } from './treeText';
 import { BASE_WORLD, WORLD_BY_ID, WORLDS, worldSpeciesCount, type WorldId } from './worlds';
 
 export type { BranchId } from './treeText';
+export { multText } from './format';
 
 /** Route order around the centre, clockwise from the top (index × 45 degrees: ↑ ↗ → ↘ ↓ ↙ ← ↖). */
 export const BRANCHES: BranchId[] = ['time', 'dropper', 'dish', 'life', 'collect', 'discovery', 'worlds', 'spark'];
@@ -182,11 +183,6 @@ const same = (s: string): Text => ({ es: s, en: s });
 /** Decimal comma in Spanish ("38,6"), point in English. */
 const loc = (s: string): Text => ({ es: s.replace(/(\d)\.(\d)/g, '$1,$2'), en: s });
 const pctNum = (x: number): string => String(Math.round(x * 100));
-/** "×1,5" in Spanish, "×1.5" in English (two decimals at most, trailing zeros dropped). */
-export function multText(x: number): Text {
-  const s = (Math.round(x * 100) / 100).toString();
-  return { es: `×${s.replace('.', ',')}`, en: `×${s}` };
-}
 const clock = (s: number): string => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 const num1 = (x: number): string => formatNumber(Math.round(x * 10) / 10);
 

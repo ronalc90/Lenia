@@ -241,3 +241,41 @@ describe('the clarity-pass texts exist in both languages before anyone wires the
     expect(TREE_UI.nightPrize(2).es).toBe('Noche 2 · capítulo 2 de la historia. +10 % de Datos y mejoras nuevas. Nada se borra.');
   });
 });
+
+describe('the pulse-pass texts exist in both languages before anyone wires them (ADR-031, docs/MECANICAS.md §10.4)', () => {
+  it('every new key gives Spanish and English, says Luz, and the numbers read in each language', async () => {
+    const { SESSION_UI, TREE_UI, NODE_TEXT } = await import('./treeText');
+    const { TEXT } = await import('./content');
+    const got: Text[] = [
+      TEXT.sow, TEXT.sowFree, TEXT.sowCost(4), TEXT.sowFull(4), TEXT.sowSnap, TEXT.sowSure,
+      TEXT.tutSow, TEXT.tutPulse, TEXT.tutStreak, TEXT.tutDrag,
+      TEXT.streak(1.25), TEXT.streakMax, TEXT.streakLine(1.25), TEXT.chispazo(5), TEXT.chispazoHint(10),
+      TEXT.motesNew, TEXT.motesCatch, TEXT.refund(4), TEXT.refundFree, TEXT.struggling, TEXT.contactAct, TEXT.saved(5),
+      TEXT.mergedLeft, TEXT.glassLeft, TEXT.lostLeft, TEXT.blobWatched, TEXT.blobDissolved,
+      TEXT.learned(2), TEXT.learnedSeed(2), TEXT.mergedCard2, TEXT.settingEasyPulse,
+      SESSION_UI.finger(74, 1.25, 4, '96'), SESSION_UI.refundLine(2, '8'), SESSION_UI.savedLine(1, 1, '18'),
+      SESSION_UI.tipSteer, SESSION_UI.pulseThanks, TREE_UI.routePulse,
+      ...['pulse', 'streakLong', 'chispazoOften'].flatMap((id) => [NODE_TEXT[id].name, NODE_TEXT[id].desc]),
+    ];
+    for (const x of got) {
+      expect(x.es.length, JSON.stringify(x)).toBeGreaterThan(0);
+      expect(x.en.length, JSON.stringify(x)).toBeGreaterThan(0);
+      expect(x.es, 'new texts say Luz, never Esencia').not.toMatch(/esencia|essence|undefined|NaN/i);
+      expect(x.en).not.toMatch(/esencia|essence|undefined|NaN/i);
+    }
+    expect(TEXT.streak(1.25)).toEqual({ es: 'Racha ×1,25', en: 'Streak ×1.25' });
+    expect(TEXT.chispazo(5)).toEqual({ es: '¡CHISPAZO! +5', en: 'FLASH! +5' });
+    expect(TEXT.refund(4).es).toBe('No prendió · +4 de vuelta');
+    expect(TEXT.learned(2).es).toBe('Aprendiste por qué pasa: +2 Datos');
+    expect(SESSION_UI.finger(74, 1.25, 4, '96').es).toBe('Tu dedo: 74 toques · mejor racha ×1,25 · 4 Chispazos · +96 de luz');
+    expect(SESSION_UI.finger(1, 1, 1, '1').en).toBe('Your finger: 1 tap · best streak ×1 · 1 Flash · +1 glow');
+    // VELA's tutorial lines and the tree's names stay kid-short (script.test.ts: ≤ 12 words; tree.test.ts: names ≤ 4).
+    for (const x of [TEXT.tutSow, TEXT.tutPulse, TEXT.tutStreak, TEXT.tutDrag])
+      for (const l of ['es', 'en'] as const) expect(x[l].split(/\s+/).length, x[l]).toBeLessThanOrEqual(12);
+    for (const id of ['pulse', 'streakLong', 'chispazoOften'])
+      for (const l of ['es', 'en'] as const) {
+        expect(NODE_TEXT[id].name[l].split(/\s+/).length).toBeLessThanOrEqual(4);
+        expect(NODE_TEXT[id].desc[l].split(/\s+/).length).toBeLessThanOrEqual(12);
+      }
+  });
+});

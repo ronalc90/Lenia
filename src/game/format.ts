@@ -1,4 +1,6 @@
 /** Number formatting for game-generated text (doc §5: thousands separator, then K/M/B/T/Qa/Qi, then 1.23e18). */
+import type { Text } from '../core/types';
+
 const SUFFIXES = ['K', 'M', 'B', 'T', 'Qa', 'Qi'];
 
 export function formatNumber(n: number): string {
@@ -11,6 +13,12 @@ export function formatNumber(n: number): string {
   const tier = Math.floor(Math.log10(a) / 3);
   const v = a / Math.pow(1000, tier);
   return sign + (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2)) + SUFFIXES[tier - 1];
+}
+
+/** "×1,5" in Spanish, "×1.5" in English (two decimals at most, trailing zeros dropped). */
+export function multText(x: number): Text {
+  const s = (Math.round(x * 100) / 100).toString();
+  return { es: `×${s.replace('.', ',')}`, en: `×${s}` };
 }
 
 /** 0.1 → "10%", 0.025 → "2.5%". */
