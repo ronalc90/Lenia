@@ -2801,7 +2801,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
             endedEarly: se.endedEarly,
             first: se.n === 1,
             tutorialHold: se.hold === true,
-            wakeHold: wakeHolding(),
+            wakeHold: wakeHolding() || plantWaking(),
           }
         : null,
       research: {

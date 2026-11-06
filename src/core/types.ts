@@ -619,9 +619,10 @@ export interface SessionClockView {
    */
   tutorialHold?: boolean;
   /**
-   * (game, ADR-027 v0.027, QA-3 §3) The clock runs but waits: the run's planted creature (starter / Nevera) is still
-   * waking — a slow device lit it before its incubation was done — and the clock counts from when it lives (at most
-   * cycleBalance.WAKE_HOLD_MAX_S of dish time). The HUD may say why («Espera a que despierte»).
+   * (game, ADR-027 v0.027, QA-3 §3) The run's planted creature (starter / Nevera) is still waking — a slow device lit it
+   * before its incubation was done — and the clock waits for it: in 'ready' the Sembrar button says «Espera…» (the
+   * plant holds the nursery, so the first seed, which starts the clock, waits); in 'running' the clock does not count
+   * (at most cycleBalance.WAKE_HOLD_MAX_S of dish time). The HUD / button may say why (content TEXT.wakeHold).
    */
   wakeHold?: boolean;
 }

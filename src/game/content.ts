@@ -504,6 +504,8 @@ export const TEXT = {
   plantLostFaded: t('No llegó a despertar · te doy otra segura', 'Never woke up · here is a sure one'),
   /** (ADR-027 v0.027) The clock waits for the run's planted creature to wake (SessionClockView.wakeHold). */
   wakeHold: t('El reloj espera a que despierte', 'The clock waits for it to wake'),
+  /** (ADR-027 v0.027) The Sembrar button's reason while the run's planted creature wakes (phase 'ready', wakeHold). */
+  wakeSow: t('Espera: la de la nevera se está despertando.', 'Wait: the fridge creature is waking up.'),
   /** A forming seed losing matter (only if the measured rule is ≥ 85 % right, MECANICAS §7.3): the amber arc. */
   struggling: t('Le cuesta…', 'Struggling…'),
   /** A warned contact the player can act on (GameView.dangers[].actionable); `saved` when it passed (`n` = hits added). */

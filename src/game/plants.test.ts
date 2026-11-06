@@ -46,6 +46,7 @@ describe('a planted creature still waking (QA-3 §3)', () => {
     expect(g.actions.sow!()).toBeNull();
     expect(((log.get('seedBlocked') ?? []) as GameEvents['seedBlocked'][]).map((e) => e.reason)).toContain('growing');
     expect(g.session!.phase).toBe('ready');
+    expect(g.view().session!.wakeHold).toBe(true); // the button can say why it waits
     // It lives: the button sows and the first seed starts the clock with the Nevera's creature already paying.
     g.tick(0.1, report([creature({ id: 1, x: plant.x + 6, y: plant.y, state: 'stable', age: 420, behavior: 'swimmer' })], [], 420));
     expect(g.actions.sow!()).not.toBeNull();
