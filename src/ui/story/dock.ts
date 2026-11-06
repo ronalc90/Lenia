@@ -27,3 +27,30 @@ export function storyLook(held: StoryHold, task: boolean, choice: boolean): Stor
 export function sceneShowing(s: { box: boolean; reenter: boolean; task: boolean; choice: boolean }): boolean {
   return s.box || s.reenter || s.task || s.choice;
 }
+
+/** Story scenes about the research tree: they play in the Tree, docked at the top (QA4 F-01), and nowhere else. */
+export const TREE_SCENES: ReadonlySet<string> = new Set(['t_tree', 't_world', 'a1_night']);
+
+/** What covers the dish right now, as the host's hold sees it. */
+export interface HoldScreen {
+  treeOpen: boolean;
+  /** A session card («¡Tiempo!», the report, the start card), a busy flow or the welcome card. */
+  cardOpen: boolean;
+}
+
+/**
+ * One layer at a time (QA4 F-01): in the Tree only the scenes about the Tree, docked at the top; over a card,
+ * nothing. A Tree scene never shows over the dish (QA-3 N6: «¡Ese late en verde! … Tócalo.» and «Te lo dejo
+ * elegido…» followed the player back to the dish and sat on Sembrar).
+ */
+export function storyHold(id: string | null, s: HoldScreen): StoryHold {
+  const tree = !!id && TREE_SCENES.has(id);
+  if (s.treeOpen) return tree ? 'dock' : 'hide';
+  if (tree || s.cardOpen) return 'hide';
+  return null;
+}
+
+/** The Tree just closed with one of its scenes on: it ends there (a choice is put off and comes back in the Tree). */
+export function endsWithTree(id: string | null, treeWasOpen: boolean, treeOpen: boolean): boolean {
+  return treeWasOpen && !treeOpen && !!id && TREE_SCENES.has(id);
+}

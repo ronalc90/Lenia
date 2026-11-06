@@ -41,7 +41,7 @@ import { RunawayWatch } from './sim/runaway';
 import { SUPPORTER_JOURNAL } from './store/catalog';
 import { setPortraitPalette } from './ui/portrait';
 import { createEncargos, createStory, ENCARGOS_STORAGE_KEY, gameGrantOf, type EncargoReward, type EncargoView } from './story';
-import { createEncargoUI, createStoryUI, type StoryArchive, type StorySound } from './ui/story';
+import { createEncargoUI, createStoryUI, endsWithTree, storyHold, type StoryArchive, type StorySound } from './ui/story';
 import type { UI, UISound } from './ui/ui';
 import { createMoments, linkStory, type StoryBridge } from './moments';
 import {
@@ -133,9 +133,6 @@ interface HudFx {
   hudAnchor?(id: 'essence' | 'datos' | 'clock'): DOMRect | null;
   pulseHud?(id: 'essence' | 'datos', amount: number): void;
 }
-
-/** Story scenes about the research tree: they play in the Tree, docked at the top (QA4 F-01). */
-const TREE_SCENES = new Set(['t_tree', 't_world', 'a1_night']);
 
 /**
  * Why the dish is frozen. The simulation and the economy stop while any source is active; the UI's
@@ -650,12 +647,8 @@ function boot(): void {
     hideTask: () => flowRef?.treeSheetOpen ?? false,
     // One layer at a time (QA4 F-01): never over the summary, the start card, "¡Tiempo!" or the welcome
     // card (the scene waits); in the Tree only the scenes about the Tree, docked at the top.
-    hold: (id) => {
-      const f = flowRef;
-      if (f?.treeOpen) return id && TREE_SCENES.has(id) ? 'dock' : 'hide';
-      if (f?.cardOpen || f?.busy || welcomeOpen()) return 'hide';
-      return null;
-    },
+    // A Tree scene never shows over the dish (QA-3 N6): ui/story/dock storyHold.
+    hold: (id) => storyHold(id, { treeOpen: !!flowRef?.treeOpen, cardOpen: !!(flowRef?.cardOpen || flowRef?.busy) || welcomeOpen() }),
     onSound: (kind) => {
       // Mute the blips while the Momentos bridge consumes a scene it already told.
       if (bridge?.consuming) return;
@@ -1221,6 +1214,8 @@ function boot(): void {
     return mustWaitForDetection(s.stepCount, detectedStep, DETECT_EVERY);
   }
   let lastView = 0;
+  /** The Tree was open at the last view refresh (its scenes end when it closes, QA-3 N6). */
+  let treeWasOpen = false;
   let lastAudio = 0;
   let lastSave = performance.now();
   let lastDishSave = performance.now();
@@ -1587,6 +1582,11 @@ function boot(): void {
       ui.update(view);
       refreshTints(view);
       flow.update(view);
+      // The Tree closed with one of its scenes on: it ends there instead of following the player (QA-3 N6). A
+      // choice is put off (story.skip) and comes back in the Tree.
+      const cur = story.current();
+      if (endsWithTree(cur?.scene.id ?? null, treeWasOpen, flow.treeOpen)) for (let i = 0; i < 3 && story.current() && endsWithTree(story.current()!.scene.id, true, false); i++) story.skip();
+      treeWasOpen = flow.treeOpen;
       setPause('cards', flowBusy());
       const cp = clockPauses({ talking: story.talking, phase: game.session?.phase, sheet: ui.drawerOpen || sheetOpen() || ui.blocked() });
       setPause('story', cp.story);

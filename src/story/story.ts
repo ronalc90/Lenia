@@ -543,6 +543,13 @@ export function createStory(deps: StoryDeps): Story {
     if (waitSatisfied(a, view())) finish(a, false);
   }
 
+  /** A choice put off («Más tarde», or «Saltar»): the scene ends unchosen and comes back after DEFER_MS. */
+  function putOff(a: Active): void {
+    st.deferUntil[a.def.id] = now() + DEFER_MS;
+    events.emit('chosen', { choiceId: a.def.choice!.id, optionId: null });
+    finish(a, true, { deferred: true });
+  }
+
   function finish(a: Active, skipped: boolean, opts: { deferred?: boolean } = {}): void {
     if (active !== a) return;
     const t = now();
@@ -825,9 +832,7 @@ export function createStory(deps: StoryDeps): Story {
     defer() {
       const a = active;
       if (!a || a.phase !== 'choice' || !a.def.choice?.deferrable) return;
-      st.deferUntil[a.def.id] = now() + DEFER_MS;
-      events.emit('chosen', { choiceId: a.def.choice.id, optionId: null });
-      finish(a, true, { deferred: true });
+      putOff(a);
     },
     skip() {
       const a = active;
@@ -840,7 +845,9 @@ export function createStory(deps: StoryDeps): Story {
         }
         finish(a, true);
       } else if (a.phase === 'wait') finish(a, true);
-      else if (a.phase === 'choice') story.defer();
+      // «Saltar» on a choice closes it, deferrable or not (QA-3 N8: nothing closed the lamp choice); nothing is
+      // picked and the scene comes back later.
+      else if (a.phase === 'choice' && a.def.choice) putOff(a);
     },
     skipTutorial() {
       st.tutorialSkipped = true;

@@ -578,3 +578,18 @@ describe('story: one voice while the clock runs (§2.8)', () => {
     expect(h.story.serialize().done).toContain('t_bestiary');
   });
 });
+
+// QA-3 N8 (v0.026, shots 084, 085): «Dejar la lámpara encendida» sat under VELA's bubble, and neither «Saltar ›» nor a
+// tap on the bubble closed it, so only «Seguir el protocolo» could be picked.
+describe('«Saltar» on a story choice closes it (QA-3 N8)', () => {
+  it('QA-3: «Saltar» during the lamp choice closes the scene; it comes back later, nothing is picked', () => {
+    const h = veteran(['t_intro', 't_stable']);
+    h.story.play('a1_night');
+    h.playLines();
+    expect(h.story.current()?.phase).toBe('choice');
+    h.story.skip();
+    expect(h.story.current()).toBeNull();
+    expect(h.log.some((e) => e.type === 'chosen' && (e.payload as { optionId: string | null }).optionId !== null)).toBe(false);
+    expect(h.story.serialize().done).not.toContain('a1_night');
+  });
+});

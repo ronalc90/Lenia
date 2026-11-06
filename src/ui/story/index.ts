@@ -3,3 +3,4 @@ export { createStoryUI, type StoryUI, type StoryUIOptions, type StorySound } fro
 export type { StoryArchive } from './archive';
 export { createEncargoUI, type EncargoUI, type EncargoUIOptions, type EncargoBadge } from './encargoUI';
 export { setVelaWear } from './portraits';
+export { endsWithTree, storyHold, TREE_SCENES } from './dock';

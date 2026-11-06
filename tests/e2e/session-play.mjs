@@ -230,6 +230,25 @@ async function runCase(c) {
         for (const n of m.removedNodes) if (n.nodeType === 1 && n.classList?.contains('toast')) end(n, t);
       }
     }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    // QA-3 N13: «Toca la semilla para sembrar» entered at the bottom and, a frame later, again at the top. Each VELA
+    // line enters on one side; changing side within 600 ms of entering is that jump.
+    window.__velaJumps = [];
+    const lineSide = new Map();
+    new MutationObserver(() => {
+      const t = performance.now();
+      for (const b of document.querySelectorAll('.sty-box:not([aria-hidden="true"])')) {
+        if (b.hidden || b.closest('.sty-held')) continue;
+        const text = b.querySelector('.sty-text')?.textContent?.trim();
+        if (!text) continue;
+        const top = b.classList.contains('at-top');
+        const r = lineSide.get(text);
+        if (!r) lineSide.set(text, { t, top });
+        else if (r.top !== top) {
+          if (t - r.t < 600) window.__velaJumps.push(`${text.slice(0, 50)} (${Math.round(t - r.t)} ms)`);
+          lineSide.set(text, { t, top });
+        }
+      }
+    }).observe(document, { subtree: true, attributes: true, attributeFilter: ['class', 'hidden'], childList: true });
     // A toast the player tapped or swiped away was read as long as they wanted.
     window.addEventListener(
       'pointerdown',
@@ -1218,6 +1237,8 @@ async function runCase(c) {
   // starts to leave, unless the player closed it.
   const toastIn = await page.evaluate(() => window.__toastIn ?? {}).catch(() => ({}));
   for (const [key, ts] of Object.entries(toastIn)) if (ts.length > 1) problems.push(`[${c.name}] the toast «${key}» entered the screen ${ts.length} times (it bounces)`);
+  const jumps = await page.evaluate(() => window.__velaJumps ?? []).catch(() => []);
+  for (const j of jumps) problems.push(`[${c.name}] VELA's line «${j}» entered on one side and jumped to the other`);
   const toastSeen = await page.evaluate(() => window.__toastSeen ?? []).catch(() => []);
   for (const r of toastSeen)
     if (!r.tapped && r.out - r.in < 1000) problems.push(`[${c.name}] the toast «${r.key}» was on screen ${Math.round(r.out - r.in)} ms (less than 1 s: unreadable)`);

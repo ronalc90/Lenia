@@ -395,6 +395,29 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
     return held === 'hide';
   }
 
+  /**
+   * Which side the box takes for a line with this target: the top when the target sits low on the screen, or when
+   * docked over a screen of its own. Decided when the line starts (QA-3 N13: «Toca la semilla» entered at the bottom
+   * and jumped to the top a frame later, once its target had been measured).
+   */
+  function sideFor(ids: TargetId[] | null, r0: DOMRect): boolean {
+    const tg = targetRect(ids, r0);
+    const big = !!tg && (tg.id === 'dish' || tg.rect.w * tg.rect.h > r0.width * r0.height * 0.3);
+    return held === 'dock' || (!!tg && !big && tg.rect.y + tg.rect.h / 2 > r0.height * 0.55);
+  }
+
+  function applySide(): void {
+    box.classList.toggle('at-top', boxTop);
+    if (boxTop) {
+      // --sty-top: set by the game UI below its floating objective, so VELA never covers it.
+      box.style.top = 'max(var(--sty-top, 64px), calc(env(safe-area-inset-top) + 56px))';
+      box.style.bottom = '';
+    } else {
+      box.style.bottom = 'max(14px, calc(env(safe-area-inset-bottom) + 10px))';
+      box.style.top = '';
+    }
+  }
+
   function place(r0: DOMRect): void {
     const W = r0.width;
     const H = r0.height;
@@ -421,24 +444,18 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
           hideBox();
           reenter = true;
         }
-        box.classList.toggle('at-top', boxTop);
       }
-      if (boxTop) {
-        // --sty-top: set by the game UI below its floating objective, so VELA never covers it.
-        box.style.top = 'max(var(--sty-top, 64px), calc(env(safe-area-inset-top) + 56px))';
-        box.style.bottom = '';
-      } else {
-        box.style.bottom = 'max(14px, calc(env(safe-area-inset-bottom) + 10px))';
-        box.style.top = '';
-      }
+      applySide();
     }
     if (!choice.hidden) {
-      const bh = box.hidden ? 0 : box.offsetHeight;
+      // The options start where the box really ends (QA-3 N8: docked under the Tree's bar, the box sat lower than
+      // the 64 px assumed here and covered «Dejar la lámpara encendida»).
+      const br = box.hidden ? null : box.getBoundingClientRect();
       if (boxTop) {
-        choice.style.top = `${64 + bh + 12}px`;
+        choice.style.top = `${Math.round((br ? br.bottom - r0.top : 64) + 12)}px`;
         choice.style.bottom = '';
       } else {
-        choice.style.bottom = `${14 + bh + 14}px`;
+        choice.style.bottom = `${Math.round((br ? r0.bottom - br.top : 14) + 14)}px`;
         choice.style.top = '';
       }
     }
@@ -671,6 +688,16 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
       choice.hidden = true;
       task.hidden = true;
       taskInfo = null;
+      // The new line takes its side before it shows: the old line leaves, the new one enters there (QA-3 N13).
+      occ.clear();
+      const top = sideFor(l.target ?? null, rootRect());
+      if (top !== boxTop) {
+        if (!rm()) hideBox();
+        else box.hidden = true;
+        reenter = false;
+        boxTop = top;
+        applySide();
+      }
       showBox();
       setLine(l);
       kick();
