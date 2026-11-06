@@ -17,7 +17,7 @@ import { fmt, fmtClock, fmtDuration, fmtRate, fmtShort } from './format';
 import { behaviorName, getLang, setLang, stateName, t, tx } from './i18n';
 import { icon, logo } from './icons';
 import { DishInput } from './input';
-import { dropAt, dropsOnSegment, routeTap } from './dishTap';
+import { dropAt, dropsOnSegment, routeTap, segmentDist, type TapRoute } from './dishTap';
 import { copyPick } from './copyPick';
 import { PressGuard } from './pressGuard';
 import { FlyLayer, flyDuration } from './fx/fly';
@@ -41,9 +41,11 @@ import type { LeaderboardClient } from './leaderboard-types';
 import { createSplash, type Splash } from './splash';
 import { Toasts } from './toasts';
 import { SESSION_UI } from '../game/treeText';
-import { MOMENT_MIN_RUN_SECONDS, SESSION_SIM_PACE, SESSION_TOAST_MAX_MS, SIM_STEPS_PER_SEC } from '../game/cycleBalance';
+import { LIGHT_TAP_RADIUS_PX, MOMENT_MIN_RUN_SECONDS, MOTES_FROM_SESSION, SAVE_STREAK_HITS, SESSION_SIM_PACE, SESSION_TOAST_MAX_MS, SIM_STEPS_PER_SEC } from '../game/cycleBalance';
 import { safeSowSpot } from './sowHint';
-import { deathLabel, shapelessLabel } from './deathLabel';
+import { SowButton, SOW_UI, type SowRequest } from './sowButton';
+import { createStreakChip, type StreakChip } from './session/hud';
+import { deathLabel, dissolvedLabel, learnedLabel, refundLabel, shapelessLabel } from './deathLabel';
 import { earningNow } from './moments/status';
 import { installPressFeedback, pop, restartClass, setReduceMotion, DURATION, EASING } from './art/motion';
 
@@ -68,7 +70,19 @@ const COLLECT_UI = {
   moteShare: [0.04, 0.12],
   /** The reason chip next to the counter ("+5 · primera semilla"), ms. */
   giftMs: 2400,
+  /** (ADR-031, docs/MECANICAS.md §3.1) A tap on empty agar collects the drops this close (CSS px): generous. */
+  emptyTapPx: 48,
+  /** A death the player's own tool caused (Goma, cleaning) this recently (ms) says nothing of VELA. */
+  toolMs: 2000,
+  /** The «También puedes arrastrarla» hint comes with this tap of the Sembrar button, from session 2 (§6.2). */
+  dragHintTap: 3,
 } as const;
+
+/**
+ * A tap's route: dishTap's (ADR-030) and the pulse routes PB adds there (ADR-031, docs/MECANICAS.md §7.1:
+ * 'pulse', 'grey', 'catch', 'ripple'). Until they land, the session tap maps the old routes onto them.
+ */
+type DishRoute = TapRoute | { kind: 'pulse'; id: number } | { kind: 'grey'; id: number } | { kind: 'catch'; mote: number } | { kind: 'ripple' };
 
 export interface UIDeps {
   actions: GameActions;
@@ -77,8 +91,17 @@ export interface UIDeps {
   glCanvas: HTMLCanvasElement;
   /** Called when the dish area resizes (CSS px) so the integrator resizes GL + camera. */
   onDishResize(cssW: number, cssH: number, dpr: number): void;
-  /** Player tapped the dish at a grid point (already filtered: not a creature tap, not golden, not a UI control). */
+  /**
+   * Player tapped the dish at a grid point (already filtered: not a creature tap, not golden, not a UI control).
+   * The classic loop only: in the sessions cycle a finger on the dish never sows (ADR-031); see `onSow`.
+   */
   onDishTap(x: number, y: number, opts: { big: boolean }): void;
+  /**
+   * (ADR-031, docs/MECANICAS.md §3.1) The Sembrar button: sow at `req.spot` (the safest free spot, or the snapped
+   * spot of a drag when `req.dragged`); `req.big` = a held press. The host asks the game (actions.sow) and hands
+   * the spec to the simulation. Without it the UI falls back to `onDishTap` at that spot.
+   */
+  onSow?(req: SowRequest): void;
   onErase(x: number, y: number): void;
   onBrush(x: number, y: number): void;
   onPrint(speciesId: string, x: number, y: number): void;
@@ -342,6 +365,8 @@ class BiolumaUI implements UI {
   private flyQ = '';
   // Collecting by hand and guiding (ADR-030)
   private readonly sweepIds: number[] = [];
+  /** Creatures a sweep segment crossed (reused). */
+  private readonly sweepPulse: number[] = [];
   private sweepN = 0;
   private steerId: number | null = null;
   private steerAt = 0;
@@ -385,6 +410,18 @@ class BiolumaUI implements UI {
   private dropOvergrownToast = false;
   /** Last seed cost shown, to animate changes (green ↓ cheaper, amber ↑ pricier). */
   private lastSeedCost = -1;
+  /** (ADR-031) The Sembrar button, its price explainer and the streak chip by the counter. */
+  private sowBtn!: SowButton;
+  private sowWrap!: HTMLElement;
+  private sowInfo!: HTMLButtonElement;
+  private streakChip!: StreakChip;
+  /** Button presses this session (the drag hint), the run's «Aquí cabe mejor» already said. */
+  private sowPresses = 0;
+  private snapTold = false;
+  /** Light of the drops a pulse collected while the game was asked (the pulse's own «+N» is the rest). */
+  private handSum = 0;
+  /** When the player last used a tool that removes matter (the Goma, cleaning the dish). */
+  private toolAt = 0;
   /** Slot reserved next to the seed cost for the price meter (src/ui/moments wires it). */
   readonly seedMeterSlot = h('span', { class: 'mp-meter' });
   /** «Copiar» over the seed pill once the Copiadora is bought (QA-CLARIDAD #39), and its species strip. */
@@ -638,6 +675,8 @@ class BiolumaUI implements UI {
       h('div', { class: 'hud-actions' }, this.lbBtn, this.journalBtn, this.muteBtn, this.settingsBtn),
       this.giftEl,
     );
+    // ADR-031 (docs/MECANICAS.md §3.2): «Racha ×1,2» and its ten dots, floating under the counter (no layout shift).
+    this.streakChip = createStreakChip(hud, { lang: () => this.lang, reduceMotion: () => !!this.v?.settings.reduceMotion });
 
     // Objective
     this.objIcon = ic('target', 24);
@@ -686,6 +725,7 @@ class BiolumaUI implements UI {
     // Overflow banner (view.overgrown): prominent, but the dish stays usable underneath.
     const cleanBig = h('button', { type: 'button', class: 'btn primary og-btn', 'data-testid': 'overgrown-clean' }, ic('broom', 24), h('span', { class: 'og-btn-l' }));
     cleanBig.addEventListener('click', () => {
+      this.toolAt = performance.now();
       this.sound('confirm');
       this.actions.sterilizeDish?.();
     });
@@ -733,6 +773,25 @@ class BiolumaUI implements UI {
       this.enterPrint(b.dataset.copy!);
     });
     this.buffsEl = h('div', { class: 'buffs' });
+    // ADR-031: sowing is the Sembrar button in the sessions cycle (the mode pill keeps the eraser, the copy mode and
+    // the classic loop). Its price explainer is the small «i» beside it; the price meter's chips sit above it.
+    this.sowBtn = new SowButton({
+      dish: this.dish,
+      camera: this.camera,
+      lang: () => this.lang,
+      reduceMotion: () => !!this.v?.settings.reduceMotion,
+      onSow: (req) => this.sowNow(req),
+      onDenied: () => retriggerClass(this.sowBtn.el, 'shake'),
+      onSound: (k) => this.sound(k),
+      vibrate: (p) => this.vibrate(p),
+    });
+    this.sowInfo = h('button', { type: 'button', class: 'sow-info', hidden: !this.deps.onSeedPriceInfo, html: icon('info', 18) });
+    this.sowInfo.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.sound('open');
+      this.deps.onSeedPriceInfo?.();
+    });
+    this.sowWrap = h('div', { class: 'sow-wrap', hidden: true }, this.sowBtn.el, this.sowInfo);
     this.dishUI = h(
       'div',
       { class: 'bl-dish-ui' },
@@ -744,6 +803,7 @@ class BiolumaUI implements UI {
       this.fabCentre,
       this.buffsEl,
       this.modePill,
+      this.sowWrap,
       this.copyStrip,
       this.copyBtn,
       this.overgrownEl,
@@ -817,6 +877,7 @@ class BiolumaUI implements UI {
       erase: (x, y) => {
         if (!this.camera.isOnDish(x, y)) return;
         const g = this.camera.screenToGrid(x, y);
+        this.toolAt = performance.now();
         this.deps.onErase(g.x, g.y);
         this.overlay.ripple(g.x, g.y, 'erase');
         this.vibrate(6);
@@ -861,6 +922,8 @@ class BiolumaUI implements UI {
     setAttr(this.fabSpeed, 'aria-label', t('speed'));
     setAttr(this.fabErase, 'aria-label', t('eraser'));
     setAttr(this.fabErase, 'title', t('eraser'));
+    setAttr(this.sowInfo, 'aria-label', t('seedPriceWhy'));
+    setAttr(this.sowInfo, 'title', t('seedPriceWhy'));
     setAttr(this.fabClean, 'aria-label', t('cleanDish'));
     setAttr(this.fabClean, 'title', t('cleanDish'));
     setText(this.overgrownEl.querySelector('.og-title') as HTMLElement, t('overgrownTitle'));
@@ -982,7 +1045,8 @@ class BiolumaUI implements UI {
     if (id === 'tree.next') return q('.rt-node.can', document);
     if (id === 'world.picker') return q('.ss-worlds', document) ?? q('.ss-world', document);
     if (id.startsWith('tree.node.')) return q(`.rt-node[data-id="${CSS.escape(id.slice(10))}"]`, document);
-    if (id === 'seed') return q('.mode-pill');
+    // ADR-031: the Sembrar button in sessions; the classic loop's seed pill otherwise.
+    if (id === 'seed') return q('.sow-btn:not([hidden])') ?? (this.v?.cycle === 'sessions' ? null : q('.mode-pill'));
     if (id === 'objective') return q('.bl-objective');
     // The Bestiary's dock button is under the open drawer (owner bug B-10.1): its visible equivalent is
     // the new species' card in the drawer (else the first species card).
@@ -1230,6 +1294,8 @@ class BiolumaUI implements UI {
       'title',
       mu ? `${t('multGlobal')} ×${fmtShort(mu.global, lang)} · ${t('multBuffs')} ×${fmtShort(mu.buffs, lang)}` : null,
     );
+
+    this.streakChip.update(v.streak);
 
     show(this.journalDot, v.journal.some((e) => !e.read));
     setHTML(this.muteBtn, icon(v.settings.muted ? 'mute' : 'sound'));
@@ -1604,6 +1670,7 @@ class BiolumaUI implements UI {
       this.fabClean.classList.remove('holding');
       this.sound('confirm');
       this.vibrate(20);
+      this.toolAt = performance.now();
       this.actions.sterilizeDish?.();
     }, B.CLEAN_HOLD_MS);
   }
@@ -1685,6 +1752,7 @@ class BiolumaUI implements UI {
       this.fabClean.classList.remove('armed');
       this.sound('confirm');
       this.vibrate(20);
+      this.toolAt = performance.now();
       this.actions.sterilizeDish?.();
       return;
     }
@@ -1823,6 +1891,14 @@ class BiolumaUI implements UI {
       }
     }
 
+    // ADR-031: in the sessions cycle the Sembrar button takes the seed pill's place (seed mode only).
+    const sowing = v.cycle === 'sessions' && this.mode === 'seed';
+    this.sowBtn.update(v);
+    show(this.sowWrap, sowing && !this.sowBtn.el.hidden);
+    show(this.modePill, !sowing);
+    toggle(this.el, 'sow-on', sowing);
+    if (sowing && this.seedMeterSlot.parentElement !== this.sowWrap) this.sowWrap.prepend(this.seedMeterSlot);
+
     // Buffs
     reconcile(
       this.buffsEl,
@@ -1865,7 +1941,11 @@ class BiolumaUI implements UI {
       !this.card &&
       !this.deps.isNarrating?.();
     const want = wantHint || wantAgain;
-    if (want && !this.hintEl) {
+    // ADR-031: in sessions «¡Toca aquí!» is a hand on the Sembrar button (a tap on the dish never sows).
+    this.sowBtn.setHand(sowing && want);
+    if (sowing) {
+      if (this.hintEl) this.hideFirstHint();
+    } else if (want && !this.hintEl) {
       this.hintEl = h(
         'div',
         { class: 'dish-hint' },
@@ -1876,14 +1956,16 @@ class BiolumaUI implements UI {
       this.dishUI.appendChild(this.hintEl);
       this.hintSpot = null;
     } else if (!want && this.hintEl) this.hideFirstHint();
-    if (this.hintEl) this.placeHint(v);
+    if (this.hintEl && !sowing) this.placeHint(v);
 
     // Gesture hints the first time a gesture becomes available.
     if (!this.hintEl && !this.gestureHint && !this.card && !this.splash?.visible && !this.deps.isNarrating?.()) {
       if (v.tools.longPress && !this.prefs.hints.includes('long')) {
         this.prefs.hints.push('long');
         this.savePrefs();
-        this.showGestureHint(v.settings.oneTouch ? t('hintDoubleTap') : t('hintLongPress'), 'hand');
+        // ADR-031: in sessions the big seed is the Sembrar button's (held, or a double tap in one-touch mode).
+        if (sowing) this.showGestureHint(v.settings.oneTouch ? t('hintDoubleTapSow') : t('hintHoldSow'), 'hand');
+        else this.showGestureHint(v.settings.oneTouch ? t('hintDoubleTap') : t('hintLongPress'), 'hand');
       } else if (v.tools.brush && !v.settings.oneTouch && !v.drops && !this.prefs.hints.includes('brush')) {
         this.prefs.hints.push('brush');
         this.savePrefs();
@@ -1997,6 +2079,7 @@ class BiolumaUI implements UI {
       return;
     }
     if (this.mode === 'erase') {
+      this.toolAt = performance.now();
       this.deps.onErase(g.x, g.y);
       this.overlay.ripple(g.x, g.y, 'erase');
       this.vibrate(8);
@@ -2011,6 +2094,11 @@ class BiolumaUI implements UI {
         this.sound('open');
         this.deps.onBehaviorInfo(pill.behavior);
       } else if (pill.state === 'stable') this.openCard(pill.id);
+      return;
+    }
+    // ADR-031 (docs/MECANICAS.md §3.1): in the sessions cycle a finger on the dish never sows.
+    if (this.v.cycle === 'sessions') {
+      this.sessionTap(routeTap('tap', px, py, scene) as DishRoute, px, py, g);
       return;
     }
     // ADR-030 §2.2.1: a drop, or a creature with light, is collected; a tap never sows on either.
@@ -2043,6 +2131,108 @@ class BiolumaUI implements UI {
     this.deps.onDishTap(g.x, g.y, { big: false });
   }
 
+  /**
+   * A tap on the dish in a session (ADR-031, docs/MECANICAS.md §3.1): a glimmer is caught; a stable creature pulses
+   * (it glows, its drop comes with it, +1 to the streak); a forming seed only blinks; a drop is collected; empty agar
+   * collects the drops near the finger and ripples. Nothing here costs Luz, sows, or breaks the streak.
+   */
+  private sessionTap(route: DishRoute, px: number, py: number, g: { x: number; y: number }): void {
+    const a = this.actions;
+    this.lastTapAt = performance.now();
+    // A glimmer under the finger first (it is caught before the creature behind it), until dishTap routes it.
+    const mote = route.kind === 'catch' ? route.mote : this.moteAt(px, py);
+    if (mote !== null && a.catchMote) {
+      a.catchMote(mote);
+      return;
+    }
+    if (route.kind === 'pulse') return void this.pulseCreature(route.id);
+    if (route.kind === 'grey') return this.overlay.ripple(g.x, g.y, 'auto');
+    if (route.kind === 'collect') {
+      // A creature's own drop: the pulse collects it with its glow; a loose drop is collected as before.
+      if (route.creature !== null && a.pulse && this.pulseCreature(route.creature) > 0) return;
+      this.closeCard();
+      return this.collectDrop(route.drop);
+    }
+    if (route.kind === 'cardHint') {
+      if (a.pulse) return void this.pulseCreature(route.id);
+      if (this.v?.settings.oneTouch) this.openCard(route.id);
+      return;
+    }
+    if (route.kind === 'card') return this.openCard(route.id);
+    if (this.card) return this.closeCard();
+    // Empty agar: every drop within a generous reach comes to the finger; nothing there, a ripple of water.
+    const scene = this.overlay.tapScene();
+    let got = 0;
+    for (let i = 0; i < scene.dropCount; i++) {
+      const d = scene.drops[i];
+      if (d.amount > 0 && Math.hypot(d.x - px, d.y - py) <= COLLECT_UI.emptyTapPx) {
+        this.collectDrop(d.id);
+        got++;
+      }
+    }
+    if (!got) this.overlay.ripple(g.x, g.y, 'auto');
+  }
+
+  /** A ¡Chispazo! glimmer under (px, py) (dish CSS px, within a drop's touch radius), or null. */
+  private moteAt(px: number, py: number): number | null {
+    let best: number | null = null;
+    let bd = LIGHT_TAP_RADIUS_PX;
+    for (const m of this.v?.motes ?? []) {
+      const p = this.overlay.screenOf(m.x, m.y);
+      const d = Math.hypot(p.x - px, p.y - py);
+      if (d <= bd) {
+        bd = d;
+        best = m.id;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Pulse creature `id` (ADR-031): its drop is drawn in and comes with the pulse (the game's lightCollected tells
+   * it); the pulse's own light is the «+N» on top, from the creature. Returns the Luz it paid.
+   */
+  private pulseCreature(id: number): number {
+    const a = this.actions;
+    if (!a.pulse) return 0;
+    const ov = this.overlay;
+    const scene = ov.tapScene();
+    let own = -1;
+    for (let i = 0; i < scene.dropCount; i++) if (scene.drops[i].owner === id && scene.drops[i].amount > 0) own = scene.drops[i].id;
+    const at = own >= 0 ? ov.drops.take(own, this.overlayNow()) : null;
+    const c = ov.creatureScreen(id);
+    this.handAt = at;
+    this.handSum = 0;
+    const got = a.pulse(id);
+    this.handAt = null;
+    const extra = got - this.handSum;
+    if (extra > 0 && c) this.collectedAt(c.x, c.y, at?.hue ?? ov.drops.hueOf(own), extra, 'hand');
+    if (got > 0) this.hideFirstHint();
+    return got;
+  }
+
+  /** The Sembrar button asked for a seed (ADR-031). The host sows; without its hook, the old dish tap at that spot. */
+  private sowNow(req: SowRequest): void {
+    const v = this.v;
+    this.lastTapAt = performance.now();
+    this.sowPresses++;
+    this.closeCard();
+    if (req.big) this.lastBigTap = performance.now();
+    if (this.deps.onSow) this.deps.onSow(req);
+    else this.deps.onDishTap(req.spot.x, req.spot.y, { big: req.big });
+    // A drag let go on a bad spot moved to a safe one: said once a run, never a scolding (§3.4).
+    if (req.snapped && !this.snapTold) {
+      this.snapTold = true;
+      this.overlay.wentDark(req.spot.x, req.spot.y, tx(TEXT.sowSnap), false);
+    }
+    // Session 2 on: on the third press, the hand shows the seed can be dragged (§6.2), once.
+    if (v && (v.session?.n ?? 1) >= 2 && this.sowPresses === COLLECT_UI.dragHintTap && !req.dragged && !this.prefs.hints.includes('sowDrag')) {
+      this.prefs.hints.push('sowDrag');
+      this.savePrefs();
+      this.showGestureHint(tx(TEXT.tutDrag), 'hand');
+    }
+  }
+
   private onBigTap(px: number, py: number): void {
     if (!this.v) return;
     if (this.hitGolden(px, py)) return;
@@ -2054,6 +2244,8 @@ class BiolumaUI implements UI {
       this.openCard(route.id);
       return;
     }
+    // ADR-031: in sessions the big seed is the Sembrar button's; a long press on the agar does nothing.
+    if (this.v.cycle === 'sessions') return;
     if (!this.v.tools.longPress) return;
     const g = this.camera.screenToGrid(px, py);
     this.lastTapAt = performance.now();
@@ -2070,11 +2262,13 @@ class BiolumaUI implements UI {
   private wireCollection(): void {
     const ov = this.overlay;
     ov.dangerText = (steer) => {
-      // A new pair about to touch: one soft warning tone and a short buzz (the label once per pair).
+      // ADR-031 (docs/MECANICAS.md §4): warn only when the player can act. A pair nobody can steer gets the red
+      // link alone, no alarm; one with a swimmer: a soft tone, a short buzz and «¡Van a chocar! Arrastra una».
+      if (!steer || !this.deps.onSteer) return null;
       this.sound('warn');
       this.vibrate([8, 40, 8]);
       if (this.deps.contactTold?.()) return null;
-      return tx(steer && this.deps.onSteer ? TEXT.contactSteer : TEXT.contactSoon);
+      return tx(TEXT.contactAct);
     };
     ov.drops.onRipe = (x, y) => {
       // «¡Lista!» beside the first ripe drops of the first sessions (§2.2.2), never on a busy screen.
@@ -2085,6 +2279,7 @@ class BiolumaUI implements UI {
     bus.on('lightCollected', (e) => {
       let at = e.by === 'hand' && this.handAt ? this.handAt : null;
       this.handTold = this.handTold || e.by === 'hand';
+      if (e.by === 'hand') this.handSum += e.amount;
       if (!at) {
         // Where that drop is drawn (an owned one sits on its creature's outline), else its grid point.
         const d = ov.drops.atGrid(e.x, e.y, 4);
@@ -2107,17 +2302,21 @@ class BiolumaUI implements UI {
     const at = this.overlay.drops.take(id, this.overlayNow());
     this.handAt = at;
     this.handTold = false;
+    this.handSum = 0;
     let got = 0;
     if (a.collect) got = a.collect(id);
     else if (at && a.collectAt) {
       const g = this.camera.screenToGrid(at.x, at.y);
       got = a.collectAt(g.x, g.y, 1);
     }
-    // A game that pays without telling the bus still shows where the light went.
-    if (got > 0 && !this.handTold && at) this.collectedAt(at.x, at.y, at.hue, got, 'hand');
+    // A game that pays without telling the bus still shows where the light went; so does the part of a drop hit
+    // the bus did not tell (ADR-031: the streak's pulse on its turn, a ¡Chispazo!).
+    const rest = got - this.handSum;
+    if (rest > 1e-6 && at) this.collectedAt(at.x, at.y, at.hue, rest, 'hand');
     this.handAt = null;
     if (got > 0) {
-      this.vibrate(6);
+      // ADR-031 §3.1: in sessions only the ¡Chispazo! buzzes (at 8 taps a second a buzz each tap annoys).
+      if (this.v?.cycle !== 'sessions') this.vibrate(6);
       this.hideFirstHint();
     }
   }
@@ -2177,6 +2376,8 @@ class BiolumaUI implements UI {
     if (route.kind === 'steer' && this.deps.onSteer) {
       this.steerId = route.id;
       this.steerSent = NaN;
+      // ADR-031: the game hears it was the finger (a warned contact avoided now is «¡Salvada!»).
+      this.actions.noteSteer?.(route.id);
       this.closeCard();
       this.overlay.steerGuide(route.id, x, y);
       if (!this.prefs.hints.includes('steer')) {
@@ -2201,9 +2402,26 @@ class BiolumaUI implements UI {
       return;
     }
     // Sweep: every drop the finger passes over, once, as it passes (the feedback runs with the finger).
+    const scene = this.overlay.tapScene();
     const before = this.sweepN;
-    this.sweepN = dropsOnSegment(this.overlay.tapScene(), x0, y0, x1, y1, this.sweepIds, this.sweepN);
+    this.sweepN = dropsOnSegment(scene, x0, y0, x1, y1, this.sweepIds, this.sweepN);
     for (let i = before; i < this.sweepN; i++) this.collectDrop(this.sweepIds[i]);
+    // ADR-031 (MECANICAS §3.1): …and every stable creature it crosses glows, one pulse each (pulseMany spaces the
+    // hits on one creature SWEEP_REHIT_S apart). Their drops tell the bus; the pulses' «+N» rides with the finger.
+    const many = this.actions.pulseMany;
+    if (this.v?.cycle === 'sessions' && many) {
+      const ids = this.sweepPulse;
+      ids.length = 0;
+      for (let i = 0; i < scene.creatureCount; i++) {
+        const c = scene.creatures[i];
+        if (c.state === 'stable' && segmentDist(c.x, c.y, x0, y0, x1, y1) <= c.r + scene.creaturePadPx * 0.5) ids.push(c.id);
+      }
+      if (ids.length) {
+        this.handSum = 0;
+        const extra = many(ids) - this.handSum;
+        if (extra > 1e-6) this.collectedAt(x1, y1, this.overlay.drops.hueOf(-1), extra, 'hand');
+      }
+    }
   }
 
   private onDragEnd(): void {
@@ -2482,8 +2700,13 @@ class BiolumaUI implements UI {
   private bindBus(): void {
     const ov = this.overlay;
     bus.on('seed', (e) => {
-      const big = e.manual && performance.now() - this.lastBigTap < 150;
-      ov.ripple(e.x, e.y, e.manual ? (big ? 'big' : 'seed') : 'auto');
+      const big = e.manual && performance.now() - this.lastBigTap < 150 + SOW_UI.doubleMs;
+      const kind = e.manual ? (big ? 'big' : 'seed') : 'auto';
+      // ADR-031: a seed from the Sembrar button flies there in an arc (300 ms) and rings where it lands.
+      if (e.manual && this.v?.cycle === 'sessions' && !this.v.settings.reduceMotion) {
+        this.sowBtn.flyTo(e.x, e.y);
+        window.setTimeout(() => ov.ripple(e.x, e.y, kind), SOW_UI.flightMs);
+      } else ov.ripple(e.x, e.y, kind);
       // Moved to the nearest spot with room (spacing rule): show where it went.
       if (e.from) ov.seedMoved(e.from.x, e.from.y, e.x, e.y);
       if (e.manual) this.hideFirstHint();
@@ -2495,14 +2718,17 @@ class BiolumaUI implements UI {
       const waiting = !!v?.creatures.some((c) => c.state === 'stable');
       ov.denied(e.x, e.y, fmtShort(e.cost, this.lang), short > 0 ? { text: t('deniedShort', { n: fmt(short, this.lang) }), sub: waiting ? t('deniedWait') : '' } : undefined);
       retriggerClass(this.modePill, 'shake');
+      retriggerClass(this.sowBtn.el, 'shake');
       this.vibrate([10, 30, 10]);
     });
     // A refused tap always shows why, where it happened; nothing was charged (no toast, no layout shift).
     bus.on('seedBlocked', (e) => {
       // Refused for free, said on the spot: a red ring and why (first sentence big, the rest small).
       const room = this.v?.seedPrice?.capacity ?? this.v?.seedPrice?.freeSlots;
-      // «¡Muy cerca! Si se tocan, se juntan y se apagan.» (docs/CLARIDAD2.md §6 #4): what would happen.
-      const msg = e.reason === 'tooClose' ? t('tooCloseSeed') : e.reason === 'full' && room ? tx(TEXT.dishFull(room)) : '';
+      // «¡Muy cerca! Si se tocan, se juntan y se apagan.» (docs/CLARIDAD2.md §6 #4): what would happen. Never in a
+      // session (ADR-031): the Sembrar button always finds a safe spot, so there is nothing to scold.
+      const sessions = this.v?.cycle === 'sessions';
+      const msg = e.reason === 'tooClose' ? (sessions ? '' : t('tooCloseSeed')) : e.reason === 'full' && room ? tx(TEXT.dishFull(room)) : '';
       if (msg) {
         const cut = msg.search(/[.!] /);
         ov.seedBlocked(e.x, e.y, cut > 0 ? msg.slice(0, cut + 1) : msg, cut > 0 ? msg.slice(cut + 2) : '', e.near);
@@ -2514,6 +2740,7 @@ class BiolumaUI implements UI {
       }
       // 'growing': the pill already says "Espera…"; a shake points at it (the meter's chip says why).
       retriggerClass(this.modePill, 'shake');
+      retriggerClass(this.sowBtn.el, 'shake');
       this.sound('deny');
       this.vibrate([10, 30, 10]);
     });
@@ -2525,7 +2752,9 @@ class BiolumaUI implements UI {
       // particles of any colour (QA 071); a living creature that hit the glass says its light is still there.
       // Every death, not only the first one's card (QA-CLARIDAD-2 C7: living creatures faded in open agar unsaid).
       const alive = ov.stateOf(e.id) === 'stable';
-      const label = deathLabel(e.cause, alive);
+      // ADR-031: a seed that never took is told by the game's refund (bus 'seedRefund', «No prendió · +4 de vuelta»);
+      // a game without refunds still says why it faded.
+      const label = !alive && this.actions.sow ? null : deathLabel(e.cause, alive);
       if (alive) ov.puff(e.x, e.y);
       // One label at a time on the dish (ARTE §10): while a Momento or VELA speaks, the grey fade alone.
       ov.wentDark(e.x, e.y, this.deps.isNarrating?.() || !label ? '' : tx(label), !alive);
@@ -2541,8 +2770,55 @@ class BiolumaUI implements UI {
     });
     // Shapeless matter dissolved (lysis, clean-up): it fades like a puff; it was never a creature that died.
     bus.on('creatureDissolved', (e) => {
+      // ADR-031: VELA's lysis of a blob that kept growing says so (it pays nothing: it never was a creature); the
+      // player's own Goma or clean-up says nothing.
+      const label = dissolvedLabel(ov.stateOf(e.id) === 'exploded', performance.now() - this.toolAt < COLLECT_UI.toolMs);
       ov.puff(e.x, e.y);
+      if (label && !this.deps.isNarrating?.()) ov.wentDark(e.x, e.y, tx(label), false);
       if (this.card?.id === e.id) this.closeCard();
+    });
+    // ── ADR-031 (docs/MECANICAS.md §3, §4): the pulse, the glimmers, and losses that give something back ──
+    bus.on('pulse', (e) => {
+      if (!e.chispazo) return;
+      this.vibrate([12, 30, 12]);
+      // The first ¡Chispazo! ever says what it is, for 2 s beside it («Cada 10 toques seguidos, ¡un Chispazo!»).
+      if (!this.prefs.hints.includes('chispazo')) {
+        this.prefs.hints.push('chispazo');
+        this.savePrefs();
+        ov.wentDark(e.x, e.y, tx(TEXT.chispazoHint(this.v?.streak?.every ?? 10)), false);
+      } else if ((this.v?.session?.n ?? 1) >= MOTES_FROM_SESSION && !this.prefs.hints.includes('motes')) {
+        // The first glimmers (session 2 on): «¡Atrápalas!» beside them.
+        this.prefs.hints.push('motes');
+        this.savePrefs();
+        const p = ov.screenOf(e.x, e.y);
+        ov.ripeLabel(p.x, p.y, tx(TEXT.motesCatch));
+      }
+    });
+    bus.on('moteCaught', (e) => {
+      const p = ov.screenOf(e.x, e.y);
+      this.collectedAt(p.x, p.y, ov.drops.hueOf(-1), e.amount, 'hand');
+    });
+    bus.on('seedRefund', (e) => {
+      // «No prendió · +4 de vuelta» where it was, and the coin goes back to the counter (a free seed, to the button).
+      if (!this.deps.isNarrating?.()) ov.wentDark(e.x, e.y, tx(refundLabel(e)), false);
+      if (e.amount > 0) {
+        const p = ov.screenOf(e.x, e.y);
+        const d = this.dish.getBoundingClientRect();
+        this.fly.launch(d.left + p.x, d.top + p.y, 'essence', hueHex(ov.drops.hueOf(-1), 70), 1, performance.now());
+      } else retriggerClass(this.sowBtn.el, 'refund');
+    });
+    bus.on('contactSaved', (e) => {
+      const p = ov.creaturePos(e.a) ?? ov.creaturePos(e.b);
+      if (p) ov.wentDark(p.x, p.y, tx(TEXT.saved(SAVE_STREAK_HITS)), false);
+      this.sound('confirm');
+    });
+    bus.on('accidentLearned', (e) => {
+      // The first death of its kind teaches, for Datos (a chip without a pause; the fusion has its own card).
+      if (e.datos > 0) this.toasts.push(tx(learnedLabel(e.cause, e.datos)), 'good', 'book');
+    });
+    bus.on('sessionStart', () => {
+      this.sowPresses = 0;
+      this.snapTold = false;
     });
     bus.on('creatureDivided', (e) => ov.dividedPulse(e.x, e.y));
     bus.on('income', (e) => {

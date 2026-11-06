@@ -35,6 +35,9 @@ const S = {
   hintLongPress: { es: 'Mantén pulsado: semilla grande', en: 'Press and hold: big seed' },
   hintDoubleTap: { es: 'Doble toque: semilla grande', en: 'Double tap: big seed' },
   hintBrush: { es: 'Arrastra: pincel de materia', en: 'Drag: matter brush' },
+  // ADR-031: the big seed lives on the Sembrar button in the sessions cycle.
+  hintHoldSow: { es: 'Mantén pulsado Sembrar: semilla grande', en: 'Hold Sow: big seed' },
+  hintDoubleTapSow: { es: 'Doble toque en Sembrar: semilla grande', en: 'Double tap Sow: big seed' },
   pause: { es: 'Pausa', en: 'Pause' },
   paused: { es: 'En pausa', en: 'Paused' },
   resume: { es: 'Reanudar', en: 'Resume' },

@@ -5758,3 +5758,267 @@ button.chip {
 .mode-pill .mp-cost.mp-free {
   color: var(--good);
 }
+
+/* ── ADR-031 (docs/MECANICAS.md §3.1, §6.1): the Sembrar button, its drag preview, the streak chip ── */
+.sow-wrap {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.sow-wrap > * {
+  pointer-events: auto;
+}
+/* The price meter's reason chip floats above the button (never resizing it). */
+.sow-wrap > .mp-meter {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.sow-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 148px;
+  height: 64px;
+  padding: 0 18px 0 12px;
+  border-radius: var(--bl-r-xl);
+  border: 1.5px solid rgba(var(--good-rgb), 0.55);
+  background: rgba(14, 19, 26, 0.92);
+  color: var(--text);
+  box-shadow: var(--bl-elev-2);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: border-color var(--bl-t-base), background var(--bl-t-base), opacity var(--bl-t-base);
+}
+.sow-btn .sow-seed {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: var(--good);
+  background: radial-gradient(circle, rgba(var(--good-rgb), 0.28), rgba(var(--good-rgb), 0) 70%);
+}
+.sow-btn .sow-seed .icw {
+  width: 30px;
+  height: 30px;
+}
+.sow-btn .sow-tx {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.1;
+}
+.sow-btn .sow-l {
+  font-size: var(--bl-fs-body);
+  font-weight: 700;
+}
+.sow-btn .sow-sub {
+  font-size: var(--bl-fs-small);
+  color: var(--c-essence);
+  font-variant-numeric: tabular-nums;
+}
+.sow-btn[data-state='free'] .sow-sub {
+  color: var(--good);
+}
+.sow-btn.dim {
+  border-color: var(--line-2);
+  background: rgba(14, 19, 26, 0.8);
+}
+.sow-btn.dim .sow-seed,
+.sow-btn.dim .sow-sub {
+  color: var(--dim);
+}
+.sow-btn.shake {
+  animation: bl-shake var(--bl-t-card);
+}
+.sow-btn.sure {
+  border-color: var(--gold-fill);
+  box-shadow: var(--bl-glow-gold);
+}
+.sow-btn.holding .sow-seed {
+  transform: scale(1.18);
+  transition: transform var(--bl-t-base);
+}
+.sow-btn.dragging {
+  opacity: 0.6;
+}
+.sow-btn.refund .sow-seed {
+  animation: sow-pop var(--bl-t-celebrate) var(--ease);
+}
+/* Luck dots: failed seeds in a row (the gold ring lights when the next one is sure). */
+.sow-luck {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+}
+.sow-luck i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(var(--gold-rgb), 0.6);
+}
+.sow-luck i.on {
+  background: var(--gold-fill);
+}
+/* The tutorial's hand over the button (§6.1 step 2), bobbing gently; still under Reduce motion. */
+.sow-hand {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% - 6px);
+  color: #fff;
+  pointer-events: none;
+  animation: sow-hand var(--bl-t-spring-slow) var(--ease) infinite alternate; /* css-lint-ok: an ambient pointer, transform only */
+}
+.sow-btn.call {
+  border-color: rgba(var(--good-rgb), 0.9);
+  box-shadow: var(--bl-glow-accent);
+}
+.bl.rm .sow-hand {
+  animation: none;
+  transform: translate(-50%, 0);
+}
+@keyframes sow-hand {
+  from {
+    transform: translate(-50%, 0);
+  }
+  to {
+    transform: translate(-50%, -8px);
+  }
+}
+@keyframes sow-pop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.25);
+  }
+}
+.sow-info {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid var(--line-2);
+  background: rgba(14, 19, 26, 0.86);
+  color: var(--dim);
+}
+.bl.sow-on .copy-btn {
+  bottom: 86px;
+}
+.bl.sow-on .copy-strip {
+  bottom: 142px;
+}
+/* Drag preview: soft green where a seed fits, hatched bodies; the ghost seed and where it will land. */
+.sow-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.sow-layer .sow-zones {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.sow-layer.away .sow-zones {
+  opacity: 0.4;
+}
+.sow-ghost,
+.sow-target,
+.sow-fly {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+.sow-ghost {
+  color: var(--good);
+}
+.sow-target {
+  border-radius: 50%;
+  border: 2px solid rgba(var(--good-rgb), 0.9);
+}
+.sow-target.snap {
+  border-style: dashed;
+}
+.sow-fly {
+  z-index: 4;
+  color: var(--good);
+}
+/* The streak chip under the Luz counter (§3.2): «Racha ×1,2», ten dots to the next ¡Chispazo! */
+.streak-chip {
+  position: absolute;
+  left: calc(max(10px, env(safe-area-inset-left)) + 58px);
+  top: calc(100% + 48px);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 6px 10px;
+  border-radius: var(--bl-r-sm);
+  border: 1px solid rgba(var(--accent-rgb), 0.45);
+  background: rgba(14, 19, 26, 0.9);
+  color: #dff5ff;
+  pointer-events: none;
+  transition: border-color var(--bl-t-base), opacity var(--bl-t-base);
+}
+.streak-chip .sk-t {
+  font-size: var(--bl-fs-small);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.streak-chip .sk-dots {
+  display: flex;
+  gap: 3px;
+}
+.streak-chip .sk-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid rgba(var(--accent-rgb), 0.6);
+}
+.streak-chip .sk-dots i.on {
+  background: var(--accent);
+}
+.streak-chip .sk-line {
+  font-size: var(--bl-fs-caption);
+  color: var(--dim);
+}
+.streak-chip.full {
+  border-color: rgba(var(--good-rgb), 0.85);
+  color: var(--good);
+}
+.streak-chip.full .sk-dots i.on {
+  background: var(--good);
+}
+.streak-chip.draining {
+  opacity: 0.6;
+  border-color: var(--line-2);
+}
+/* The report: what the finger did and what the losses gave back (§6.1 step 11). */
+.ss-rp-finger {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--bl-r-sm);
+  border: 1px dashed var(--bl-plate-rule, var(--line-2));
+  font-size: var(--bl-fs-small);
+}
+.ss-rp-finger p {
+  margin: 2px 0;
+}
