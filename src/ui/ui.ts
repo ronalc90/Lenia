@@ -20,6 +20,7 @@ import { DishInput } from './input';
 import { dropAt, dropsOnSegment, motesOnSegment, routeTap, SweepHits, type TapReach } from './dishTap';
 import { copyPick } from './copyPick';
 import { installScreenGuard, PressGuard, screenChanged } from './pressGuard';
+import { stackLabel, type LabelObstacles, type LabelPlacement, type StackRequest } from './labelPlace';
 import { FlyLayer, flyDuration } from './fx/fly';
 import { Readout, wholeRate } from './fx/readout';
 import { dishFx } from './fx/stage';
@@ -977,6 +978,7 @@ class BiolumaUI implements UI {
     this.updateHUD(view);
     this.updateObjective(view);
     this.publishTopInset();
+    this.placeHudChips();
     this.updateDock(view);
     this.updateDishUI(view);
     // ADR-031 (PB): the dish answers taps with pulses in a lab session of a game that has them.
@@ -1410,6 +1412,75 @@ class BiolumaUI implements UI {
 
   private topInset = '';
   private dockH = 0;
+  /** The HUD chips' step down from home (px): the streak chip, then the gift chip (QA-3 N3). */
+  private chipDy = [0, 0];
+  private readonly chipBoxes = new Float32Array(4 * 8);
+  private readonly chipObs: LabelObstacles = { boxes: this.chipBoxes, nBoxes: 0, discs: [], nDiscs: 0 };
+  private readonly chipReq: StackRequest = { x: 0, y: 0, w: 0, h: 0, bounds: { l: 0, t: 0, r: 0, b: 0 } };
+  private readonly chipOut: LabelPlacement = { x: 0, y: 0, slot: -1, clear: true };
+
+  /**
+   * One placement solver for the messages over the top of the dish (QA-3 N3: the objective pill hid the streak
+   * chip from session 2 on): the objective, a toast, an Encargo bubble and VELA's top line hold their places; the
+   * streak chip and the gift chip under the Luz counter step down past them (./labelPlace stackLabel), and the
+   * dish's own labels keep out of all of them (overlay.keepClearHud).
+   */
+  private placeHudChips(): void {
+    const o = this.chipObs;
+    const q = this.chipBoxes;
+    o.nBoxes = 0;
+    const add = (l: number, t: number, r: number, b: number) => {
+      if (o.nBoxes * 4 >= q.length || !(r - l > 1 && b - t > 1)) return;
+      const k = o.nBoxes++ * 4;
+      q[k] = l;
+      q[k + 1] = t;
+      q[k + 2] = r;
+      q[k + 3] = b;
+    };
+    if (!this.objEl.hidden) {
+      const r = this.objEl.getBoundingClientRect();
+      add(r.left, r.top, r.right, r.bottom);
+    }
+    for (const el of this.el.ownerDocument.querySelectorAll<HTMLElement>('.toasts > .toast:not(.out), .enc-bubble, .sty-box.at-top:not([hidden])')) {
+      if (el.closest('[hidden]') || el.getClientRects().length === 0) continue;
+      const r = el.getBoundingClientRect();
+      add(r.left, r.top, r.right, r.bottom);
+    }
+    const nFixed = o.nBoxes;
+    const dish = this.dish.getBoundingClientRect();
+    const chips = [this.streakChip.el, this.giftEl];
+    for (let i = 0; i < chips.length; i++) {
+      const el = chips[i];
+      if (el.hidden) {
+        if (this.chipDy[i]) el.style.transform = '';
+        this.chipDy[i] = 0;
+        continue;
+      }
+      const r = el.getBoundingClientRect();
+      if (r.width < 1) continue;
+      // Its home: where the CSS puts it (the box as drawn, minus this solver's own step).
+      const top = r.top - this.chipDy[i];
+      const rq = this.chipReq;
+      rq.x = r.left + r.width / 2;
+      rq.y = top + r.height / 2;
+      rq.w = r.width;
+      rq.h = r.height;
+      rq.bounds.l = 0;
+      rq.bounds.t = 0;
+      rq.bounds.r = window.innerWidth;
+      rq.bounds.b = dish.bottom;
+      const dy = stackLabel(rq, o, this.chipOut) ? Math.round(this.chipOut.y - rq.y) : 0;
+      if (dy !== this.chipDy[i]) {
+        this.chipDy[i] = dy;
+        el.style.transform = dy ? `translateY(${dy}px)` : '';
+      }
+      // The next chip keeps clear of this one.
+      add(r.left, top + dy, r.right, top + dy + r.height);
+    }
+    // The dish's labels keep out of the chips (dish canvas px).
+    const cr = this.overlay.canvas.getBoundingClientRect();
+    this.overlay.keepClearHud(q, nFixed, o.nBoxes - nFixed, cr.left, cr.top);
+  }
   /**
    * Where overlays may start under the floating objective: VELA's dialogue at the top (page
    * coordinates, --sty-top) and the toasts inside the dish (--toast-top). Never covers the objective.

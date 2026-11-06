@@ -9,6 +9,9 @@
  * Slots, in order of preference: above the anchor, below it, a step further above, below… then left and
  * right. A label keeps last frame's slot while that slot stays clear, so it does not jump as things move.
  * Pure and allocation-free: obstacles are flat arrays the overlay already keeps per frame.
+ *
+ * The HUD's chips under the Luz counter (the streak, a gift) have one home and step down instead (`stackLabel`):
+ * under the objective pill, a toast or VELA's top line, never under them (QA-3 N3).
  */
 
 export interface LabelObstacles {
@@ -149,4 +152,46 @@ export function placeLabel(r: LabelRequest, o: LabelObstacles, out: LabelPlaceme
   out.slot = best;
   out.clear = bestCover === 0;
   return true;
+}
+
+/** A message with a home spot (its centre) that steps down past whatever covers it (`stackLabel`). */
+export interface StackRequest {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  bounds: { l: number; t: number; r: number; b: number };
+}
+
+/**
+ * Where a chip with a home goes (the streak chip under the Luz counter, QA-3 N3: the objective pill hid it): home
+ * when nothing covers it, else just below the message it would overlap, and below the next one, while it stays
+ * inside the bounds. Same rule as placeLabel: two messages never overlap. False when it runs out of room below
+ * (`out` then holds its home); bodies are ignored (the chip lives on the dish's rim, over the glass).
+ */
+export function stackLabel(r: StackRequest, o: LabelObstacles, out: LabelPlacement): boolean {
+  const hw = r.w / 2;
+  const hh = r.h / 2;
+  let y = r.y;
+  const q = o.boxes;
+  out.x = r.x;
+  out.slot = -1;
+  out.clear = true;
+  // Each step clears one obstacle for good (it only moves down), so nBoxes + 1 steps are enough.
+  for (let step = 0; step <= o.nBoxes; step++) {
+    if (y + hh > r.bounds.b) break;
+    let below = -Infinity;
+    for (let i = 0; i < o.nBoxes; i++) {
+      const k = i * 4;
+      const hit = r.x - hw < q[k + 2] + MSG_AIR && r.x + hw > q[k] - MSG_AIR && y - hh < q[k + 3] + MSG_AIR && y + hh > q[k + 1] - MSG_AIR;
+      if (hit && q[k + 3] > below) below = q[k + 3];
+    }
+    if (below === -Infinity) {
+      out.y = y;
+      return true;
+    }
+    y = below + MSG_AIR + hh;
+  }
+  out.y = r.y;
+  return false;
 }

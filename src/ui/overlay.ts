@@ -342,6 +342,9 @@ export class Overlay {
   private readonly bodyView = { discs: this.bodyDiscs, n: 0 };
   /** A message drawn outside this canvas (the Momento brief, canvas px): nothing here is drawn under it. */
   private readonly kept = { on: false, l: 0, t: 0, r: 0, b: 0 };
+  /** The HUD's chips over the dish (the streak, a gift; canvas px, l t r b): labels keep out of them (QA-3 N3). */
+  private readonly hudKept = new Float32Array(4 * 4);
+  private hudKeptN = 0;
   private readonly labelObs: LabelObstacles = { boxes: this.occ, nBoxes: 0, discs: this.bodyDiscs, nDiscs: 0 };
   private readonly labelReq: LabelRequest = { x: 0, y: 0, w: 0, h: 0, gap: 0, bounds: { l: 0, t: 0, r: 0, b: 0 }, slot: -1 };
   private readonly labelOut: LabelPlacement = { x: 0, y: 0, slot: -1, clear: false };
@@ -1236,6 +1239,7 @@ export class Overlay {
     this.nameN = 0;
     // The brief is placed first (it is the Momento); every label, number and name here keeps out of it.
     if (this.kept.on) this.occupy(this.kept.l, this.kept.t, this.kept.r, this.kept.b);
+    for (let i = 0; i < this.hudKeptN; i++) this.occupy(this.hudKept[i * 4], this.hudKept[i * 4 + 1], this.hudKept[i * 4 + 2], this.hudKept[i * 4 + 3]);
     const ctx = this.ctx;
     const cam = this.camera;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1404,6 +1408,22 @@ export class Overlay {
     k.t = box.t;
     k.r = box.r;
     k.b = box.b;
+  }
+
+  /**
+   * The HUD chips over this canvas (QA-3 N3): `n` boxes of `boxes` from index `from` (l t r b quadruples, page
+   * px), with the canvas at (`ox`, `oy`) on the page. The dish's labels keep out of them, like the brief.
+   */
+  keepClearHud(boxes: ArrayLike<number>, from: number, n: number, ox: number, oy: number): void {
+    const k = Math.min(n, this.hudKept.length / 4);
+    for (let i = 0; i < k; i++) {
+      const s = (from + i) * 4;
+      this.hudKept[i * 4] = boxes[s] - ox;
+      this.hudKept[i * 4 + 1] = boxes[s + 1] - oy;
+      this.hudKept[i * 4 + 2] = boxes[s + 2] - ox;
+      this.hudKept[i * 4 + 3] = boxes[s + 3] - oy;
+    }
+    this.hudKeptN = k;
   }
 
   /** What is under a finger, as drawn in the latest frame (src/ui/dishTap.ts reads it). Reused object. */

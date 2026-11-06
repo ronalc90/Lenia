@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { placeLabel, type LabelObstacles, type LabelPlacement, type LabelRequest } from './labelPlace';
+import { placeLabel, stackLabel, type LabelObstacles, type LabelPlacement, type LabelRequest } from './labelPlace';
 
 const BOUNDS = { l: 6, t: 6, r: 384, b: 600 };
 
@@ -91,5 +91,46 @@ describe('label placement (one solver for every message over the dish)', () => {
     expect(box[0]).toBeGreaterThanOrEqual(BOUNDS.l);
     expect(box[1]).toBeGreaterThanOrEqual(BOUNDS.t);
     expect(p.y).toBeGreaterThan(20);
+  });
+});
+
+// QA-3 §2, N3 (v0.026, shots 051, 075, 103): from session 2 on, the objective pill «Mira tu criatura en el Bestiario.»
+// sat exactly over the streak chip: only a green edge and «○○» showed, so the child never saw the streak.
+describe('the HUD chips under the Luz counter step under the messages over the dish (QA-3 N3)', () => {
+  // 390-px phone: the chip's home is under the counter, the objective pill floats over the top of the dish.
+  const chip = { x: 168, y: 86, w: 200, h: 28, bounds: { l: 0, t: 62, r: 390, b: 700 } };
+  const pill = [75, 77, 315, 124];
+  const out: LabelPlacement = { x: 0, y: 0, slot: -1, clear: false };
+
+  it('QA-3: with the objective pill over its home, the streak chip goes just under the pill, never under it', () => {
+    const o: LabelObstacles = { boxes: pill, nBoxes: 1, discs: [], nDiscs: 0 };
+    expect(stackLabel(chip, o, out)).toBe(true);
+    const top = out.y - chip.h / 2;
+    expect(top).toBeGreaterThanOrEqual(pill[3]);
+    expect(top).toBeLessThan(pill[3] + 12);
+    expect(out.x).toBe(chip.x);
+  });
+
+  it('nothing over its home: it stays home', () => {
+    expect(stackLabel(chip, { boxes: [], nBoxes: 0, discs: [], nDiscs: 0 }, out)).toBe(true);
+    expect(out.y).toBe(chip.y);
+  });
+
+  it('past the pill and a toast under it: it clears both', () => {
+    const toast = [70, 130, 320, 166];
+    const o: LabelObstacles = { boxes: [...pill, ...toast], nBoxes: 2, discs: [], nDiscs: 0 };
+    expect(stackLabel(chip, o, out)).toBe(true);
+    expect(out.y - chip.h / 2).toBeGreaterThanOrEqual(toast[3]);
+  });
+
+  it('a message beside its home (not over it) does not move it', () => {
+    const o: LabelObstacles = { boxes: [300, 70, 380, 110], nBoxes: 1, discs: [], nDiscs: 0 };
+    expect(stackLabel(chip, o, out)).toBe(true);
+    expect(out.y).toBe(chip.y);
+  });
+
+  it('no room below the bounds: false (the caller keeps it home)', () => {
+    const o: LabelObstacles = { boxes: [0, 60, 390, 700], nBoxes: 1, discs: [], nDiscs: 0 };
+    expect(stackLabel(chip, o, out)).toBe(false);
   });
 });

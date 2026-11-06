@@ -908,9 +908,11 @@ export function createMomentsUI(root: HTMLElement, moments: Moments, opts: Momen
 
   /**
    * What a brief label must never cover (integrator review): the HUD, the dish's corner buttons, its seed
-   * pill and the objective. Measured once when a brief starts (they do not move during its 3 s).
+   * pill and the objective, and the HUD's chips and a toast under them (QA-3 N14: five messages stacked when the
+   * Spark was caught). Measured once when a brief starts (they do not move during its 3 s).
    */
-  const BRIEF_AVOID = '.bl-hud, .bl-dish-ui > :not(.toasts):not([hidden]), .bl-dish > .bl-objective:not([hidden])';
+  const BRIEF_AVOID =
+    '.bl-hud, .bl-dish-ui > :not(.toasts):not([hidden]), .bl-dish > .bl-objective:not([hidden]), .streak-chip:not([hidden]), .luz-gift:not([hidden]), .toasts > .toast:not(.out)';
   const briefAvoid: { l: number; t: number; r: number; b: number }[] = [];
   function measureBriefAvoid(): void {
     briefAvoid.length = 0;

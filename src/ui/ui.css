@@ -5984,7 +5984,15 @@ button.chip {
   color: #dff5ff;
   white-space: nowrap;
   pointer-events: none;
-  transition: border-color var(--bl-t-base), opacity var(--bl-t-base);
+  /* It steps under the objective pill or a toast (ui.ts placeHudChips, QA-3 N3): a short slide, a cut with Reduce motion. */
+  transition: border-color var(--bl-t-base), opacity var(--bl-t-base), transform var(--bl-t-base) var(--ease);
+}
+.luz-gift {
+  transition: transform var(--bl-t-base) var(--ease);
+}
+.bl.rm .streak-chip,
+.bl.rm .luz-gift {
+  transition: none;
 }
 .bl.streaking .luz-gift {
   top: calc(100% + 44px);
