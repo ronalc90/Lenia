@@ -553,6 +553,21 @@ export class AudioCore {
       case 'offlineReturn':
         this.play('offline', t + 0.1);
         break;
+      // ADR-031 (PB): a pulse climbs the ladder (it answers a touch: never on the beat grid); a Chispazo is its chord.
+      case 'pulse': {
+        const p = payload as GameEvents['pulse'];
+        this.play(p.chispazo ? 'chispazo' : 'pulse', t, { pan: this.panX(p.x) });
+        break;
+      }
+      case 'moteCaught':
+        this.play('pulse', t, { pan: this.panX((payload as GameEvents['moteCaught']).x) });
+        break;
+      case 'seedRefund':
+        this.play('refund', t, { pan: this.panX((payload as GameEvents['seedRefund']).x) });
+        break;
+      case 'contactSaved':
+        this.play('saved', t);
+        break;
       default:
         break;
     }

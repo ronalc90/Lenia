@@ -72,6 +72,11 @@ const EVENTS: (keyof GameEvents)[] = [
   'goldenMissed',
   'calibrationChanged',
   'offlineReturn',
+  // ADR-031 (PB): the finger's sounds.
+  'pulse',
+  'moteCaught',
+  'seedRefund',
+  'contactSaved',
 ];
 
 type Ctor = typeof AudioContext;

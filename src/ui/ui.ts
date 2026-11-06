@@ -17,7 +17,7 @@ import { fmt, fmtClock, fmtDuration, fmtRate, fmtShort } from './format';
 import { behaviorName, getLang, setLang, stateName, t, tx } from './i18n';
 import { icon, logo } from './icons';
 import { DishInput } from './input';
-import { dropAt, dropsOnSegment, routeTap, segmentDist, type TapRoute } from './dishTap';
+import { dropAt, dropsOnSegment, motesOnSegment, routeTap, SweepHits, type TapReach } from './dishTap';
 import { copyPick } from './copyPick';
 import { PressGuard } from './pressGuard';
 import { FlyLayer, flyDuration } from './fx/fly';
@@ -41,7 +41,7 @@ import type { LeaderboardClient } from './leaderboard-types';
 import { createSplash, type Splash } from './splash';
 import { Toasts } from './toasts';
 import { SESSION_UI } from '../game/treeText';
-import { LIGHT_TAP_RADIUS_PX, MOMENT_MIN_RUN_SECONDS, MOTES_FROM_SESSION, SAVE_STREAK_HITS, SESSION_SIM_PACE, SESSION_TOAST_MAX_MS, SIM_STEPS_PER_SEC } from '../game/cycleBalance';
+import { MOMENT_MIN_RUN_SECONDS, MOTES_FROM_SESSION, SAVE_STREAK_HITS, SESSION_SIM_PACE, SESSION_TOAST_MAX_MS, SIM_STEPS_PER_SEC, SWEEP_REHIT_S } from '../game/cycleBalance';
 import { safeSowSpot } from './sowHint';
 import { SowButton, SOW_UI, type SowRequest } from './sowButton';
 import { createStreakChip, type StreakChip } from './session/hud';
@@ -70,19 +70,12 @@ const COLLECT_UI = {
   moteShare: [0.04, 0.12],
   /** The reason chip next to the counter ("+5 · primera semilla"), ms. */
   giftMs: 2400,
-  /** (ADR-031, docs/MECANICAS.md §3.1) A tap on empty agar collects the drops this close (CSS px): generous. */
-  emptyTapPx: 48,
   /** A death the player's own tool caused (Goma, cleaning) this recently (ms) says nothing of VELA. */
   toolMs: 2000,
   /** The «También puedes arrastrarla» hint comes with this tap of the Sembrar button, from session 2 (§6.2). */
   dragHintTap: 3,
 } as const;
 
-/**
- * A tap's route: dishTap's (ADR-030) and the pulse routes PB adds there (ADR-031, docs/MECANICAS.md §7.1:
- * 'pulse', 'grey', 'catch', 'ripple'). Until they land, the session tap maps the old routes onto them.
- */
-type DishRoute = TapRoute | { kind: 'pulse'; id: number } | { kind: 'grey'; id: number } | { kind: 'catch'; mote: number } | { kind: 'ripple' };
 
 export interface UIDeps {
   actions: GameActions;
@@ -365,8 +358,12 @@ class BiolumaUI implements UI {
   private flyQ = '';
   // Collecting by hand and guiding (ADR-030)
   private readonly sweepIds: number[] = [];
-  /** Creatures a sweep segment crossed (reused). */
-  private readonly sweepPulse: number[] = [];
+  // ADR-031 (PB's dishTap): the session finger's scratch: the empty-agar reach, the sweep's glimmers and creatures.
+  private readonly reach: TapReach = { drops: [], dropN: 0, motes: [], moteN: 0 };
+  private readonly sweepMotes: number[] = [];
+  private sweepMoteN = 0;
+  private readonly sweepHits = new SweepHits();
+  private readonly sweepCross: number[] = [];
   private sweepN = 0;
   private steerId: number | null = null;
   private steerAt = 0;
@@ -418,8 +415,6 @@ class BiolumaUI implements UI {
   /** Button presses this session (the drag hint), the run's «Aquí cabe mejor» already said. */
   private sowPresses = 0;
   private snapTold = false;
-  /** Light of the drops a pulse collected while the game was asked (the pulse's own «+N» is the rest). */
-  private handSum = 0;
   /** When the player last used a tool that removes matter (the Goma, cleaning the dish). */
   private toolAt = 0;
   /** Slot reserved next to the seed cost for the price meter (src/ui/moments wires it). */
@@ -906,6 +901,9 @@ class BiolumaUI implements UI {
       dragStart: (x, y) => this.onDragStart(x, y),
       dragMove: (x0, y0, x1, y1) => this.onDragMove(x0, y0, x1, y1),
       dragEnd: () => this.onDragEnd(),
+      // ADR-031 (PB): in a session every tap lands at once; «Pulso fácil» holds pulse a creature.
+      quickTaps: () => this.overlay.pulseMode,
+      holdPulse: (x, y) => this.overlay.pulseMode && !!this.v?.settings.easyPulse && routeTap('tap', x, y, this.overlay.tapScene()).kind === 'pulse',
     });
     this.relabelStatic();
   }
@@ -980,6 +978,8 @@ class BiolumaUI implements UI {
     this.publishTopInset();
     this.updateDock(view);
     this.updateDishUI(view);
+    // ADR-031 (PB): the dish answers taps with pulses in a lab session of a game that has them.
+    this.overlay.pulseMode = !!this.actions.pulse && !!view.session;
     this.overlay.setView(view);
     this.updateCard(view);
     if (this.bestiaryOpen) bestiary.update(view);
@@ -2098,8 +2098,8 @@ class BiolumaUI implements UI {
       return;
     }
     // ADR-031 (docs/MECANICAS.md §3.1): in the sessions cycle a finger on the dish never sows.
-    if (this.v.cycle === 'sessions') {
-      this.sessionTap(routeTap('tap', px, py, scene) as DishRoute, px, py, g);
+    if (scene.pulsing || this.v.cycle === 'sessions') {
+      this.sessionTap(px, py, g);
       return;
     }
     // ADR-030 §2.2.1: a drop, or a creature with light, is collected; a tap never sows on either.
@@ -2133,83 +2133,51 @@ class BiolumaUI implements UI {
   }
 
   /**
-   * A tap on the dish in a session (ADR-031, docs/MECANICAS.md §3.1): a glimmer is caught; a stable creature pulses
-   * (it glows, its drop comes with it, +1 to the streak); a forming seed only blinks; a drop is collected; empty agar
-   * collects the drops near the finger and ripples. Nothing here costs Luz, sows, or breaks the streak.
+   * A tap on the dish in a session (ADR-031, docs/MECANICAS.md §3.1; routes: src/ui/dishTap.ts): a glimmer is caught,
+   * a stable creature pulses (it glows at once; its drop comes with the pulse), a loose drop is collected, a forming
+   * seed blinks grey, empty agar ripples and gathers the drops and glimmers in reach. It never sows and never costs.
    */
-  private sessionTap(route: DishRoute, px: number, py: number, g: { x: number; y: number }): void {
+  private sessionTap(px: number, py: number, g: { x: number; y: number }): void {
     const a = this.actions;
-    this.lastTapAt = performance.now();
-    // A glimmer under the finger first (it is caught before the creature behind it), until dishTap routes it.
-    const mote = route.kind === 'catch' ? route.mote : this.moteAt(px, py);
-    if (mote !== null && a.catchMote) {
-      a.catchMote(mote);
-      return;
-    }
-    if (route.kind === 'pulse') return void this.pulseCreature(route.id);
-    if (route.kind === 'grey') return this.overlay.ripple(g.x, g.y, 'auto');
-    if (route.kind === 'collect') {
-      // A creature's own drop: the pulse collects it with its glow; a loose drop is collected as before.
-      if (route.creature !== null && a.pulse && this.pulseCreature(route.creature) > 0) return;
-      this.closeCard();
-      return this.collectDrop(route.drop);
-    }
-    if (route.kind === 'cardHint') {
-      if (a.pulse) return void this.pulseCreature(route.id);
-      if (this.v?.settings.oneTouch) this.openCard(route.id);
-      return;
-    }
-    if (route.kind === 'card') return this.openCard(route.id);
-    if (this.card) return this.closeCard();
-    // Empty agar: every drop within a generous reach comes to the finger; nothing there, a ripple of water.
-    const scene = this.overlay.tapScene();
-    let got = 0;
-    for (let i = 0; i < scene.dropCount; i++) {
-      const d = scene.drops[i];
-      if (d.amount > 0 && Math.hypot(d.x - px, d.y - py) <= COLLECT_UI.emptyTapPx) {
-        this.collectDrop(d.id);
-        got++;
-      }
-    }
-    if (!got) this.overlay.ripple(g.x, g.y, 'auto');
-  }
-
-  /** A ¡Chispazo! glimmer under (px, py) (dish CSS px, within a drop's touch radius), or null. */
-  private moteAt(px: number, py: number): number | null {
-    let best: number | null = null;
-    let bd = LIGHT_TAP_RADIUS_PX;
-    for (const m of this.v?.motes ?? []) {
-      const p = this.overlay.screenOf(m.x, m.y);
-      const d = Math.hypot(p.x - px, p.y - py);
-      if (d <= bd) {
-        bd = d;
-        best = m.id;
-      }
-    }
-    return best;
-  }
-
-  /**
-   * Pulse creature `id` (ADR-031): its drop is drawn in and comes with the pulse (the game's lightCollected tells
-   * it); the pulse's own light is the «+N» on top, from the creature. Returns the Luz it paid.
-   */
-  private pulseCreature(id: number): number {
-    const a = this.actions;
-    if (!a.pulse) return 0;
     const ov = this.overlay;
-    const scene = ov.tapScene();
-    let own = -1;
-    for (let i = 0; i < scene.dropCount; i++) if (scene.drops[i].owner === id && scene.drops[i].amount > 0) own = scene.drops[i].id;
-    const at = own >= 0 ? ov.drops.take(own, this.overlayNow()) : null;
-    const c = ov.creatureScreen(id);
-    this.handAt = at;
-    this.handSum = 0;
-    const got = a.pulse(id);
-    this.handAt = null;
-    const extra = got - this.handSum;
-    if (extra > 0 && c) this.collectedAt(c.x, c.y, at?.hue ?? ov.drops.hueOf(own), extra, 'hand');
-    if (got > 0) this.hideFirstHint();
-    return got;
+    this.lastTapAt = performance.now();
+    const route = routeTap('tap', px, py, ov.tapScene(), this.reach);
+    if (route.kind !== 'pulse') this.closeCard();
+    switch (route.kind) {
+      case 'catch':
+        ov.moteTaken(route.mote);
+        a.catchMote?.(route.mote);
+        return;
+      case 'pulse': {
+        ov.pulseTap(route.id);
+        // Its drop is drawn in now; the game's pulse collects it (no collectAt: one tap, one payment).
+        this.handAt = route.drop !== null ? ov.drops.take(route.drop, this.overlayNow()) : null;
+        a.pulse?.(route.id);
+        this.handAt = null;
+        this.hideFirstHint();
+        return;
+      }
+      case 'collect':
+        return this.collectDrop(route.drop);
+      case 'grey':
+        return ov.greyTap(route.id);
+      case 'card':
+        return this.openCard(route.id);
+      case 'ripple': {
+        ov.agarTap(px, py);
+        const r = this.reach;
+        for (let i = 0; i < r.dropN; i++) this.collectDrop(r.drops[i]);
+        for (let i = 0; i < r.moteN; i++) {
+          ov.moteTaken(r.motes[i]);
+          a.catchMote?.(r.motes[i]);
+        }
+        return;
+      }
+      default:
+        // A game without the pulse (no `scene.pulsing`): its old routes, but empty agar never sows in a session.
+        if (route.kind === 'cardHint' && this.v?.settings.oneTouch) this.openCard(route.id);
+        else if (route.kind === 'sow') ov.ripple(g.x, g.y, 'auto');
+    }
   }
 
   /** The Sembrar button asked for a seed (ADR-031). The host sows; without its hook, the old dish tap at that spot. */
@@ -2280,7 +2248,6 @@ class BiolumaUI implements UI {
     bus.on('lightCollected', (e) => {
       let at = e.by === 'hand' && this.handAt ? this.handAt : null;
       this.handTold = this.handTold || e.by === 'hand';
-      if (e.by === 'hand') this.handSum += e.amount;
       if (!at) {
         // Where that drop is drawn (an owned one sits on its creature's outline), else its grid point.
         const d = ov.drops.atGrid(e.x, e.y, 4);
@@ -2303,17 +2270,15 @@ class BiolumaUI implements UI {
     const at = this.overlay.drops.take(id, this.overlayNow());
     this.handAt = at;
     this.handTold = false;
-    this.handSum = 0;
     let got = 0;
     if (a.collect) got = a.collect(id);
     else if (at && a.collectAt) {
       const g = this.camera.screenToGrid(at.x, at.y);
       got = a.collectAt(g.x, g.y, 1);
     }
-    // A game that pays without telling the bus still shows where the light went; so does the part of a drop hit
-    // the bus did not tell (ADR-031: the streak's pulse on its turn, a ¡Chispazo!).
-    const rest = got - this.handSum;
-    if (rest > 1e-6 && at) this.collectedAt(at.x, at.y, at.hue, rest, 'hand');
+    // A game that pays without telling the bus still shows where the light went (a drop hit's own pulse, ADR-031,
+    // comes on the bus 'pulse': PB's overlay shows it).
+    if (got > 0 && !this.handTold && at) this.collectedAt(at.x, at.y, at.hue, got, 'hand');
     this.handAt = null;
     if (got > 0) {
       // ADR-031 §3.1: in sessions only the ¡Chispazo! buzzes (at 8 taps a second a buzz each tap annoys).
@@ -2331,8 +2296,9 @@ class BiolumaUI implements UI {
   private collectedAt(x: number, y: number, hue: number, amount: number, by: 'hand' | 'pipette' | 'sweep'): void {
     if (!(amount > 0)) return;
     const lang = this.lang;
-    // Whole numbers on the dish (docs/CLARIDAD2.md §2.13: no decimals); a sliver below 1 keeps one.
-    this.overlay.collected(x, y, amount, hue, (n) => fmt(n >= 1 ? Math.round(n) : n, lang));
+    // Whole numbers on the dish (docs/CLARIDAD2.md §2.13: no decimals). A sliver below 1 shows no number at all (its
+    // mote still flies to the counter): «+0,4 luz» read as a reward of nothing.
+    if (amount >= 0.5) this.overlay.collected(x, y, amount, hue, (n) => fmt(Math.max(1, Math.round(n)), lang));
     const d = this.dish.getBoundingClientRect();
     const cx = d.left + x;
     const cy = d.top + y;
@@ -2389,8 +2355,11 @@ class BiolumaUI implements UI {
     }
     if (route.kind === 'sweep' || route.kind === 'steer') {
       // Without a guide (not wired), a drag from a swimmer is a sweep like any other.
-      if (!this.overlay.tapScene().collecting) return null;
+      const scene = this.overlay.tapScene();
+      if (!scene.collecting && !scene.pulsing) return null;
       this.sweepN = 0;
+      this.sweepMoteN = 0;
+      this.sweepHits.reset();
       return 'sweep';
     }
     return null;
@@ -2407,22 +2376,18 @@ class BiolumaUI implements UI {
     const before = this.sweepN;
     this.sweepN = dropsOnSegment(scene, x0, y0, x1, y1, this.sweepIds, this.sweepN);
     for (let i = before; i < this.sweepN; i++) this.collectDrop(this.sweepIds[i]);
-    // ADR-031 (MECANICAS §3.1): …and every stable creature it crosses glows, one pulse each (pulseMany spaces the
-    // hits on one creature SWEEP_REHIT_S apart). Their drops tell the bus; the pulses' «+N» rides with the finger.
-    const many = this.actions.pulseMany;
-    if (this.v?.cycle === 'sessions' && many) {
-      const ids = this.sweepPulse;
-      ids.length = 0;
-      for (let i = 0; i < scene.creatureCount; i++) {
-        const c = scene.creatures[i];
-        if (c.state === 'stable' && segmentDist(c.x, c.y, x0, y0, x1, y1) <= c.r + scene.creaturePadPx * 0.5) ids.push(c.id);
-      }
-      if (ids.length) {
-        this.handSum = 0;
-        const extra = many(ids) - this.handSum;
-        if (extra > 1e-6) this.collectedAt(x1, y1, this.overlay.drops.hueOf(-1), extra, 'hand');
-      }
+    if (!scene.pulsing) return;
+    // ADR-031 (PB): the glimmers on the path are caught, and every creature it crosses glows (once per SWEEP_REHIT_S).
+    const m0 = this.sweepMoteN;
+    this.sweepMoteN = motesOnSegment(scene, x0, y0, x1, y1, this.sweepMotes, this.sweepMoteN);
+    for (let i = m0; i < this.sweepMoteN; i++) {
+      this.overlay.moteTaken(this.sweepMotes[i]);
+      this.actions.catchMote?.(this.sweepMotes[i]);
     }
+    const n = this.sweepHits.cross(scene, x0, y0, x1, y1, performance.now() / 1000, SWEEP_REHIT_S, this.sweepCross);
+    if (n === 0) return;
+    for (let i = 0; i < n; i++) this.overlay.pulseTap(this.sweepCross[i]);
+    this.actions.pulseMany?.(this.sweepCross.slice(0, n));
   }
 
   private onDragEnd(): void {
@@ -2780,8 +2745,14 @@ class BiolumaUI implements UI {
     });
     // ── ADR-031 (docs/MECANICAS.md §3, §4): the pulse, the glimmers, and losses that give something back ──
     bus.on('pulse', (e) => {
+      // The game's answer (PB's overlay): «+N» / ¡Chispazo! on the dish, a mote to the counter, a buzz on a Chispazo.
+      const p = ov.pulsed(e);
+      if (p && e.amount > 0) {
+        const d = this.dish.getBoundingClientRect();
+        this.fly.launch(d.left + p.x, d.top + p.y, 'essence', hueHex(p.hue, 70), e.chispazo ? 3 : 1, performance.now());
+      }
       if (!e.chispazo) return;
-      this.vibrate([12, 30, 12]);
+      this.vibrate([10, 30, 14]);
       // The first ¡Chispazo! ever says what it is, for 2 s beside it («Cada 10 toques seguidos, ¡un Chispazo!»).
       if (!this.prefs.hints.includes('chispazo')) {
         this.prefs.hints.push('chispazo');
@@ -2795,10 +2766,9 @@ class BiolumaUI implements UI {
         ov.ripeLabel(p.x, p.y, tx(TEXT.motesCatch));
       }
     });
-    bus.on('moteCaught', (e) => {
-      const p = ov.screenOf(e.x, e.y);
-      this.collectedAt(p.x, p.y, ov.drops.hueOf(-1), e.amount, 'hand');
-    });
+    bus.on('moteCaught', (e) => ov.moteCaught(e));
+    // A living creature died and its light joined its drop: the drop flares with its «+N» (its cause: deathLabel).
+    bus.on('deathBurst', (e) => ov.deathBurst(e));
     bus.on('seedRefund', (e) => {
       // «No prendió · +4 de vuelta» where it was, and the coin goes back to the counter (a free seed, to the button).
       if (!this.deps.isNarrating?.()) ov.wentDark(e.x, e.y, tx(refundLabel(e)), false);
