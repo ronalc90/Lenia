@@ -359,6 +359,8 @@ export const CLASSIC_ONLY_TEXT: readonly string[] = [
   'bloom',
   'bloomReward',
   'lumpReward',
+  // ADR-031: the sessions sow with the Sembrar button, never refused for spacing.
+  'seedTooClose',
 ];
 
 /** Why some Luz entered the wallet without a drop (bus 'luzGift', ADR-030). */
@@ -433,8 +435,9 @@ export const TEXT = {
   /** Several requests' light at once, one chip («+189 · 7 encargos cumplidos»). */
   giftMany: (n: number) => t(`${n} encargos cumplidos`, `${n} requests done`),
   /** A seed that never became stable went dark (game/contact.ts deathCause), a 2 s label in place, grey fade. */
-  deathGlass: t('Se apagó: muy pegada al cristal', 'Went dark: too close to the glass'),
-  deathCrowd: t('Se apagó: muy cerca de otra', 'Went dark: too close to another'),
+  // ADR-031: no session text scolds (clarity.test.ts): what happened, never «muy cerca» / "too close".
+  deathGlass: t('Se apagó: muy pegada al cristal', 'Went dark: right against the glass'),
+  deathCrowd: t('Se apagó: estaba cerca de otra', 'Went dark: it was next to another'),
   deathFaded: t('Se apagó: no prendió. ¡Prueba otra!', 'Went dark: didn’t take. Try another!'),
   /** A living creature hit the glass (a rare miss of the deflector): its drop stays on the dish. */
   deathGlassAlive: t('Chocó con el cristal y se apagó. Su luz sigue ahí.', 'It hit the glass and went dark. Its glow is still there.'),
@@ -446,9 +449,12 @@ export const TEXT = {
   shapeLost: t('Se deshizo: sin forma no da luz', 'Fell apart: no shape, no glow'),
   /** A fusion seen again (the first one gets its card): a 2 s label in place. */
   merged: t('Se juntaron: sin forma no da luz', 'Merged: no shape, no glow'),
-  /** The warning before two creatures touch (GameView.dangers); `contactSteer` when one is a swimmer. */
-  contactSoon: t('¡Cuidado! Se van a tocar', 'Careful! They’re about to touch'),
-  contactSteer: t('¡Cuidado! Arrástrala para desviarla', 'Careful! Drag it to steer it away'),
+  /**
+   * The warning before two creatures touch (GameView.dangers); `contactSteer` when one is a swimmer. ADR-031: worded
+   * only when the player can act (dangers[].actionable), and it says what to do (= contactAct), never «¡Cuidado!».
+   */
+  contactSoon: t('Se van a tocar', 'They’re about to touch'),
+  contactSteer: t('¡Van a chocar! Arrastra una', 'About to bump! Drag one away'),
   // ── ADR-031 (docs/MECANICAS.md §10.4): the tap is a pulse, sowing is a button, every loss leaves something ──
   // Numbers arrive as numbers (they are formatted here for each language). Multipliers read as in the main flow
   // (CLARIDAD2 §2.13, format.ts multWords): «+25 %», never «×1,25»; the exact factor is for «Ver cuentas».

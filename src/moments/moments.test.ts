@@ -789,7 +789,7 @@ describe('moments: accidents say why, at the spot (CLARIDAD2 §2.5)', () => {
     const cur = h.m.current();
     expect(cur?.id).toBe('contact');
     expect(cur?.mode).toBe('brief');
-    expect(cur?.brief.en).toBe('Careful! Drag it to steer it away');
+    expect(cur?.brief.en).toBe('About to bump! Drag one away'); // ADR-031: worded as what to do, never «Careful!»
     expect(h.m.isPausing()).toBe(false);
   });
 

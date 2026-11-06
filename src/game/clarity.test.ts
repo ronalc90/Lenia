@@ -283,3 +283,13 @@ describe('the pulse-pass texts exist in both languages before anyone wires them 
       }
   });
 });
+
+describe('no session text scolds (ADR-031, docs/MECANICAS.md §3.4)', () => {
+  it('no session text says «Muy cerca», «se fundirían» or «¡Cuidado!»', () => {
+    const SCOLD = [/muy cerca/i, /se fundir[ií]an/i, /¡cuidado!/i, /too close/i, /would melt/i, /careful!/i];
+    const all = gameTexts();
+    expect(all.filter(([, t]) => SCOLD.some((re) => re.test(t.es) || re.test(t.en))).map(([p, t]) => `${p}: «${t.es}»`)).toEqual([]);
+    // The warning is worded only when the player can act, and says what to do.
+    expect(TEXT.contactSteer).toEqual(TEXT.contactAct);
+  });
+});
