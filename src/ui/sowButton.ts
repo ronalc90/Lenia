@@ -195,7 +195,8 @@ export class SowButton {
     this.name.textContent = m.label[l];
     this.sub.textContent = m.sub[l];
     const luck = this.el.querySelector('.sow-luck') as HTMLElement;
-    luck.hidden = !m.luck;
+    // The dots appear with the first seed that did not take (empty dots on a fresh button would read as decoration).
+    luck.hidden = !m.luck || (m.luck.on === 0 && !m.sure);
     this.dots.forEach((d, i) => {
       d.hidden = !m.luck || i >= m.luck.of;
       d.classList.toggle('on', !!m.luck && i < m.luck.on);

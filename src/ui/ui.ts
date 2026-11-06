@@ -1296,6 +1296,7 @@ class BiolumaUI implements UI {
     );
 
     this.streakChip.update(v.streak);
+    toggle(this.el, 'streaking', !this.streakChip.el.hidden);
 
     show(this.journalDot, v.journal.some((e) => !e.read));
     setHTML(this.muteBtn, icon(v.settings.muted ? 'mute' : 'sound'));

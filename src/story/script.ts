@@ -312,7 +312,8 @@ export const SCENES: SceneDef[] = [
     title: t('Tócala', 'Tap it'),
     // ADR-031 (MECANICAS §6.1 step 5): the pulse works with the dish still; its first taps pay the floor (+1).
     when: (c) => firstSession(c) && clockWaits(c) && pulseLesson(c),
-    lines: [vela('happy', TEXT.tutPulse.es, TEXT.tutPulse.en, at('creature', 'dish'))],
+    // Her line moves on by itself: the step ends on three taps on the creature, not on a tap on her box (§6.1).
+    lines: [vela('happy', TEXT.tutPulse.es, TEXT.tutPulse.en, { target: ['creature', 'dish'], auto: 1.5 })],
     wait: {
       until: (c) => (c.v.streak?.hits ?? 0) >= PULSE_LESSON_HITS,
       text: t('Toca tu criatura.', 'Tap your creature.'),

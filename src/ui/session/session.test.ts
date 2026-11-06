@@ -379,7 +379,7 @@ describe('the streak chip by the counter (ADR-031, docs/MECANICAS.md §3.2)', ()
     // Full: «¡Racha máxima!» and what it does to all the light, under the counter.
     const full = streakChip(st(10, { toChispazo: 10 }), 'es')!;
     expect(full.full).toBe(true);
-    expect(full.text).toBe('¡Racha máxima!');
+    expect(full.text).toBe('¡Racha máxima! ×1,2');
     expect(full.line).toBe('×1,2 por tu racha');
     expect(full.dots).toBe(0);
     for (let n = 1; n <= 30; n++)

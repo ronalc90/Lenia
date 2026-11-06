@@ -24,6 +24,7 @@
  */
 import type { GameView, Lang, Text } from '../../core/types';
 import { TEXT } from '../../game/content';
+import { multText } from '../../game/format';
 import * as C from '../../game/cycleBalance';
 import { countdownSeconds, warnSeconds, type SessionState } from '../../game/session';
 import { SESSION_UI } from '../../game/treeText';
@@ -445,7 +446,7 @@ export function createSessionHud(container: HTMLElement, opts: SessionHudOptions
 
 /** What the streak chip shows (pure). */
 export interface StreakChipView {
-  /** «Racha ×1,2», or «¡Racha máxima!» when full. */
+  /** «Racha ×1,2», or «¡Racha máxima! ×1,2» when full. */
   text: string;
   /** Dots lit towards the next ¡Chispazo! (0 right after one) out of `every`. */
   dots: number;
@@ -473,7 +474,7 @@ export function streakChip(s: GameView['streak'] | undefined, l: Lang): StreakCh
   // Hits left to the next one (every … 1): every − left are lit; right after a ¡Chispazo! (left = every) none.
   const dots = (every - (Math.max(0, Math.round(s.toChispazo)) % every)) % every;
   return {
-    text: (full ? TEXT.streakMax : TEXT.streak(shown))[l],
+    text: full ? `${TEXT.streakMax[l]} ${multText(shown)[l]}` : TEXT.streak(shown)[l],
     dots,
     every,
     full,
@@ -494,11 +495,11 @@ export function createStreakChip(host: HTMLElement, opts: { lang(): Lang; reduce
   el.className = 'streak-chip';
   el.hidden = true;
   el.setAttribute('role', 'status');
-  el.innerHTML = '<span class="sk-t mono"></span><span class="sk-dots" aria-hidden="true"></span><span class="sk-line mono"></span>';
+  // One row under the counter: the words and the dots («×1,2 por tu racha» is its spoken label).
+  el.innerHTML = '<span class="sk-t mono"></span><span class="sk-dots" aria-hidden="true"></span>';
   host.appendChild(el);
   const text = el.querySelector('.sk-t') as HTMLElement;
   const dotsEl = el.querySelector('.sk-dots') as HTMLElement;
-  const lineEl = el.querySelector('.sk-line') as HTMLElement;
   let key = '';
   let dotN = 0;
   let lastDots = -1;
@@ -522,8 +523,6 @@ export function createStreakChip(host: HTMLElement, opts: { lang(): Lang; reduce
       const ds = dotsEl.children;
       for (let i = 0; i < ds.length; i++) ds[i].classList.toggle('on', i < v.dots);
       text.textContent = v.text;
-      lineEl.textContent = v.line ?? '';
-      lineEl.hidden = !v.line;
       el.classList.toggle('full', v.full);
       el.classList.toggle('draining', v.draining);
       el.setAttribute('aria-label', v.line ? `${v.text} · ${v.line}` : v.text);

@@ -5872,11 +5872,12 @@ button.chip {
 .sow-luck i.on {
   background: var(--gold-fill);
 }
-/* The tutorial's hand over the button (§6.1 step 2), bobbing gently; still under Reduce motion. */
+/* The tutorial's hand tapping the button (§6.1 step 2), on its lower right: the space above belongs to the price
+   chip and VELA's arrow. It bobs gently; still under Reduce motion. */
 .sow-hand {
   position: absolute;
-  left: 50%;
-  bottom: calc(100% - 6px);
+  left: 58%;
+  top: 46%;
   color: #fff;
   pointer-events: none;
   animation: sow-hand var(--bl-t-spring-slow) var(--ease) infinite alternate; /* css-lint-ok: an ambient pointer, transform only */
@@ -5887,14 +5888,13 @@ button.chip {
 }
 .bl.rm .sow-hand {
   animation: none;
-  transform: translate(-50%, 0);
 }
 @keyframes sow-hand {
   from {
-    transform: translate(-50%, 0);
+    transform: translate(0, 0);
   }
   to {
-    transform: translate(-50%, -8px);
+    transform: translate(-4px, -8px);
   }
 }
 @keyframes sow-pop {
@@ -5960,23 +5960,28 @@ button.chip {
   z-index: 4;
   color: var(--good);
 }
-/* The streak chip under the Luz counter (§3.2): «Racha ×1,2», ten dots to the next ¡Chispazo! */
+/* The streak chip under the Luz counter (§3.2): one row, «Racha ×1,2» and ten dots to the next ¡Chispazo!. It takes
+   the gift chip's lane, which steps below it while a streak runs. */
 .streak-chip {
   position: absolute;
   left: calc(max(10px, env(safe-area-inset-left)) + 58px);
-  top: calc(100% + 48px);
+  top: calc(100% + 10px);
   z-index: 4;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  padding: 6px 10px;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 10px;
   border-radius: var(--bl-r-sm);
   border: 1px solid rgba(var(--accent-rgb), 0.45);
   background: rgba(14, 19, 26, 0.9);
   color: #dff5ff;
+  white-space: nowrap;
   pointer-events: none;
   transition: border-color var(--bl-t-base), opacity var(--bl-t-base);
+}
+.bl.streaking .luz-gift {
+  top: calc(100% + 44px);
 }
 .streak-chip .sk-t {
   font-size: var(--bl-fs-small);
@@ -5988,17 +5993,13 @@ button.chip {
   gap: 3px;
 }
 .streak-chip .sk-dots i {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   border: 1px solid rgba(var(--accent-rgb), 0.6);
 }
 .streak-chip .sk-dots i.on {
   background: var(--accent);
-}
-.streak-chip .sk-line {
-  font-size: var(--bl-fs-caption);
-  color: var(--dim);
 }
 .streak-chip.full {
   border-color: rgba(var(--good-rgb), 0.85);
