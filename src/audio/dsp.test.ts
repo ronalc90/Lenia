@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { analyze, detectClicks, encodeWav16, fft, powerSpectrum, toDb } from './analysis';
 import { DEFAULT_REVERB, makeNoise, makeReverbIR, warmWaveCoefficients } from './fx';
-import { PURCHASE_STEPS, SFX, MAX_SFX_VOICES, sliderFreq } from './sfx';
-import { D_DORIAN, midiToFreq, pc } from './theory';
+import { chispazoNotes, nextPulseRun, PULSE_RUN_GAP_S, pulseLadder, pulseMidi, PURCHASE_STEPS, SFX, MAX_SFX_VOICES, sliderFreq, type SfxEnv } from './sfx';
+import type { Instruments } from './synth';
+import { CHORDS, D_DORIAN, midiToFreq, pc, usable } from './theory';
 import { volumeCurve } from './engine';
 
 const sine = (f: number, sr: number, n: number, a = 0.5) => Float32Array.from({ length: n }, (_, i) => a * Math.sin((2 * Math.PI * f * i) / sr));
@@ -143,5 +144,101 @@ describe('sfx rules', () => {
     expect(volumeCurve(1)).toBe(1);
     expect(volumeCurve(0.5)).toBeGreaterThan(0.3);
     expect(volumeCurve(NaN)).toBe(0);
+  });
+});
+
+/** A Web Audio stand-in that records every oscillator's frequency (no audio in unit tests). */
+function recordingCtx(): { ctx: BaseAudioContext; freqs: number[] } {
+  const freqs: number[] = [];
+  const param = (rec?: (v: number) => void) => ({
+    value: 0,
+    setValueAtTime(v: number) {
+      rec?.(v);
+      return this;
+    },
+    linearRampToValueAtTime() {
+      return this;
+    },
+    exponentialRampToValueAtTime() {
+      return this;
+    },
+    setTargetAtTime() {
+      return this;
+    },
+  });
+  const node = () => ({ connect: (n: unknown) => n, disconnect() {} });
+  const ctx = {
+    createOscillator: () => ({ ...node(), type: 'sine', frequency: param((v) => freqs.push(v)), start() {}, stop() {}, setPeriodicWave() {}, onended: null }),
+    createGain: () => ({ ...node(), gain: param() }),
+    createBiquadFilter: () => ({ ...node(), type: 'lowpass', frequency: param(), Q: param() }),
+    createBufferSource: () => ({ ...node(), buffer: { duration: 2 }, start() {}, stop() {}, onended: null }),
+  } as unknown as BaseAudioContext;
+  return { ctx, freqs };
+}
+
+describe('the pulse climbs the scale (sfx, ADR-031, MECANICAS §1.2: Peggle)', () => {
+  it('each hit of a streak is one scale step higher and wraps at the octave', () => {
+    for (const chord of Object.values(CHORDS)) {
+      const scale = usable(chord);
+      const L = pulseLadder(chord);
+      expect(L).toBe(scale.length + 1);
+      const base = pulseMidi(0, chord);
+      expect(pc(base)).toBe(chord.root);
+      for (let r = 1; r < L; r++) {
+        const m = pulseMidi(r, chord);
+        const prev = pulseMidi(r - 1, chord);
+        expect(m).toBeGreaterThan(prev);
+        expect(scale).toContain(pc(m));
+        // One step: no note of the scale in between.
+        for (let k = prev + 1; k < m; k++) expect(scale).not.toContain(pc(k));
+      }
+      // The ladder reaches the octave, then starts again.
+      expect(pulseMidi(L - 1, chord)).toBe(base + 12);
+      expect(pulseMidi(L, chord)).toBe(base);
+      expect(pulseMidi(L + 3, chord)).toBe(pulseMidi(3, chord));
+    }
+  });
+
+  it('a pause over a second starts the climb again, and the Chispazo resolves it', () => {
+    let run = -1;
+    run = nextPulseRun(run, Infinity);
+    expect(run).toBe(0);
+    run = nextPulseRun(run, 0.1);
+    run = nextPulseRun(run, 0.1);
+    expect(run).toBe(2);
+    expect(nextPulseRun(run, PULSE_RUN_GAP_S + 0.01)).toBe(0);
+    expect(PULSE_RUN_GAP_S).toBe(1);
+  });
+
+  it('a Chispazo plays a chord of the current harmony', () => {
+    for (const chord of Object.values(CHORDS)) {
+      const notes = chispazoNotes(chord);
+      expect(notes.length).toBeGreaterThanOrEqual(4);
+      expect(new Set(notes).size).toBe(notes.length);
+      for (const m of notes) expect(chord.tones).toContain(pc(m));
+      // At least three different chord tones: a chord, not an octave.
+      expect(new Set(notes.map(pc)).size).toBeGreaterThanOrEqual(3);
+      // It sits above the ladder, so it lands as its resolution.
+      expect(Math.max(...notes)).toBeGreaterThan(pulseMidi(pulseLadder(chord) - 1, chord));
+      // And that is what it schedules.
+      const { ctx, freqs } = recordingCtx();
+      const inst = { glint: (_d: AudioNode, t: number) => t + 0.6 } as unknown as Instruments;
+      const env: SfxEnv = { ctx, inst, chord, out: {} as AudioNode, n: 0 };
+      SFX.chispazo.fn(env, 0);
+      for (const m of notes) expect(freqs.some((f) => Math.abs(f - midiToFreq(m)) < 1e-6)).toBe(true);
+    }
+  });
+
+  it('a pulse sounds the ladder note it is given', () => {
+    const chord = CHORDS.Dm9;
+    for (const n of [0, 3, 7]) {
+      const { ctx, freqs } = recordingCtx();
+      SFX.pulse.fn({ ctx, inst: {} as Instruments, chord, out: {} as AudioNode, n }, 0);
+      expect(freqs[0]).toBeCloseTo(midiToFreq(pulseMidi(n, chord)), 6);
+    }
+    // Fast enough for ten taps a second, and above the drops' own pluck when both are due.
+    expect(SFX.pulse.minInterval).toBeLessThan(0.1);
+    expect(SFX.chispazo.priority).toBeGreaterThan(SFX.pulse.priority);
+    expect(SFX.pulse.priority).toBeGreaterThanOrEqual(SFX.collect.priority);
   });
 });

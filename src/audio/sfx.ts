@@ -8,7 +8,7 @@
  * (auto-seeder at −12 dB).
  */
 import type { Chord } from './theory';
-import { midiToFreq, nearestPitchWithPc, pitchesInRange, voiceLead } from './theory';
+import { midiToFreq, nearestPitchWithPc, pitchesInRange, scaleStep, usable, voiceLead } from './theory';
 import { glide, type MixGraph, type SfxChannel } from './fx';
 import { autoDisconnect, vca, type Instruments } from './synth';
 
@@ -51,6 +51,10 @@ export type SfxName =
   | 'collect'
   | 'pipette'
   | 'contactWarn'
+  | 'pulse'
+  | 'chispazo'
+  | 'refund'
+  | 'saved'
   | 'uiTap'
   | 'uiTab'
   | 'uiOpen'
@@ -433,6 +437,80 @@ const contactWarn: SfxFn = (e, t) => {
   return tone(e, t + 0.13, midiToFreq(69), 0.045, 0.08, 'triangle', 0.003);
 };
 
+// ───────────────────────────── the tap is a pulse (ADR-031) ─────────────────────────────
+// docs/MECANICAS.md §1.2 (Peggle: each peg one degree higher, in a scale that fits the music) and §7.1.
+
+/** The ladder starts on the current chord's root nearest this pitch (C5: the pulses sit above the pads). */
+export const PULSE_BASE_MIDI = 72;
+/**
+ * A pause this long starts the climb again from the root (s). Mirrors the game's STREAK_GRACE_S: when the streak
+ * starts to drain, the ladder starts over.
+ */
+export const PULSE_RUN_GAP_S = 1;
+
+/** Notes on the pulse ladder of `c`: its usable chord-scale from the root up to and including the octave. */
+export function pulseLadder(c: Chord): number {
+  return usable(c).length + 1;
+}
+
+/**
+ * Pitch of the `run`-th pulse of a streak (0 = the first): one step of the current chord-scale per hit (its
+ * avoid notes left out, so a held finger never clashes with the pad), from the root to its octave, then again.
+ */
+export function pulseMidi(run: number, c: Chord): number {
+  const L = pulseLadder(c);
+  const k = ((Math.floor(run) % L) + L) % L;
+  const base = nearestPitchWithPc(PULSE_BASE_MIDI, [c.root]);
+  return k === L - 1 ? base + 12 : scaleStep(base, k, usable(c));
+}
+
+/** The next run index: one more within PULSE_RUN_GAP_S of the last pulse, else back to the root. */
+export function nextPulseRun(run: number, sinceLast: number): number {
+  return sinceLast < PULSE_RUN_GAP_S ? run + 1 : 0;
+}
+
+/** The Chispazo's chord: the current chord's first four tones voiced just above the ladder, and its root on top. */
+export function chispazoNotes(c: Chord): number[] {
+  const top = nearestPitchWithPc(PULSE_BASE_MIDI, [c.root]) + 12;
+  const v = voiceLead(null, c.tones.slice(0, 4), top - 7, top + 12, top + 3);
+  const hi = v[v.length - 1] ?? top;
+  return [...v, nearestPitchWithPc(hi + 6, [c.root], 1)];
+}
+
+/** One pulse: a glassy tink on the ladder's note and a faint bell an octave up (the shimmer of the flash). */
+const pulse: SfxFn = (e, t) => {
+  const m = pulseMidi(e.n, e.chord);
+  tone(e, t, midiToFreq(m), 0.075, 0.13, 'sine', 0.002);
+  return fmBell(e, t + 0.004, m + 12, 0.02, 0.3);
+};
+
+/** ¡Chispazo!: the ladder resolves into the chord, strummed in 14 ms steps, with a glint on top. */
+const chispazo: SfxFn = (e, t) => {
+  const notes = chispazoNotes(e.chord);
+  let end = t;
+  for (let i = 0; i < notes.length; i++) {
+    const ts = t + i * 0.014;
+    end = Math.max(end, tone(e, ts, midiToFreq(notes[i]), 0.045, 0.6, 'triangle', 0.003));
+    end = Math.max(end, fmBell(e, ts, notes[i], 0.028, 0.95));
+  }
+  return Math.max(end, e.inst.glint(e.out, t + 0.05, notes[notes.length - 1] + 12, 0.6));
+};
+
+/** A seed that never took gave its light back: a soft blip up a fourth (a coin back, never an error). */
+const refund: SfxFn = (e, t) => {
+  const m = nearestPitchWithPc(79, e.chord.stable);
+  tone(e, t, midiToFreq(m - 5), 0.045, 0.06, 'sine', 0.003);
+  return tone(e, t + 0.06, midiToFreq(m), 0.05, 0.14, 'sine', 0.003);
+};
+
+/** A swimmer saved from a warned contact: «tin-tin», root then fifth. */
+const saved: SfxFn = (e, t) => {
+  const a = nearestPitchWithPc(81, [e.chord.root]);
+  const b = pitchesInRange([e.chord.fifth], a + 1, a + 12)[0] ?? a + 7;
+  fmBell(e, t, a, 0.055, 0.5);
+  return fmBell(e, t + 0.11, b, 0.055, 0.7);
+};
+
 // ───────────────────────────── interface sounds ─────────────────────────────
 // Very short and soft: they confirm a touch without competing with the music.
 
@@ -520,6 +598,11 @@ export const SFX: Record<SfxName, SfxDef> = {
   collect: { fn: collect, channel: 'room', priority: 5, minInterval: 0.04, gain: 1.1 },
   pipette: { fn: pipette, channel: 'dry', priority: 1, minInterval: 0.12, gain: 0.7 },
   contactWarn: { fn: contactWarn, channel: 'dry', priority: 5, minInterval: 1.5, gain: 1 },
+  // ADR-031: ten taps a second must each be heard (the voice cap and the steal rule keep it clean).
+  pulse: { fn: pulse, channel: 'room', priority: 5, minInterval: 0.035, gain: 1.1 },
+  chispazo: { fn: chispazo, channel: 'echo', priority: 7, minInterval: 0.2, gain: 1 },
+  refund: { fn: refund, channel: 'dry', priority: 4, minInterval: 0.3, gain: 1 },
+  saved: { fn: saved, channel: 'echo', priority: 6, minInterval: 0.5, gain: 1 },
   uiTap: { fn: uiTap, channel: 'dry', priority: 1, minInterval: 0.05, gain: 1 },
   uiTab: { fn: uiTab, channel: 'dry', priority: 2, minInterval: 0.08, gain: 1 },
   uiOpen: { fn: uiOpen, channel: 'room', priority: 2, minInterval: 0.15, gain: 1 },
@@ -546,6 +629,10 @@ export class SfxPlayer {
   private lastPurchase = -Infinity;
   private collectRun = 0;
   private lastCollect = -Infinity;
+  /** The pulse ladder (ADR-031): run index, time of the last pulse, and the drop pluck it may replace. */
+  private pulseRun = -1;
+  private lastPulse = -Infinity;
+  private lastCollectVoice: Voice | null = null;
   /** Counters for tests / debugging. */
   readonly stats = { played: 0, dropped: 0, stolen: 0 };
 
@@ -568,6 +655,11 @@ export class SfxPlayer {
   play(name: SfxName, t: number, opts: { gain?: number; pan?: number; key?: string; minInterval?: number } = {}): boolean {
     const def = SFX[name];
     const key = opts.key ?? name;
+    // A pulse collects its creature's drop: the pulse says it, so the drop's own pluck stays quiet.
+    if (name === 'collect' && t >= this.lastPulse && t - this.lastPulse < 0.06) {
+      this.stats.dropped++;
+      return false;
+    }
     const lastT = this.last.get(key) ?? -Infinity;
     if (t - lastT < (opts.minInterval ?? def.minInterval)) {
       this.stats.dropped++;
@@ -597,6 +689,20 @@ export class SfxPlayer {
       this.collectRun = t - this.lastCollect < 0.6 ? this.collectRun + 1 : 0;
       this.lastCollect = t;
       n = this.collectRun;
+    } else if (name === 'pulse') {
+      // One step up the ladder per hit; a pluck for the same tap a moment ago is muted (one sound per tap).
+      this.pulseRun = nextPulseRun(this.pulseRun, t - this.lastPulse);
+      this.lastPulse = t;
+      n = this.pulseRun;
+      const c = this.lastCollectVoice;
+      if (c && c.end > t && t - this.lastCollect < 0.03) {
+        glide(c.gain.gain, 0, t, 0.004);
+        c.end = t;
+      }
+    } else if (name === 'chispazo') {
+      // The chord resolves the ladder: the next pulse starts again from the root.
+      this.pulseRun = -1;
+      this.lastPulse = t;
     }
     const ctx = this.g.ctx;
     const vg = ctx.createGain();
@@ -611,7 +717,9 @@ export class SfxPlayer {
     timer.start(t);
     timer.stop(end + 0.1);
     autoDisconnect(timer, [timer, vg]);
-    this.voices.push({ end, priority: def.priority, gain: vg });
+    const voice: Voice = { end, priority: def.priority, gain: vg };
+    this.voices.push(voice);
+    if (name === 'collect') this.lastCollectVoice = voice;
     this.stats.played++;
     return true;
   }
