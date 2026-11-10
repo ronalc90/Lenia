@@ -810,6 +810,14 @@ export function createGame(deps: GameDeps, save?: string): Game {
     if (!se || !pulseOpen(se)) return null;
     return { se, ps: (se.pulse ??= freshPulse()), pf: pulseFx(fx, se.n) };
   }
+  /**
+   * The finger of a tap (a pulse, a drop hit, a glimmer): none while the dish is paused (the pause card, a sheet,
+   * VELA's line). Code review v0.027 #1: with the clock stopped and the streak frozen, 600 taps in 60 s paid
+   * +1 050 Luz. A paused tap may still collect a drop that is already there (collect, pulseCreature), never more.
+   */
+  function tapFinger(): ReturnType<typeof fingerOf> {
+    return paused ? null : fingerOf();
+  }
   /** The dish's light for a pulse: production of stable creatures (buffs included); 0 on soup or a flooded dish. */
   function pulseLight(): number {
     if (overgrown) return 0;
@@ -824,7 +832,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
   }
   /** A hit that collected a drop (a tap on a drop or near one): +1 to the streak, and a Chispazo's pulses on its turn. */
   function dropHit(at: { x: number; y: number; owner: number | null }): { mult: number; amount: number } | null {
-    const f = fingerOf();
+    const f = tapFinger();
     if (!f) return null;
     const r = registerHit(f.ps, { kind: 'drop', P: pulseLight(), fx: f.pf, nowMs: now(), at, R: s.calib.R, place: motePlace });
     if (!r) return null;
@@ -834,8 +842,9 @@ export function createGame(deps: GameDeps, save?: string): Game {
   }
   /** A pulse on stable creature `c`: its drop (× the streak) and one pulse (CHISPAZO_MULT on a Chispazo). */
   function pulseCreature(c: Creature): number {
-    const f = fingerOf();
-    if (!f || c.state !== 'stable') return 0;
+    if (c.state !== 'stable') return 0;
+    const f = tapFinger();
+    if (!f) return ownDrop(c); // a paused dish: the drop the finger drew in still comes, nothing else
     const r = registerHit(f.ps, { kind: 'pulse', P: pulseLight(), fx: f.pf, nowMs: now(), at: { x: c.x, y: c.y, owner: c.id }, R: s.calib.R, place: motePlace });
     if (!r) return 0; // nothing pays on this dish: not even a hit
     let got = 0;
@@ -846,6 +855,13 @@ export function createGame(deps: GameDeps, save?: string): Game {
     if (r.amount > 0) addEssence(r.amount);
     if (r.counted) bus.emit('pulse', { id: c.id, x: c.x, y: c.y, amount: r.amount + got, hits: f.ps.hits, chispazo: r.chispazo });
     return r.amount + got;
+  }
+  /** Creature `c`'s own drop into the wallet, with no hit (the streak it finds, as a pipette's): 0 when it has none. */
+  function ownDrop(c: Creature): number {
+    const L = collectable();
+    const d = L?.drops.find((q) => q.owner === c.id && q.amount > 0);
+    const p = L && d ? collectDrop(L, d.id) : null;
+    return p ? pocket([p]) : 0;
   }
   /** Glimmers whose time is up (or every one, at "¡Tiempo!") land as loose drops: light on screen is never taken away. */
   function settleGlimmers(se: SessionState, dt: number): void {
@@ -3360,7 +3376,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     },
 
     pulseMany(creatureIds) {
-      const f = fingerOf();
+      const f = tapFinger();
       if (!f || !Array.isArray(creatureIds)) return 0;
       const t = now();
       let sum = 0;
@@ -3376,7 +3392,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     },
 
     catchMote(moteId) {
-      const f = fingerOf();
+      const f = tapFinger();
       if (!f || !Number.isFinite(moteId)) return 0;
       const r = catchMoteIn(f.ps, moteId, now(), f.pf);
       if (!r) return 0;

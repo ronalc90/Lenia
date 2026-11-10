@@ -2237,8 +2237,7 @@ class BiolumaUI implements UI {
     if (route.kind !== 'pulse') this.closeCard();
     switch (route.kind) {
       case 'catch':
-        ov.moteTaken(route.mote);
-        a.catchMote?.(route.mote);
+        this.catchMote(route.mote);
         return;
       case 'pulse': {
         ov.pulseTap(route.id);
@@ -2259,10 +2258,7 @@ class BiolumaUI implements UI {
         ov.agarTap(px, py);
         const r = this.reach;
         for (let i = 0; i < r.dropN; i++) this.collectDrop(r.drops[i]);
-        for (let i = 0; i < r.moteN; i++) {
-          ov.moteTaken(r.motes[i]);
-          a.catchMote?.(r.motes[i]);
-        }
+        for (let i = 0; i < r.moteN; i++) this.catchMote(r.motes[i]);
         return;
       }
       default:
@@ -2270,6 +2266,14 @@ class BiolumaUI implements UI {
         if (route.kind === 'cardHint' && this.v?.settings.oneTouch) this.openCard(route.id);
         else if (route.kind === 'sow') ov.ripple(g.x, g.y, 'auto');
     }
+  }
+
+  /**
+   * Catch glimmer `id`: it pops on screen only when the game took it (a paused dish keeps its glimmers, code review
+   * v0.027 #1: a glimmer that vanished there would still be in the game, and land later as a drop).
+   */
+  private catchMote(id: number): void {
+    if ((this.actions.catchMote?.(id) ?? 0) > 0) this.overlay.moteTaken(id);
   }
 
   /** The Sembrar button asked for a seed (ADR-031). The host sows; without its hook, the old dish tap at that spot. */
@@ -2472,10 +2476,7 @@ class BiolumaUI implements UI {
     // ADR-031 (PB): the glimmers on the path are caught, and every creature it crosses glows (once per SWEEP_REHIT_S).
     const m0 = this.sweepMoteN;
     this.sweepMoteN = motesOnSegment(scene, x0, y0, x1, y1, this.sweepMotes, this.sweepMoteN);
-    for (let i = m0; i < this.sweepMoteN; i++) {
-      this.overlay.moteTaken(this.sweepMotes[i]);
-      this.actions.catchMote?.(this.sweepMotes[i]);
-    }
+    for (let i = m0; i < this.sweepMoteN; i++) this.catchMote(this.sweepMotes[i]);
     const n = this.sweepHits.cross(scene, x0, y0, x1, y1, performance.now() / 1000, SWEEP_REHIT_S, this.sweepCross);
     if (n === 0) return;
     for (let i = 0; i < n; i++) this.overlay.pulseTap(this.sweepCross[i]);

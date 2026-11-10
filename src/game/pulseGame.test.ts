@@ -105,6 +105,50 @@ describe('the pulse in the game (ADR-031)', () => {
     t.g.isPaused = false;
   });
 
+  // Code review v0.027 #1: with the pause card up (or a sheet, or VELA's line) 600 taps in 60 s paid +1 050 Luz
+  // while the clock stood still and the streak stayed full.
+  it('a paused dish pays no pulse: 600 taps in 60 s give no light and no streak, only the drop already there', () => {
+    const t = tapGame();
+    run(t.g, 2, report(ONE), 0.5);
+    const v0 = t.g.view();
+    const drop = v0.drops!.find((d) => d.owner === 1)!.amount;
+    expect(drop).toBeGreaterThan(0);
+    t.g.isPaused = true;
+    let got = 0;
+    for (let i = 0; i < 600; i++) {
+      got += t.g.actions.pulse!(1);
+      got += t.g.actions.pulseMany!([1]);
+      t.advance(0.1);
+      t.g.tick(0.1, report(ONE));
+    }
+    const v = t.g.view();
+    expect(got).toBeCloseTo(drop, 9); // the drop the finger drew in, once
+    expect(v.essence).toBeCloseTo(v0.essence + drop, 9);
+    expect(v.session!.elapsed).toBe(v0.session!.elapsed);
+    expect(v.streak?.hits ?? 0).toBe(0);
+    expect(pulses(t.log)).toHaveLength(0);
+    t.g.isPaused = false;
+    expect(t.g.actions.pulse!(1)).toBeGreaterThan(0); // the finger works again
+  });
+
+  it('a paused dish keeps its glimmers and its streak: a tap there catches nothing', () => {
+    const t = tapGame();
+    t.g.actions.endSessionNow!();
+    t.g.actions.startSession!(); // session 2 throws glimmers
+    t.g.actions.startClock!();
+    run(t.g, 1, report(ONE), 0.5);
+    tapN(t, 10);
+    const motes = t.g.view().motes!;
+    expect(motes.length).toBeGreaterThan(0);
+    const hits = t.g.view().streak!.hits;
+    t.g.isPaused = true;
+    expect(t.g.actions.catchMote!(motes[0].id)).toBe(0);
+    expect(t.g.view().motes).toHaveLength(motes.length);
+    expect(t.g.view().streak!.hits).toBe(hits);
+    t.g.isPaused = false;
+    expect(t.g.actions.catchMote!(motes[0].id)).toBeGreaterThan(0);
+  });
+
   it('a pipette\'s drop is worth the streak while it lasts; the final sweep is never multiplied', () => {
     const t = tapGame();
     (t.g.state as unknown as { settings: { autoCollect: boolean } }).settings.autoCollect = true; // a free pipette
