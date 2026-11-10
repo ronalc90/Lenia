@@ -400,6 +400,15 @@
   height: 100%;
   display: block;
 }
+/* QA-4 N14 (c3-025, c3-030): on a wide screen the dish filled the panel's height and ran under «Sembrar» and its
+   «Cabe 1 más»: the canvases (and the camera, ui.ts applyDish) stop above the button's band. */
+.bl.is-wide.sessions-cycle {
+  --bl-sow-band: 100px;
+}
+.bl.is-wide.sessions-cycle .bl-dish > canvas {
+  bottom: auto;
+  height: calc(100% - var(--bl-sow-band));
+}
 .bl-overlay {
   pointer-events: none;
 }
@@ -4529,8 +4538,14 @@
 .dock-preview .ss-prev.docked .g {
   display: none;
 }
+/* QA-4 N14 (c3-018, c3-030): three lines in 58 px cut «¡Alcanza para Gotero!» at the bottom; the wide chip holds them. */
+.bl.is-wide .dock-preview .ss-prev.docked {
+  max-height: 66px;
+  padding-block: 4px;
+}
 .bl.is-wide .dock-preview .ss-prev.docked .g {
   display: block;
+  line-height: 1.2;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;

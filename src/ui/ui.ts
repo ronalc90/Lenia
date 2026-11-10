@@ -963,6 +963,7 @@ class BiolumaUI implements UI {
       this.splash?.relabel();
     }
     toggle(this.el, 'rm', view.settings.reduceMotion);
+    toggle(this.el, 'sessions-cycle', view.cycle === 'sessions');
     // The game's Reduce motion reaches every layer (tokens shorten under .bl-rm, motion.ts helpers fade).
     if (this.rmApplied !== view.settings.reduceMotion) {
       this.rmApplied = view.settings.reduceMotion;
@@ -3008,7 +3009,9 @@ class BiolumaUI implements UI {
     const applyDish = () => {
       const r = this.dish.getBoundingClientRect();
       const w = r.width;
-      const hgt = r.height;
+      // QA-4 N14: on a wide screen the canvases end above the Sembrar band (CSS --bl-sow-band), so the round dish
+      // fits above the button instead of running under it. Same top-left as the dish: its coordinates hold.
+      const hgt = Math.min(r.height, this.deps.glCanvas.getBoundingClientRect().height || r.height);
       if (w < 1 || hgt < 1) return;
       const dpr = window.devicePixelRatio || 1;
       this.camera.setView(w, hgt);
@@ -3031,6 +3034,7 @@ class BiolumaUI implements UI {
     watchDpr();
     if (typeof ResizeObserver !== 'undefined') {
       new ResizeObserver(() => applyDish()).observe(this.dish);
+      new ResizeObserver(() => applyDish()).observe(this.deps.glCanvas);
       new ResizeObserver((entries) => {
         const r = entries[0].contentRect;
         const wide = r.width >= 900 || (r.width >= 640 && r.width > r.height * 1.2);

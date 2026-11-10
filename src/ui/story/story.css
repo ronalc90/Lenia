@@ -645,14 +645,15 @@
 }
 
 @media (min-width: 720px) {
+  /* QA-4 N14 (c3-005): a 140-px portrait in a 116-px box stuck out at the bottom; the box holds it whole. */
   .sty-box {
-    padding-left: 146px;
-    min-height: 116px;
+    padding-left: 128px;
+    min-height: 128px;
   }
   .sty-portrait-wrap,
   .sty-box .sty-portrait {
-    width: 140px;
-    height: 140px;
+    width: 104px;
+    height: 104px;
   }
   .sty-text {
     font-size: var(--bl-fs-lead);
