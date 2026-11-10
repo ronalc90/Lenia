@@ -137,3 +137,9 @@ export function sheetCounters(route: Text, level: number, maxLevel: number, l: L
   if (maxLevel <= 1) return { route: name, level: null };
   return { route: name, level: TREE_UI.levelOf(level, maxLevel >= 99 ? '∞' : String(maxLevel))[l] };
 }
+
+/** The night sheet's title: the night it leads to (QA-4 N10: «Noche 1» over «Empezar la Noche 2»), or the last one's. */
+export function nightSheetTitle(level: number, next: number | null, l: Lang): string {
+  if (!next) return TREE_UI.night(level)[l];
+  return l === 'es' ? `Hacia la Noche ${next}` : `Towards Night ${next}`;
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TREE_NODES } from '../../game/tree';
-import { nodeWhy, sheetCounters, sheetSentences, whySentences } from './why';
+import { nightSheetTitle, nodeWhy, sheetCounters, sheetSentences, whySentences } from './why';
 
 const ctx = { levels: { lab: 1, clock: 1 }, datos: 4, sessions: 1, species: 1, recentDatos: [12] };
 
@@ -45,5 +45,14 @@ describe('the node sheet counts one thing (QA-4 pulido 2)', () => {
     expect(sheetCounters({ es: 'Reloj', en: 'Clock' }, 0, 6, 'en')).toEqual({ route: 'Clock route', level: 'Level 0 of 6' });
     expect(sheetCounters({ es: 'Reloj', en: 'Clock' }, 2, 1, 'es').level).toBeNull();
     expect(sheetCounters({ es: 'Vida', en: 'Life' }, 7, 999, 'es').level).toBe('Nivel 7 de ∞');
+  });
+});
+
+// QA-4 N10 (c1-097): the night's sheet read «Noche 1» while all of it was about Night 2.
+describe('the night sheet names the night it is about (QA-4 N10)', () => {
+  it('QA-4 N10: «Hacia la Noche 2» on the first night; the last night keeps its own name', () => {
+    expect(nightSheetTitle(1, 2, 'es')).toBe('Hacia la Noche 2');
+    expect(nightSheetTitle(1, 2, 'en')).toBe('Towards Night 2');
+    expect(nightSheetTitle(7, null, 'es')).toBe('Noche 7');
   });
 });

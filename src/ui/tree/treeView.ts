@@ -54,7 +54,7 @@ import '../moments/moments.css';
 import { mountPortrait } from '../portrait';
 import { ROUTE_ICON } from '../art/icons';
 import { DURATION, EASING, pop, staggerIn } from '../art/motion';
-import { nodeWhy, sheetCounters, WHY_UI } from './why';
+import { nightSheetTitle, nodeWhy, sheetCounters, WHY_UI } from './why';
 import { D, FAR_Z, PHONE_Z_MIN, Z_MAX, Z_MIN, buyPressAllowed, freeTop, gateLabelAngle, openingCam, revealCam, tapAllowed, type Area, type Cam } from './camera';
 import { treeIcon } from './icons';
 import { screenChanged } from '../pressGuard';
@@ -979,7 +979,9 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     sheetKey = key;
     const mystery = st.status === 'mystery';
     const br = branchOf(def);
-    const name = mystery ? '?' : selected === 'lab' ? tx(TREE_UI.night(st.level), l) : tx(nodeText(def.id).name, l);
+    // The night's sheet is about the next night (QA-4 N10: it read «Noche 1» over «Empezar la Noche 2»).
+    const next = selected === 'lab' ? nightInfo(ctxOf(data)).next : null;
+    const name = mystery ? '?' : selected === 'lab' ? nightSheetTitle(st.level, next, l) : tx(nodeText(def.id).name, l);
     const chips: string[] = [];
     const devMax = isDeviceMax(st);
     if (!mystery && br !== 'core') {
