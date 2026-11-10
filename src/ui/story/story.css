@@ -870,9 +870,6 @@
 .enc-chip.ess {
   color: #5bc0eb;
 }
-.enc-chip.smp {
-  color: #8ae234;
-}
 .enc-chip.dat {
   color: var(--bl-aurora, #5ee6c8);
 }
