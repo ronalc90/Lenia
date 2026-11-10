@@ -180,3 +180,60 @@ describe('a seed that formed and crashed is not a seed that «did not take» (QA
     expect(refunds(log)[0].cause).toBe('glass');
   });
 });
+
+// Code review v0.027 #6: a seed wiped with the Goma came back as «No prendió» with its price and a bad-luck dot, so
+// sow → erase → sow → erase left the Luz where it was and made the next seed sure; a waking Nevera plant erased gave
+// a free sure seed. The Goma is the player's own act and gives nothing (docs/MECANICAS.md §4: «la Goma no da nada»).
+describe('what the Goma erases is neither a failure nor bad luck', () => {
+  function runningGame() {
+    const p = plantedGame();
+    const starter = creature({ id: 1, x: p.plant.x, y: p.plant.y, state: 'stable', age: 600, behavior: 'swimmer' });
+    p.g.tick(0.1, report([starter], [], 600));
+    p.g.actions.startClock!(); // every seed below is bought (the run's first one would be on the house)
+    return { ...p, starter };
+  }
+  const learned = (log: Map<keyof GameEvents, unknown[]>) => log.get('accidentLearned') ?? [];
+
+  it('a forming seed erased: no refund, no bad-luck dot, no lesson, and sowing it again costs again', () => {
+    const { g, st, log, starter } = runningGame();
+    let step = 610;
+    for (let k = 0; k < 3; k++) {
+      const spec = g.actions.sow!()!;
+      expect(spec).not.toBeNull();
+      const paid = st.essence;
+      const body = creature({ id: 20 + k, x: spec.x, y: spec.y, state: 'born', age: 10, behavior: null });
+      g.tick(0.1, report([starter, body], [], (step += 10)));
+      g.noteErased(spec.x, spec.y, 16);
+      g.tick(0.1, report([starter], [{ type: 'died', id: 20 + k, x: spec.x, y: spec.y }], (step += 10)));
+      g.tick(0.1, report([starter], [], (step += C.STABLE_AGE_STEPS)));
+      expect(st.essence).toBe(paid);
+    }
+    expect(refunds(log)).toHaveLength(0);
+    expect(learned(log)).toHaveLength(0);
+    expect(g.view().seedLuck!.fails).toBe(0); // the next seed is not a sure one
+    expect(g.session!.bought).toBe(3); // and every one of them was paid for
+  });
+
+  it('a seed erased before the detector ever saw it is not «did not take» either', () => {
+    const { g, st, log, starter } = runningGame();
+    const spec = g.actions.sow!()!;
+    const paid = st.essence;
+    g.noteErased(spec.x, spec.y, 16);
+    g.tick(0.1, report([starter], [], 620));
+    g.tick(0.1, report([starter], [], 620 + C.STABLE_AGE_STEPS + 10));
+    expect(refunds(log)).toHaveLength(0);
+    expect(st.essence).toBe(paid);
+    expect(g.view().seedLuck!.fails).toBe(0);
+  });
+
+  it('a waking Nevera plant erased gives no free sure seed', () => {
+    const { g, st, plant, log } = plantedGame();
+    g.tick(0.1, report([creature({ id: 1, x: plant.x, y: plant.y, state: 'born', age: 60, behavior: null })], [], 60));
+    g.noteErased(plant.x, plant.y, 16);
+    g.tick(0.1, report([], [{ type: 'died', id: 1, x: plant.x, y: plant.y }], 70));
+    expect(refunds(log)).toHaveLength(0);
+    expect(learned(log)).toHaveLength(0);
+    expect(st.charges).toMatchObject({ free: 0, guaranteed: 0 });
+    expect(g.view().session!.wakeHold).toBe(false); // and it holds nothing any more
+  });
+});

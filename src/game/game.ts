@@ -450,7 +450,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
    * and the creature it became (`id`, linked on its first report near the spot). `at`: where that creature was last
    * seen (QA-3 §3: a seed that formed and swam into another went dark far from where it was sown, and is said there).
    */
-  let ledger: { x: number; y: number; cost: number; free: boolean; step: number; id: number | null; r: number; plant?: boolean; at?: { x: number; y: number; r: number } }[] = [];
+  let ledger: { x: number; y: number; cost: number; free: boolean; step: number; id: number | null; r: number; plant?: boolean; at?: { x: number; y: number; r: number }; erased?: boolean }[] = [];
   /** (ADR-027 v0.027) Dish seconds this run's clock has waited for its planted creatures to wake (WAKE_HOLD_MAX_S at most). */
   let wakeHeld = 0;
   /** (ADR-031) Creatures the player erased (no death light), by id, with the report step they were marked at. */
@@ -1395,6 +1395,24 @@ export function createGame(deps: GameDeps, save?: string): Game {
     return deathCause(e.at, others, s.calib.R, dish);
   }
 
+  /**
+   * A sown seed or a waking plant went dark under the player's own Goma: it is forgotten, nothing else. Code review
+   * v0.027 #6: it came back as «No prendió» with its price and a bad-luck dot (sow → erase twice made the next seed
+   * sure for free) and an erased plant gave a free sure seed. The price does not come back either: «la Goma no da
+   * nada» (docs/MECANICAS.md §4), and a refund would make sow → erase a free loop towards the seed achievements.
+   */
+  function seedErased(e: (typeof ledger)[number]): void {
+    ledger = ledger.filter((x) => x !== e);
+  }
+
+  /** The Goma touched ledger seed `e` (where it is now, or where it was sown) at (x, y) within `r` cells. */
+  function markErasedSeeds(x: number, y: number, r: number): void {
+    for (const e of ledger) {
+      const w = e.at ?? e;
+      if (gdist(w.x, w.y, x, y) <= r + w.r) e.erased = true;
+    }
+  }
+
   /** Settle the ledger against the latest report: link new creatures to their seed, refund the ones that never took. */
   function settleLedger(): void {
     if (!ledger.length) return;
@@ -1402,12 +1420,17 @@ export function createGame(deps: GameDeps, save?: string): Game {
     for (const e of [...ledger]) {
       if (reportStep < e.step) e.step = reportStep; // a fresh dish restarted the step count
       if (e.id === null) {
-        if (reportStep - e.step >= C.STABLE_AGE_STEPS) seedFailed(e, 'faded'); // the detector never saw it: it never took
+        // The detector never saw it: it never took (or the Goma took it first).
+        if (reportStep - e.step < C.STABLE_AGE_STEPS) continue;
+        if (e.erased) seedErased(e);
+        else seedFailed(e, 'faded');
         continue;
       }
       const c = byId.get(e.id);
-      if (!c || c.state === 'dead' || c.state === 'exploded') seedFailed(e, seedLossCause(e, c));
-      else if (c.state === 'stable') {
+      if (!c || c.state === 'dead' || c.state === 'exploded') {
+        if (e.erased) seedErased(e);
+        else seedFailed(e, seedLossCause(e, c));
+      } else if (c.state === 'stable') {
         ledger = ledger.filter((x) => x !== e);
         const se = ses();
         if (se && !e.plant) losses(se).fails = 0;
@@ -1907,6 +1930,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     eraseMarks = eraseMarks.filter((m) => !(reportStep < m.step) && reportStep - m.step <= B.SEED_SEEN_STEPS);
     for (const c of creatures) for (const m of eraseMarks) if (gdist(c.x, c.y, m.x, m.y) <= m.r + (Number.isFinite(c.radius) ? c.radius : 0)) erased.set(c.id, reportStep);
     for (const [id, step] of lastBodies) for (const m of eraseMarks) if (gdist(step.x, step.y, m.x, m.y) <= m.r + step.r) erased.set(id, reportStep);
+    for (const e of ledger) if (e.id !== null && erased.has(e.id)) e.erased = true;
   }
 
   /**
@@ -4029,6 +4053,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       if (!Number.isFinite(x) || !Number.isFinite(y) || !(r > 0)) return;
       eraseMarks.push({ x, y, r, step: reportStep });
       if (eraseMarks.length > 64) eraseMarks.shift();
+      markErasedSeeds(x, y, r);
       // The bodies already known there are marked now (the next report may not list them any more).
       for (const [id, b] of lastBodies) if (gdist(b.x, b.y, x, y) <= r + b.r) erased.set(id, reportStep);
     },
