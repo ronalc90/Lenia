@@ -827,6 +827,27 @@
   color: #ffe2b8;
   font-size: var(--bl-fs-body);
 }
+/* QA-4 N5: several requests at once are one card, a short list (who · what), not three cards in a row. */
+.enc-list {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.enc-list li {
+  display: flex;
+  flex-direction: column;
+  padding-left: 8px;
+  border-left: 3px solid var(--c, #5bc0eb);
+}
+.enc-li-ask {
+  font-size: var(--bl-fs-small);
+  line-height: 1.3;
+  font-weight: 700;
+  text-wrap: pretty;
+}
 .enc-foot {
   display: flex;
   flex-wrap: wrap;

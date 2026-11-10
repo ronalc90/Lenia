@@ -19,6 +19,7 @@ import type { EncargoDone, EncargoView, Encargos } from '../../story/encargos';
 import type { Speaker } from '../../story/types';
 import { restartClass } from '../art/motion';
 import { icon } from '../icons';
+import { bubbleSeconds, nextBubble, offersTitle, type EncargoBubble, type EncargoItem } from './encargoQueue';
 import { Portrait, setVelaWear } from './portraits';
 import { tr } from './strings';
 
@@ -43,7 +44,7 @@ export interface EncargoUI {
   relabel(): void;
   readonly busy: boolean;
   /** Dev / screenshots: show a bubble now (ignores the queue), optionally frozen. */
-  readonly debug: { offer(view: EncargoView): void; cheer(done: EncargoDone): void; hold(on: boolean): void };
+  readonly debug: { offer(view: EncargoView): void; offers(views: EncargoView[]): void; cheer(done: EncargoDone): void; hold(on: boolean): void };
   dispose(): void;
 }
 
@@ -63,7 +64,9 @@ const L10N = {
   journal: { es: 'Bitácora', en: 'Journal' } as Text,
 };
 
-type Item = { kind: 'offer'; view: EncargoView } | { kind: 'cheer'; done: EncargoDone };
+type Item = EncargoItem;
+/** An offer card (one request, or several that arrived together: QA-4 N5). */
+const isOffer = (b: EncargoBubble | null): boolean => !!b && (b.kind === 'offer' || b.kind === 'offers');
 
 interface Particle {
   x: number;
@@ -100,7 +103,7 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
   setVelaWear(enc.cosmetics());
 
   let queue: Item[] = [];
-  let showing: Item | null = null;
+  let showing: EncargoBubble | null = null;
   let shownAt = 0;
   /** Real-time start (ms): the bubble's on-screen time must not stretch on slow frames. */
   let shownAtMs = 0;
@@ -166,6 +169,44 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
     body.append(head, ask, why, foot);
     face.set(v.who, v.mood);
     bubble.setAttribute('aria-label', `${tr(v.ask, L())}. ${tr(v.why, L())}`);
+  }
+
+  /** Several requests at once (a night opens): one card that lists them; the bar's «?» has each one's detail. */
+  function fillOffers(views: EncargoView[]): void {
+    const lead = views[0];
+    bubble.className = `enc-bubble who-vela offer batch`;
+    delete bubble.dataset.theme;
+    bubble.style.setProperty('--c', ACCENT.vela);
+    body.innerHTML = '';
+    const head = document.createElement('div');
+    head.className = 'enc-head';
+    const tag = document.createElement('span');
+    tag.className = 'enc-tag';
+    tag.textContent = tr(offersTitle(views.length), L());
+    head.append(tag);
+    const list = document.createElement('ul');
+    list.className = 'enc-list';
+    for (const v of views) {
+      const li = document.createElement('li');
+      li.style.setProperty('--c', ACCENT[v.who]);
+      const who = document.createElement('span');
+      who.className = 'enc-name';
+      who.textContent = tr(v.name, L());
+      const ask = document.createElement('span');
+      ask.className = 'enc-li-ask';
+      ask.textContent = tr(v.plain, L());
+      li.append(who, ask);
+      list.appendChild(li);
+    }
+    const foot = document.createElement('div');
+    foot.className = 'enc-foot';
+    const whyBtn = document.createElement('span');
+    whyBtn.className = 'enc-whybtn';
+    whyBtn.textContent = tr(L10N.why, L());
+    foot.append(whyBtn);
+    body.append(head, list, foot);
+    face.set('vela', lead.who === 'vela' ? lead.mood : 'happy');
+    bubble.setAttribute('aria-label', `${tr(offersTitle(views.length), L())}: ${views.map((v) => tr(v.plain, L())).join('; ')}`);
   }
 
   function fillCheer(d: EncargoDone): void {
@@ -301,29 +342,28 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
   // ───────────── queue & loop ─────────────
 
   function next(): void {
-    while (queue.length) {
-      const it = queue.shift()!;
-      // An offer that was already completed: the cheer tells the story.
-      if (it.kind === 'offer' && doneIds.has(it.view.id)) continue;
-      show(it);
-      return;
-    }
+    // An offer already completed is dropped (the cheer tells the story); offers waiting together are one card.
+    const { bubble: b, rest } = nextBubble(queue, doneIds);
+    queue = rest;
+    if (b) show(b);
   }
 
-  function show(it: Item): void {
+  function show(it: EncargoBubble): void {
     showing = it;
     shownAt = clock;
     shownAtMs = performance.now();
+    duration = bubbleSeconds(it);
     if (it.kind === 'offer') {
       // The offer may have waited (a card, VELA talking): show it as it reads now (e.g. "Al terminar: …"
       // once the clock runs), like the badge does.
       const now = enc.current();
       fillOffer(now && now.id === it.view.id ? now : it.view);
-      duration = 6.5;
+      opts.onSound?.('offer');
+    } else if (it.kind === 'offers') {
+      fillOffers(it.views);
       opts.onSound?.('offer');
     } else {
       fillCheer(it.done);
-      duration = 4.2;
       opts.onSound?.('done');
     }
     bubble.hidden = false;
@@ -366,18 +406,18 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
     if (enc.quiet()) queue = queue.filter((q) => q.kind !== 'cheer');
     if (!showing && queue.length && !(opts.busy?.() ?? false) && !enc.quiet()) next();
     // A story dialogue took the stage: the offer tucks into the badge (it is there already).
-    if (showing?.kind === 'offer' && !hold && ((opts.busy?.() ?? false) || enc.quiet())) hide(true);
+    if (isOffer(showing) && !hold && ((opts.busy?.() ?? false) || enc.quiet())) hide(true);
     if (showing) {
       const age = clock - shownAt;
       // The portrait "speaks" the first moments of an offer.
-      const talking = showing.kind === 'offer' && age < 1.6 && !rm();
+      const talking = isOffer(showing) && age < 1.6 && !rm();
       const target = talking ? 0.4 + 0.6 * Math.abs(Math.sin(age * 17)) : 0;
       face.state.reduceMotion = rm();
       face.frame(clock, dt, target, talking);
       if (showing.kind === 'cheer' && age > 0.45 && age - dt <= 0.45) face.set(showing.done.thanks.who, 'awed');
       if (showing.kind === 'cheer' && age > 1.4 && age - dt <= 1.4) face.set(showing.done.thanks.who, showing.done.thanks.who === 'vela' ? 'proud' : 'neutral');
       place();
-      if (!hold && (now - shownAtMs) / 1000 > duration) hide(showing.kind === 'offer');
+      if (!hold && (now - shownAtMs) / 1000 > duration) hide(isOffer(showing));
     }
     drawParticles(dt);
     // An offer waiting for the clock to stop is checked twice a second, not every frame.
@@ -392,6 +432,9 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
     if (it.kind === 'offer') {
       hide(true);
       enc.why(it.view.id);
+    } else if (it.kind === 'offers') {
+      hide(true);
+      enc.why(enc.current()?.id ?? it.views[0].id);
     } else hide(false);
   });
 
@@ -408,6 +451,7 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
       // Drop a pending offer of the same request: it is already done.
       queue = queue.filter((q) => !(q.kind === 'offer' && q.view.id === d.encargo.id));
       if (showing?.kind === 'offer' && showing.view.id === d.encargo.id) hide(true);
+      if (showing?.kind === 'offers' && showing.views.some((v) => v.id === d.encargo.id)) hide(true);
       queue.push({ kind: 'cheer', done: d });
       setVelaWear(enc.cosmetics());
       kick();
@@ -502,6 +546,7 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
     relabel() {
       if (!showing) return;
       if (showing.kind === 'offer') fillOffer(showing.view);
+      else if (showing.kind === 'offers') fillOffers(showing.views);
       else fillCheer(showing.done);
       bubble.classList.add('in');
     },
@@ -512,6 +557,10 @@ export function createEncargoUI(root: HTMLElement, enc: Encargos, opts: EncargoU
       offer(view) {
         queue = [];
         show({ kind: 'offer', view });
+      },
+      offers(views) {
+        queue = [];
+        if (views.length) show(views.length > 1 ? { kind: 'offers', views } : { kind: 'offer', view: views[0] });
       },
       cheer(done) {
         queue = [];
