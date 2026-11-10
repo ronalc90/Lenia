@@ -4,9 +4,9 @@
 
 ¡Es muy fácil! Solo necesitas **un dedo**.
 
-Bioluma se juega en **sesiones** cortas de laboratorio, con un **reloj**. En cada sesión siembras vida y juntas **Esencia**. Al terminar, tu Esencia se vuelve **Datos**, y con los Datos mejoras el **Árbol**. La sesión siguiente rinde más. ¡Y la otra, más todavía!
+Bioluma se juega en **sesiones** cortas de laboratorio, con un **reloj**. En cada sesión siembras vida con el botón **Sembrar** y juntas **Luz**: las criaturas la guardan en gotas y tú la recoges con el dedo. Al terminar, tu Luz se vuelve **Datos**, y con los Datos mejoras el **Árbol**. La sesión siguiente rinde más. ¡Y la otra, más todavía!
 
-<p align="center"><img src="images/m-04-clock-running.png" alt="Una sesión en marcha: la Esencia arriba a la izquierda, el reloj en el centro y la placa con criaturas" width="300"></p>
+<p align="center"><img src="images/m-04-clock-running.png" alt="Una sesión en marcha: la Luz arriba a la izquierda, el reloj en el centro y la placa con criaturas" width="300"></p>
 
 ---
 
@@ -18,7 +18,9 @@ Bioluma se juega en **sesiones** cortas de laboratorio, con un **reloj**. En cad
 
 Verás a Bioluma brillar. **Toca la pantalla** para entrar.
 
-Te saluda **VELA**, la ayudante del laboratorio. **Toca su globo** para leer lo siguiente.
+La primera vez hay una **intro** corta. Si quieres ir directo, toca **«Saltar intro»**.
+
+Te saluda **VELA**, el **monitor de cultivo MC-7** del laboratorio. **Toca su globo** para leer lo siguiente. Mientras VELA habla, **el reloj espera**.
 
 ¿Ya sabes jugar? Toca **«Saltar tutorial»**. Puedes repetirlo cuando quieras desde **Ajustes**.
 
@@ -33,24 +35,26 @@ Te saluda **VELA**, la ayudante del laboratorio. **Toca su globo** para leer lo 
 
 ---
 
-## Paso 1 · Toca la placa 🌱 y el reloj empieza
+## Paso 1 · Toca «Sembrar» 🌱
 
 <table>
 <tr>
 <td valign="top">
 
-La **placa** es el cuadro oscuro del medio.
+La **placa** es el círculo oscuro del medio. En la primera sesión está **vacía**.
 
-**Tócala.** ¡Acabas de poner una **semilla de luz**!
+Abajo está el botón **Sembrar**. **Tócalo.** ¡Acabas de poner una **semilla de luz**! El juego busca solo el sitio libre más seguro. Si quieres elegirlo tú, **arrastra** la semilla desde el botón.
 
 Tu primera semilla es **gratis** y vive seguro.
 
-Arriba, en el centro, está el **reloj** de la sesión: **2:00**. Espera quieto hasta tu primera semilla. Entonces empieza a correr.
+Arriba, en el centro, está el **reloj** de la sesión: **0:15**. Empieza a correr cuando VELA termina de hablarte de tu primera semilla.
+
+**Tocar la placa no siembra nada.** Así nunca gastas sin querer.
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/m-02-vela-hello.png" alt="VELA saluda: esto es la Estación Vigilia" width="230">
+<img src="images/m-02-vela-hello.png" alt="VELA saluda desde su monitor" width="230">
 
 </td>
 </tr>
@@ -64,18 +68,16 @@ Arriba, en el centro, está el **reloj** de la sesión: **2:00**. Espera quieto 
 <tr>
 <td valign="top">
 
-La primera vez, el juego **se para** y VELA te lo explica con una tarjeta. Toca **«¡Entendido!»** para seguir.
+La primera vez que pasa algo nuevo, VELA te lo explica con una tarjeta. Toca **«¡Entendido!»** para seguir.
 
 Encima de cada semilla verás **«Naciendo 62 %»**. Si se queda con forma, ¡es una **criatura**! Dirá **«Viva»**.
 
-Algunas semillas se apagan. **Es normal.** Prueba en otro sitio.
-
-Si tocas muy cerca de otra criatura, verás **«Muy cerca: se fundirían»**. ¡Siembra separado!
+Algunas semillas no prenden. **Es normal.** Si una no prende, **te devuelve lo que costó**. Y tras dos que no prenden seguidas, la siguiente **vive seguro** (los puntitos del botón Sembrar te lo cuentan).
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/m-03-moment-seed.png" alt="Tarjeta de VELA: ¡Una semilla! Cada toque pone una semilla de luz" width="230">
+<img src="images/m-03-moment-seed.png" alt="Tarjeta de VELA sobre la primera semilla" width="230">
 
 </td>
 </tr>
@@ -83,31 +85,59 @@ Si tocas muy cerca de otra criatura, verás **«Muy cerca: se fundirían»**. ¡
 
 ---
 
-## Paso 3 · Junta Esencia 💧
+## Paso 3 · Recoge la Luz 💧
 
-Cada criatura viva te da **Esencia** cada segundo. Arriba a la izquierda ves cuánta tienes.
+Cada criatura viva llena **su propia gota de Luz**. Cuando la gota está llena, **tócala** o **pasa el dedo** por encima: la Luz vuela a tu contador, arriba a la izquierda.
 
-**«+1/s»** quiere decir **1 de Esencia cada segundo**.
+**La Luz nunca se pierde.** Si se te escapa una gota, se recoge sola al sonar «¡Tiempo!». Más adelante, las **pipetas** de la ruta ↓ Recoger del Árbol la recogen por ti.
 
-Con Esencia siembras más. El precio está en la píldora de abajo de la placa: **cada semilla que compras hoy cuesta un poquito más**. En la sesión siguiente vuelve al precio de siempre.
+**«+1/s»** quiere decir **1 de Luz cada segundo**.
 
-En la placa caben **5 criaturas** al principio. Si está llena, verás **«¡Placa llena!»**. La mejora **Placa más grande** del Árbol da más sitio.
+Con Luz siembras más. **Una semilla cuesta 4 de Luz**, siempre igual durante toda la sesión. Algunas son **gratis**: el botón te lo dice.
+
+En la placa caben **3 criaturas** al principio. Si está llena, el botón dice **«Llena (3 de 3)»**. La ruta **Placa** del Árbol da más sitio.
 
 ---
 
-## Paso 4 · El reloj ⏱
+## Paso 4 · Toca tus criaturas: el Pulso ✦
+
+Tocar una **criatura viva** le da un **Pulso**: brilla, te da Luz al momento y recoge su gota.
+
+- Los toques seguidos forman una **racha**: mientras dura, **toda** la Luz que entra vale más. Verás **«Racha +25 %»**.
+- Cada **10 toques seguidos**, ¡un **Chispazo**! Vale **×5**. Desde la sesión 2 suelta **chispitas**: atrápalas antes de que se apaguen (si no, se quedan como gotas en la placa).
+- Si paras un momento, la racha **baja poco a poco**, no de golpe.
+- Tocar el agar vacío o una mancha sin forma **no da nada**, pero tampoco cuesta nada.
+
+¿No te apetece tocar? **No pasa nada**: quien no toca nunca gana menos que antes. Tocar es un premio, no una obligación.
+
+---
+
+## Paso 5 · Cuida tus criaturas ⚠️
+
+Las criaturas nadan, giran y a veces **chocan**. Si dos se tocan, **se funden** y pierden la forma.
+
+- VELA **avisa antes de un choque** cuando todavía puedes hacer algo.
+- **Arrastra el dedo desde una nadadora** para desviarla un poco.
+- Si una criatura muere, **deja su Luz** en la placa. Y la primera vez que ves cada tipo de accidente, VELA te explica por qué pasó y te da **Datos**.
+
+Si la placa se llena de materia sin forma, verás **«¡La placa se desbordó!»**. Toca **«Limpiar placa»** y sigue.
+
+---
+
+## Paso 6 · El reloj ⏱
 
 <table>
 <tr>
 <td valign="top">
 
-El reloj marca tu **tiempo de laboratorio**.
+El reloj marca tu **tiempo de laboratorio**. La primera sesión dura **15 segundos** de juego; la ruta **Reloj** del Árbol las alarga hasta **2:30**.
 
-- Cada **especie nueva** suma **+5 segundos**.
-- Cuando queda un minuto, verás **«¡Último minuto!»**.
+- Cada **especie nueva** suma **+3 segundos**.
+- Cerca del final el reloj se pone ámbar y cuenta los últimos segundos.
 - Al llegar a **0:00**, la placa se para: **«¡TIEMPO!»**.
+- El reloj **se para** mientras VELA habla o tienes una hoja abierta (Bestiario, Ajustes, una ficha…).
 
-**No pierdes nada.** Tu Esencia se cuenta y se vuelve Datos.
+**No pierdes nada.** Tu Luz se cuenta y se vuelve Datos.
 
 </td>
 <td width="254" align="center" valign="top">
@@ -120,7 +150,7 @@ El reloj marca tu **tiempo de laboratorio**.
 
 ---
 
-## Paso 5 · Tu Esencia se vuelve Datos 📊
+## Paso 7 · Tu Luz se vuelve Datos 📊
 
 <table>
 <tr>
@@ -128,11 +158,12 @@ El reloj marca tu **tiempo de laboratorio**.
 
 Al final de cada sesión, una tarjeta hace la cuenta paso a paso:
 
-- **Por cada 250 de Esencia, 1 Dato.**
-- **+5 Datos** por cada especie nueva.
+- **Por cada 25 de Luz, 1 Dato.**
+- **+10 Datos** por cada especie nueva y **+2** por cada variante nueva.
 - **+3 Datos** por cada manera de moverse nueva.
-- **+2 Datos** por cada encargo cumplido (en la sesión 1 se llaman **primeras metas**: sembrar y tu primera criatura).
-- Y más por los **récords**.
+- **+2 Datos** por cada encargo cumplido.
+- **+2 Datos** por cada **récord**.
+- Cada noche nueva suma un poco más, y una sesión nunca da menos de **3 Datos**.
 
 **Los Datos no se pierden nunca.** Tus especies nuevas quedan **guardadas en el Bestiario**.
 
@@ -149,17 +180,17 @@ Luego toca **«Ir al Árbol»**.
 
 ---
 
-## Paso 6 · Mejora el Árbol 🌳
+## Paso 8 · Mejora el Árbol 🌳
 
 <table>
 <tr>
 <td valign="top">
 
-En el **Árbol** gastas tus Datos.
+En el **Árbol** gastas tus Datos. Tiene **8 rutas rectas** que salen del centro.
 
 Las mejoras que **laten en verde** las puedes comprar. **Toca una.**
 
-Verás **«AHORA → CON UN NIVEL MÁS»**: gris es lo que tienes, verde es lo que tendrás. Toca **«Comprar»**.
+Verás **«Ahora → Con un nivel más»**: lo que tienes y lo que tendrás. Toca **«Comprar»**.
 
 Cada mejora es **tuya para siempre**. La próxima sesión ya lo notas.
 
@@ -178,7 +209,7 @@ Todo sobre las mejoras: [[Árbol]].
 
 ---
 
-## Paso 7 · Una sesión nueva
+## Paso 9 · Una sesión nueva
 
 <table>
 <tr>
@@ -187,13 +218,15 @@ Todo sobre las mejoras: [[Árbol]].
 Toca **«Nueva sesión»**. Una tarjeta te dice:
 
 - cuánto tiempo tienes hoy,
-- qué te **regala el Árbol** (Esencia de inicio, siembras gratis, criaturas de la Nevera),
+- qué te **regala el Árbol** (Luz de bolsillo, semillas de regalo, criaturas de la Nevera),
 - lo **nuevo** desde la última vez,
 - y tu **encargo**.
 
+Mientras lees, la criatura de la **Nevera** ya va despertando en la placa.
+
 Cuando tengas otro **Mundo**, elige su tarjeta: otras reglas, otras criaturas. Mira [[Mundos]].
 
-Toca **«¡Empezar!»**. Recuerda: **el reloj empieza con tu primera semilla**.
+Toca **«¡Empezar!»**. Desde la sesión 2, **el reloj empieza con tu primera semilla**.
 
 </td>
 <td width="254" align="center" valign="top">
@@ -206,22 +239,22 @@ Toca **«¡Empezar!»**. Recuerda: **el reloj empieza con tu primera semilla**.
 
 ---
 
-## Paso 8 · Abono, encargos y el Destello
+## Paso 10 · Nutrientes, encargos y el Destello
 
 <table>
 <tr>
 <td valign="top">
 
-**Abono 🌿** (el botón del centro, abajo, desde la primera sesión). Cuando tus criaturas ya dan Esencia y el reloj lleva medio minuto, se enciende en verde: **todo da Esencia ×1,25 hasta el final de la sesión**. Cuesta 20 segundos de tu Esencia. El siguiente de la misma sesión cuesta el doble. Sin criaturas vivas dice **«Falta vida»**.
+**Nutrientes 🌿** (el botón del centro, abajo, desde la sesión 2). Cuando el reloj lleva unos segundos, se enciende: **toda la Luz vale ×1,25 hasta el final de la sesión**. Su precio se fija cuando sale a la venta y solo se dobla con cada compra. Sin criaturas vivas dice **«Falta vida»**, y en los últimos segundos ya no se vende.
 
-**Encargos** (desde la sesión 2). VELA te pide favores en la barra de arriba de la placa: «Ten 3 criaturas vivas a la vez». Cumplirlo da Esencia, **+2 Datos** y **+5 segundos** de reloj. Si el favor es del Árbol, empieza con **«Al terminar:»**: el Árbol se abre cuando acaba el reloj.
+**Encargos** (desde la sesión 2). VELA te pide favores en la barra de arriba de la placa: «Ten 3 criaturas vivas a la vez». Cumplirlo da Luz, **+2 Datos** y **+3 segundos** de reloj.
 
-**El Destello ✨** (desde la sesión 2). A veces una chispa dorada cruza la placa. **¡Tócala rápido!** Te regala **30 segundos de tu Esencia**, y tu próxima semilla vivirá seguro.
+**El Destello ✨** (desde la sesión 4). A veces una chispa dorada cruza la placa. **¡Tócala rápido!** Te regala **10 segundos de tu Luz**, y tu próxima semilla vivirá seguro.
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/m-14-session-2.png" alt="La sesión 2 con un encargo arriba y el Abono abajo" width="230">
+<img src="images/m-14-session-2.png" alt="La sesión 2 con un encargo arriba y los Nutrientes abajo" width="230">
 
 </td>
 </tr>
@@ -229,7 +262,7 @@ Toca **«¡Empezar!»**. Recuerda: **el reloj empieza con tu primera semilla**.
 
 ---
 
-## Paso 9 · El Bestiario 📖
+## Paso 11 · El Bestiario 📖
 
 <table>
 <tr>
@@ -237,7 +270,7 @@ Toca **«¡Empezar!»**. Recuerda: **el reloj empieza con tu primera semilla**.
 
 El botón **Bestiario** está abajo a la izquierda. Ahí se guarda **cada especie** que descubres, para siempre.
 
-Toca una para ver su ficha: su retrato, su nombre, **cómo se mueve**, **dónde vive** y **cuánta Esencia da**.
+Toca una para ver su ficha: su retrato, su nombre, **cómo se mueve**, **dónde vive** y **cuánta Luz da**. También puedes **mantener el dedo** sobre una criatura de la placa para ver su ficha.
 
 Más en [[Especies]].
 
@@ -252,7 +285,7 @@ Más en [[Especies]].
 
 ---
 
-## Paso 10 · La noche avanza 🌙
+## Paso 12 · La noche avanza 🌙
 
 Después de unas sesiones y unas especies, **el centro del Árbol brilla en dorado**: ¡la noche puede avanzar!
 
@@ -283,10 +316,11 @@ Toca **«Seguir»** para volver. Si quieres acabar ya, **«Terminar ahora»** te
 
 ## Trucos 💡
 
-- **Siembra separado.** Dos semillas que se tocan se funden y pierden la forma.
-- **¿Se apagaron todas?** Verás **«¡Toca aquí otra vez!»**. Siembra de nuevo: es barato.
-- **Compra primero lo que late en verde.** El **Gotero** hace que vivan más semillas; **Más tiempo** alarga cada sesión.
+- **Recoge las gotas llenas** y **toca tus criaturas seguido**: la racha sube toda la Luz que entra.
+- **Deja que el botón Sembrar elija el sitio.** Busca el hueco más seguro, lejos de las demás.
+- **¿Una semilla no prendió?** No perdiste nada: te devolvió su precio.
+- **Compra primero lo que late en verde.** El **Gotero** hace que vivan más semillas; **Más tiempo** alarga cada sesión; **Pipeta** recoge la Luz por ti.
 - **Los mundos nuevos traen especies nuevas**: cada especie nueva da Datos y segundos de reloj.
-- **Nada se pierde**: ni los Datos, ni el Árbol, ni el Bestiario.
+- **Nada se pierde**: ni la Luz, ni los Datos, ni el Árbol, ni el Bestiario.
 
 Más preguntas: [[Preguntas frecuentes]].

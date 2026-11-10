@@ -4,9 +4,9 @@
 
 It is very easy! You only need **one finger**.
 
-Bioluma is played in short lab **sessions**, with a **clock**. In each session you sow life and collect **Essence**. At the end, your Essence becomes **Data**, and Data grows the **Tree**. The next session earns more. And the one after that, even more!
+Bioluma is played in short lab **sessions**, with a **clock**. In each session you sow life with the **Sow** button and gather **Glow**: the creatures keep it in drops and you collect it with your finger. At the end, your Glow becomes **Data**, and Data grows the **Tree**. The next session earns more. And the one after that, even more!
 
-<p align="center"><img src="images/en-04-clock-running.png" alt="A session running: Essence top left, the clock in the middle and the dish with creatures" width="300"></p>
+<p align="center"><img src="images/en-04-clock-running.png" alt="A session running: Glow top left, the clock in the middle and the dish with creatures" width="300"></p>
 
 ---
 
@@ -18,7 +18,9 @@ Bioluma is played in short lab **sessions**, with a **clock**. In each session y
 
 You will see Bioluma glow. **Tap the screen** to come in.
 
-**VELA**, the lab assistant, says hello. **Tap her bubble** to read on.
+The first time there is a short **intro**. To go straight in, tap **"Skip intro"**.
+
+**VELA**, the lab's **MC-7 culture monitor**, says hello. **Tap her bubble** to read on. While VELA talks, **the clock waits**.
 
 Already know how to play? Tap **"Skip tutorial"**. You can replay it any time from **Settings**.
 
@@ -33,24 +35,26 @@ Already know how to play? Tap **"Skip tutorial"**. You can replay it any time fr
 
 ---
 
-## Step 1 · Tap the dish 🌱 and the clock starts
+## Step 1 · Tap "Sow" 🌱
 
 <table>
 <tr>
 <td valign="top">
 
-The **dish** is the dark box in the middle.
+The **dish** is the dark circle in the middle. In the first session it is **empty**.
 
-**Tap it.** You just dropped a **seed of light**!
+At the bottom is the **Sow** button. **Tap it.** You just dropped a **seed of light**! The game finds the safest free spot by itself. To choose the spot yourself, **drag** the seed from the button.
 
 Your first seed is **free** and always lives.
 
-At the top, in the middle, is the session **clock**: **2:00**. It waits until your first seed. Then it starts running.
+At the top, in the middle, is the session **clock**: **0:15**. It starts once VELA has finished telling you about your first seed.
+
+**Tapping the dish never sows.** You can never spend by accident.
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/en-02-vela-hello.png" alt="VELA says hello: this is Vigil Station" width="230">
+<img src="images/en-02-vela-hello.png" alt="VELA says hello from her monitor" width="230">
 
 </td>
 </tr>
@@ -64,18 +68,16 @@ At the top, in the middle, is the session **clock**: **2:00**. It waits until yo
 <tr>
 <td valign="top">
 
-The first time, the game **pauses** and VELA explains it with a card. Tap **"Got it!"** to go on.
+The first time something new happens, VELA explains it with a card. Tap **"Got it!"** to go on.
 
-Above each seed you will see **"Hatching 62%"**. If it keeps its shape, it is a **creature**! It will say **"Alive"**.
+Above every seed you will see **"Hatching 62 %"**. If it keeps its shape, it is a **creature**! It will say **"Alive"**.
 
-Some seeds fade away. **That is normal.** Try another spot.
-
-If you tap too close to another creature, you will see **"Too close: they would melt"**. Sow apart!
+Some seeds do not take. **That is normal.** A seed that does not take **gives back its price**. And after two misses in a row, the next one **surely lives** (the little dots on the Sow button tell you).
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/en-03-moment-seed.png" alt="VELA's card: A seed! Each tap drops a seed of light" width="230">
+<img src="images/en-03-moment-seed.png" alt="VELA's card about the first seed" width="230">
 
 </td>
 </tr>
@@ -83,36 +85,64 @@ If you tap too close to another creature, you will see **"Too close: they would 
 
 ---
 
-## Step 3 · Collect Essence 💧
+## Step 3 · Collect the Glow 💧
 
-Every living creature gives you **Essence** every second. Top left shows how much you have.
+Every living creature fills **its own drop of Glow**. When a drop is full, **tap it** or **swipe** over it: the Glow flies to your counter, top left.
 
-**"+1/s"** means **1 Essence every second**.
+**Glow is never lost.** If you miss a drop, it is collected by itself at "Time!". Later on, the **pipettes** of the ↓ Collect route in the Tree collect it for you.
 
-Essence buys more seeds. The price is on the pill under the dish: **each seed you buy today costs a tiny bit more**. Next session it goes back to the usual price.
+**"+1/s"** means **1 Glow every second**.
 
-The dish holds **5 creatures** at first. When it is full you will see **"Dish full!"**. The **Bigger dish** upgrade in the Tree gives more room.
+Glow buys more seeds. **A seed costs 4 Glow**, the same price for the whole session. Some are **free**: the button tells you.
+
+The dish holds **3 creatures** at first. When it is full, the button says **"Full (3 of 3)"**. The **Dish** route in the Tree gives more room.
 
 ---
 
-## Step 4 · The clock ⏱
+## Step 4 · Tap your creatures: the Pulse ✦
+
+Tapping a **living creature** gives it a **Pulse**: it shines, gives you Glow right away and collects its drop.
+
+- Taps in a row build a **streak**: while it lasts, **all** the Glow that comes in is worth more. You will see **"Streak +25 %"**.
+- Every **10 taps in a row**, a **Flash**! It is worth **×5**. From session 2 it throws out **glimmers**: catch them before they fade (if you don't, they stay on the dish as drops).
+- If you stop for a moment, the streak **drains slowly**, never all at once.
+- Tapping empty agar or a shapeless blob **gives nothing**, but costs nothing either.
+
+Not in the mood for tapping? **That's fine**: a player who does not tap never earns less than before. Tapping is a reward, not a chore.
+
+---
+
+## Step 5 · Look after your creatures ⚠️
+
+Creatures swim, spin and sometimes **collide**. If two touch, they **merge** and lose their shape.
+
+- VELA **warns you before a collision** while you can still do something.
+- **Drag your finger from a swimmer** to steer it a little.
+- If a creature dies, **it leaves its Glow** on the dish. And the first time you see each kind of accident, VELA explains why it happened and gives you **Data**.
+
+If the dish fills up with shapeless matter, you will see **"The dish overflowed!"**. Tap **"Clean dish"** and carry on.
+
+---
+
+## Step 6 · The clock ⏱
 
 <table>
 <tr>
 <td valign="top">
 
-The clock is your **lab time**.
+The clock shows your **lab time**. The first session lasts **15 seconds** of play; the **Clock** route of the Tree stretches sessions up to **2:30**.
 
-- Each **new species** adds **+5 seconds**.
-- With one minute left you will see **"Last minute!"**.
+- Every **new species** adds **+3 seconds**.
+- Near the end the clock turns amber and counts down the last seconds.
 - At **0:00** the dish stops: **"TIME!"**.
+- The clock **stands still** while VELA talks or a sheet is open (Bestiary, Settings, a species card…).
 
-**You lose nothing.** Your Essence is counted and becomes Data.
+**You lose nothing.** Your Glow is counted and becomes Data.
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/en-07-times-up.png" alt="The TIME! stamp over the dish" width="230">
+<img src="images/en-07-times-up.png" alt="TIME! stamp over the dish" width="230">
 
 </td>
 </tr>
@@ -120,19 +150,20 @@ The clock is your **lab time**.
 
 ---
 
-## Step 5 · Your Essence becomes Data 📊
+## Step 7 · Your Glow becomes Data 📊
 
 <table>
 <tr>
 <td valign="top">
 
-At the end of each session a card does the maths step by step:
+At the end of every session, a card does the maths step by step:
 
-- **For every 250 Essence, 1 Data.**
-- **+5 Data** for each new species.
+- **For every 25 Glow, 1 Data.**
+- **+10 Data** for each new species and **+2** for each new variant.
 - **+3 Data** for each new way of moving.
-- **+2 Data** for each request done (in session 1 they are called **first goals**: sowing and your first creature).
-- And more for **records**.
+- **+2 Data** for each request done.
+- **+2 Data** for each **record**.
+- Every new night adds a little more, and a session never gives less than **3 Data**.
 
 **Data is never lost.** Your new species are **kept in the Bestiary**.
 
@@ -149,26 +180,26 @@ Then tap **"Go to the Tree"**.
 
 ---
 
-## Step 6 · Grow the Tree 🌳
+## Step 8 · Grow the Tree 🌳
 
 <table>
 <tr>
 <td valign="top">
 
-The **Tree** is where you spend your Data.
+The **Tree** is where you spend your Data. It has **8 straight routes** out of the centre.
 
-Upgrades that **glow green** can be bought. **Tap one.**
+Upgrades that **pulse green** are ones you can buy. **Tap one.**
 
-You will see **"NOW → WITH ONE MORE LEVEL"**: grey is what you have, green is what you will get. Tap **"Buy"**.
+You will see **"Now → With one more level"**: what you have and what you will have. Tap **"Buy"**.
 
-Every upgrade is **yours forever**. You will notice it next session.
+Every upgrade is **yours forever**. You will feel it in the next session.
 
 All about upgrades: [[Tree|Tree-en]].
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/en-09-tree.png" alt="The Tree with upgrades glowing green" width="230">
+<img src="images/en-09-tree.png" alt="The Tree with upgrades pulsing green" width="230">
 
 </td>
 </tr>
@@ -178,7 +209,7 @@ All about upgrades: [[Tree|Tree-en]].
 
 ---
 
-## Step 7 · A new session
+## Step 9 · A new session
 
 <table>
 <tr>
@@ -187,13 +218,15 @@ All about upgrades: [[Tree|Tree-en]].
 Tap **"New session"**. A card tells you:
 
 - how much time you have today,
-- what the **Tree gives you** (starting Essence, free seeds, creatures from the Fridge),
+- what the **Tree gives you** (Pocket glow, gift seeds, creatures from the Fridge),
 - what is **new** since last time,
 - and your **request**.
 
+While you read, the **Fridge** creature is already waking up on the dish.
+
 Once you have another **World**, pick its card: other rules, other creatures. See [[Worlds|Worlds-en]].
 
-Tap **"Start!"**. Remember: **the clock starts with your first seed**.
+Tap **"Let's start!"**. From session 2, **the clock starts with your first seed**.
 
 </td>
 <td width="254" align="center" valign="top">
@@ -206,22 +239,22 @@ Tap **"Start!"**. Remember: **the clock starts with your first seed**.
 
 ---
 
-## Step 8 · Fertiliser, requests and the Spark
+## Step 10 · Nutrients, requests and the Spark
 
 <table>
 <tr>
 <td valign="top">
 
-**Fertiliser 🌿** (the middle button, at the bottom, from the first session). Once your creatures make Essence and the clock has run half a minute, it lights up green: **everything gives Essence ×1.25 until the session ends**. It costs 20 seconds of your Essence. The next one in the same session costs double. With nothing alive it says **"Needs life"**.
+**Nutrients 🌿** (the middle button at the bottom, from session 2). Once the clock has run a few seconds it lights up: **all Glow is worth ×1.25 until the end of the session**. Its price is set when it goes on sale and only doubles with each purchase. With nothing alive it says **"Needs life"**, and it is not sold in the last seconds.
 
-**Requests** (from session 2). VELA asks for favours in the bar at the top of the dish: "Have 3 living creatures at once". Doing one gives Essence, **+2 Data** and **+5 seconds** of clock. A favour for the Tree starts with **"After the session:"**: the Tree opens when the clock ends.
+**Requests** (from session 2). VELA asks for favours in the bar at the top of the dish: "Have 3 living creatures at once". Doing one gives Glow, **+2 Data** and **+3 seconds** of clock.
 
-**The Spark ✨** (from session 2). Now and then a golden spark crosses the dish. **Tap it quickly!** It gives you **30 seconds of your Essence**, and your next seed will surely live.
+**The Spark ✨** (from session 4). Now and then a golden spark crosses the dish. **Tap it quickly!** It gives you **10 seconds of your Glow**, and your next seed will surely live.
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/en-14-session-2.png" alt="Session 2 with a request at the top and Fertiliser at the bottom" width="230">
+<img src="images/en-14-session-2.png" alt="Session 2 with a request at the top and Nutrients at the bottom" width="230">
 
 </td>
 </tr>
@@ -229,22 +262,22 @@ Tap **"Start!"**. Remember: **the clock starts with your first seed**.
 
 ---
 
-## Step 9 · The Bestiary 📖
+## Step 11 · The Bestiary 📖
 
 <table>
 <tr>
 <td valign="top">
 
-The **Bestiary** button is at the bottom left. Every species you discover is **kept there forever**.
+The **Bestiary** button is at the bottom left. **Every species** you discover is kept there, forever.
 
-Tap one to see its card: its portrait, its name, **how it moves**, **where it lives** and **how much Essence it gives**.
+Tap one to see its card: its portrait, its name, **how it moves**, **where it lives** and **how much Glow it gives**. You can also **hold your finger** on a creature in the dish to see its card.
 
 More in [[Species|Species-en]].
 
 </td>
 <td width="254" align="center" valign="top">
 
-<img src="images/en-17-bestiary.png" alt="The Bestiary opened from the bottom" width="230">
+<img src="images/en-17-bestiary.png" alt="The Bestiary open from the bottom" width="230">
 
 </td>
 </tr>
@@ -252,9 +285,9 @@ More in [[Species|Species-en]].
 
 ---
 
-## Step 10 · The night moves on 🌙
+## Step 12 · The night moves on 🌙
 
-After some sessions and some species, **the centre of the Tree glows gold**: the night can move on!
+After a few sessions and a few species, **the centre of the Tree glows gold**: the night can move on!
 
 Tap it. **Nothing is erased.** New upgrades open and every night gives **more Data**. All in [[Night|Night-en]].
 
@@ -283,10 +316,11 @@ Tap **"Keep playing"** to go back. If you want to finish now, **"End now"** tell
 
 ## Tips 💡
 
-- **Sow apart.** Two seeds that touch melt together and lose their shape.
-- **Did they all fade?** You will see **"Tap here again!"**. Sow again: it is cheap.
-- **Buy what glows green first.** The **Dropper** makes more seeds live; **More time** makes every session longer.
+- **Collect full drops** and **tap your creatures in a row**: the streak boosts all the Glow that comes in.
+- **Let the Sow button pick the spot.** It looks for the safest gap, away from the others.
+- **A seed did not take?** You lost nothing: it gave its price back.
+- **Buy what pulses green first.** The **Dropper** makes more seeds live; **More time** makes every session longer; **Pipette** collects Glow for you.
 - **New worlds bring new species**: each new species gives Data and clock seconds.
-- **Nothing is lost**: not your Data, not the Tree, not the Bestiary.
+- **Nothing is lost**: not your Glow, not your Data, not the Tree, not the Bestiary.
 
 More questions: [[FAQ|FAQ-en]].

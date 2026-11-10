@@ -13,7 +13,7 @@ Respuestas cortitas a las dudas más comunes.
 **No.** Nunca. No hay anuncios en el juego.
 
 ### ¿Se puede pagar para ganar?
-**No.** Nada que cueste dinero te da más Esencia, más velocidad o ventaja en el ranking. Si algún día hay adornos opcionales (colores, sonidos…), solo cambian cómo **se ve** o **suena** el juego, nunca cómo se **gana**.
+**No.** Nada que cueste dinero te da más Luz, más velocidad o ventaja en el ranking. Si algún día hay adornos opcionales (colores, sonidos…), solo cambian cómo **se ve** o **suena** el juego, nunca cómo se **gana**.
 
 ### ¿Necesito una cuenta?
 **No.** Abres y juegas.
@@ -27,7 +27,7 @@ Para todos. Se juega con un dedo y los textos son cortos. Los más chiquitos pue
 **Sí, sola.** Cada 30 segundos y cuando pasa algo importante. Se guarda **en tu navegador**, en tu aparato. Si algo falla, el juego te avisa.
 
 ### ¿Puedo jugar en otro aparato con mi partida?
-Sí. Entra a **Ajustes → Partida → Exportar**, copia el código largo (empieza con `BIOLUMA1.`) y pégalo en **Importar** en el otro aparato.
+Sí. Entra a **Ajustes → Partida → Exportar**, copia el código largo (empieza con `BIOLUMA2.`) y pégalo en **Importar** en el otro aparato.
 
 ### ¿Qué pasa si borro los datos del navegador?
 Si borras los datos del sitio o juegas en una **ventana privada**, la partida **se pierde**. Por eso conviene **exportar** una copia de vez en cuando.
@@ -74,7 +74,7 @@ Prueba en **Ajustes**:
 - **Gráficos → Calidad:** *Baja* hace la placa más chica y más ligera (puede aplicarse la próxima vez que abras el juego).
 
 ### Es difícil tocar y mantener apretado
-Activa el **Modo un toque** en Ajustes. El toque largo pasa a ser doble toque y se apaga el pincel.
+Activa el **Modo un toque** en Ajustes: el toque largo pasa a ser doble toque. Y si recoger gotas te cuesta, **«Recoger la luz sola»** pone una pipeta a trabajar por ti desde la primera sesión.
 
 ### ¿Puedo repetir el tutorial?
 Sí. **Ajustes → Repetir tutorial.**
@@ -90,7 +90,7 @@ Tu navegador no tiene WebGL2. Actualízalo, prueba con otro, y revisa que esté 
 ## Ranking y juego limpio
 
 ### ¿Hay ranking?
-Sí, **opcional**. Tiene tres tablas: **Esencia de toda la vida**, **Especies** y **Noches**. Para aparecer eliges un **nombre de científico** (3 a 16 caracteres). No pide correo ni nada más. Hasta que lo eliges, **no se envía nada**.
+Sí, **opcional**. Tiene tres tablas: **Luz de por vida**, **Especies** y **Noches**. Para aparecer eliges un **nombre de científico** (3 a 16 caracteres). No pide correo ni nada más. Hasta que lo eliges, **no se envía nada**.
 
 Si no ves el botón del trofeo arriba, tu versión todavía no lo tiene activado.
 
@@ -107,21 +107,21 @@ No. Se guarda **lo mejor que hayas logrado**, así que empezar de nuevo no te bo
 ## Privacidad
 
 ### ¿Qué datos se envían?
-Ninguno por defecto. El ajuste **Analítica anónima** viene **apagado**; si lo enciendes, se envían números agregados (sin datos personales) para equilibrar el juego. Solo el ranking envía algo más, y solo si tú eliges un nombre.
+Ninguno. El juego no tiene analítica. Solo el ranking envía algo, y solo si tú eliges un nombre.
 
 ## Jugando
 
 ### ¿Por qué casi todo se deshace al principio?
-Porque es **ciencia de verdad**: la mayoría de las manchas de luz no encuentra su forma. Sigue sembrando. Las que sí, ¡brillan!
+Porque es **ciencia de verdad**: muchas manchas de luz no encuentran su forma. Una semilla que no prende **te devuelve su precio**, y tras dos fallos seguidos la siguiente vive seguro. Las que sí, ¡brillan!
 
-### ¿Por qué la placa empieza vacía en cada sesión?
-Cada sesión es un rato nuevo de laboratorio. **Tus especies no se pierden**: están guardadas en el **Bestiario**. Con la **Nevera** del Árbol, tus mejores criaturas empiezan contigo la sesión siguiente.
+### ¿Por qué la placa se limpia en cada sesión?
+Cada sesión es un rato nuevo de laboratorio. **Tus especies no se pierden**: están guardadas en el **Bestiario**. Desde la sesión 2, una criatura de la **Nevera** ya está viva al empezar, y la mejora **Nevera** del Árbol trae más.
 
 ### Cambié de mundo y no nace mi criatura favorita
 Es normal: **cada mundo tiene sus propias criaturas**. Elige su mundo en la tarjeta de inicio. La ficha de cada especie dice **dónde vive**. Mira [[Mundos]].
 
 ### ¿Cómo consigo más Datos?
-Juntando Esencia (**por cada 250, 1 Dato**) y **descubriendo**: cada especie nueva da +5 Datos, cada manera de moverse nueva +3 y cada encargo +2. El **Abono** y el **Destello** ayudan a juntar más Esencia.
+Juntando Luz (**por cada 25, 1 Dato**) y **descubriendo**: cada especie nueva da +10 Datos, cada variante nueva +2, cada manera de moverse nueva +3, cada encargo +2 y cada récord +2. Los **Pulsos** en racha, los **Nutrientes** y el **Destello** ayudan a juntar más Luz.
 
 ### ¿Qué pasó con el Laboratorio, Calibrar, el Genoma y la Extinción?
 Eran de una versión anterior. Ahora todo se mejora en el [[Árbol]], las reglas son los [[Mundos]] y la [[Noche]] reemplaza a la Extinción, **sin borrar nada**. Si tenías una partida vieja, se convirtió en Datos y mejoras.

@@ -2,12 +2,12 @@
 
 # Logros: medallas para coleccionar
 
-Los **logros** son medallas. Cada vez que consigues uno suena una campanita y te regalan un **bono pequeño y permanente** de Esencia.
+Los **logros** son medallas. Cada vez que consigues uno suena una campanita y te regalan un **bono pequeño y permanente** de Luz.
 
-- Se ven en la **Bitácora**: toca tu Esencia, arriba a la izquierda, o el libro de arriba.
+- Se ven en la **Bitácora**: toca tu Luz, arriba a la izquierda, o el libro de arriba.
 - Tus logros **se quedan para siempre**: ninguna noche nueva los borra.
 - Ningún logro es obligatorio: son un regalo por jugar y explorar.
-- Si consigues **los 31**, tu Esencia crece **+83 %**.
+- Si consigues **los 32**, tu Luz crece **+85 %**.
 
 *(Además hay cosas escondidas que no están en esta lista. Mira [[Secretos]].)*
 
@@ -37,17 +37,18 @@ Los **logros** son medallas. Cada vez que consigues uno suena una campanita y te
 |---|---|---|
 | **Nadadora** | Mira una criatura que nada. | +2 % |
 | **Remolino** | Mira una criatura que gira. | +2 % |
+| **Latido** | Mira una criatura que late. | +2 % |
 | **Observadora** | Mira todas las maneras de moverse. | +5 % |
 
-## Esencia
+## Luz
 
 | Logro | Cómo se consigue | Bono |
 |---|---|---|
-| **Productiva** | Gana 10 Esencia por segundo. | +2 % |
-| **Floreciente** | Gana 100 Esencia por segundo. | +3 % |
-| **Jardín de luz** | Gana 1 000 Esencia por segundo. | +5 % |
-| **Diez mil** | Gana 10 000 Esencia en total. | +2 % |
-| **Millonaria** | Gana 1 000 000 de Esencia en total. | +3 % |
+| **Productiva** | Haz 10 de luz por segundo. | +2 % |
+| **Floreciente** | Haz 100 de luz por segundo. | +3 % |
+| **Jardín de luz** | Haz 1 000 de luz por segundo. | +5 % |
+| **Diez mil** | Haz 10 000 de luz en total. | +2 % |
+| **Millonaria** | Haz 1 000 000 de luz en total. | +3 % |
 
 ## Destellos
 

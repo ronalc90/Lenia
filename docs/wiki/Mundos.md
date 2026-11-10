@@ -22,18 +22,18 @@ Al empezar una sesión, la tarjeta de inicio muestra **tus mundos** como tarjeta
 | Mundo | Cómo es | Se abre |
 |---|---|---|
 | **1 · Clásico** | Donde empezó todo: nadadoras redondas. | Desde el principio |
-| **2 · Frío** | Un mundo lento: criaturas finas y transparentes. | Noche 1 |
+| **2 · Frío** | Un mundo frío y quieto: un anillo con un agujero. Aquí viven las quietas y las que laten. | Noche 1 |
 | **3 · Remolinos** | Nace una criatura que gira como un remolino. | Noche 1 |
 | **4 · Escudos** | Criaturas fuertes con forma de escudo. | Noche 2 |
-| **5 · Discos** | Discos, anillos y triángulos que brillan. | Noche 2 |
-| **6 · Patas** | Criaturas con patitas que caminan por la placa. | Noche 3 |
+| **5 · Hélices** | Una bailarina retorcida que gira sobre sus patas. | Noche 2 |
+| **6 · Patas** | Una escalera larga con agujeros que nada por la placa. | Noche 3 |
 | **7 · Gigantes** | Criaturas enormes: caben menos, pero cada una vale el doble. | Noche 4 |
 
 ## Consejos
 
-- **Un mundo nuevo = especies nuevas.** Cada especie nueva da **+5 Datos** y **+5 segundos** de reloj.
-- Los mundos van **en orden**: cada uno nuevo da un poco más de Esencia que el anterior.
-- ¿Quieres ver una criatura que **gira**? Búscala en **Remolinos** o en **Patas**. Las **quietas** viven en **Discos**.
+- **Un mundo nuevo = especies nuevas.** Cada especie nueva da **+10 Datos** y **+3 segundos** de reloj.
+- Los mundos van **en orden**: cada uno nuevo da un poco más de Luz que el anterior.
+- ¿Quieres ver una criatura que **gira**? Búscala en **Remolinos** o en **Hélices**. Las **quietas** y las que **laten** viven en **Frío**.
 - Tu **Bestiario** dice en qué mundo vive cada especie.
 
 Más: [[Árbol]] · [[Especies]] · [[Cómo jugar]]

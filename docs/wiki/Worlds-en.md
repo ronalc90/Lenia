@@ -22,18 +22,18 @@ When a session starts, the start card shows **your worlds** as cards, with their
 | World | What it is like | Opens |
 |---|---|---|
 | **1 · Classic** | Where it all began: round swimmers. | From the start |
-| **2 · Cold** | A slow world: thin, see-through creatures. | Night 1 |
+| **2 · Cold** | A cold, still world: a ring with a hole. The still and the pulsing ones live here. | Night 1 |
 | **3 · Whirls** | A creature that spins like a whirl is born. | Night 1 |
 | **4 · Shields** | Strong creatures shaped like shields. | Night 2 |
-| **5 · Discs** | Glowing discs, rings and triangles. | Night 2 |
-| **6 · Legs** | Creatures with little legs that walk the dish. | Night 3 |
+| **5 · Helices** | A twisted dancer that spins on its legs. | Night 2 |
+| **6 · Legs** | A long ladder with holes that swims across the dish. | Night 3 |
 | **7 · Giants** | Huge creatures: fewer fit, but each is worth double. | Night 4 |
 
 ## Tips
 
-- **A new world = new species.** Every new species gives **+5 Data** and **+5 seconds** of clock.
-- Worlds come **in order**: each new one gives a bit more Essence than the one before.
-- Want to see a creature that **spins**? Look in **Whirls** or **Legs**. The **still** ones live in **Discs**.
+- **A new world = new species.** Every new species gives **+10 Data** and **+3 seconds** of clock.
+- Worlds come **in order**: each new one gives a bit more Glow than the one before.
+- Want to see a creature that **spins**? Look in **Whirls** or **Helices**. The **still** and **pulsing** ones live in **Cold**.
 - Your **Bestiary** says which world each species lives in.
 
 More: [[Tree|Tree-en]] · [[Species|Species-en]] · [[How to play|How-to-play-en]]

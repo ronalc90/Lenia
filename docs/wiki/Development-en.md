@@ -42,7 +42,7 @@ You need **Node 22** and a browser with **WebGL2**. In development, `window.biol
 | `npm run build` | Typecheck + production build into `dist/` |
 | `SINGLE=1 npx vite build` | **Single-file** build into `dist-single/` (for sharing) |
 | `npm run preview` | Serves `dist/` |
-| `npm run e2e` | Build with `VITE_E2E=1` and a Playwright smoke test |
+| `npm run e2e` | Build with `VITE_E2E=1` into `dist-e2e/` and a Playwright smoke test (`npm run e2e:single`: the same with the single-file build) |
 | `npm run e2e:sim` | GPU simulation checks |
 | `npm run e2e:audio` | Offline audio render, with peak control |
 | `npm run calibrate` | Recalibrates the detector signatures with the catalog (~4 min) |
@@ -51,7 +51,7 @@ You need **Node 22** and a browser with **WebGL2**. In development, `window.biol
 | `node tests/e2e/release-checks.mjs` | Final review: 48 px touch targets, one rate before the first seed, full export/import |
 | `node tests/e2e/wiki-shots.mjs` | Regenerates this wiki's screenshots from the real game |
 
-For headless browsers use `playwright-core` with the Chromium found in `/opt/pw-browsers`. **Never** run `playwright install`.
+For headless browsers use `playwright-core` with the Chromium found in `/opt/pw-browsers` (`chromium-*/chrome-linux64/chrome`). **Never** run `playwright install`.
 
 ## Code map
 
@@ -60,14 +60,14 @@ For headless browsers use `playwright-core` with the Chromium found in `/opt/pw-
 | `src/core/` | Shared **contracts**: `types.ts`, `bus.ts`, `camera.ts`, `palette.ts` | Only changed through the integrator. You may **add optional fields**, never rename |
 | `src/sim/` | Simulation: WebGL2 shaders, CPU reference with FFT, 26-species catalog | Chan's exact formulas (ADR-002) |
 | `src/detect/` | Detector: states, behaviours, species signatures | Pure CPU; the signature has no μ or σ (ADR-007) |
-| `src/game/` | Economy, upgrades, prestige, bestiary, objectives, achievements, Spark, saving and **`balance.ts`** | No DOM or GL |
-| `src/ui/` | HUD, dish, tabs, modals, tutorial, texts (`i18n.ts`) | All UI in plain TypeScript |
+| `src/game/` | Economy, sessions and their clock, Tree, worlds, collected Glow (drops, pipettes), Pulse and streak, bestiary, achievements, Spark, saving; **`balance.ts`** and **`cycleBalance.ts`** | No DOM or GL |
+| `src/ui/` | HUD, dish, Sow button, session cards, Tree, modals, texts (`i18n.ts`) | All UI in plain TypeScript |
 | `src/audio/` | Procedural audio | Only starts after the first tap |
 | `src/net/` | Leaderboard client and integrity | Optional for the player |
 | `src/store/` | Cosmetics catalog and entitlements | Visual or audible only; nothing touches the economy |
 | `src/story/`, `src/secrets/` | Narrative and hidden content | **Spoilers**: read only if you want to |
 | `src/main.ts` | Wires everything: sim → detector → game → UI and audio; loop and autosave | Touched by the integrator |
-| `api/`, `server/` | Leaderboard (Vercel Edge functions and pure logic) | See `docs/RANKING.md` |
+| `api/`, `server/`, `functions/` | Leaderboard and store (Vercel Edge functions, pure logic and Cloudflare Pages Functions) | See `docs/RANKING.md` and `docs/MONETIZACION.md` |
 | `platforms/` | Wrappers: desktop (Electron), mobile (Capacitor), Steam | See `docs/PLATAFORMAS.md` |
 | `scripts/` | Detector calibration, session bot (`sessionBotCore.ts`), icons | Not shipped; outputs go to the OS temp folder |
 | `tests/unit/`, `tests/e2e/` | Cross-module and browser tests | A module's own tests live next to its code |
@@ -80,7 +80,7 @@ Each frame goes: `requestAnimationFrame` → simulation steps (30 per second × 
 Summary of [`CLAUDE.md`](https://github.com/ronalc90/Lenia/blob/main/CLAUDE.md):
 
 1. **Contracts only through the integrator** (`src/core`). Adding optional fields is fine.
-2. **Every balance number lives in `src/game/balance.ts`**, each with a comment saying where it comes from. No magic numbers in `game/` or `ui/`.
+2. **Every balance number lives in `src/game/balance.ts`** (or `src/game/cycleBalance.ts` for sessions and the Tree), each with a comment saying where it comes from. No magic numbers in `game/` or `ui/`.
 3. **All player-facing text is `Text { es, en }`**, in both languages. Identifiers, comments and test names are in English.
 4. **Simulation invariants**: Chan's formulas, a round glass petri dish that grows (no torus, fixed square grid; ADR-025), RGBA16F (never 8-bit), seeds with asymmetric noise, the dish never steps without its 10-step snapshot. They are not "improved" without an ADR.
 5. **No new dependencies** without an ADR. No UI framework.
@@ -109,19 +109,19 @@ Species come from Bert Chan's catalog (MIT). Steps:
 5. Run `npx vitest run src/sim src/detect src/game` and check it stabilises with its own μ and σ.
 6. Add its row to the table in **`CREDITS.md`**.
 
-## How to add an upgrade
+## How to add a Tree upgrade
 
-1. **Numbers** in `src/game/balance.ts`: costs, growth, bonus, cap. With a comment about their origin.
-2. **Definition** in the `UPGRADES` list of `src/game/defs.ts`: `id`, `tab` (`'lab'` or `'bestiary'`), `currency`, `maxLevel`, `costs` or `base` and `growth`, `value(level)` and `unlock(ctx)`.
-3. **Texts** in `UPGRADE_TEXT` of `src/game/content.ts`: `name`, `desc` and `hint`, each with `es` and `en`. If the effect needs a sentence per level, add the case to `effectText`.
-4. **Effect**: use it where it belongs in `src/game/game.ts` or `economy.ts` (for example `level('myUpgrade')`).
-5. **Card icon** in `UP_ICONS` of `src/ui/upgrades.ts` (otherwise a generic one is used).
-6. **Tests** in `src/game/upgrades.test.ts` (and economy tests if production changes): cost, cap, unlock and effect.
-7. Run the **session bot** before and after: `npm run bot` (HARD rule: the median player never earns less than in the session before). No number changes without that report.
+1. **Numbers** in `src/game/cycleBalance.ts`: levels, values and cap, with a comment about their origin. The price comes from the Tree's single rule (ring × factor per level).
+2. **Definition** in its route's `route(...)` list inside `TREE_NODES` (`src/game/tree.ts`): `id`, `ring`, `icon`, `maxLevel` and its effect (`apply`, `measure`, `show`), which feeds `treeEffects`. The node before it on the route is its prerequisite.
+3. **Texts** in `NODE_TEXT` of `src/game/treeText.ts`: `name` and `desc`, each with `es` and `en`.
+4. **Effect**: read it from `treeEffects(...)` where it belongs in `src/game/game.ts`.
+5. **Icon** in `src/ui/tree/icons.ts`.
+6. **Tests** in `src/game/tree.test.ts` (and economy tests if production changes).
+7. Run the **session bot** before and after: `npm run bot` (HARD rule: the median never earns less than in the session before). No number changes without that report.
 
 ## How to add a language or a text
 
-- Game texts (upgrades, achievements, objectives): `src/game/content.ts`, always `{ es, en }`.
+- Game texts (achievements, objectives, sessions): `src/game/content.ts`; the Tree's, `src/game/treeText.ts`. Always `{ es, en }`.
 - UI texts: the `S` object in `src/ui/i18n.ts`. A test checks that every key has both languages and the same `{placeholders}`.
 
 ## This wiki

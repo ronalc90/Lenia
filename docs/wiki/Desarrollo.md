@@ -42,7 +42,7 @@ Hace falta **Node 22** y un navegador con **WebGL2**. En desarrollo, `window.bio
 | `npm run build` | Typecheck + build de producción en `dist/` |
 | `SINGLE=1 npx vite build` | Build de **un solo archivo** en `dist-single/` (para compartir) |
 | `npm run preview` | Sirve `dist/` |
-| `npm run e2e` | Build con `VITE_E2E=1` y prueba de humo con Playwright |
+| `npm run e2e` | Build con `VITE_E2E=1` en `dist-e2e/` y prueba de humo con Playwright (`npm run e2e:single`: lo mismo con la build de un solo archivo) |
 | `npm run e2e:sim` | Comprobaciones de la simulación en GPU |
 | `npm run e2e:audio` | Render de audio sin conexión, con control de picos |
 | `npm run calibrate` | Recalibra las firmas del detector con el catálogo (~4 min) |
@@ -51,7 +51,7 @@ Hace falta **Node 22** y un navegador con **WebGL2**. En desarrollo, `window.bio
 | `node tests/e2e/release-checks.mjs` | Revisión final: toques de 48 px, una sola cifra antes de sembrar, exportar/importar todo |
 | `node tests/e2e/wiki-shots.mjs` | Regenera las capturas de esta wiki desde el juego real |
 
-Para navegadores sin pantalla usa `playwright-core` con el Chromium que haya en `/opt/pw-browsers`. **Nunca** ejecutes `playwright install`.
+Para navegadores sin pantalla usa `playwright-core` con el Chromium que haya en `/opt/pw-browsers` (`chromium-*/chrome-linux64/chrome`). **Nunca** ejecutes `playwright install`.
 
 ## Mapa del código
 
@@ -60,14 +60,14 @@ Para navegadores sin pantalla usa `playwright-core` con el Chromium que haya en 
 | `src/core/` | **Contratos** compartidos: `types.ts`, `bus.ts`, `camera.ts`, `palette.ts` | Solo se cambian a través del integrador. Puedes **añadir campos opcionales**, nunca renombrar |
 | `src/sim/` | Simulación: shaders WebGL2, referencia en CPU con FFT, catálogo de 26 especies | Fórmulas exactas de Chan (ADR-002) |
 | `src/detect/` | Detector: estados, comportamientos, firmas de especie | CPU puro; la firma no incluye μ ni σ (ADR-007) |
-| `src/game/` | Economía, mejoras, prestigio, bestiario, objetivos, logros, Destello, guardado y **`balance.ts`** | Sin DOM ni GL |
-| `src/ui/` | HUD, placa, pestañas, modales, tutorial, textos (`i18n.ts`) | Toda la interfaz en TypeScript puro |
+| `src/game/` | Economía, sesiones y su reloj, Árbol, mundos, Luz recogida (gotas, pipetas), Pulso y racha, bestiario, logros, Destello, guardado; **`balance.ts`** y **`cycleBalance.ts`** | Sin DOM ni GL |
+| `src/ui/` | HUD, placa, botón Sembrar, tarjetas de sesión, Árbol, modales, textos (`i18n.ts`) | Toda la interfaz en TypeScript puro |
 | `src/audio/` | Audio procedural | Solo arranca tras el primer toque |
 | `src/net/` | Cliente del ranking e integridad | Opcional para el jugador |
 | `src/store/` | Catálogo de cosméticos y derechos | Solo visual o sonoro; nada toca la economía |
 | `src/story/`, `src/secrets/` | Narrativa y contenido escondido | **Con spoilers**: léelo solo si quieres |
 | `src/main.ts` | Une todo: sim → detector → juego → UI y audio; bucle y autoguardado | Lo toca el integrador |
-| `api/`, `server/` | Ranking (funciones Edge de Vercel y lógica pura) | Ver `docs/RANKING.md` |
+| `api/`, `server/`, `functions/` | Ranking y tienda (funciones Edge de Vercel, lógica pura y Cloudflare Pages Functions) | Ver `docs/RANKING.md` y `docs/MONETIZACION.md` |
 | `platforms/` | Envoltorios: escritorio (Electron), móvil (Capacitor), Steam | Ver `docs/PLATAFORMAS.md` |
 | `scripts/` | Calibración del detector, bot de sesiones (`sessionBotCore.ts`), iconos | No se publican; salidas en la carpeta temporal del sistema |
 | `tests/unit/`, `tests/e2e/` | Pruebas entre módulos y de navegador | Las de un módulo viven junto a su código |
@@ -80,7 +80,7 @@ El flujo de cada fotograma: `requestAnimationFrame` → pasos de simulación (30
 Resumen de [`CLAUDE.md`](https://github.com/ronalc90/Lenia/blob/main/CLAUDE.md):
 
 1. **Contratos solo por el integrador** (`src/core`). Añadir campos opcionales está bien.
-2. **Todos los números del balance viven en `src/game/balance.ts`**, cada uno con un comentario de dónde sale. Nada de números mágicos en `game/` ni `ui/`.
+2. **Todos los números del balance viven en `src/game/balance.ts`** (o en `src/game/cycleBalance.ts`, los de las sesiones y el Árbol), cada uno con un comentario de dónde sale. Nada de números mágicos en `game/` ni `ui/`.
 3. **Todo texto para el jugador es `Text { es, en }`**, en los dos idiomas. Identificadores, comentarios y nombres de pruebas, en inglés.
 4. **Invariantes de la simulación**: fórmulas de Chan, placa de Petri redonda con cristal que crece (sin toro, grilla cuadrada fija; ADR-025), RGBA16F (nunca 8 bits), semillas con ruido asimétrico, la placa nunca avanza sin su lectura cada 10 pasos. No se "mejoran" sin ADR.
 5. **Sin dependencias nuevas** sin ADR. Sin framework de interfaz.
@@ -109,19 +109,19 @@ Las especies vienen del catálogo de Bert Chan (MIT). Pasos:
 5. Corre `npx vitest run src/sim src/detect src/game` y mira que se estabiliza con sus propios μ y σ.
 6. Añade la fila a la tabla de **`CREDITS.md`**.
 
-## Cómo añadir una mejora
+## Cómo añadir una mejora del Árbol
 
-1. **Números** en `src/game/balance.ts`: costos, crecimiento, bonus, tope. Con un comentario de su origen.
-2. **Definición** en la lista `UPGRADES` de `src/game/defs.ts`: `id`, `tab` (`'lab'` o `'bestiary'`), `currency`, `maxLevel`, `costs` o `base` y `growth`, `value(level)` y `unlock(ctx)`.
-3. **Textos** en `UPGRADE_TEXT` de `src/game/content.ts`: `name`, `desc` y `hint`, cada uno con `es` y `en`. Si el efecto necesita una frase por nivel, añade el caso en `effectText`.
-4. **Efecto**: úsalo donde corresponda en `src/game/game.ts` o `economy.ts` (por ejemplo `level('miMejora')`).
-5. **Icono** de la tarjeta en `UP_ICONS` de `src/ui/upgrades.ts` (si no, usa uno genérico).
-6. **Pruebas** en `src/game/upgrades.test.ts` (y de economía si cambia la producción): costo, tope, desbloqueo y efecto.
+1. **Números** en `src/game/cycleBalance.ts`: niveles, valores y tope, con un comentario de su origen. El precio sale de la regla única del Árbol (anillo × factor por nivel).
+2. **Definición** en la lista `route(...)` de su ruta, dentro de `TREE_NODES` (`src/game/tree.ts`): `id`, `ring`, `icon`, `maxLevel` y su efecto (`apply`, `measure`, `show`), que entra en `treeEffects`. El nodo anterior de la ruta es su requisito.
+3. **Textos** en `NODE_TEXT` de `src/game/treeText.ts`: `name` y `desc`, cada uno con `es` y `en`.
+4. **Efecto**: léelo de `treeEffects(...)` donde corresponda en `src/game/game.ts`.
+5. **Icono** en `src/ui/tree/icons.ts`.
+6. **Pruebas** en `src/game/tree.test.ts` (y de economía si cambia la producción).
 7. Corre el **bot de sesiones** antes y después: `npm run bot` (regla DURA: la mediana nunca gana menos que en la sesión anterior). Ningún número cambia sin ese informe.
 
 ## Cómo añadir un idioma o un texto
 
-- Textos del juego (mejoras, logros, objetivos): `src/game/content.ts`, siempre `{ es, en }`.
+- Textos del juego (logros, objetivos, sesiones): `src/game/content.ts`; los del Árbol, `src/game/treeText.ts`. Siempre `{ es, en }`.
 - Textos de la interfaz: el objeto `S` de `src/ui/i18n.ts`. Una prueba revisa que cada clave tenga los dos idiomas y los mismos `{marcadores}`.
 
 ## Esta wiki

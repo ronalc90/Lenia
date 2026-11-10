@@ -20,8 +20,8 @@ Se juega en sesiones cortas de laboratorio, con un solo dedo y sin anuncios.
 
 <table>
   <tr>
-    <td align="center" width="25%"><img src="images/m-04-clock-running.png" alt="La placa con criaturas y el reloj de la sesión" width="180"><br><b>1. Siembra</b><br>Toca la placa: el reloj empieza.</td>
-    <td align="center" width="25%"><img src="images/m-08-summary.png" alt="Fin de la sesión: tu Esencia se vuelve Datos" width="180"><br><b>2. ¡Tiempo!</b><br>Tu Esencia se vuelve Datos.</td>
+    <td align="center" width="25%"><img src="images/m-04-clock-running.png" alt="La placa con criaturas y el reloj de la sesión" width="180"><br><b>1. Siembra</b><br>Toca «Sembrar» y recoge la Luz.</td>
+    <td align="center" width="25%"><img src="images/m-08-summary.png" alt="Fin de la sesión: tu Luz se vuelve Datos" width="180"><br><b>2. ¡Tiempo!</b><br>Tu Luz se vuelve Datos.</td>
     <td align="center" width="25%"><img src="images/m-09-tree.png" alt="El Árbol con mejoras" width="180"><br><b>3. Mejora</b><br>Con Datos, el Árbol crece.</td>
     <td align="center" width="25%"><img src="images/m-17-bestiary.png" alt="El Bestiario con retratos de criaturas" width="180"><br><b>4. Descubre</b><br>Mundos y especies nuevas.</td>
   </tr>
@@ -49,7 +49,7 @@ Cada sesión rinde más que la anterior. Y cuando tu laboratorio crece, **la noc
 ## Por qué es divertido
 
 - **La vida es real.** Cada criatura sale de una regla matemática que corre en vivo. Ninguna está animada a mano.
-- **Todo brilla y suena.** Cada toque hace ondas de luz y notas de música que se inventan en el momento.
+- **Todo brilla y suena.** Tocar una criatura le da un Pulso de luz; los toques seguidos hacen racha y, cada diez, ¡un Chispazo! La música se inventa en el momento.
 - **Siempre pasa algo.** Chispas doradas, criaturas nuevas, premios, medallas.
 - **Tú decides.** ¿Qué mejoras primero? ¿En qué mundo juegas hoy? Cada partida sale distinta.
 

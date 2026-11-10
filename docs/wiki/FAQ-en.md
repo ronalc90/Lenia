@@ -13,7 +13,7 @@ Short answers to the most common questions.
 **No.** Never. There are no ads in the game.
 
 ### Can I pay to win?
-**No.** Nothing that costs money gives you more Essence, more speed or an edge on the leaderboard. If one day there are optional extras (colours, sounds…), they only change how the game **looks** or **sounds**, never how you **win**.
+**No.** Nothing that costs money gives you more Glow, more speed or an edge on the leaderboard. If one day there are optional extras (colours, sounds…), they only change how the game **looks** or **sounds**, never how you **win**.
 
 ### Do I need an account?
 **No.** You open it and play.
@@ -27,7 +27,7 @@ Everyone. It is played with one finger and the texts are short. The littlest one
 **Yes, by itself.** Every 30 seconds and whenever something important happens. It is saved **in your browser**, on your device. If something fails, the game tells you.
 
 ### Can I play on another device with my game?
-Yes. Go to **Settings → Save data → Export**, copy the long code (it starts with `BIOLUMA1.`) and paste it into **Import** on the other device.
+Yes. Go to **Settings → Save data → Export**, copy the long code (it starts with `BIOLUMA2.`) and paste it into **Import** on the other device.
 
 ### What if I clear my browser data?
 If you clear the site's data or play in a **private window**, the game **is lost**. That is why it is a good idea to **export** a copy now and then.
@@ -70,7 +70,7 @@ Try this in **Settings**:
 - **Graphics → Quality:** *Low* makes the dish smaller and lighter (it may apply the next time you open the game).
 
 ### It is hard to press and hold
-Turn on **One-touch mode** in Settings. Long press becomes double tap and the brush is turned off.
+Turn on **One-touch mode** in Settings: long press becomes double tap. And if collecting drops is hard, **"Collect glow for me"** puts a pipette to work for you from the first session.
 
 ### Can I repeat the tutorial?
 Yes. **Settings → Replay tutorial.**
@@ -86,7 +86,7 @@ Your browser has no WebGL2. Update it, try another one, and check that **hardwar
 ## Leaderboard and fair play
 
 ### Is there a leaderboard?
-Yes, **optional**. It has three boards: **Lifetime Essence**, **Species** and **Nights**. To appear you choose a **scientist name** (3 to 16 characters). It asks for no email or anything else. Until you choose one, **nothing is sent**.
+Yes, **optional**. It has three boards: **Lifetime glow**, **Species** and **Nights**. To appear you choose a **scientist name** (3 to 16 characters). It asks for no email or anything else. Until you choose one, **nothing is sent**.
 
 If you do not see the trophy button at the top, your version does not have it switched on yet.
 
@@ -103,21 +103,21 @@ No. **Your best result** is kept, so starting over does not erase you.
 ## Privacy
 
 ### What data is sent?
-None by default. The **Anonymous analytics** setting is **off**; if you turn it on, aggregated numbers (no personal data) are sent to balance the game. Only the leaderboard sends anything more, and only if you choose a name.
+None. The game has no analytics. Only the leaderboard sends anything, and only if you choose a name.
 
 ## Playing
 
 ### Why does almost everything dissolve at the start?
-Because it is **real science**: most blobs of light do not find their shape. Keep seeding. The ones that do, glow!
+Because it is **real science**: many blobs of light do not find their shape. A seed that does not take **gives its price back**, and after two misses in a row the next one surely lives. The ones that do, glow!
 
-### Why does the dish start empty every session?
-Each session is a fresh stint in the lab. **Your species are not lost**: they are kept in the **Bestiary**. With the Tree's **Fridge**, your best creatures start the next session with you.
+### Why is the dish cleaned every session?
+Each session is a fresh stint in the lab. **Your species are not lost**: they are kept in the **Bestiary**. From session 2 a creature from the **Fridge** is already alive at the start, and the Tree's **Fridge** upgrade brings more.
 
 ### I changed worlds and my favourite creature does not hatch
 That is normal: **each world has its own creatures**. Pick its world on the start card. Each species' card says **where it lives**. See [[Worlds|Worlds-en]].
 
 ### How do I get more Data?
-By collecting Essence (**every 250 makes 1 Data**) and by **discovering**: each new species gives +5 Data, each new way of moving +3 and each request +2. **Fertiliser** and the **Spark** help you collect more Essence.
+By collecting Glow (**every 25 makes 1 Data**) and by **discovering**: each new species gives +10 Data, each new variant +2, each new way of moving +3, each request +2 and each record +2. **Pulses** in a streak, **Nutrients** and the **Spark** help you collect more Glow.
 
 ### What happened to the Lab, Calibrate, Genome and Extinction?
 They belonged to an earlier version. Now everything is upgraded in the [[Tree|Tree-en]], the rules are the [[Worlds|Worlds-en]] and the [[Night|Night-en]] replaces Extinction, **without erasing anything**. If you had an old save, it was turned into Data and upgrades.

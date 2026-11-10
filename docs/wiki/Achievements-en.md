@@ -2,12 +2,12 @@
 
 # Achievements: medals to collect
 
-**Achievements** are medals. Each time you earn one a little bell rings and you get a **small, permanent** Essence bonus.
+**Achievements** are medals. Each time you earn one a little bell rings and you get a **small, permanent** Glow bonus.
 
-- They are in the **Journal**: tap your Essence, top left, or the book at the top.
+- They are in the **Journal**: tap your Glow, top left, or the book at the top.
 - Your achievements **stay forever**: no new night erases them.
 - No achievement is required: they are a gift for playing and exploring.
-- If you get **all 31**, your Essence grows **+83%**.
+- If you get **all 32**, your Glow grows **+85%**.
 
 *(There are also hidden things that are not on this list. See [[Secrets|Secrets-en]].)*
 
@@ -37,17 +37,18 @@
 |---|---|---|
 | **Swimmer** | See a creature that swims. | +2% |
 | **Whirl** | See a creature that spins. | +2% |
+| **Heartbeat** | See a creature that pulses. | +2% |
 | **Watcher** | See every way of moving. | +5% |
 
-## Essence
+## Glow
 
 | Achievement | How to get it | Bonus |
 |---|---|---|
-| **Productive** | Earn 10 Essence per second. | +2% |
-| **Flourishing** | Earn 100 Essence per second. | +3% |
-| **Garden of light** | Earn 1,000 Essence per second. | +5% |
-| **Ten thousand** | Earn 10,000 Essence in total. | +2% |
-| **Millionaire** | Earn 1,000,000 Essence in total. | +3% |
+| **Productive** | Make 10 glow per second. | +2% |
+| **Flourishing** | Make 100 glow per second. | +3% |
+| **Garden of light** | Make 1,000 glow per second. | +5% |
+| **Ten thousand** | Make 10,000 glow in total. | +2% |
+| **Millionaire** | Make 1,000,000 glow in total. | +3% |
 
 ## Sparks
 

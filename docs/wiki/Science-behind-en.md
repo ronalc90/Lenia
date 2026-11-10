@@ -48,7 +48,7 @@ Thank you, Bert! More thanks in [[Credits|Credits-en]].
 
 - **The rule runs on the graphics card** of your phone or computer (with a technology called WebGL2), about 30 times a second.
 - A **detector** looks at the dish every few steps and asks: is this alive? did it blow up? does it swim? spin? divide?
-- The **economy** turns *shape* into **Essence**: a well-formed creature is worth a lot; a shapeless blob, nothing.
+- The **economy** turns *shape* into **Glow**: a well-formed creature is worth a lot; a shapeless blob, nothing (not even when you tap it).
 - **Seeds** carry a bit of luck and, early on, a nudge towards the creature that lives best under the rules of that moment. That makes seeding exciting instead of frustrating.
 - **All sound** is made on the spot: there are no recordings.
 

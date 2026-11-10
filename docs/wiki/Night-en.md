@@ -10,12 +10,12 @@ The **centre of the Tree** shows two bars: **sessions** and **species**. When bo
 
 | To reach | Sessions | Species |
 |---|---|---|
-| Night 2 | 3 | 2 |
-| Night 3 | 6 | 4 |
-| Night 4 | 10 | 7 |
-| Night 5 | 14 | 10 |
+| Night 2 | 4 | 1 |
+| Night 3 | 8 | 2 |
+| Night 4 | 13 | 3 |
+| Night 5 | 20 | 4 |
 
-And so on up to Night 9.
+And so on up to Night 9. Short of species? A few more sessions and the night moves on anyway: you never get stuck.
 
 ## What happens when it moves on
 
@@ -26,7 +26,7 @@ And so on up to Night 9.
 
 **What stays with you:** your Data, the whole Tree, the Bestiary, the worlds you opened, achievements and the story.
 
-**What does not change:** the next session starts as always, with a clean dish and your starting Essence.
+**What does not change:** the next session starts as always, with a clean dish and your starting Glow.
 
 ## What about Extinction and Genome?
 

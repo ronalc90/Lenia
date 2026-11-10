@@ -48,7 +48,7 @@ Bert Chan encontró cientos de criaturas y las puso en un **catálogo** con nomb
 
 - **La regla corre en la tarjeta gráfica** de tu teléfono o computador (con una tecnología llamada WebGL2), unas 30 veces por segundo.
 - Un **detector** mira la placa cada pocos pasos y se pregunta: ¿esto vive?, ¿explotó?, ¿nada?, ¿gira?, ¿se divide?
-- La **economía** convierte *forma* en **Esencia**: una criatura bien formada vale mucho; una mancha sin forma, nada.
+- La **economía** convierte *forma* en **Luz**: una criatura bien formada vale mucho; una mancha sin forma, nada (ni siquiera si la tocas).
 - **Las semillas** llevan un poco de azar y, al principio, un empujoncito hacia la criatura que mejor vive con las reglas de ese momento. Así sembrar es emocionante y no frustrante.
 - **Todo el sonido** se inventa en el momento: no hay grabaciones.
 

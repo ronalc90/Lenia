@@ -10,12 +10,12 @@ El **centro del Árbol** muestra dos barras: **sesiones** y **especies**. Cuando
 
 | Para llegar a | Sesiones | Especies |
 |---|---|---|
-| Noche 2 | 3 | 2 |
-| Noche 3 | 6 | 4 |
-| Noche 4 | 10 | 7 |
-| Noche 5 | 14 | 10 |
+| Noche 2 | 4 | 1 |
+| Noche 3 | 8 | 2 |
+| Noche 4 | 13 | 3 |
+| Noche 5 | 20 | 4 |
 
-Y así hasta la Noche 9.
+Y así hasta la Noche 9. ¿Te faltan especies? Con unas sesiones más, la noche avanza igual: nunca te quedas atascado.
 
 ## Qué pasa al avanzar
 
@@ -26,7 +26,7 @@ Y así hasta la Noche 9.
 
 **Lo que se queda contigo:** tus Datos, todo el Árbol, el Bestiario, los mundos abiertos, los logros y la historia.
 
-**Lo que no cambia:** la sesión siguiente empieza como siempre, con la placa limpia y tu Esencia de inicio.
+**Lo que no cambia:** la sesión siguiente empieza como siempre, con la placa limpia y tu Luz de inicio.
 
 ## ¿Y la Extinción y el Genoma?
 
