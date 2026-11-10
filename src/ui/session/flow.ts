@@ -20,7 +20,7 @@ import { nextGoal, nodeText, sessionsToAfford } from '../../game/tree';
 import { WORLD_BY_ID, worldOfSpecies, type WorldId } from '../../game/worlds';
 import { catalogGroup, catalogPortrait } from '../../species';
 import { createTreeView, type TreeSound, type TreeView } from '../tree';
-import { createSessionHud, hudViewOf, type SessionHud, type SessionHudSound } from './hud';
+import { clockWaitOf, createSessionHud, hudViewOf, type SessionHud, type SessionHudSound } from './hud';
 import { createSessionStart, type SessionStartView } from './start';
 import { startGo, TutorialHold } from './clockGate';
 import { celebrateNight } from './night';
@@ -295,7 +295,8 @@ export function createSessionFlow(o: SessionFlowOptions): SessionFlow {
         pausedShown = paused;
         hud.setPaused?.(paused);
       }
-      hud.update({ ...hudViewOf(s, v.session?.sprint ?? 1), wakeHold: !!v.session?.wakeHold });
+      // The game's clockWait when it has one (QA-4 N3), else wakeHold.
+      hud.update({ ...hudViewOf(s, v.session?.sprint ?? 1), wakeHold: clockWaitOf(v.session) });
       const p = v.sessionPreview;
       hud.preview(p ? { datos: p.datos, goal: p.goal ? { name: nodeText(p.goal.id).name, missing: p.goal.missing } : null, minimum: !!p.minimum } : null);
     },

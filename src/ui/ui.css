@@ -4667,7 +4667,16 @@
    (tests/e2e/layout-shift.mjs). 140 px holds the widest label next to the dial. */
 .bl:not(.is-wide) .hud-clock .ss-hud {
   min-width: 140px;
+  max-width: 100%;
   justify-content: center;
+}
+/* QA-4: a label never widens the pill over the LUZ counter or the Journal: it ends in «…» inside it. */
+.bl:not(.is-wide) .hud-clock .ss-time {
+  min-width: 0;
+}
+.bl:not(.is-wide) .hud-clock .ss-time small {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* A phone HUD has room for "Sesión 1", not for "Siembra para empezar" (the dish says "¡Toca aquí!"). */
 .bl:not(.is-wide) .hud-clock .ss-time small.w {

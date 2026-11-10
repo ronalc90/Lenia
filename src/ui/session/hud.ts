@@ -148,9 +148,33 @@ export function dialTarget(v: SessionHudView): number {
   return Math.min(1, Math.max(0, 1 - left / v.total)) * 360;
 }
 
+/**
+ * The pill's own label while the run's creature wakes: as short as «Sesión 12» (QA-4: «EL RELOJ ESPERA A QUE
+ * DESPIERTE» made the pill grow over the LUZ counter and the Journal). The whole sentence is the wide screen's
+ * second label (hudWaitSub).
+ */
+export const HUD_WAKE_SHORT: Text = { es: 'Despertando…', en: 'Waking up…' };
+
+/**
+ * Does the clock wait for the run's creature to wake? The game's `clockWait` (one state for the clock-start rules,
+ * QA-4 N3) when the session view has it: a reason string or an object with `reason` / `kind`; else `wakeHold`.
+ */
+export function clockWaitOf(s: { wakeHold?: boolean; clockWait?: unknown } | null | undefined): boolean {
+  if (!s) return false;
+  if ('clockWait' in s) {
+    const w = s.clockWait;
+    if (!w) return false;
+    if (w === true) return true;
+    const o = typeof w === 'object' ? (w as { reason?: unknown; kind?: unknown }) : null;
+    const k = String(typeof w === 'string' ? w : (o?.reason ?? o?.kind ?? ''));
+    return /wake|nevera|fridge|plant/i.test(k);
+  }
+  return !!s.wakeHold;
+}
+
 /** The small line under the digits: "Sesión 3", or "⏸ En pausa" while the clock waits for the player. */
 export function hudSub(v: SessionHudView, paused: boolean, l: Lang): string {
-  if (v.wakeHold) return TEXT.wakeHold[l];
+  if (v.wakeHold) return HUD_WAKE_SHORT[l];
   return paused ? SESSION_UI.paused[l] : SESSION_UI.session(v.n)[l];
 }
 

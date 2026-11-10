@@ -4,7 +4,7 @@ import { beginSession, computeDatos, freshResearch, noteEncargo, noteEssence, no
 import { treeEffects } from '../../game/tree';
 import { nodePriceExplain } from '../tree/treeView';
 import { fmt } from '../format';
-import { NEEDLE, dialTarget, extendChip, hudSub, hudWaitSub, stepNeedle, streakChip } from './hud';
+import { HUD_WAKE_SHORT, NEEDLE, clockWaitOf, dialTarget, extendChip, hudSub, hudWaitSub, stepNeedle, streakChip } from './hud';
 import { TEXT } from '../../game/content';
 import { hudState } from './hud';
 import { moreBelow } from './scrollCue';
@@ -386,7 +386,7 @@ describe('the clock pill while the Nevera creature wakes (SessionClockView.wakeH
   it('it says the clock waits for it, instead of «Siembra para empezar» or «Sesión 3»', () => {
     const v = { phase: 'ready' as const, remaining: 20, total: 20, n: 3, sprint: null, wakeHold: true };
     expect(hudWaitSub(v, 'es')).toBe(TEXT.wakeHold.es);
-    expect(hudSub({ ...v, phase: 'running' }, false, 'en')).toBe(TEXT.wakeHold.en);
+    expect(hudSub({ ...v, phase: 'running' }, false, 'en')).toBe(HUD_WAKE_SHORT.en);
     expect(hudWaitSub({ ...v, wakeHold: false }, 'es')).not.toBe(TEXT.wakeHold.es);
     expect(hudSub({ ...v, phase: 'running', wakeHold: false }, false, 'es')).toBe('Sesión 3');
   });
@@ -466,5 +466,27 @@ describe('a long session card says it goes on (QA-4 N16)', () => {
     expect(moreBelow(0, 600, 1362)).toBe(true);
     expect(moreBelow(762, 600, 1362)).toBe(false);
     expect(moreBelow(0, 600, 604)).toBe(false);
+  });
+});
+
+// QA-4 (c1-040, c1-155, c2-035): «EL RELOJ ESPERA A QUE DESPIERTE» made the clock pill grow over the LUZ counter and
+// the Journal. The pill's own label stays as short as «Sesión 3»; the long sentence is the wide screen's.
+describe('the clock pill never grows over the HUD (QA-4)', () => {
+  it('QA-4: the pill\'s label while the creature wakes is as short as «Sesión 12»', () => {
+    const v = { phase: 'ready' as const, remaining: 20, total: 20, n: 12, sprint: null, wakeHold: true };
+    for (const l of ['es', 'en'] as const) {
+      expect(hudSub(v, false, l).length).toBeLessThanOrEqual(hudSub({ ...v, wakeHold: false }, false, l).length + 4);
+      expect(hudSub(v, false, l)).toBe(HUD_WAKE_SHORT[l]);
+    }
+  });
+
+  it('QA-4: the wait is read from the game\'s clockWait when it has one, else from wakeHold', () => {
+    expect(clockWaitOf({ wakeHold: true })).toBe(true);
+    expect(clockWaitOf({ wakeHold: false })).toBe(false);
+    expect(clockWaitOf(null)).toBe(false);
+    expect(clockWaitOf({ clockWait: 'wake', wakeHold: false })).toBe(true);
+    expect(clockWaitOf({ clockWait: { reason: 'wake' } })).toBe(true);
+    expect(clockWaitOf({ clockWait: 'seed', wakeHold: true })).toBe(false);
+    expect(clockWaitOf({ clockWait: null, wakeHold: true })).toBe(false);
   });
 });
