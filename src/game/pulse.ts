@@ -198,10 +198,21 @@ export function addBonusHits(st: PulseState, n: number, fx: PulseFx): void {
 }
 
 /**
- * Catch glimmer `id`: one pulse (its base) × the streak, and one more hit of the streak when the rate cap allows.
- * It does not count towards the next Chispazo (MECANICAS §5.4: Chispazos come from taps; glimmers that made
- * Chispazos would feed a runaway chain). Null when it is gone. The light is paid even over the cap: what shines
- * is never taken away.
+ * A glimmer's hit (caught, or the drop a settled one became): one more hit of the streak when the rate cap allows,
+ * never a step towards the next Chispazo (MECANICAS §5.4: Chispazos come from taps; glimmers that made Chispazos
+ * would feed a runaway chain). True when it counted.
+ */
+export function glimmerHit(st: PulseState, nowMs: number, fx: PulseFx): boolean {
+  if (!roomNow(st, nowMs)) return false;
+  st.window.push(nowMs);
+  st.taps++;
+  grow(st, 1, fx);
+  return true;
+}
+
+/**
+ * Catch glimmer `id`: one pulse (its base) × the streak, and a glimmer's hit (glimmerHit: no Chispazo step). Null
+ * when it is gone. The light is paid even over the cap: what shines is never taken away.
  */
 export function catchMote(st: PulseState, id: number, nowMs: number, fx: PulseFx): { amount: number; x: number; y: number; owner: number | null } | null {
   const i = st.motes.findIndex((m) => m.id === id);
@@ -209,11 +220,7 @@ export function catchMote(st: PulseState, id: number, nowMs: number, fx: PulseFx
   const m = st.motes[i];
   st.motes.splice(i, 1);
   const amount = m.base * streakMult(st);
-  if (roomNow(st, nowMs)) {
-    st.window.push(nowMs);
-    st.taps++;
-    grow(st, 1, fx);
-  }
+  glimmerHit(st, nowMs, fx);
   st.motesCaught++;
   st.finger += amount;
   return { amount, x: m.x, y: m.y, owner: m.owner };

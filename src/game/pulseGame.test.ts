@@ -191,6 +191,39 @@ describe('the pulse in the game (ADR-031)', () => {
     expect(loose()).toHaveLength(C.CHISPAZO_MOTES - 1);
   });
 
+  // Code review v0.027 #5: a glimmer left to settle became a drop whose tap counted towards the next Chispazo
+  // (5 of every 10 hits from glimmers: ~50 % more Chispazos than designed).
+  it('a settled glimmer is a drop worth the streak and a hit, but never counts towards the next Chispazo (§5.4)', () => {
+    const t = tapGame();
+    t.g.actions.endSessionNow!();
+    t.g.actions.startSession!(); // session 2 throws glimmers
+    t.g.actions.startClock!();
+    run(t.g, 1, report(ONE), 0.5);
+    tapN(t, 10);
+    run(t.g, C.MOTE_LIFE_S + 0.5, report(ONE), 0.5);
+    const settled = t.g.view().drops!.filter((d) => d.owner === null);
+    expect(settled).toHaveLength(C.CHISPAZO_MOTES);
+    const s0 = t.g.view().streak!;
+    const pulsesBefore = pulses(t.log).length;
+    let n = 0;
+    for (const d of settled) {
+      const mult = t.g.view().streak!.mult;
+      expect(t.g.actions.collect!(d.id)).toBeCloseTo(d.amount * mult, 9);
+      n++;
+      t.advance(0.2);
+      expect(t.g.view().streak!.hits).toBe(Math.min(s0.max, s0.hits + n)); // a hit of the streak, as a caught glimmer
+    }
+    expect(t.g.view().streak!.toChispazo).toBe(s0.toChispazo); // …but none towards the Chispazo
+    expect(pulses(t.log)).toHaveLength(pulsesBefore);
+    // A tap on empty agar that gathers only settled glimmers is the same: a hit, not a Chispazo step.
+    tapN(t, 10);
+    run(t.g, C.MOTE_LIFE_S + 0.5, report(ONE), 0.5);
+    const s1 = t.g.view().streak!;
+    const p = t.g.view().drops!.find((d) => d.owner === null)!;
+    t.g.actions.collectAt!(p.x, p.y, 0.5);
+    expect(t.g.view().streak!.toChispazo).toBe(s1.toChispazo);
+  });
+
   it('an idle player (no taps) gets no streak and exactly the light of the drops', () => {
     const t = tapGame();
     (t.g.state as unknown as { settings: { autoCollect: boolean } }).settings.autoCollect = true;

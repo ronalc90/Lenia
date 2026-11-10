@@ -25,6 +25,8 @@ export interface LightDrop {
   amount: number;
   /** Luz it holds when full: capSeconds × its owner's production (frozen once loose). */
   cap: number;
+  /** (ADR-031) A glimmer nobody caught settled here: its tap is a glimmer's hit, never a Chispazo step (MECANICAS §5.4). */
+  mote?: boolean;
 }
 
 export interface PipetteState {
@@ -77,6 +79,8 @@ export interface Pickup {
   y: number;
   amount: number;
   by: 'hand' | 'pipette' | 'sweep';
+  /** The drop was a settled glimmer (LightDrop.mote). */
+  mote?: boolean;
 }
 
 export function freshCollect(): CollectState {
@@ -141,7 +145,7 @@ function take(st: CollectState, d: LightDrop, by: Pickup['by']): Pickup {
   st[by] += amount;
   // A pipette heading for it turns back and chooses again on its next tick.
   for (const p of st.pipettes) if (p.target === d.id) p.target = null;
-  return { dropId: d.id, x: d.x, y: d.y, amount, by };
+  return d.mote ? { dropId: d.id, x: d.x, y: d.y, amount, by, mote: true } : { dropId: d.id, x: d.x, y: d.y, amount, by };
 }
 
 /** Collect one drop (a tap on it, full or not: tapping early is never worse). */

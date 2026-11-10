@@ -124,6 +124,7 @@ import * as C from './cycleBalance';
 import {
   addBonusHits,
   catchMote as catchMoteIn,
+  glimmerHit,
   freshPulse,
   pulseFx,
   registerHit,
@@ -830,10 +831,18 @@ export function createGame(deps: GameDeps, save?: string): Game {
     if (dish) return clampToDish(dish, x, y, 0.5 * s.calib.R);
     return { x: ((x % grid.w) + grid.w) % grid.w, y: ((y % grid.h) + grid.h) % grid.h };
   }
-  /** A hit that collected a drop (a tap on a drop or near one): +1 to the streak, and a Chispazo's pulses on its turn. */
-  function dropHit(at: { x: number; y: number; owner: number | null }): { mult: number; amount: number } | null {
+  /**
+   * A hit that collected a drop (a tap on a drop or near one): +1 to the streak, and a Chispazo's pulses on its turn.
+   * `mote`: only settled glimmers came in, a glimmer's hit (code review v0.027 #5: no step towards the Chispazo).
+   */
+  function dropHit(at: { x: number; y: number; owner: number | null }, mote = false): { mult: number; amount: number } | null {
     const f = tapFinger();
     if (!f) return null;
+    if (mote) {
+      const mult = streakMult(f.ps);
+      glimmerHit(f.ps, now(), f.pf);
+      return { mult, amount: 0 };
+    }
     const r = registerHit(f.ps, { kind: 'drop', P: pulseLight(), fx: f.pf, nowMs: now(), at, R: s.calib.R, place: motePlace });
     if (!r) return null;
     if (r.amount > 0) addEssence(r.amount);
@@ -868,7 +877,9 @@ export function createGame(deps: GameDeps, save?: string): Game {
     if (!se.pulse) return;
     const L = lightState();
     for (const m of settleMotes(se.pulse, dt)) {
-      if (!L || !addLight(L, m.x, m.y, m.amount)) continue;
+      const d = L ? addLight(L, m.x, m.y, m.amount) : null;
+      if (!d) continue;
+      d.mote = true; // a new loose drop (no owner): its tap is a glimmer's hit (MECANICAS §5.4)
       // Light made now counts now, also in the instant the clock ran out (the phase is already 'over').
       s.stats.totalEssence += m.amount;
       s.eraEssence += m.amount;
@@ -3644,7 +3655,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       const p = collectDrop(L, dropId);
       if (!p) return 0;
       // ADR-031: a tap on a drop is a hit of the streak (it is paid with the streak it found).
-      const h = dropHit({ x: p.x, y: p.y, owner });
+      const h = dropHit({ x: p.x, y: p.y, owner }, !!p.mote);
       return pocket([p], h?.mult) + (h?.amount ?? 0);
     },
 
@@ -3654,7 +3665,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
       const r = Number.isFinite(rCells) && rCells > 0 ? rCells : 0;
       const ps = collectAtDrops(L, x, y, r, bodies(), gdist);
       if (!ps.length) return 0; // a tap on empty agar: nothing, and the streak is not broken
-      const h = dropHit({ x, y, owner: null });
+      const h = dropHit({ x, y, owner: null }, ps.every((p) => p.mote));
       return pocket(ps, h?.mult) + (h?.amount ?? 0);
     },
 
