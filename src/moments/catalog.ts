@@ -447,8 +447,9 @@ export const MOMENTS: MomentDef[] = [
     priority: 110,
     title: t('¡Un Destello!', 'A Spark!'),
     lines: [
-      t('Una chispa dorada cruza la placa. ¡Tócala rápido!', 'A golden spark drifts across the dish. Tap it, quick!'),
-      t('Si la atrapas, te regala luz.', 'Catch it and it gives you glow.'),
+      // QA-4 pulido 12: one name for it, «Destello», never «chispa dorada».
+      t('Un Destello dorado cruza la placa. ¡Tócalo rápido!', 'A golden Spark drifts across the dish. Tap it, quick!'),
+      t('Si lo atrapas, te regala luz.', 'Catch it and it gives you Glow.'),
     ],
     brief: t('¡Toca el Destello!', 'Tap the Spark!'),
     illustration: 'golden',

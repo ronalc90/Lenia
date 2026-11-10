@@ -357,7 +357,7 @@ export const CHAIN: EncargoDef[] = [
     who: 'vela',
     mood: 'awed',
     ask: t('Atrapa un Destello.', 'Catch a Spark.'),
-    how: t('Cuando cruce la chispa dorada, tócala rápido.', 'When the golden spark drifts by, tap it quickly.'),
+    how: t('Cuando cruce el Destello dorado, tócalo rápido.', 'When the golden Spark drifts by, tap it quickly.'),
     why: t('Pasa volando y deja un regalo. ¡Mira bien!', 'It flies by and leaves a gift. Keep watch!'),
     thanks: t('¡Atrapado! ¡Qué reflejos!', 'Caught! What reflexes!'),
     goal: { metric: 'golden', target: 1 },

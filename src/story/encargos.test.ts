@@ -321,7 +321,7 @@ describe('encargos: never ask for what cannot be done yet (QA4 F-04)', () => {
 
 describe('encargos: every request says how, in plain words (CLARIDAD2 §5.3 task 6)', () => {
   /** Real buttons and Tree nodes a player can find on screen. */
-  const PLACES = /Árbol|Bestiario|«Copiar»|placa|chispa|Mundo|tarjeta de inicio|Nutrientes|nadadora|la que gira|semilla|Sembrar/;
+  const PLACES = /Árbol|Bestiario|«Copiar»|placa|chispa|Destello|Mundo|tarjeta de inicio|Nutrientes|nadadora|la que gira|semilla|Sembrar/;
 
   it('QA#39: every offered Encargo has a how that names a real button or tree node', () => {
     for (const e of [...CHAIN, ...SIDE]) {
@@ -372,5 +372,14 @@ describe('encargos: every request says how, in plain words (CLARIDAD2 §5.3 task
     t.set({ session: { ...session!, phase: 'ready' } });
     t.wait(1);
     expect(t.enc.quiet()).toBe(false);
+  });
+});
+
+// QA-4 pulido 12: Chispazo, Destello, «chispa dorada» and «chispitas»: the golden spark has one name, «Destello».
+describe('the golden spark has one name (QA-4 pulido 12)', async () => {
+  const { CHAIN: chain, SIDE: side } = await import('./encargoScript');
+  it('QA-4: no Encargo calls it «chispa dorada»', () => {
+    const texts = [...chain, ...side].flatMap((e) => [e.ask.es, e.how?.es ?? '', e.why.es]);
+    for (const s of texts) expect(s).not.toMatch(/chispa dorada/i);
   });
 });
