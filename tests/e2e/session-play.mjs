@@ -340,13 +340,23 @@ async function runCase(c) {
     await tap(box.x + box.width / 2, box.y + box.height / 2);
     return true;
   };
-  /** The tree's sheet shows `id` and nothing in it moves (its slide and its blocks' entrance are over). */
+  /**
+   * The tree's sheet shows `id` and nothing in it moves (its slide and its blocks' entrance are over), and it has
+   * shown it for longer than the screen guard (350 ms, QA-3 §2), as a player who reads it before tapping «Comprar».
+   * A loaded software-GL machine handled the node's tap late and the sheet came to rest ~300 ms after it opened:
+   * the tap on «Comprar» right then was a phantom tap to the guard («buying clock did not add a level», v0.028).
+   */
   const sheetAtRest = (id) =>
     page
       .waitForFunction(
         (id) => {
           const sh = document.querySelector('.rt-sheet.show');
-          if (!sh || !sh.querySelector(`[data-buy="${id}"], [data-why="${id}"]`)) return false;
+          if (!sh || !sh.querySelector(`[data-buy="${id}"], [data-why="${id}"]`)) {
+            window.__sheetSeen = null;
+            return false;
+          }
+          if (window.__sheetSeen?.id !== id) window.__sheetSeen = { id, at: performance.now() };
+          if (performance.now() - window.__sheetSeen.at < 450) return false;
           // Finite animations only: an ambient loop never ends and never moves the button.
           return !sh
             .getAnimations({ subtree: true })
