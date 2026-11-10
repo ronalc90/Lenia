@@ -19,6 +19,8 @@ interface H {
   /** Advance through every line of the current scene. */
   playLines(): void;
   id(): string | null;
+  /** The research Tree is on screen (StoryDeps.ui('tree')). */
+  tree: boolean;
 }
 
 function harness(view: Partial<GameView> = {}, storage = memoryStorage()): H {
@@ -31,7 +33,8 @@ function harness(view: Partial<GameView> = {}, storage = memoryStorage()): H {
     log: [] as H['log'],
     hints: [] as HintView[],
   } as H;
-  h.story = createStory({ bus, getView: () => h.v, storage, now: () => now, random: () => 0.99, pollMs: 0 });
+  h.tree = false;
+  h.story = createStory({ bus, getView: () => h.v, storage, now: () => now, random: () => 0.99, pollMs: 0, ui: (name) => name === 'tree' && h.tree });
   for (const type of ['sceneStart', 'line', 'choice', 'chosen', 'sceneWait', 'sceneEnd', 'ending', 'journal'] as const)
     h.story.on(type, (payload) => h.log.push({ type, payload }));
   h.story.on('hint', (p) => h.hints.push(p));
@@ -450,7 +453,7 @@ describe('story: the tutorial follows the player (QA4 F-03)', () => {
 function sessionView(n: number, phase: 'ready' | 'running' | 'over', over: Partial<GameView> = {}): Partial<GameView> {
   return {
     cycle: 'sessions',
-    research: { sessions: n - 1 } as GameView['research'],
+    research: { sessions: n - 1, worlds: ['classic'], world: 'classic' } as unknown as GameView['research'],
     session: {
       n,
       world: 'classic',
@@ -590,10 +593,59 @@ describe('story: one voice while the clock runs (§2.8)', () => {
     h.playLines();
     h.set({ golden: null });
     h.wait(1);
-    // Off the clock VELA may talk again (the start card, the report, the Tree, before the first seed).
+    // Off the clock VELA may talk again: the Tree, between runs (QA-4 N5: not on the dish before the clock).
     h.set(sessionView(4, 'ready', { species: [species('a'), species('b'), species('c')], golden: null }));
+    h.tree = true;
     h.wait(30);
     expect(h.id()).toBe('a1_committee');
+  });
+
+  // QA-4 N5 (c1-125, c1-130, c1-135): at the start of Night 2 seven boxes of a2_memory and a1_committee came one
+  // after another on the dish while the clock waited for the Nevera's creature, and kept talking once it ran.
+  it('QA-4 N5: from session 2 a story scene never starts on the dish before the clock; it waits for the Tree', () => {
+    const h = veteran(['t_intro', 't_stable', 't_born', 't_clock', 't_bestiary'], { tutorialSkipped: false });
+    h.set(sessionView(5, 'ready', { era: 2, species: [species('a'), species('b'), species('c')], essencePerSec: 20 }));
+    h.wait(600);
+    expect(h.id()).toBeNull();
+    h.set(sessionView(5, 'over', { era: 2, species: [species('a'), species('b'), species('c')], essencePerSec: 20 }));
+    h.tree = true;
+    h.wait(30);
+    expect(h.id()).not.toBeNull();
+  });
+
+  // QA-4 N4 (c1-087, c1-167, c1-169): «Se fue. Tranquilidad: siempre vuelve.» and «¡Bien! Siempre deja un regalo.»
+  // paused later runs (the first Spark caught two sessions after the first one was missed). Only the first Spark's
+  // own line pauses; its reply waits for the clock to stop.
+  it('QA-4 N4: the reply to the first Spark never pauses a run; it comes off the clock', () => {
+    const h = veteran(['t_intro', 't_stable', 't_born', 't_clock', 't_golden'], { tutorialSkipped: false });
+    h.set(sessionView(6, 'running', { golden: null }));
+    h.bus.emit('goldenMissed', {});
+    h.wait(30);
+    expect(h.id()).toBeNull();
+    h.bus.emit('goldenCollected', { x: 20, y: 20, reward: { es: '', en: '' } });
+    h.wait(30);
+    expect(h.id()).toBeNull();
+    expect(h.story.talking).toBe(false);
+    h.set(sessionView(6, 'over', { golden: null }));
+    h.tree = true;
+    h.wait(5);
+    expect(h.id()).toBe('t_golden_caught');
+  });
+
+  it('QA-4 N4/N5: VELA names who she talks about and never says the dish is empty', () => {
+    const text = (id: string) =>
+      SCENES.find((s) => s.id === id)!
+        .lines as { text: { es: string; en: string } }[];
+    for (const id of ['t_golden_caught', 't_golden_missed']) {
+      const es = text(id).map((l) => l.text.es).join(' ');
+      const en = text(id).map((l) => l.text.en).join(' ');
+      expect(es, id).toMatch(/Destello/);
+      expect(en, id).toMatch(/Spark/);
+      expect(es, id).not.toMatch(/^Se fue\b/);
+    }
+    const memory = text('a2_memory').map((l) => l.text.es).join(' ');
+    expect(memory).not.toMatch(/placa está vacía/);
+    expect(text('t_golden_caught').map((l) => l.text.es).join(' ')).toMatch(/Albor/);
   });
 
   it('QA#16: opening the Bestiary is never blocked by a tutorial scene', () => {

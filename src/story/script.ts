@@ -464,14 +464,14 @@ export const SCENES: SceneDef[] = [
     act: 1,
     tutorial: true,
     chain: true,
-    // The reply of the first Spark's beat (the same pause, §2.8).
-    duringRun: true,
+    // The reply to the first Spark waits for the clock to stop (QA-4 N4: it paused a later run). It names the Spark
+    // and the doctor: «Se fue» after a death read as a creature that died.
     after: ['t_golden'],
     title: t('Un regalo', 'A gift'),
     when: (c) => c.n('goldenCaught') >= 1,
     lines: [
-      vela('happy', '¡Bien! Siempre deja un regalo.', 'Yay! It always leaves a gift.'),
-      vela('neutral', 'Aparecen desde que ella se fue. Qué raro.', 'They appeared after she left. Strange.'),
+      vela('happy', '¡Atrapaste un Destello! Siempre deja un regalo.', 'You caught a Spark! It always leaves a gift.'),
+      vela('neutral', 'Los Destellos aparecen desde que la doctora Albor se fue. Qué raro.', 'Sparks appeared after Dr. Albor left. Strange.'),
     ],
   },
   {
@@ -479,11 +479,10 @@ export const SCENES: SceneDef[] = [
     act: 1,
     tutorial: true,
     chain: true,
-    duringRun: true,
     after: ['t_golden'],
-    title: t('Se fue', 'Gone'),
+    title: t('Se escapó', 'It got away'),
     when: (c) => c.n('goldenMissed') >= 1 && c.n('goldenCaught') === 0,
-    lines: [vela('worried', 'Se fue. Tranquilidad: siempre vuelve.', 'Gone. Don\'t worry: it always comes back.')],
+    lines: [vela('worried', 'El Destello se escapó. Tranquilidad: siempre vuelve.', 'The Spark got away. Don\'t worry: it always comes back.')],
   },
   {
     id: 't_calibrate',
@@ -598,7 +597,7 @@ export const SCENES: SceneDef[] = [
     when: (c) => c.era >= 2 && c.eraAge() >= 4,
     lines: [
       you('Placa nueva. Mismos ojos.', 'New dish. Same eyes.'),
-      vela('worried', 'Colega… la placa está vacía. Pero el Bestiario las reconoce a todas.', 'Colleague… the dish is empty. But the Bestiary still knows them all.'),
+      vela('worried', 'Colega… cada noche, placa nueva. Pero el Bestiario las reconoce a todas.', 'Colleague… every night, a new dish. But the Bestiary still knows them all.'),
       vela('worried', 'La placa no tiene memoria. No debería tenerla.', 'The dish has no memory. It shouldn\'t have any.'),
       vela('awed', '…Lo apunto en mi libreta. ¡Qué misterio!', '…I\'m writing it down. What a mystery!'),
     ],

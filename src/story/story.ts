@@ -590,6 +590,10 @@ export function createStory(deps: StoryDeps): Story {
       const first = c.v.session.first ?? c.v.session.n <= 1;
       if (!(def.tutorial && first)) return false;
     }
+    // From session 2 the story waits off the dish while a run is about to start too (QA-4 N5: at the start of Night 2
+    // seven boxes came one after another while the clock waited for the Nevera's creature, and the last ones paused
+    // the run once it started). Story beats play over the Tree, between runs (docs/CLARIDAD2.md §2.8).
+    if (!def.tutorial && c.v.cycle === 'sessions' && c.v.session?.phase === 'ready' && !(c.v.session.first ?? c.v.session.n <= 1) && !c.ui('tree')) return false;
     if (def.tutorial && st.tutorialSkipped) return false;
     if ((st.deferUntil[def.id] ?? 0) > t) return false;
     if (def.after && !def.after.every((id) => st.done.has(id))) return false;
