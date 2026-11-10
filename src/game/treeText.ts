@@ -227,7 +227,7 @@ export const TREE_UI = {
   titleShort: t('Árbol', 'Tree'),
   hint: t('Toca una mejora', 'Tap an upgrade'),
   /** First visit, nothing bought yet: the hand points at a green node (QA4 F-11). */
-  hintFirst: t('¡Toca el círculo que brilla! Lo puedes comprar.', 'Tap the glowing circle! You can buy it.'),
+  hintFirst: t('¡Toca el cuadro que brilla! Lo puedes comprar.', 'Tap the glowing square! You can buy it.'),
   level: t('NIVEL', 'LEVEL'),
   buy: t('Comprar', 'Buy'),
   maxed: t('¡Completo!', 'Complete!'),
@@ -305,7 +305,7 @@ export const TREE_UI = {
   affordable: (n: number) => (n === 1 ? t('1 mejora lista', '1 upgrade ready') : t(`${n} mejoras listas`, `${n} upgrades ready`)),
   // ── ADR-030 (docs/CLARIDAD2.md §2.10, §8.2) ──
   /** First visit: the buyable nodes pulse in their own colour (green is for gains, §2.11). */
-  tapGlowing: t('¡Toca el círculo que brilla! Lo puedes comprar.', 'Tap the glowing circle! You can buy it.'),
+  tapGlowing: t('¡Toca el cuadro que brilla! Lo puedes comprar.', 'Tap the glowing square! You can buy it.'),
   /** One count per sheet: "Ruta Placa · paso 1 de 7"; the levels are dots ●●○. */
   routeStep: (route: Text, k: number, n: number) => t(`Ruta ${route.es} · paso ${k} de ${n}`, `${route.en} route · step ${k} of ${n}`),
   /** A Placa level past this device's dish (state `deviceMax`): a badge and the line, no price, no "Comprar". */

@@ -500,6 +500,10 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
         }
         else if (tg.rect.y + tg.rect.h + 44 + ph < H - 8) y = tg.rect.y + tg.rect.h + 44;
         else y = Math.max(8, tg.rect.y - 44 - ph);
+      } else if (held === 'dock') {
+        // Docked over a screen of its own (the Tree) a pill with no target sits where the box sat, at the top, never
+        // in the middle over a node (QA-4 N17: «Compra una mejora.» covered «Más tiempo»).
+        y = Math.max(parseFloat(document.documentElement.style.getPropertyValue('--sty-top')) || 64, 64);
       }
       task.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
     }

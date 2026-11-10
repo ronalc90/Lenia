@@ -15,6 +15,12 @@ import { TREE_LAYOUT, type NodeState } from '../../game/tree';
 /** Pixels per layout unit at zoom 1 (one step along a route; leaves room for the name under a tile). */
 export const D = 128;
 export const Z_MIN = 0.16;
+/**
+ * On a phone the camera never goes below this zoom: a 64-px tile stays at least 44 px on screen (QA-4 N18: 18-px
+ * nodes in the Night-2 Tree at 390 px). The whole tree no longer fits; one finger pans and the strip lists what can
+ * be bought.
+ */
+export const PHONE_Z_MIN = 0.7;
 export const Z_MAX = 1.9;
 /** Below this zoom node names and branch labels fade out. */
 export const FAR_Z = 0.55;
@@ -110,15 +116,22 @@ export function frameCam(ids: readonly string[], area: Area, zMin = Z_MIN, zMax 
  * readable zoom when every buyable node is then on screen; otherwise the buyable nodes and the centre, at
  * whatever zoom they need (the player zooms in on one with a tap on the strip).
  */
-export function openingCam(states: ReadonlyMap<string, NodeState>, area: Area): Cam {
+export function openingCam(states: ReadonlyMap<string, NodeState>, area: Area, zFloor = Z_MIN): Cam {
   const buy = buyableIds(states);
   const shown: string[] = ['lab'];
   for (const [id, st] of states) if (st.status === 'owned' || st.status === 'available' || st.status === 'locked') shown.push(id);
-  const all = frameCam(shown, area, READABLE_Z);
+  const readable = Math.max(READABLE_Z, zFloor);
+  const all = frameCam(shown, area, readable);
   if (buy.every((id) => within(nodeRect(worldOf(id), all), area))) return all;
-  const some = frameCam([...buy, 'lab'], area, READABLE_Z);
+  const some = frameCam([...buy, 'lab'], area, readable);
   if (buy.every((id) => within(nodeRect(worldOf(id), some), area))) return some;
-  return frameCam(buy.length ? buy : ['lab'], area, Z_MIN);
+  const wide = frameCam(buy.length ? buy : ['lab'], area, zFloor);
+  if (zFloor <= Z_MIN || buy.every((id) => within(nodeRect(worldOf(id), wide), area))) return wide;
+  // A phone (QA-4 N18): the zoom stays readable, so frame the cheapest node to buy, with the centre when it fits.
+  const cheapest = buy.filter((id) => id !== 'lab').sort((a, b) => (states.get(a)?.cost ?? 0) - (states.get(b)?.cost ?? 0))[0] ?? 'lab';
+  // At the floor zoom: as much of the tree around them as a phone shows (one finger pans to the rest).
+  const near = frameCam([cheapest, 'lab'], area, zFloor, zFloor);
+  return within(nodeRect(worldOf(cheapest), near), area) ? near : frameCam([cheapest], area, zFloor, zFloor);
 }
 
 function worldOf(id: string): { x: number; y: number } {

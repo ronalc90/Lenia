@@ -56,7 +56,7 @@ import { mountPortrait } from '../portrait';
 import { ROUTE_ICON } from '../art/icons';
 import { DURATION, EASING, pop, staggerIn } from '../art/motion';
 import { nodeWhy, WHY_UI } from './why';
-import { D, FAR_Z, Z_MAX, Z_MIN, buyPressAllowed, freeTop, gateLabelAngle, openingCam, revealCam, tapAllowed, type Area, type Cam } from './camera';
+import { D, FAR_Z, PHONE_Z_MIN, Z_MAX, Z_MIN, buyPressAllowed, freeTop, gateLabelAngle, openingCam, revealCam, tapAllowed, type Area, type Cam } from './camera';
 import { treeIcon } from './icons';
 import { screenChanged } from '../pressGuard';
 import { DISH_DIAMETERS } from '../../core/dish';
@@ -316,6 +316,8 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
   const ctxOf = (d: TreeViewData): TreeCtx => ({ levels: d.levels, datos: d.datos, sessions: d.sessions, species: d.species });
   const vpSize = () => ({ w: vp.clientWidth || window.innerWidth, h: vp.clientHeight || window.innerHeight });
   const desktop = () => vpSize().w >= 900;
+  /** The farthest zoom: on a phone a node never goes under 44 px (QA-4 N18). */
+  const zMin = () => (desktop() ? Z_MIN : PHONE_Z_MIN);
 
   // ───────────── camera ─────────────
   function applyCam(): void {
@@ -363,14 +365,14 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
   }
   function clampCam(): void {
     const { w, h } = vpSize();
-    cam.z = Math.min(Z_MAX, Math.max(Z_MIN, cam.z));
+    cam.z = Math.min(Z_MAX, Math.max(zMin(), cam.z));
     const lim = S * D * cam.z * 0.85;
     cam.x = Math.min(w / 2 + lim, Math.max(w / 2 - lim, cam.x));
     cam.y = Math.min(h / 2 + lim, Math.max(h / 2 - lim, cam.y));
   }
   /** Screen point where the world origin should sit so world point (wx, wy) shows at (sx, sy). */
   function animateTo(wx: number, wy: number, z: number, sx: number, sy: number): void {
-    const target = { z: Math.min(Z_MAX, Math.max(Z_MIN, z)), x: 0, y: 0 };
+    const target = { z: Math.min(Z_MAX, Math.max(zMin(), z)), x: 0, y: 0 };
     target.x = sx - wx * target.z;
     target.y = sy - wy * target.z;
     cancelAnimationFrame(camAnim);
@@ -396,7 +398,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     camAnim = requestAnimationFrame(step);
   }
   function zoomAt(factor: number, sx: number, sy: number): void {
-    const z = Math.min(Z_MAX, Math.max(Z_MIN, cam.z * factor));
+    const z = Math.min(Z_MAX, Math.max(zMin(), cam.z * factor));
     const wx = (sx - cam.x) / cam.z;
     const wy = (sy - cam.y) / cam.z;
     cam.z = z;
@@ -415,7 +417,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     const bar = topBar.getBoundingClientRect();
     const vpTop = vp.getBoundingClientRect().top;
     // VELA docked at the top of the Tree (QA4 F-01) is part of the bar: no node under her bubble (./camera freeTop).
-    const dock = document.querySelector('.sty.sty-docked .sty-box:not([hidden])')?.getBoundingClientRect();
+    const dock = (document.querySelector('.sty.sty-docked .sty-box:not([hidden])') ?? document.querySelector('.sty.sty-docked .sty-task:not([hidden])'))?.getBoundingClientRect();
     const top = freeTop(bar.height > 0 ? bar.bottom - vpTop : 0, dock && dock.height > 0 ? { top: dock.top - vpTop, bottom: dock.bottom - vpTop } : null, h);
     // Room for the strip and the first visit's hint at the bottom: no node under them.
     const low = Math.max(strip.offsetHeight, hint.offsetHeight + (strip.offsetHeight ? strip.offsetHeight + 8 : 0));
@@ -429,7 +431,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
   }
   /** Frame what can be bought (./camera openingCam): on open, on «centrar», when VELA docks. */
   function fitView(animate = true): void {
-    const c = openingCam(states, freeArea(false));
+    const c = openingCam(states, freeArea(false), zMin());
     if (animate) animateTo(0, 0, c.z, c.x, c.y);
     else {
       Object.assign(cam, c);
@@ -496,7 +498,7 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
       const mx = (a.x + b.x) / 2;
       const my = (a.y + b.y) / 2;
       homeCam = null;
-      cam.z = Math.min(Z_MAX, Math.max(Z_MIN, (pinch.z * d) / pinch.d));
+      cam.z = Math.min(Z_MAX, Math.max(zMin(), (pinch.z * d) / pinch.d));
       cam.x = mx - pinch.wx * cam.z;
       cam.y = my - pinch.wy * cam.z;
       clampCam();
@@ -1312,6 +1314,8 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
   window.addEventListener('resize', onResize);
   // VELA docks at the top of the Tree or leaves: fit the tree to the room that is left.
   const onDock = () => {
+    // One hint at a time (QA-4 N17): while VELA talks or asks in the Tree, its own «¡Toca el cuadro…!» steps back.
+    el.classList.toggle('vela-on', !!document.querySelector('.sty.sty-docked'));
     if (open) requestAnimationFrame(() => fitView(!rm()));
   };
   window.addEventListener('bl-story-dock', onDock);

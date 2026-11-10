@@ -37,3 +37,15 @@ describe('static labels follow the language (QA-4 N6)', async () => {
     setLang('es');
   });
 });
+
+// QA-4 N17 (c4-013): «¡Toca el círculo que brilla!» while the Tree's nodes are square tiles.
+describe('the Tree names what the player sees (QA-4 N17)', async () => {
+  const { TREE_UI } = await import('../game/treeText');
+  it('QA-4 N17: the glowing node is a square, not a circle', () => {
+    for (const k of ['tapGlowing', 'hintFirst'] as const) {
+      expect(TREE_UI[k].es).not.toMatch(/círculo/);
+      expect(TREE_UI[k].en).not.toMatch(/circle/);
+      expect(TREE_UI[k].es).toMatch(/cuadro/);
+    }
+  });
+});

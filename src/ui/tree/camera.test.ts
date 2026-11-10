@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TREE_LAYOUT, TREE_NODES, treeStates, type TreeCtx } from '../../game/tree';
-import { D, NODE_EXTENT, TAP_QUIET_MS, buyPressAllowed, buyableIds, nodeRect, openingCam, revealCam, tapAllowed, type Area, type Cam, freeTop, gateLabelAngle, LABEL_EDGE } from './camera';
+import { D, NODE_EXTENT, PHONE_Z_MIN, TAP_QUIET_MS, buyPressAllowed, buyableIds, nodeRect, openingCam, revealCam, tapAllowed, type Area, type Cam, freeTop, gateLabelAngle, LABEL_EDGE } from './camera';
 
 /** A 390 × 844 phone: the top bar and VELA take 150 px, the "Puedes comprar" strip 96 px. */
 const PHONE: Area = { left: 0, top: 150, right: 390, bottom: 844 - 96 };
@@ -72,6 +72,20 @@ describe('the Tree camera (docs/CLARIDAD2.md §2.10)', () => {
     const r = nodeRect(world(far), openingCam(states, PHONE));
     expect(r.l).toBeGreaterThanOrEqual(0);
     expect(r.r).toBeLessThanOrEqual(390);
+  });
+
+  // QA-4 N18 (c1-157, c4-015): the Night-2 Tree opened with 18-px nodes on a 390-px phone (30 px at 360). On a phone the
+  // camera never shows a node under 44 px; the opening frame shows the cheapest node to buy (the strip lists the rest).
+  it('QA-4 N18: on a phone every node is at least 44 px and the cheapest node to buy is on screen', () => {
+    expect(64 * PHONE_Z_MIN).toBeGreaterThanOrEqual(44);
+    for (const ctx of [{ levels: { lab: 1 }, datos: 28, sessions: 1, species: 1 }, spread(60), spread(900), spread(5000, 2), spread(1e6, 3)] as TreeCtx[]) {
+      const states = treeStates(ctx);
+      const cam = openingCam(states, PHONE, PHONE_Z_MIN);
+      expect(64 * cam.z, `datos ${ctx.datos}`).toBeGreaterThanOrEqual(44);
+      const ids = buyableIds(states).filter((id) => id !== 'lab');
+      const cheapest = ids.sort((a, b) => states.get(a)!.cost - states.get(b)!.cost)[0];
+      if (cheapest) expect(inside(nodeRect(world(cheapest), cam), PHONE), `${cheapest}, datos ${ctx.datos}`).toBe(true);
+    }
   });
 
   it('a tap right after a camera move is ignored', () => {

@@ -553,7 +553,8 @@
   pointer-events: none;
   transition: opacity var(--bl-t-sheet);
 }
-.rt.sheet-open .rt-hint {
+.rt.sheet-open .rt-hint,
+.rt.vela-on .rt-hint {
   opacity: 0;
 }
 
