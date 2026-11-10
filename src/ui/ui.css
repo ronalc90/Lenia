@@ -1478,6 +1478,17 @@
 .range:focus {
   outline: none;
 }
+/* QA-4 N13: the wrap takes the finger (src/ui/sliderGesture.ts): sideways drags it, up or down scrolls Settings. */
+.range-wrap {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  touch-action: pan-y;
+  cursor: pointer;
+}
+.range-wrap .range {
+  pointer-events: none;
+}
 .range::-webkit-slider-runnable-track {
   height: 6px;
   border-radius: var(--bl-r-sm);

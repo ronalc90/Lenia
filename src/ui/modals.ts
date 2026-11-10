@@ -4,6 +4,7 @@
  * Bottom sheets on mobile, centered dialogs on wide layouts.
  */
 import type { GameView, Settings, SpeciesView } from '../core/types';
+import { guardSlider } from './sliderGesture';
 import { screenChanged } from './pressGuard';
 import { BEHAVIOR_COLOR } from '../core/palette';
 import type { Ctx } from './ctx';
@@ -349,7 +350,10 @@ export function openSettings(host: ModalHost, ctx: Ctx): ModalHandle {
           }
         },
       });
-      return h('div', { style: 'display:flex;align-items:center;gap:6px;flex:0 1 190px' }, r, out);
+      // QA-4 N13: a vertical swipe over it scrolls Settings and never moves it (the wrap takes the finger).
+      const wrap = h('span', { class: 'range-wrap' }, r);
+      guardSlider(wrap, r);
+      return h('div', { style: 'display:flex;align-items:center;gap:6px;flex:0 1 190px' }, wrap, out);
     };
     const segc = <V extends string>(opts: { v: V; label: string }[], cur: () => V, onPick: (v: V) => void) => {
       const el = h('div', { class: 'seg text' });
