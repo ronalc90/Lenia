@@ -1,134 +1,83 @@
 # Roadmap de Bioluma
 
-Fases del plan original ([`source/PLAN-100-USD.md`](source/PLAN-100-USD.md)), lo que ya cubre la build **v0.1**, los
-siguientes pasos y el plan del agente nocturno (**todavía no activado**). Las semanas son una estimación del plan, no
-un dato medido. Diseño en [`GDD.md`](GDD.md); decisiones en [`../DECISIONS.md`](../DECISIONS.md).
+Dónde está el juego hoy (**v0.027**, publicada en [bioluma-xi.vercel.app](https://bioluma-xi.vercel.app)) y qué sigue,
+en orden. Diseño en [`GDD.md`](GDD.md) (v1.5); el porqué de cada cosa en [`../DECISIONS.md`](../DECISIONS.md) (ADR-001
+a ADR-031); plataformas en [`PLATAFORMAS.md`](PLATAFORMAS.md). El plan original de fases (semanas, presupuesto de
+100 USD) sigue en [`source/PLAN-100-USD.md`](source/PLAN-100-USD.md) como referencia histórica.
 
-> **Nota sobre v0.1.** Esta build integra de golpe el alcance de las Fases 0, 1 y 2 y buena parte de la 3 (todo
-> lo que se puede probar sin servicios externos). Las casillas de abajo siguen el alcance acordado para v0.1; el
-> integrador debe confirmarlas contra la build final (`npm test`, `npm run build`, `npm run e2e`).
+> **Cómo leer este documento.** «Hecho» quiere decir que está en `main`, con pruebas, y que las puertas duras de
+> [`../CLAUDE.md`](../CLAUDE.md) pasan. «Pendiente» lista lo que falta, con quién lo decide cuando no es código.
 
-## Estado de v0.1 por sistema
+## Dónde estamos: v0.027
 
-| Sistema | Incluido en v0.1 | Pendiente |
+Bioluma es un incremental de **sesiones de laboratorio cortas**: siembras con el botón «Sembrar», las criaturas de Lenia
+que se estabilizan llenan gotas de **Luz** (`essence` en el código), tocarlas les da un **Pulso** que paga y hace racha,
+y al sonar «¡Tiempo!» la Luz se vuelve **Datos** para el **Árbol de investigación**. La noche avanza sin borrar nada.
+
+| Sistema | Hecho | Pendiente |
 |---|---|---|
-| Simulación | Lenia WebGL2 (ping-pong RGBA16F), kernel y crecimiento exactos de Chan (ADR-002), referencia CPU con FFT (Orbium O2u estable 2 000 pasos), catálogo de 26 especies con decodificador RLE, placa toroidal de aspecto fijo (ADR-004, ADR-010) | Medir fps en teléfonos reales; perfil Alto afinado; multi-kernel / multicanal |
-| Semillas | Semillas con ruido asimétrico y **esporas** desde la plantilla de la especie cercana (ADR-003) | Ajustar la tasa de éxito con datos de jugadores |
-| Detector | Estados muerta / explotó / naciendo / estable, comportamientos, firma sin μ/σ, "estable" a ~400 pasos (ADR-007, ADR-009) | Calibrar el umbral de firma con 100 siembras; tests a 128×128 para R = 18 (ADR-011) |
-| Economía | Esencia por gradiente, rendimientos decrecientes (ADR-008), Gotero, Sembrador, Calibrador, Placa, afinidades, Reserva, offline | Corridas del bot de progresión contra la curva de §11 del GDD |
-| Bestiario | Registro, ficha, Impresión, rareza, Microscopio, Catalogación, Archivo, Marcador | Fusionar especies (válvula de seguridad del detector) |
-| Prestigio | Extinción, Genoma (bonus solo la primera vez, ADR-005, ADR-006), Árbol de 11 nodos | Efecto real de **Segundo canal, Flujo y Depredación** (hoy "próximamente") |
-| Capa de diversión | Destello, cadena de 20 objetivos, 34 logros, jugo (ADR-014) | Afinar pesos y recompensas con el bot |
-| UI y audio | Una pantalla, 4 pestañas, HUD, ajustes es/en, audio procedural | Modo claro (Fase 2 del GDD), Lighthouse ≥ 90 verificado |
-| Guardado | Guardado local, export/import `BIOLUMA1.` (ADR-018) | Cloud save de galaxy.click |
-| PWA e infraestructura | Manifest, iconos (SVG y PNG), service worker, CI (typecheck, tests, build, build de un solo archivo, ADR-015) | Deploy en Vercel (preview) y Cloudflare (producción) |
-| Analítica | Ajuste "Analítica anónima" (apagado por defecto) | Integrar PostHog y Sentry (§18 del GDD) |
+| Simulación | Lenia en WebGL2 (ping-pong RGBA16F), kernel y crecimiento exactos de Chan (ADR-002), referencia CPU con FFT, catálogo de 26 especies; cámara rápida ×1,5 en las sesiones e incubación bajo la tarjeta de inicio (ADR-027) | Medir los 30 fps en teléfonos reales (en CI no hay GPU) |
+| Placa | Placa de Petri redonda con cristal que absorbe, deflector para las nadadoras, crece con la ruta Placa (ADR-025); grilla fija por calidad (ADR-010) | — |
+| Semillas | Ruido asimétrico y esporas (ADR-003); botón «Sembrar» que elige el sitio libre más seguro; semilla que no prende devuelve su precio, y tras dos fallos la siguiente es segura (ADR-031) | — |
+| Detector | Estados, comportamientos, firma sin μ/σ, pruebas a 64² (R = 13) y 128² (R = 18) (ADR-007, ADR-011) | Las maneras «se divide» y «colonia» no las cría ningún mundo |
+| Ciclo | Sesiones con reloj (0:15 → 2:30), Datos al final, Nevera, Encargos, Nutrientes, noches (ADR-026, ADR-030); el reloj espera mientras VELA habla o hay una hoja abierta | Borrar el bucle clásico retirado (ver «Siguientes pasos», 2) |
+| Luz y Pulso | Gotas que se recogen a mano o con pipetas, la Luz nunca se pierde (ADR-030); Pulso, racha y ¡Chispazo! ×5, toques limitados a 10 por segundo, quien no toca nunca gana menos (ADR-031) | — |
+| Árbol y mundos | 62 mejoras en 8 rutas rectas (Reloj, Gotero, Placa, Vida, ↓ Recoger, Descubrir, Mundos, ✦ Pulso) y 7 mundos con su especie y variantes | Afinar con el bot de sesiones cuando lleguen datos de jugadores |
+| Historia y explicaciones | VELA como monitor de cultivo MC-7 y doctores en encuadre documental (ADR-029), tutorial con historia, Encargos, finales (ADR-022); Momentos con una sola tarjeta por partida y accidentes explicados (ADR-030) | — |
+| Diversión | Destello dorado, objetivos, 32 logros de sesión, secretos, juego visual y sonoro (ADR-014) | — |
+| Interfaz y audio | Una pantalla, dock y cajones, es/en, tema oscuro y claro, «Reducir movimiento», «Modo un toque», «Recoger la luz sola»; audio sintetizado en vivo | Lighthouse ≥ 90 sin verificar |
+| Guardado | Guardado local, exportar/importar `BIOLUMA2.` (todo el progreso), los `BIOLUMA1.` antiguos se siguen importando | Guardado en la nube de galaxy.click |
+| Ranking | Opcional, firmado (ECDSA) y con validación de plausibilidad en el servidor ([`RANKING.md`](RANKING.md)) | — |
+| Tienda | Cosméticos y Vestidor implementados con los pagos apagados (`STORE_ENABLED = false`, ADR-021); el modo de prueba (`?store=mock`) solo existe en builds de desarrollo y de prueba | Lo decide el dueño ([`MONETIZACION.md`](MONETIZACION.md)) |
+| Plataformas | Electron (Windows, macOS, Linux, Steam), Capacitor (Android), zips para portales; las builds salen en `release.yml` | Ninguna publicada todavía (ver «Siguientes pasos», 6) |
+| PWA e infraestructura | Manifest, iconos, service worker con versión, CI (typecheck, pruebas, build y build de un solo archivo), release con logros de Steam comprobados y `butler` fijado | Puertas de tamaño de bundle y de fps en CI |
 
-## Fases
+Nombre: **Bioluma** es definitivo (ADR-023). Sin anuncios, nunca. Analítica: no hay (no existe telemetría).
 
-### Fase 0: Fundaciones (semana 1)
+## Cómo llegamos aquí
 
-Repo público Vite + TS, CI, `CLAUDE.md`, `DECISIONS.md`, licencia MIT propia y aviso "MIT License, Copyright (c)
-2018 Bert Chan" para el catálogo. Shader single-kernel con ping-pong RGBA16F, decoder RLE de `animals.json`, Orbium
-corriendo, deploy a Vercel preview.
-**Aceptación:** Orbium estable 2 000 pasos en Playwright; ≥ 30 fps en viewport móvil emulado y en el teléfono del dueño.
-
-- [x] Repo, CI (`.github/workflows/ci.yml`), `CLAUDE.md`, `DECISIONS.md`, `LICENSE`, `CREDITS.md`.
-- [x] Simulación GPU con ping-pong RGBA16F, decoder RLE, catálogo curado, referencia CPU con test de 2 000 pasos.
-- [ ] Orbium estable 2 000 pasos **en la GPU**, medido con Playwright.
-- [ ] Deploy a Vercel (preview) y medición de fps en viewport móvil emulado (CPU ×4) y en el teléfono del dueño.
-
-### Fase 1: Core loop (semanas 2 a 3)
-
-Siembra por toque con costo, Esencia por masa de gradiente, Gotero, Sembrador automático, Placa más grande, guardado
-local, detector v1 (vivo / muerto / explotó / móvil), bot de progresión.
-**Aceptación:** el bot llega al primer Sembrador en 5 a 8 min reales; sopa uniforme produce Esencia = 0 (test
-unitario); Lighthouse PWA ≥ 90.
-
-- [x] Siembra, economía, Gotero, Sembrador, Placa, guardado local, detector.
-- [ ] Bot de progresión (`greedy`, `explorer`, `idle`) con informe en `reports/balance/`.
-- [ ] Lighthouse CI con presupuesto de bundle (≤ 2 MB comprimido, objetivo 600 KB).
-
-### Fase 2: Bestiario y Calibrador (semanas 4 a 5)
-
-Sliders μ / σ con rangos crecientes, detección de oscilación y división, registro de especies con multiplicador e
-Impresión. QA adversarial corre cada noche.
-**Aceptación:** 8 especies del catálogo clasificadas correctamente en tests; el Balanceador no encuentra una
-estrategia > 3× la base.
-
-- [x] Calibrador, bestiario, comportamientos, Impresión, rareza.
-- [ ] Tests de las especies del catálogo (R = 13 a 64×64, R = 18 a 128×128) y 100 siembras de ruido sin falsos positivos.
-- [ ] QA adversarial nocturno sobre el preview de Vercel.
-
-### Fase 3: Extinción y profundidad (semanas 6 a 7)
-
-Prestigio con Genoma, kernels multi-anillo, PostHog, Discord, páginas en itch.io y galaxy.click con cloud save, tres
-playtesters sintéticos.
-**Aceptación:** corrida post-prestigio del bot 30 a 50 % más rápida; encuesta in-game activa; build publicada en ambos
-portales.
-
-- [x] Extinción, Genoma, Árbol, Anillos dobles y triples.
-- [ ] PostHog (opt-in, sin identificadores personales), encuesta tras la primera Extinción, Discord.
-- [ ] Páginas en itch.io (HTML5, puede usar el build de un solo archivo) y galaxy.click con cloud save.
-- [ ] Tres playtesters sintéticos con diario de sesión.
-
-### Fase 4: Lanzamiento y Android (semana 8 o más)
-
-Dominio en Cloudflare, `assetlinks.json`, TWA con Bubblewrap / PWABuilder, Play Console, 12 testers reclutados en
-Discord y r/incremental_games durante 14 días, Microsoft Store.
-**Aceptación:** 12 testers opt-in continuos; cuestionario de producción respondido; post en r/incremental_games con GIF.
-
-- [ ] Todo pendiente. Decisión previa del dueño: escenario de presupuesto (solo web o web + Android) y nombre final.
+- **v0.1** (fases 0 a 3 del plan): simulación, detector, economía continua, Bestiario, Calibrador, Extinción y Genoma.
+- **v0.012–v0.018** (octubre de 2026): sesiones de laboratorio con Árbol de rutas rectas y mundos desde la v0.012
+  (ADR-026), placa redonda que crece desde la v0.014 (ADR-025), cámara rápida (ADR-027); el bucle clásico (Calibrar,
+  Extinción, Genoma) se retira (ADR-028).
+- **v0.019–v0.024** (noviembre): realismo científico desde la v0.021 (ADR-029); segunda pasada de claridad: la Esencia
+  pasa a llamarse Luz y se recoge a mano, ruta ↓ Recoger, reloj que espera al jugador, accidentes explicados (ADR-030).
+- **v0.025–v0.027**: el toque es un Pulso, sembrar es un botón, rachas y Chispazo, muertes que enseñan (ADR-031);
+  correcciones de QA sobre la Nevera, el tutorial y el reloj.
 
 ## Siguientes pasos, en orden
 
-1. **Medir de verdad**: fps en el teléfono del dueño y con Playwright (CPU ×4, 8 criaturas); decidir el perfil por defecto.
-2. **Cerrar la deuda de pruebas del detector** (ADR-011, 100 siembras de ruido, Orbium impreso 10 de 10).
-3. **Bot de progresión** y primera corrida contra la curva de §11; ajustar solo `src/game/balance.ts`.
-4. **Deploy**: Vercel para previews de cada PR, Cloudflare para el dominio final; comprobar `sw.js` solo en http(s).
-5. **Primera build a jugadores** (build de un solo archivo + itch.io / galaxy.click) y hilo de feedback en
-   r/incremental_games; validar las convenciones de incrementales que el plan marcó como no verificadas.
-6. **Contenido pendiente**: Segundo canal, Flujo y Depredación (hoy nodos "próximamente"), fusionar especies, entradas
-   finales de la Bitácora en `content/` (es/en), modo claro.
-7. **Analítica y errores**: PostHog (embudo de §18) y Sentry, siempre opt-out desde ajustes.
-8. Post-lanzamiento en el orden de la §21 del GDD (Flujo, eventos de placa, pastoreo, ...). La **cubeta de prueba**
-   sigue diferida (ADR-012).
+1. **Puertas que hoy no corre la CI.** Medir los 30 fps con la cámara rápida en un teléfono real y, si se puede, en un
+   runner con GPU (`FPS_FLOOR` en `tests/e2e/smoke.mjs`); añadir a `ci.yml` un paso que mida el bundle comprimido
+   (hoy el código ronda los 605 KB, por encima del objetivo de 600 KB: cargar tarde el arte de la historia, la intro y
+   los Momentos).
+2. **Borrar el bucle clásico** (consecuencia pendiente de ADR-028): las ramas `classic` / `!sessions` de
+   `src/game/game.ts`, las 19 pruebas con `cycle: 'classic'` (pasarlas al ciclo de sesiones primero),
+   `CLASSIC_ONLY_TEXT`, `CLASSIC_ONLY_SCENES`, las ilustraciones de Extinción y Genoma y el camino clásico de
+   `server/validate.ts`. Un PR por pieza, con su ADR si toca contratos.
+3. **Números de balance fuera de su sitio**: mover a `src/game/cycleBalance.ts` los literales que quedan en
+   `legacy.ts`, `worlds.ts`, `tree.ts`, `game.ts`, `session.ts` y en algunos archivos de `src/ui/`, cada uno con su
+   comentario y con el informe del bot antes y después.
+4. **Dependencias**: revisar y fusionar (o cerrar) los PR de Dependabot y activar sus alertas en el repositorio.
+5. **Material para jugadores**: regenerar las capturas de la wiki con `node tests/e2e/wiki-shots.mjs`, rehacer a mano
+   `docs/wiki/images/hero.png` y `social-preview.png` (muestran las pestañas viejas; el script no los toca) y las
+   capturas del README en `docs/capturas/` (son de la v0.018).
+6. **Publicar**, en el orden de [`PLATAFORMAS.md`](PLATAFORMAS.md): dominio propio, galaxy.click e itch.io,
+   Microsoft Store, Google Play (12 testers durante 14 días) y Steam (demo para el Next Fest antes del 2027-01-10).
+   Antes de la primera tienda: política de privacidad publicada y la revisión pendiente de las dos fotos del NCI
+   ([`../CREDITS.md`](../CREDITS.md)).
+7. **Tienda** (decisión del dueño): cuentas, productos y webhook, luego `STORE_ENABLED` con su ADR.
+8. **Contenido**: un mundo que críe las maneras «se divide» y «colonia», y lo de la §21 del GDD (eventos de placa,
+   pastoreo…). La cubeta de prueba sigue diferida (ADR-012).
 
-## Plan del agente nocturno (no activado)
+## Agente nocturno (no activado)
 
-**Estado:** no hay ningún workflow que llame a un modelo. `ci.yml` solo verifica; tiene `permissions: contents: read`
-y ningún secreto. El plan recomienda activarlo **después de la Fase 0**, con CI y `CLAUDE.md` listos.
+No hay ningún workflow que llame a un modelo: `ci.yml`, `pages.yml`, `release.yml` y `wiki-sync.yml` solo construyen,
+prueban o publican, y `ci.yml` tiene `permissions: contents: read` y ningún secreto. Si algún día se activa, lo hace
+el dueño y con las salvaguardas de ADR-020:
 
-**Cómo funcionará**
-
-- **Ejecución:** una *scheduled task* nativa en la nube (sobre la suscripción; intervalo mínimo de 1 hora) a las 23:00
-  hora de Colombia, fuera de la hora pico de la tarde en EE. UU.; alternativa equivalente: Claude Code GitHub Action
-  con `CLAUDE_CODE_OAUTH_TOKEN`.
-- **Ciclo por noche (1 a 3 ítems del backlog, un PR pequeño por ítem):** spec, plan, build en rama, tests, QA
-  adversarial, revisión, merge, preview en Vercel, playtest sintético, métricas, backlog.
-- **Salidas:** `reports/YYYY-MM-DD.md` (decisiones y bloqueos), `reports/balance/YYYY-MM-DD.json` (informe del bot) y PRs
-  para revisar por la mañana desde el teléfono.
-- **Roles** (modelo): Director (Opus; no escribe código), Arquitecto (Opus; ADR), Ingeniero de simulación y de
-  juego (Sonnet), Diseñador UI/audio (Sonnet), QA adversarial (Opus, sin acceso al código), Revisor (Opus; no
-  aprueba su propio PR), Balanceador (Opus con corridas de Haiku), Playtesters sintéticos (Haiku), Cronista (Haiku;
-  CHANGELOG, DECISIONS, README, créditos).
-
-**Compuertas duras:** Vitest y Playwright en verde; piso de 30 fps en viewport móvil emulado; presupuesto de bundle;
-todo bug de QA genera primero un test que falla.
-
-**Salvaguardas de costo (obligatorias antes de activarlo, ADR-020)**
-
-- Ninguna API key de Anthropic en el repo, `.env`, secretos de CI ni shells de tareas programadas; solo
-  `CLAUDE_CODE_OAUTH_TOKEN` o una tarea nativa.
-- `timeout-minutes` y `--max-turns` en cada workflow; concurrencia 1; si un experimento puntual usa la API,
-  `--max-budget-usd 3`.
-- **Interruptor:** variable de repositorio `NIGHTLY_ENABLED`; el workflow termina de inmediato si vale `false`.
-- Créditos de uso de la suscripción apagados, para que al tocar el límite la ejecución se rechace en vez de facturar.
-- Si el límite semanal se agota, bajar a 3 noches por semana.
-
-**Criterios para activarlo:** Fase 0 cerrada (Orbium estable en GPU, fps medido), CI verde en `main`, `CLAUDE.md` y
-`DECISIONS.md` al día, `NIGHTLY_ENABLED` creado en `false`, y el dueño decide arrancar.
-
-**Auto-mejora:** `CLAUDE.md` crece desde fallos repetidos (dos rechazos del Revisor por la misma causa producen una
-regla); los procedimientos repetidos tres veces se vuelven skills del repo; retrospectiva por ciclo; A/B de parámetros
-del Balanceador con el bot.
+- ninguna API key de Anthropic en el repo, `.env`, secretos de CI ni shells de tareas programadas; solo
+  `CLAUDE_CODE_OAUTH_TOKEN` o una tarea nativa en la nube;
+- `timeout-minutes` y `--max-turns` en cada workflow, concurrencia 1;
+- interruptor `NIGHTLY_ENABLED` (el workflow termina si vale `false`);
+- un PR pequeño por ítem, revisado por otro rol, y todo bug de QA con su prueba que falla primero.
