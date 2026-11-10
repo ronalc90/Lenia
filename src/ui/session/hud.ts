@@ -153,7 +153,7 @@ export function dialTarget(v: SessionHudView): number {
  * DESPIERTE» made the pill grow over the LUZ counter and the Journal). The whole sentence is the wide screen's
  * second label (hudWaitSub).
  */
-export const HUD_WAKE_SHORT: Text = { es: 'Despertando…', en: 'Waking up…' };
+export const HUD_WAKE_SHORT: Text = { es: 'Despertando', en: 'Waking up' };
 
 /**
  * Does the clock wait for the run's creature to wake? The game's `clockWait` (one state for the clock-start rules,
@@ -331,6 +331,7 @@ export function createSessionHud(container: HTMLElement, opts: SessionHudOptions
         lastState = st;
       }
       el.classList.toggle('rm', rm());
+      el.classList.toggle('waking', !!v.wakeHold);
       const sec = Math.ceil(v.remaining);
       const text = fmtClock(v.remaining);
       if (text !== lastText) {

@@ -4704,6 +4704,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* «Despertando» fits the pill without its tracking (390 px: «DESPERT…»). */
+.bl:not(.is-wide) .hud-clock .ss-hud.waking .ss-time small {
+  letter-spacing: 0;
+}
 /* A phone HUD has room for "Sesión 1", not for "Siembra para empezar" (the dish says "¡Toca aquí!"). */
 .bl:not(.is-wide) .hud-clock .ss-time small.w {
   display: none;
