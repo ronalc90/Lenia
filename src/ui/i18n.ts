@@ -89,7 +89,7 @@ const S = {
   cleanDish: { es: 'Limpiar placa', en: 'Clean dish' },
   cleanConfirm: { es: '¿Limpiar? Toca otra vez', en: 'Clean? Tap again' },
   cleanHold: { es: 'Mantén pulsado para limpiar la placa', en: 'Hold to clean the dish' },
-  recenter: { es: 'Centrar', en: 'Centre' },
+  recenter: { es: 'Centrar', en: 'Re-centre' },
   // Collecting light by hand, the pipettes and the finger guide (ADR-030, docs/CLARIDAD2.md §2.2, §2.5)
   /** A drop at its ripe share, the first times. */
   dropReady: { es: '¡Lista!', en: 'Ready!' },

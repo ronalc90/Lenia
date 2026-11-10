@@ -50,6 +50,12 @@ export interface DishInputHooks {
 }
 
 const LONG_PRESS_MS = 400;
+/**
+ * A long press also needs the finger seen held over this many frames (QA-4 N6: at 0.4–4 fps the 400 ms timer and
+ * the next frame ran before a quick tap's «up» was handled, and the tap opened the creature's card). At 30–60 fps
+ * the 400 ms hold spans 12–24 frames, so a real press is never delayed.
+ */
+export const LONG_PRESS_MIN_FRAMES = 6;
 const DOUBLE_TAP_MS = 280;
 /**
  * In sessions a touch shorter than this is a tap even if the finger slid up to QUICK_SLIDE_PX
@@ -80,6 +86,9 @@ export class DishInput {
   /** The long press waits one more frame before it fires (see onDown). */
   private longRaf = 0;
   private longFired = false;
+  /** Frames seen while the finger is held (LONG_PRESS_MIN_FRAMES), and their counter's frame request. */
+  private holdFrames = 0;
+  private frameRaf = 0;
   private dragging: 'none' | 'brush' | 'erase' | 'swipe' | 'steer' | 'sweep' = 'none';
   private pinched = false;
   private pinch: { d: number; mx: number; my: number } | null = null;
@@ -133,6 +142,10 @@ export class DishInput {
 
   private clearLong(): void {
     this.clearEasy();
+    if (this.frameRaf) {
+      cancelAnimationFrame(this.frameRaf);
+      this.frameRaf = 0;
+    }
     if (this.longRaf) {
       cancelAnimationFrame(this.longRaf);
       this.longRaf = 0;
@@ -200,20 +213,33 @@ export class DishInput {
     const card = this.hooks.mode() === 'seed' && !this.hooks.oneTouch() && !!this.hooks.holdTarget?.(p.x, p.y);
     if (this.hooks.mode() === 'seed' && !this.hooks.oneTouch() && (card || (!quick && this.hooks.longPressEnabled()))) {
       if (!card) this.hooks.pressStart?.(p.x, p.y);
+      this.holdFrames = 0;
+      const count = () => {
+        this.holdFrames++;
+        this.frameRaf = requestAnimationFrame(count);
+      };
+      this.frameRaf = requestAnimationFrame(count);
       this.longTimer = window.setTimeout(() => {
         this.longTimer = 0;
         // Pointer moves are delivered with the frame: on a slow frame the timer can run before the moves
         // that already happened, and a drag from a creature (a guide, a sweep) would open its card. One
-        // more frame lets those moves land first.
-        this.longRaf = requestAnimationFrame(() => {
+        // more frame lets those moves land first; on a frozen phone, as many as LONG_PRESS_MIN_FRAMES.
+        const fire = () => {
           this.longRaf = 0;
-          this.hooks.pressEnd?.();
           const ptr = this.ptrs.get(e.pointerId);
+          if (ptr && !this.pinched && this.dragging === 'none' && this.holdFrames < LONG_PRESS_MIN_FRAMES) {
+            this.longRaf = requestAnimationFrame(fire);
+            return;
+          }
+          this.hooks.pressEnd?.();
+          if (this.frameRaf) cancelAnimationFrame(this.frameRaf);
+          this.frameRaf = 0;
           if (!ptr || this.pinched || this.dragging !== 'none') return;
           if (Math.hypot(ptr.x - ptr.sx, ptr.y - ptr.sy) > this.slop(ptr.type)) return;
           this.longFired = true;
           this.hooks.bigTap(ptr.sx, ptr.sy);
-        });
+        };
+        this.longRaf = requestAnimationFrame(fire);
       }, LONG_PRESS_MS);
     }
   };

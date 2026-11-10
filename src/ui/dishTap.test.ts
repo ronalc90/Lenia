@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CARD_TAP_QUIET_MS,
+  cardHoldOk,
   dropsOnSegment,
   motesOnSegment,
   pillTapRoute,
@@ -183,6 +185,15 @@ describe('the creature card is a long press only, never during a streak (QA-3 §
   it('QA-3: during a streak a long press on a creature opens nothing (a slow tap counted as a press)', () => {
     const s = { ...session([], [orbium(1, 100, 100)]), streaking: true };
     expect(routeTap('long', 100, 100, s)).toEqual({ kind: 'none' });
+  });
+
+  // QA-4 N6 (c1-118, c1-134): before the clock there is no streak, and fast taps on the Nevera's creatures opened its
+  // card (and the next tap landed on «Seguir»). A press that starts right after a tap is part of the tapping.
+  it('QA-4 N6: a press that starts within a second of a tap never opens the card', () => {
+    expect(cardHoldOk(10_000, 9_500)).toBe(false);
+    expect(cardHoldOk(10_000, 10_000 - CARD_TAP_QUIET_MS)).toBe(true);
+    expect(cardHoldOk(10_000, -Infinity)).toBe(true);
+    expect(CARD_TAP_QUIET_MS).toBeGreaterThanOrEqual(800);
   });
 
   it('without a streak the long press still opens it', () => {

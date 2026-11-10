@@ -23,3 +23,17 @@ describe('i18n', () => {
     expect(tx(null)).toBe('');
   });
 });
+
+// QA-4 N6 (c2-026, c2-030): the English dish showed «Centrar». Its label was written once, in Spanish, before the
+// language was known; the static labels are rewritten on every language change.
+describe('static labels follow the language (QA-4 N6)', async () => {
+  const ui = ((await import('./ui.ts?raw')) as { default: string }).default;
+  const relabel = ui.slice(ui.indexOf('private relabelStatic(): void {'), ui.indexOf('private ensureBestiary('));
+  it('QA-4 N6: «Centrar» is relabelled in English', () => {
+    expect(relabel).toMatch(/fabCentre/);
+    expect(relabel).toMatch(/t\('recenter'\)/);
+    setLang('en');
+    expect(t('recenter')).toBe('Re-centre');
+    setLang('es');
+  });
+});

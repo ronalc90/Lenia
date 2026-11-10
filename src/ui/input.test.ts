@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Camera } from '../core/camera';
-import { DishInput, EASY_PULSE_HZ, QUICK_SLIDE_PX, QUICK_TAP_MS, type DishInputHooks } from './input';
+import { DishInput, EASY_PULSE_HZ, LONG_PRESS_MIN_FRAMES, QUICK_SLIDE_PX, QUICK_TAP_MS, type DishInputHooks } from './input';
 
 /** A stand-in for the dish element: it keeps the listeners DishInput adds and replays pointer events. */
 class FakeDish {
@@ -149,6 +149,21 @@ describe('the finger on the dish (input.ts, ADR-031, MECANICAS §3.4, §7.3)', (
     expect(log.big).toBe(1);
     dish.fire('pointerup', 100, 100);
     expect(log.taps).toEqual([[300, 300]]);
+  });
+
+  // QA-4 N6 (c1-118, c1-130, c2-026): at 0.4–4 fps a quick tap became the card: the 400 ms timer and the frame
+  // that opened the card ran before the finger's «up» was handled. A press opens the card only after the finger
+  // was seen held over several frames.
+  it('QA-4 N6: on a frozen phone a quick tap never opens the card (the hold must span several frames)', () => {
+    const { dish, log } = rig({ quickTaps: () => true, holdTarget: () => true });
+    // One frame every 2.5 s (0.4 fps): the up of a quick tap is handled after the next frame.
+    vi.stubGlobal('requestAnimationFrame', (cb: (t: number) => void) => setTimeout(() => cb(performance.now()), 2500));
+    dish.fire('pointerdown', 100, 100);
+    vi.advanceTimersByTime(2550);
+    dish.fire('pointerup', 100, 100);
+    expect(log.big).toBe(0);
+    expect(log.taps).toEqual([[100, 100]]);
+    expect(LONG_PRESS_MIN_FRAMES).toBeGreaterThanOrEqual(4);
   });
 
   it('with Pulso fácil a finger held on a creature taps four times a second, and lifting adds no extra tap', () => {

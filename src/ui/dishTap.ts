@@ -11,7 +11,8 @@
  *   tap on a forming seed or a shapeless blob     → grey: «aún no brilla»; nothing paid, the streak kept
  *   tap on empty agar                             → a water ripple that gathers the drops and glimmers
  *                                                    within TAP_REACH_PX; never a seed, never a cost
- *   long press on a creature                      → its card (never during a streak: QA-3 §2)
+ *   long press on a creature                      → its card (never during a streak: QA-3 §2, nor right after a
+ *                                                    tap: cardHoldOk, QA-4 N6)
  *   tap on a creature's pill                      → its pulse (the card is a long press only; a behaviour
  *                                                    pill explains itself while no streak runs: pillTapRoute)
  *   drag that starts on a swimmer                 → guide it (§2.5)
@@ -36,6 +37,18 @@ export const TAP_REACH_PX = 48;
  * the game enforces it in pulseMany too). Here it keeps the glow and the sound from firing on every pointer move.
  */
 export { SWEEP_REHIT_S };
+
+/**
+ * A press that starts this soon after a tap on the dish is part of the tapping, not a request for the card (QA-4 N6:
+ * before the clock there is no streak, and fast taps on the Nevera's creatures opened its card, and the next tap
+ * landed on «Seguir»). The card stays a long press on a still finger.
+ */
+export const CARD_TAP_QUIET_MS = 1000;
+
+/** May a press that starts at `pressMs` open a creature's card, the last tap on the dish having been at `lastTapMs`? */
+export function cardHoldOk(pressMs: number, lastTapMs: number): boolean {
+  return pressMs - lastTapMs >= CARD_TAP_QUIET_MS;
+}
 
 /** A drop as drawn this frame (overlay coordinates). */
 export interface TapDrop {

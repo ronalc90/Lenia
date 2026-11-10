@@ -17,7 +17,7 @@ import { fmt, fmtClock, fmtDuration, fmtRate, fmtShort } from './format';
 import { behaviorName, getLang, setLang, stateName, t, tx } from './i18n';
 import { icon, logo } from './icons';
 import { DishInput } from './input';
-import { dropAt, dropsOnSegment, motesOnSegment, pillTapRoute, routeTap, SweepHits, type TapReach } from './dishTap';
+import { cardHoldOk, dropAt, dropsOnSegment, motesOnSegment, pillTapRoute, routeTap, SweepHits, type TapReach } from './dishTap';
 import { boostDenial, deniedShortKey } from './boostWhy';
 import { copyPick } from './copyPick';
 import { HandGather } from './handGather';
@@ -894,7 +894,8 @@ class BiolumaUI implements UI {
       longPressEnabled: () => !!this.v?.tools.longPress,
       brushEnabled: () => !!this.v?.tools.brush,
       oneTouch: () => !!this.v?.settings.oneTouch,
-      holdTarget: (x, y) => routeTap('long', x, y, this.overlay.tapScene()).kind === 'card',
+      // QA-4 N6: a press right after a tap is part of the tapping (no streak before the clock), never the card.
+      holdTarget: (x, y) => cardHoldOk(performance.now(), this.lastTapAt) && routeTap('long', x, y, this.overlay.tapScene()).kind === 'card',
       dragStart: (x, y) => this.onDragStart(x, y),
       dragMove: (x0, y0, x1, y1) => this.onDragMove(x0, y0, x1, y1),
       dragEnd: () => this.onDragEnd(),
@@ -921,6 +922,8 @@ class BiolumaUI implements UI {
     setAttr(this.sowInfo, 'title', t('seedPriceWhy'));
     setAttr(this.fabClean, 'aria-label', t('cleanDish'));
     setAttr(this.fabClean, 'title', t('cleanDish'));
+    // QA-4 N6: written once at build time it stayed «Centrar» in English.
+    setText(this.fabCentre.querySelector('.fab-label') as HTMLElement, t('recenter'));
     setText(this.overgrownEl.querySelector('.og-title') as HTMLElement, t('overgrownTitle'));
     setText(this.overgrownEl.querySelector('.og-sub') as HTMLElement, t('overgrownText'));
     setText(this.overgrownEl.querySelector('.og-btn-l') as HTMLElement, t('cleanDish'));
