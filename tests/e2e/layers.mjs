@@ -14,11 +14,11 @@
 // three cells in place.
 //
 // Usage: node tests/e2e/layers.mjs [--dist <dir>] [--out <dir>] [--only mobile|desktop]
-import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { chromium } from 'playwright-core';
+import { findChromium, freePort, startPreview, viteBuild } from './vite-server.mjs';
 
 const args = process.argv.slice(2);
 const opt = (n, d) => (args.includes(n) ? args[args.indexOf(n) + 1] : d);
@@ -29,30 +29,12 @@ let dist = opt('--dist', '');
 if (!dist) {
   dist = resolve(`${tmpdir()}/bioluma-layers-dist`);
   console.log(`building (VITE_E2E=1) into ${dist}…`);
-  const b = spawnSync('npx', ['vite', 'build', '--outDir', dist, '--emptyOutDir'], { stdio: ['ignore', 'ignore', 'inherit'], env: { ...process.env, VITE_E2E: '1' } });
-  if (b.status !== 0) throw new Error('build failed');
+  viteBuild(dist);
 }
 dist = resolve(dist);
 
-function findChromium() {
-  const base = '/opt/pw-browsers';
-  for (const d of readdirSync(base).filter((d) => d.startsWith('chromium-')).sort().reverse()) {
-    for (const sub of ['chrome-linux', 'chrome-linux64']) {
-      const p = `${base}/${d}/${sub}/chrome`;
-      if (existsSync(p)) return p;
-    }
-  }
-  throw new Error('chromium not found under /opt/pw-browsers');
-}
-
-const port = 7900 + Math.floor(Math.random() * 600);
-// The project's own vite when installed: `npx` may first ask the registry and miss the start window.
-const localVite = existsSync('node_modules/.bin/vite') ? 'node_modules/.bin/vite' : null;
-const server = spawn(localVite ?? 'npx', [...(localVite ? [] : ['vite']), 'preview', '--outDir', dist, '--port', String(port), '--strictPort'], { stdio: ['ignore', 'pipe', 'pipe'] });
-await new Promise((res, rej) => {
-  const t = setTimeout(() => rej(new Error('preview did not start')), 120000);
-  server.stdout.on('data', (d) => String(d).includes(String(port)) && (clearTimeout(t), res()));
-});
+const port = await freePort();
+const server = await startPreview(dist, port, { timeoutMs: 120000 });
 const browser = await chromium.launch({ executablePath: findChromium(), args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 
 const CASES = [
@@ -727,7 +709,7 @@ try {
   console.error(err);
 } finally {
   await browser.close();
-  server.kill();
+  server.stop();
 }
 console.log(notes.join('\n'));
 if (problems.length) {

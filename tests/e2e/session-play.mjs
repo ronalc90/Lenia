@@ -19,12 +19,12 @@
 // ADR-031 (docs/MECANICAS.md §6.1): sowing is the Sembrar button (a tap on the dish never sows: a child who taps
 // the dish thirty times in a row never sows a seed); a tap on a creature is a pulse, ten in a row a ¡Chispazo!.
 // Session 1's steps are saved as s1-step<N>-… shots.
-import { spawn, spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { copyFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { inflateSync } from 'node:zlib';
 import { chromium } from 'playwright-core';
+import { findChromium, freePort, startPreview, viteBuild } from './vite-server.mjs';
 
 const args = process.argv.slice(2);
 const opt = (n, d) => (args.includes(n) ? args[args.indexOf(n) + 1] : d);
@@ -67,34 +67,12 @@ mkdirSync(out, { recursive: true });
 if (!dist) {
   dist = resolve(`${tmpdir()}/bioluma-play-dist`);
   console.log(`building (VITE_E2E=1) into ${dist}…`);
-  const b = spawnSync('npx', ['vite', 'build', '--outDir', dist, '--emptyOutDir'], {
-    stdio: ['ignore', 'ignore', 'inherit'],
-    env: { ...process.env, VITE_E2E: '1' },
-  });
-  if (b.status !== 0) throw new Error('build failed');
+  viteBuild(dist);
 }
 dist = resolve(dist);
 
-function findChromium() {
-  const base = '/opt/pw-browsers';
-  for (const d of readdirSync(base).filter((d) => d.startsWith('chromium-')).sort().reverse()) {
-    for (const sub of ['chrome-linux', 'chrome-linux64']) {
-      const p = `${base}/${d}/${sub}/chrome`;
-      if (existsSync(p)) return p;
-    }
-  }
-  throw new Error('chromium not found under /opt/pw-browsers');
-}
-
-const port = 7300 + Math.floor(Math.random() * 600);
-// The project's own vite when it is installed: `npx` may first ask the registry (a slow or blocked network
-// held the preview past its 120-s start window).
-const localVite = existsSync('node_modules/.bin/vite') ? 'node_modules/.bin/vite' : null;
-const server = spawn(localVite ?? 'npx', [...(localVite ? [] : ['vite']), 'preview', '--outDir', dist, '--port', String(port), '--strictPort'], { stdio: ['ignore', 'pipe', 'pipe'] });
-await new Promise((res, rej) => {
-  const t = setTimeout(() => rej(new Error('preview did not start')), 120000);
-  server.stdout.on('data', (d) => String(d).includes(String(port)) && (clearTimeout(t), res()));
-});
+const port = await freePort();
+const server = await startPreview(dist, port, { timeoutMs: 120000 });
 
 const CASES = [
   { name: 'mobile-es-dark', width: 390, height: 844, mobile: true, lang: 'es', theme: 'dark' },
@@ -1257,7 +1235,7 @@ try {
   console.error(err);
 } finally {
   await browser.close();
-  server.kill();
+  server.stop();
 }
 console.log(story.join('\n'));
 console.log(`\n${shots.length} screenshots in ${out}`);

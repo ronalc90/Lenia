@@ -16,6 +16,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
+import { VITE, stopWithScript } from './vite-server.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT =
@@ -105,12 +106,13 @@ const PLAN = [
 
 async function run() {
   const port = await freePort();
-  const vite = spawn('npx', ['vite', '--port', String(port), '--strictPort', '--host', '127.0.0.1'], {
+  const vite = spawn(VITE, ['--port', String(port), '--strictPort', '--host', '127.0.0.1'], {
     cwd: ROOT,
     stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, BROWSER: 'none' },
     detached: true,
   });
+  stopWithScript(vite);
   let viteLog = '';
   vite.stdout.on('data', (d) => (viteLog += d));
   vite.stderr.on('data', (d) => (viteLog += d));

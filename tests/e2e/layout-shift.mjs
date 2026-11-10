@@ -1,47 +1,25 @@
 // Layout stability of the real game: no pop-in, no layout shift during the first minute of play.
 // Usage: node tests/e2e/layout-shift.mjs [--dist <dir>] [--seconds 60] [--shots <dir>] [--tag <name>]
-// Serves <dir> (default dist/) with `vite preview`, opens the game at 390×844 (touch) and 1366×768,
+// Serves <dir> (default dist-e2e/, `npm run e2e`) with `vite preview`, opens the game at 390×844 (touch) and 1366×768,
 // dismisses the splash, skips the tutorial if offered, then taps the dish for N seconds like a player.
 // Checks: cumulative layout-shift score (every shift, input or not) < 0.05, and the bounding boxes of
 // the dish, the dock, the session clock and the HUD identical at t = 1 s and at the end (the first
 // seeds start the session clock: nothing may move when it starts).
-import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { chromium } from 'playwright-core';
+import { E2E_DIST, findChromium, freePort, startPreview } from './vite-server.mjs';
 
 const args = process.argv.slice(2);
 const opt = (name, def) => (args.includes(name) ? args[args.indexOf(name) + 1] : def);
-const dist = resolve(opt('--dist', 'dist'));
+const dist = resolve(opt('--dist', E2E_DIST));
 const seconds = Number(opt('--seconds', '60'));
 const shots = opt('--shots', null);
 const tag = opt('--tag', 'run');
 if (shots) mkdirSync(shots, { recursive: true });
 
-function findChromium() {
-  const base = '/opt/pw-browsers';
-  for (const d of readdirSync(base).filter((d) => d.startsWith('chromium-')).sort().reverse()) {
-    for (const sub of ['chrome-linux', 'chrome-linux64']) {
-      const p = `${base}/${d}/${sub}/chrome`;
-      if (existsSync(p)) return p;
-    }
-  }
-  throw new Error('chromium not found under /opt/pw-browsers');
-}
-
-const port = 4700 + Math.floor(Math.random() * 800);
-// The project's own vite when installed: `npx` may first ask the registry and miss the start window.
-const localVite = existsSync('node_modules/.bin/vite') ? 'node_modules/.bin/vite' : null;
-const server = spawn(localVite ?? 'npx', [...(localVite ? [] : ['vite']), 'preview', '--outDir', dist, '--port', String(port), '--strictPort'], { stdio: ['ignore', 'pipe', 'pipe'] });
-await new Promise((res, rej) => {
-  const t = setTimeout(() => rej(new Error('preview did not start')), 30000);
-  server.stdout.on('data', (d) => {
-    if (String(d).includes(String(port))) {
-      clearTimeout(t);
-      res();
-    }
-  });
-});
+const port = await freePort();
+const server = await startPreview(dist, port, { timeoutMs: 30000 });
 
 const SELECTORS = { dish: '.bl-dish', dock: '.bl-dock', clock: '.bl-hud .hud-clock', hud: '.bl-hud' };
 const failures = [];
@@ -146,7 +124,7 @@ try {
   }
 } finally {
   await browser.close();
-  server.kill();
+  server.stop();
 }
 if (failures.length) {
   console.log(`\nFAIL\n${failures.join('\n')}`);

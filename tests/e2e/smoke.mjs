@@ -1,43 +1,23 @@
 // End-to-end smoke test of the real game in headless Chromium.
-// Usage: npm run build && node tests/e2e/smoke.mjs [--single] [--shots <dir>]
-// Serves dist/ (or dist-single/) with `vite preview`, plays the first seconds of the first lab
-// session with real taps (the clock starts, the Bestiary drawer opens), fails on console errors.
+// Usage: npm run e2e   (builds dist-e2e/ with VITE_E2E=1, the debug handle, then runs this script)
+//        node tests/e2e/smoke.mjs [--dist <VITE_E2E=1 build>] [--single] [--shots <dir>]
+//   --single  serves dist-e2e-single/ (`VITE_E2E=1 SINGLE=1 npx vite build --outDir dist-e2e-single`,
+//             or `npm run e2e:single`); a plain `SINGLE=1` build has no debug handle and cannot be tested.
+// Serves the build with `vite preview`, plays the first seconds of the first lab session with real taps
+// (the clock starts, the Bestiary drawer opens), fails on console errors.
 // The full sessions 1–3 play-through is tests/e2e/session-play.mjs.
-import { spawn } from 'node:child_process';
-import { existsSync, readdirSync, mkdirSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { chromium } from 'playwright-core';
+import { E2E_DIST, ROOT, findChromium, freePort, startPreview } from './vite-server.mjs';
 
 const args = process.argv.slice(2);
 const single = args.includes('--single');
 const shotsDir = args.includes('--shots') ? args[args.indexOf('--shots') + 1] : null;
+const dist = args.includes('--dist') ? args[args.indexOf('--dist') + 1] : single ? `${ROOT}/dist-e2e-single` : E2E_DIST;
 if (shotsDir) mkdirSync(shotsDir, { recursive: true });
 
-function findChromium() {
-  const base = '/opt/pw-browsers';
-  for (const d of readdirSync(base).filter((d) => d.startsWith('chromium-')).sort().reverse()) {
-    for (const sub of ['chrome-linux', 'chrome-linux64']) {
-      const p = `${base}/${d}/${sub}/chrome`;
-      if (existsSync(p)) return p;
-    }
-  }
-  throw new Error('chromium not found under /opt/pw-browsers');
-}
-
-const port = 4173 + Math.floor(Math.random() * 500);
-const server = spawn(
-  'npx',
-  ['vite', 'preview', '--port', String(port), '--strictPort', ...(single ? ['--outDir', 'dist-single'] : [])],
-  { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, SINGLE: single ? '1' : '' } },
-);
-await new Promise((res, rej) => {
-  const t = setTimeout(() => rej(new Error('preview did not start')), 20000);
-  server.stdout.on('data', (d) => {
-    if (String(d).includes(String(port))) {
-      clearTimeout(t);
-      res();
-    }
-  });
-});
+const port = await freePort();
+const server = await startPreview(dist, port, { timeoutMs: 60000 });
 
 const errors = [];
 const browser = await chromium.launch({
@@ -77,7 +57,7 @@ try {
     }
     // A new player gets the opening intro once after the title (docs/STORY.md §11): it opens, then "Saltar intro".
     const introSkip = page.locator('[data-testid="intro-skip"]');
-    await introSkip.waitFor({ state: 'visible', timeout: 4000 }).catch(() => undefined);
+    await introSkip.waitFor({ state: 'visible', timeout: 15000 }).catch(() => undefined);
     if (!(await introSkip.isVisible().catch(() => false))) throw new Error(`[${vp.name}] the opening intro did not open after the title`);
     await introSkip.click();
     // It fades out (260 ms); a slow software-GL frame can hold the close for a while, so wait up to 4 s.
@@ -209,7 +189,7 @@ try {
   console.error(err);
 } finally {
   await browser.close();
-  server.kill();
+  server.stop();
 }
 if (errors.length) {
   console.error('Console errors:\n' + errors.join('\n'));

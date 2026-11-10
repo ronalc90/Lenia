@@ -22,6 +22,7 @@ import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { viteBuild } from './vite-server.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const args = process.argv.slice(2);
@@ -38,8 +39,7 @@ let dist = opt('--dist', '');
 if (!dist) {
   dist = path.join(WORK, 'dist');
   log(`building (VITE_E2E=1) into ${dist}…`);
-  const b = spawnSync('npx', ['vite', 'build', '--outDir', dist, '--emptyOutDir'], { cwd: ROOT, stdio: ['ignore', 'ignore', 'inherit'], env: { ...process.env, VITE_E2E: '1' } });
-  if (b.status !== 0) throw new Error('build failed');
+  viteBuild(dist);
 }
 
 // Play: the Spanish phone, the English phone and the desktop (each writes its own prefix).

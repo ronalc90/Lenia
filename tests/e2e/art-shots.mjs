@@ -20,6 +20,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
+import { VITE, stopWithScript } from './vite-server.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = process.env.ART_SHOTS_DIR ?? `${os.tmpdir()}/bioluma-shots/art/shots`;
@@ -85,13 +86,14 @@ function fetchFont(url) {
 }
 
 const port = await freePort();
-const vite = spawn('npx', ['vite', '--port', String(port), '--strictPort', '--host', '127.0.0.1'], {
+const vite = spawn(VITE, ['--port', String(port), '--strictPort', '--host', '127.0.0.1'], {
   cwd: ROOT,
   stdio: ['ignore', 'pipe', 'pipe'],
   env: { ...process.env, BROWSER: 'none' },
   detached: true,
 });
-/** Stop npx and the Vite server it started (the whole process group). */
+stopWithScript(vite);
+/** Stop the Vite server (its whole process group; also done on any exit by stopWithScript). */
 function stopVite() {
   try {
     process.kill(-vite.pid, 'SIGTERM');

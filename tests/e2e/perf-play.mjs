@@ -1,33 +1,35 @@
 // Frame-time and long-task measurement of real play on a phone viewport (390×844, dsf 2, touch).
 //
 // Plays like a player in REAL time (no debug time-lapse, no lockstep): title → intro skipped → VELA's
-// tutorial skipped → sessions one after another (sowing, Momentos, Sparks, the summary, the research
-// tree with a buy, the Bestiary and a species card now and then), and records in the page:
+// tutorial skipped → sessions one after another (sowing with the Sembrar button, pulses on creatures,
+// Momentos, Sparks, the summary, the research tree with a buy, the Bestiary and a species card now and
+// then), and records in the page:
 //   - every rAF timestamp (frame-time histogram, p50/p95/p99, frames > 50 / > 100 ms per minute),
 //   - `longtask` and `long-animation-frame` entries (with script attribution and forced layout),
 //   - optionally (--trace <file>) a Chrome trace with JS sampling and GC for attribution (run it on an
-//     unminified build: `VITE_E2E=1 npx vite build --minify false --outDir <dir>`).
+//     unminified build: `VITE_E2E=1 node_modules/.bin/vite build --minify false --outDir <dir>`).
 //
-// Usage: node tests/e2e/perf-play.mjs --dist <VITE_E2E=1 build> [--seconds 150] [--quality medium|low]
+// Usage: node tests/e2e/perf-play.mjs [--dist <VITE_E2E=1 build, default dist-e2e/>] [--seconds 150] [--quality medium|low]
 //          [--throttle 1] [--canvas-scale 1] [--instrument] [--trace <file.json>] [--json <out.json>] [--label x]
 //   --throttle 4      CDP CPU throttling (a phone's JS is ~3-5× slower than this machine's).
 //   --canvas-scale    SwiftShader only: shrink the dish's drawing buffer so software GL does not hide the CPU side.
 //   --instrument      wrap the game's hot functions (debug handle), rAF/timer callbacks, layout reads, storage,
 //                     JSON and the GL readbacks: calls per second, ms per second, and what ran inside long frames.
 //   PERF_VERBOSE=1    print what the player does.
-// Before/after of a change: build both with `VITE_E2E=1 npx vite build --outDir <dir>` and run them one after the
+// Before/after of a change: build both with `VITE_E2E=1 node_modules/.bin/vite build --outDir <dir>` and run them one after the
 // other with the same flags (e.g. --quality medium --throttle 4 --canvas-scale 0.25 --seconds 150).
 // The game picks its grid from the device (cores / memory): --quality sets what the page reports, so a
 // 4-core test machine can play the 'medium' profile a modern phone gets. SwiftShader renders on the CPU:
 // compare runs of the same build settings on the same machine, never against a phone.
-import { spawn } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+// Fails (exit 1) when the run plays no session or sows no seed: a script that cannot play measures nothing.
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { chromium } from 'playwright-core';
+import { E2E_DIST, findChromium, freePort, startPreview } from './vite-server.mjs';
 
 const args = process.argv.slice(2);
 const opt = (n, d) => (args.includes(n) ? args[args.indexOf(n) + 1] : d);
-const dist = resolve(opt('--dist', 'dist'));
+const dist = resolve(opt('--dist', E2E_DIST));
 const SECONDS = Number(opt('--seconds', '150'));
 const QUALITY = opt('--quality', 'medium');
 const THROTTLE = Number(opt('--throttle', '1'));
@@ -44,31 +46,9 @@ const INSTRUMENT = args.includes('--instrument');
 const CANVAS_SCALE = Number(opt('--canvas-scale', '1'));
 if (!existsSync(`${dist}/index.html`)) throw new Error(`no build in ${dist}`);
 
-function findChromium() {
-  const base = '/opt/pw-browsers';
-  for (const d of readdirSync(base).filter((d) => d.startsWith('chromium-')).sort().reverse()) {
-    for (const sub of ['chrome-linux', 'chrome-linux64']) {
-      const p = `${base}/${d}/${sub}/chrome`;
-      if (existsSync(p)) return p;
-    }
-  }
-  throw new Error('chromium not found under /opt/pw-browsers');
-}
-
-const port = 8100 + Math.floor(Math.random() * 800);
-// `detached`: the preview server (npx → sh → node) is killed as a process group at the end.
-const server = spawn('npx', ['vite', 'preview', '--outDir', dist, '--port', String(port), '--strictPort'], { stdio: ['ignore', 'pipe', 'pipe'], detached: true });
-const stopServer = () => {
-  try {
-    process.kill(-server.pid, 'SIGTERM');
-  } catch {
-    /* already gone */
-  }
-};
-await new Promise((res, rej) => {
-  const t = setTimeout(() => rej(new Error('preview did not start')), 60000);
-  server.stdout.on('data', (d) => String(d).includes(String(port)) && (clearTimeout(t), res()));
-});
+const port = await freePort();
+const server = await startPreview(dist, port, { timeoutMs: 60000 });
+const stopServer = () => server.stop();
 
 const browser = await chromium.launch({
   executablePath: findChromium(),
@@ -304,7 +284,14 @@ const tapSel = async (sel) => {
 // ── Title, intro, tutorial ──
 await page.goto(`http://localhost:${port}/`);
 await page.waitForFunction(() => !!window.bioluma, null, { timeout: 60000 });
-const quality = await page.evaluate(() => window.bioluma.sim.gridW);
+const quality = await page.evaluate(() => {
+  // Seeds the player's gestures planted (the Sembrar button), as session-play counts them.
+  window.__manualSeeds = 0;
+  window.bioluma.bus.on('seed', (e) => {
+    if (e.manual) window.__manualSeeds++;
+  });
+  return window.bioluma.sim.gridW;
+});
 if (process.env.PERF_VERBOSE) console.log(`booted, grid ${quality}`);
 await page.waitForTimeout(1500);
 await mark('title');
@@ -312,7 +299,10 @@ const vlog = (m) => process.env.PERF_VERBOSE && console.log(m);
 vlog(`title fps ${await page.evaluate(() => new Promise((r) => { let n = 0; const t0 = performance.now(); const f = () => (++n, performance.now() - t0 < 1000 ? requestAnimationFrame(f) : r(n)); requestAnimationFrame(f); }))}`);
 if (await tapSel('[data-testid="splash"]')) await page.waitForTimeout(1500);
 vlog('splash tapped');
+// The opening intro of a new player (docs/STORY.md §11): a slow page may open it seconds after the title.
+await page.locator('[data-testid="intro-skip"]').waitFor({ state: 'visible', timeout: 15000 }).catch(() => undefined);
 for (let i = 0; i < 10 && !(await tapSel('[data-testid="intro-skip"]')); i++) await page.waitForTimeout(300);
+for (let i = 0; i < 20 && (await page.locator('[data-testid="intro"]').isVisible().catch(() => false)); i++) await page.waitForTimeout(200);
 await page.waitForTimeout(1200);
 vlog('intro skipped');
 // VELA's first scene: "Saltar tutorial", then "¿Seguro? Toca otra vez".
@@ -331,23 +321,12 @@ const log = (m) => process.env.PERF_VERBOSE && console.log(`[${((Date.now() - t0
 
 // ── Play in real time ──
 const t0 = Date.now();
-const SPOTS = [
-  [0.5, 0.5],
-  [0.28, 0.3],
-  [0.72, 0.32],
-  [0.3, 0.72],
-  [0.7, 0.7],
-  [0.5, 0.18],
-  [0.5, 0.84],
-  [0.16, 0.5],
-  [0.84, 0.5],
-];
-let spot = 0;
 let sessions = 0;
 let treeBuys = 0;
 let bestiaryVisits = 0;
 let sparks = 0;
 let seeds = 0;
+let pulses = 0;
 let lastSessionN = 0;
 let summaryAt = 0;
 const state = () =>
@@ -363,14 +342,11 @@ const state = () =>
     const st = b.story.current();
     const golden = b.ui.targetRect('golden');
     const dish = document.querySelector('.bl-dish')?.getBoundingClientRect();
-    const dd = v.dish;
-    const c = dd ? b.ui.gridToClient(dd.cx, dd.cy) : null;
-    const e = dd ? b.ui.gridToClient(dd.cx + dd.radius, dd.cy) : null;
     return {
       phase: v.session?.phase ?? null,
       n: v.session?.n ?? 0,
       creatures: v.creatures.filter((x) => x.state !== 'dead').length,
-      busy: v.creatures.map((x) => b.ui.gridToClient(x.x, x.y)).filter(Boolean),
+      intro: vis('[data-testid="intro-skip"]'),
       storyLines: st?.phase === 'lines' && vis('.sty-box'),
       storyChoice: st?.phase === 'choice' && vis('.sty-opt'),
       momentCard: vis('.mo-card .mo-ok'),
@@ -383,14 +359,23 @@ const state = () =>
       treeOpen: !!b.flow.treeOpen,
       golden: golden && dish && (golden.width !== dish.width || golden.height !== dish.height) ? { x: golden.x + golden.width / 2, y: golden.y + golden.height / 2 } : null,
       boost: vis('.dock-boost.can'),
-      circle: c && e ? { x: c.x, y: c.y, r: Math.abs(e.x - c.x) } : null,
+      // ADR-031: sowing is the Sembrar button (a tap on the dish never sows); a tap on a stable creature pulses.
+      sow: vis('[data-testid="sow"][data-state="ready"]') || vis('[data-testid="sow"][data-state="free"]'),
+      sown: window.__manualSeeds ?? 0,
+      sowState: document.querySelector('[data-testid="sow"]')?.dataset.state ?? null,
+      scene: st?.scene.id ?? null,
+      stable: v.creatures.filter((x) => x.state === 'stable').map((x) => b.ui.gridToClient(x.x, x.y)).filter(Boolean),
     };
   });
 
 while (Date.now() - t0 < SECONDS * 1000) {
   const s = await state();
-  log(`${s.phase} n=${s.n} c=${s.creatures}${s.storyLines ? ' story' : ''}${s.momentCard ? ' moment' : ''}${s.sheet ? ' sheet' : ''}${s.drawer ? ' drawer' : ''}${s.startGo ? ' start' : ''}${s.summaryTree ? ' summary' : ''}${s.treeOpen ? ' tree' : ''}`);
-  if (s.storyLines) await tapSel('.sty-box');
+  log(`${s.phase} n=${s.n} c=${s.creatures} sow=${s.sowState}${s.intro ? ' intro' : ''}${s.storyLines ? ` story:${s.scene}` : ''}${s.momentCard ? ' moment' : ''}${s.sheet ? ' sheet' : ''}${s.drawer ? ' drawer' : ''}${s.startGo ? ' start' : ''}${s.summaryTree ? ' summary' : ''}${s.treeOpen ? ' tree' : ''}`);
+  // Session 1 starts on an empty dish and VELA's line waits for the first seed (ADR-030): press Sembrar.
+  seeds = s.sown;
+  if (s.intro) await tapSel('[data-testid="intro-skip"]');
+  else if (s.phase === 'ready' && s.n === 1 && s.creatures === 0 && s.sow) await tapSel('[data-testid="sow"]');
+  else if (s.storyLines) await tapSel('.sty-box');
   else if (s.storyChoice) await tapSel('.sty-opt');
   else if (s.momentCard) {
     await page.waitForTimeout(800); // a player reads it
@@ -462,21 +447,17 @@ while (Date.now() - t0 < SECONDS * 1000) {
       await tap(s.golden.x, s.golden.y);
       sparks++;
     } else if (s.boost && s.phase === 'running') await tapSel('.dock-boost');
-    else if (s.creatures < 4 && s.circle) {
-      const side = s.circle.r * 2 * 0.72;
-      for (let k = 0; k < SPOTS.length; k++) {
-        const [fx, fy] = SPOTS[spot++ % SPOTS.length];
-        const x = s.circle.x - side / 2 + side * fx;
-        const y = s.circle.y - side / 2 + side * fy;
-        if (s.busy.some((p) => Math.abs(p.x - x) < 70 && y > p.y - 90 && y < p.y + 60)) continue;
-        await tap(x, y);
-        seeds++;
-        break;
-      }
+    else if (s.creatures < 4 && s.sow) await tapSel('[data-testid="sow"]');
+    else if (s.stable.length && s.phase === 'running') {
+      // A pulse on a stable creature, like a player who taps what glows.
+      const p = s.stable[pulses % s.stable.length];
+      await tap(p.x, p.y);
+      pulses++;
     }
   }
   await page.waitForTimeout(350);
 }
+seeds = await page.evaluate(() => window.__manualSeeds ?? 0);
 const playEnd = await page.evaluate(() => performance.now());
 const raw = await page.evaluate(() => {
   const P = window.__perf;
@@ -535,6 +516,7 @@ const summary = {
   treeBuys,
   bestiaryVisits,
   sparks,
+  pulses,
   fxProfileEnd: raw.fx,
   fxLowered: info.filter((l) => l.startsWith('[fx] effects profile lowered')).length,
   incubationFrames: incDts.length,
@@ -589,6 +571,8 @@ if (JSON_OUT)
 
 if (TRACE) analyzeTrace(TRACE, playStart, playEnd);
 if (raw.inst) analyzeInstrument(raw.inst);
+const played = sessions > 0 && seeds > 0;
+if (!played) console.error(`\nPERF-PLAY: FAIL: the run played ${sessions} session(s) and sowed ${seeds} seed(s); nothing was measured`);
 
 /** Per-function totals over the play window, and the calls inside every frame callback over 50 ms. */
 function analyzeInstrument(inst) {
@@ -727,4 +711,4 @@ function analyzeTrace(file) {
   }
 }
 
-process.exit(0);
+process.exit(played ? 0 : 1);

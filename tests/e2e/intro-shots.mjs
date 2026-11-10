@@ -16,6 +16,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
+import { VITE, stopWithScript } from './vite-server.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = process.env.INTRO_SHOTS_DIR ?? `${tmpdir()}/bioluma-shots/intro`;
@@ -70,10 +71,12 @@ const errors = [];
 const shots = [];
 
 const port = await freePort();
-const vite = spawn(process.execPath, [path.join(ROOT, 'node_modules/vite/bin/vite.js'), '--port', String(port), '--strictPort', '--host', '127.0.0.1'], {
+const vite = spawn(VITE, ['--port', String(port), '--strictPort', '--host', '127.0.0.1'], {
   cwd: ROOT,
   stdio: ['ignore', 'pipe', 'pipe'],
+  detached: true,
 });
+const stopVite = stopWithScript(vite);
 const base = `http://127.0.0.1:${port}/intro-dev.html`;
 const browser = await chromium.launch({ executablePath: findChrome(), args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
 
@@ -183,7 +186,7 @@ try {
   errors.push(String(e?.stack ?? e));
 } finally {
   await browser.close();
-  vite.kill();
+  stopVite();
 }
 
 console.log(`${shots.length} screenshots in ${OUT}`);
