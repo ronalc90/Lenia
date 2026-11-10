@@ -38,6 +38,7 @@ describe('sessions cycle: the clock and the wallet', () => {
     const { g, count } = sessionsGame();
     const rep = report(stable(2));
     run(g, 5, rep, 0.5);
+    expect(g.view().session!.clockWait).toBe('firstSeed'); // living creatures do not start it: the first seed does
     expect(g.view().essence).toBe(C.SESSION_START_ESSENCE); // creatures before the clock pay nothing
     expect(g.view().drops).toEqual([]);
     expect(g.actions.seedAt(150, 200)).not.toBeNull();

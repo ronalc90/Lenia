@@ -625,6 +625,14 @@ export interface SessionClockView {
    * (at most cycleBalance.WAKE_HOLD_MAX_S of dish time). The HUD / button may say why (content TEXT.wakeHold).
    */
   wakeHold?: boolean;
+  /**
+   * (game, QA-4 N3) What the clock waits for, one state for the HUD pill, the start card and Sembrar (game.ts
+   * clockWait holds the one rule): 'vela' — session 1's tutorial, until VELA's «Tu reloj» (or its failsafes);
+   * 'waking' — a creature on the dish is still being born (the Nevera's, or a restored dish's), no seed is sown
+   * meanwhile (= wakeHold); 'firstSeed' — the first seed starts it; null — it runs (in 'ready': it starts as soon as
+   * the dish runs, because no seed can be sown — a full dish, no safe spot, nothing to pay with).
+   */
+  clockWait?: 'firstSeed' | 'vela' | 'waking' | null;
 }
 
 /** (game, sessions) What persists between sessions. */

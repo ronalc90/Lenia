@@ -237,3 +237,81 @@ describe('what the Goma erases is neither a failure nor bad luck', () => {
     expect(g.view().session!.wakeHold).toBe(false); // and it holds nothing any more
   });
 });
+
+// QA-4 N1 (blocker): a session-5 run reloaded while its Nevera woke came back with its creatures on the dish (a dish the
+// save restores; the ledger that knew them as plants is not saved). They woke, the dish was «Llena (4 de 4)», and the clock
+// waited for a first seed that could never be sown — for 8 minutes, until the player found the eraser.
+// QA-4 N3: one rule for when the clock starts (GameView.session.clockWait says which wait it is).
+describe('the clock always starts (QA-4 N1, N3)', () => {
+  /** A 'ready' run reloaded from its save: the dish keeps its bodies (main.ts restores it), the game knows none of them. */
+  function reloaded(n: number) {
+    const p = plantedGame();
+    const save = p.g.serialize();
+    const rec = recordingBus();
+    const g = createGame({ bus: rec.bus, rng: seededRng(9), cycle: 'sessions', grid: { w: 200, h: 200 } }, save);
+    g.setDish({ ...DISH });
+    const st = g.state as unknown as GameState;
+    st.charges = { free: 0, guaranteed: 0 };
+    const bodies = (state: 'born' | 'stable', step: number) =>
+      Array.from({ length: n }, (_, i) => creature({ id: 50 + i, x: 100 + 50 * Math.cos(i * 1.7), y: 100 + 50 * Math.sin(i * 1.7), state, age: step, behavior: null }));
+    return { g, st, bodies, ...rec };
+  }
+
+  it('a reloaded run whose dish is full of the Nevera\'s creatures starts its clock when they wake', () => {
+    const cap = C.DISH_CAPACITY[0];
+    const { g, bodies } = reloaded(cap);
+    expect(g.session!.phase).toBe('ready');
+    g.tick(0.1, report(bodies('born', 40), [], 40));
+    // Still waking: the clock waits for them, and says so (not for a seed).
+    expect(g.session!.phase).toBe('ready');
+    expect(g.view().session!.clockWait).toBe('waking');
+    expect(g.view().session!.wakeHold).toBe(true);
+    // They live: the clock starts by itself; the full dish never asks for an impossible seed.
+    g.tick(0.1, report(bodies('stable', 420), [], 420));
+    g.tick(0.1, report(bodies('stable', 430), [], 430));
+    expect(g.session!.phase).toBe('running');
+    expect(g.view().session!.clockWait).toBeNull();
+    run(g, 1, report(bodies('stable', 440), [], 440), 0.25);
+    expect(g.session!.elapsed).toBeGreaterThan(0.5);
+  });
+
+  it('a waiting run with no room and no money for a seed starts its clock: it never waits for an impossible seed', () => {
+    const { g, st, plant } = plantedGame();
+    st.essence = 0;
+    // The plant never took (the detector saw nothing), and there is nothing to sow with.
+    g.tick(0.1, report([], [], 10));
+    g.tick(0.1, report([], [], 10 + C.STABLE_AGE_STEPS + 10));
+    void plant;
+    expect(g.actions.sow!()).toBeNull();
+    g.tick(0.1, report([], [], 10 + C.STABLE_AGE_STEPS + 20));
+    expect(g.session!.phase).toBe('running');
+  });
+
+  it('one rule, one state: the Nevera waking, then the first seed; a dish with no room starts it by itself', () => {
+    const { g, plant } = plantedGame();
+    // Nothing reported yet: the first seed would start it.
+    expect(g.view().session!.clockWait).toBe('firstSeed');
+    g.tick(0.1, report([creature({ id: 1, x: plant.x, y: plant.y, state: 'born', age: 60, behavior: null })], [], 60));
+    expect(g.view().session!.clockWait).toBe('waking');
+    expect(g.actions.sow!()).toBeNull(); // waking: no seed, as the button says
+    // It lives: the clock still waits for the first seed while one can be sown.
+    const alive = creature({ id: 1, x: plant.x, y: plant.y, state: 'stable', age: 420, behavior: 'swimmer' });
+    g.tick(0.1, report([alive], [], 420));
+    expect(g.session!.phase).toBe('ready');
+    expect(g.view().session!.clockWait).toBe('firstSeed');
+    expect(g.actions.sow!()).not.toBeNull();
+    expect(g.session!.phase).toBe('running');
+    expect(g.view().session!.clockWait).toBeNull();
+    // A full dish starts it by itself, but not while the dish is paused (the start card is a pause).
+    const q = plantedGame(4);
+    const full = Array.from({ length: C.DISH_CAPACITY[0] }, (_, i) => creature({ id: i + 1, x: 40 + 55 * i, y: 100, state: 'stable', age: 420 }));
+    q.g.isPaused = true;
+    q.g.tick(0.1, report(full, [], 420));
+    expect(q.g.session!.phase).toBe('ready');
+    expect(q.g.view().session!.clockWait).toBeNull(); // nothing to wait for: it starts when the dish runs
+    q.g.isPaused = false;
+    q.g.tick(0.1, report(full, [], 430));
+    expect(q.g.session!.phase).toBe('running');
+  });
+
+});

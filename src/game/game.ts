@@ -1036,7 +1036,54 @@ export function createGame(deps: GameDeps, save?: string): Game {
   }
 
   /** The nursery is full: a new spore would wait (QA2 H-05 "⏳ Espera…"); too many at once fuse into a maze. */
-  const nurseryFull = (): boolean => forming() >= (sessions ? fx.nurseryMax : B.SEED_NURSERY_MAX) || plantWaking();
+  const nurseryFull = (): boolean => forming() >= (sessions ? fx.nurseryMax : B.SEED_NURSERY_MAX) || bornWaking();
+
+  /**
+   * THE rule of the session clock (QA-4 N3: the start card, the HUD and Sembrar said three different things), in one
+   * place: tick() applies it and GameView.session.clockWait shows it. The clock starts with the run's first seed, and
+   * it never waits for a seed that cannot be sown.
+   *  - 'vela': session 1's tutorial holds it: VELA's «Tu reloj» starts it (actions.startClock), or its failsafes (the
+   *    flow's TUTORIAL_CLOCK_FAILSAFE_MS / TUTORIAL_CLOCK_HARD_MS, TUTORIAL_HOLD_MAX_S of dish here).
+   *  - 'waking': a creature on the dish is still being born (bornWaking: the run's starter / Nevera, or the bodies of a
+   *    restored dish): no seed is sown and the clock waits, PLANT_WAKE_MAX_STEPS of its age at most (a running clock
+   *    holds for its plants WAKE_HOLD_MAX_S at most: wakeHolding).
+   *  - 'firstSeed': the first seed starts it (sow, a print, the Sembrador: noteSeed).
+   *  - null: it runs; or, while 'ready', it starts with the next running tick because no seed can be sown (a full dish,
+   *    no safe spot, nothing to pay with). QA-4 N1: a reloaded run whose dish was full of the Nevera's creatures waited
+   *    for an impossible seed for 8 minutes, until the player found the eraser.
+   */
+  function clockWait(): 'firstSeed' | 'vela' | 'waking' | null {
+    const se = ses();
+    if (!sessions || !se || se.phase === 'over') return null;
+    if (se.phase === 'running') return wakeHolding() ? 'waking' : null;
+    if (se.hold) return 'vela';
+    if (bornWaking()) return 'waking';
+    return seedPossible() ? 'firstSeed' : null;
+  }
+
+  /**
+   * A creature on the dish is still being born and holds the nursery (and, in 'ready', the clock): the run's planted
+   * starter / Nevera (plantWaking); in 'ready' also any body the dish shows forming, for the game sows nothing there
+   * before the clock runs — a dish the save restored brings its creatures back without the ledger that knew them as
+   * plants (QA-4 N1). Each for PLANT_WAKE_MAX_STEPS of its age at most.
+   */
+  function bornWaking(): boolean {
+    if (plantWaking()) return true;
+    const se = ses();
+    if (!sessions || !se || se.phase !== 'ready' || (tutorial && se.n === 1)) return false;
+    return creatures.some((c) => c.state === 'born' && !(c.age >= C.PLANT_WAKE_MAX_STEPS));
+  }
+
+  /**
+   * A seed could ever be sown on this dish as it is: a way to pay, room among the living, a safe spot. What passes by
+   * itself is left aside (a full nursery, seeds the detector has not reported yet): those only make it wait.
+   */
+  function seedPossible(): boolean {
+    const se = ses();
+    if (se && tutorial && se.n === 1 && se.phase === 'ready' && !se.planted) return true; // VELA's creature, on the house
+    const pay = s.charges.free > 0 || pipetteReady() || s.essence >= seedCost();
+    return pay && aliveCount() < room() && roomySpot() !== null;
+  }
 
   /**
    * (ADR-027 v0.027, QA-3 §3) The run's starter / Nevera creature has not lived yet (a slow device lit it with part of its
@@ -1336,7 +1383,11 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
   /** Where the Sembrar button would sow a normal seed now (GameView.sowSpot): null when the dish is full or has no safe spot. */
   function sowSpotNow(): { x: number; y: number } | null {
-    if (!sessions || dishFull()) return null;
+    return !sessions || dishFull() ? null : roomySpot();
+  }
+
+  /** The safest spot with room for the button's seed, the dish's count aside (null: no spot has room). */
+  function roomySpot(): { x: number; y: number } | null {
     const key = `${reportStep}|${recentSeeds.length}|${creatures.length}|${dish ? `${dish.cx},${dish.cy},${dish.radius}` : `${grid.w}x${grid.h}`}|${s.calib.R}|${worldNow()}`;
     if (sowCache?.key !== key) sowCache = { key, spot: safeSpot(sowBodyR()) };
     return sowCache.spot ? { ...sowCache.spot } : null;
@@ -2866,7 +2917,9 @@ export function createGame(deps: GameDeps, save?: string): Game {
             endedEarly: se.endedEarly,
             first: se.n === 1,
             tutorialHold: se.hold === true,
-            wakeHold: wakeHolding() || plantWaking(),
+            // Sembrar waits for a waking creature also once a running clock no longer does (WAKE_HOLD_MAX_S).
+            wakeHold: clockWait() === 'waking' || bornWaking(),
+            clockWait: clockWait(),
           }
         : null,
       research: {
@@ -3821,6 +3874,8 @@ export function createGame(deps: GameDeps, save?: string): Game {
       holdFor += dt;
       if (holdFor >= C.TUTORIAL_HOLD_MAX_S) actions.startClock!();
     }
+    // The clock's one rule (clockWait): a waiting run with nothing left to wait for starts now.
+    if (ses()?.phase === 'ready' && clockWait() === null) actions.startClock!();
     const running = live();
 
     s.eraTime += dt;
