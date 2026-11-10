@@ -460,7 +460,9 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
       showBox();
     }
     if (!box.hidden || reenter) {
-      const wantTop = held === 'dock' || boxOnTop(tg?.rect ?? null, big, sowRect(r0), H);
+      // A small target keeps the box off it; otherwise the side taken when the line started stays (it never
+      // jumps mid-line because «Sembrar» appeared or went: session-play's VELA-jump check).
+      const wantTop = held === 'dock' || (!!tg && !big ? boxOnTop(tg.rect, false, null, H) : boxTop);
       if (wantTop !== boxTop) {
         boxTop = wantTop;
         if (!box.hidden && !rm()) {
