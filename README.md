@@ -21,7 +21,7 @@
 
 ## Qué es
 
-Imagina una cuadrícula de lucecitas, cada una con un brillo entre 0 (apagada) y 1 (encendida). En cada paso, cada lucecita mira a sus vecinas en un anillo a su alrededor: si lo que ve le "gusta", brilla un poco más; si no, se apaga un poco. Repite esa sola regla en todas las lucecitas a la vez, decenas de veces por segundo, y aparecen manchas de luz que **nadan, giran y laten solas**. Eso es **vida artificial**: nadie programó cómo se mueve cada criatura, el movimiento *emerge* de la regla. La regla se llama **Lenia**, la creó Bert Wang-Chak Chan, y Bioluma la convierte en un juego: tocas la placa para sembrar, miras qué sobrevive, las criaturas estables te dan **Esencia** y, al final de cada sesión corta, esa Esencia se vuelve **Datos** para comprar mejoras. Es gratis, sin anuncios, sin cuenta y se juega con un dedo.
+Imagina una cuadrícula de lucecitas, cada una con un brillo entre 0 (apagada) y 1 (encendida). En cada paso, cada lucecita mira a sus vecinas en un anillo a su alrededor: si lo que ve le "gusta", brilla un poco más; si no, se apaga un poco. Repite esa sola regla en todas las lucecitas a la vez, decenas de veces por segundo, y aparecen manchas de luz que **nadan, giran y laten solas**. Eso es **vida artificial**: nadie programó cómo se mueve cada criatura, el movimiento *emerge* de la regla. La regla se llama **Lenia**, la creó Bert Wang-Chak Chan, y Bioluma la convierte en un juego: siembras con el botón **Sembrar**, miras qué sobrevive, las criaturas estables llenan gotas de **Luz** que recoges con el dedo (y tocarlas les da un **Pulso** que brilla y paga) y, al final de cada sesión corta, esa Luz se vuelve **Datos** para comprar mejoras. Es gratis, sin anuncios, sin cuenta y se juega con un dedo.
 
 <p align="center">
   <img src="docs/capturas/criaturas-naciendo-y-nadando.gif" alt="Animación: dos semillas nacen en la placa, se vuelven criaturas vivas y nadan solas" width="360">
@@ -30,23 +30,26 @@ Imagina una cuadrícula de lucecitas, cada una con un brillo entre 0 (apagada) y
 
 ## Qué puedes hacer
 
-- **Sembrar con un toque.** Cada semilla lleva ruido asimétrico: muchas se disuelven y algunas cobran vida. En la primera sesión las tres primeras semillas siempre viven, para que nadie empiece con la placa vacía.
-- **Jugar sesiones cortas de laboratorio.** La primera dura **15 segundos** y el reloj arranca con tu primera gota; la ruta Reloj del Árbol la alarga hasta **2:30**.
-- **Convertir Esencia en Datos.** Al sonar "¡Tiempo!" la placa se congela y un resumen muestra la cuenta completa.
-- **Crecer el Árbol de investigación:** 54 nodos en **7 rutas rectas** (Reloj, Gotero, Placa, Vida, Descubrir, Mundos, Destello). Cada compra muestra el "antes → después".
+- **Sembrar con el botón «Sembrar».** El juego elige el sitio libre más seguro (o arrastras la semilla adonde quieras); tocar la placa nunca siembra. Cada semilla lleva ruido asimétrico: algunas no cuajan y te devuelven su precio, y tras dos fallos seguidos la siguiente vive seguro. En la primera sesión las tres primeras semillas siempre viven.
+- **Recoger la Luz.** Cada criatura estable llena su propia gota de **Luz**; la recoges con un toque o pasando el dedo. La Luz hecha nunca se pierde: lo que quede se recoge solo al sonar «¡Tiempo!». Las pipetas de la ruta ↓ Recoger la recogen por ti.
+- **Tocar las criaturas: el Pulso.** Tocar una criatura estable le da un **Pulso**: Luz al momento y su gota recogida. Los toques seguidos forman una **racha** que sube toda la Luz que entra, y cada 10.º toque seguido es un **¡Chispazo!** ×5. Tocar lo que no es una criatura estable no paga nada, y quien juega sin tocar nunca gana menos que antes.
+- **Jugar sesiones cortas de laboratorio.** La primera dura **15 segundos** de juego y su reloj espera a que VELA termine de hablar; la ruta Reloj del Árbol las alarga hasta **2:30**. El reloj se para mientras VELA habla o tienes una hoja abierta.
+- **Convertir Luz en Datos.** Al sonar «¡Tiempo!» la placa se congela y un resumen muestra la cuenta completa: 1 Dato por cada 25 de Luz, más especies nuevas, maneras de moverse, Encargos y récords.
+- **Crecer el Árbol de investigación:** 62 mejoras en **8 rutas rectas** (Reloj, Gotero, Placa, Vida, ↓ Recoger, Descubrir, Mundos, ✦ Pulso). Cada compra muestra el «antes → después».
 - **Abrir 7 mundos.** Cada mundo es otra combinación de parámetros de Lenia (μ, σ, radio, anillos) y hace nacer otra especie; en Gigantes las criaturas son tan grandes que caben la mitad y valen el doble.
 - **Llenar el Bestiario.** Un detector reconoce cada criatura estable comparando su firma con el catálogo de Bert Chan (26 especies curadas); cada especie nueva queda para siempre.
-- **Avanzar noches e historia.** VELA te acompaña, te pide Encargos durante las sesiones y cada pocas sesiones la noche avanza gratis: se abren mejoras nuevas y nunca se borra nada.
-- **Atrapar el Destello dorado**, cumplir objetivos y logros permanentes y buscar [secretos](https://github.com/ronalc90/Lenia/wiki/Secretos) (sin spoilers).
+- **Aprender de cada accidente.** VELA, el monitor de cultivo **MC-7**, avisa antes de un choque cuando aún puedes hacer algo (arrastrar a una nadadora la desvía) y explica cada fusión, desborde o semilla fallida. Una criatura que muere deja su Luz en la placa, y la primera muerte de cada causa da Datos.
+- **Avanzar noches e historia.** VELA te pide Encargos durante las sesiones y cada pocas sesiones la noche avanza gratis: se abren mejoras nuevas y nunca se borra nada.
+- **Nutrientes, el Destello dorado** y objetivos y logros permanentes, más [secretos](https://github.com/ronalc90/Lenia/wiki/Secretos) (sin spoilers).
 - **Ver una placa redonda que crece**, con borde de vidrio que absorbe y desvía a las nadadoras.
 - **Competir en un ranking global opcional:** no se envía nada hasta que eliges un nombre, y cada envío va firmado ([`docs/RANKING.md`](docs/RANKING.md)).
 - **Llevarte la partida:** guardado local automático y, en **Ajustes**, los botones **Exportar** e **Importar** para pasarla a otro aparato.
-- **Jugar como prefieras:** español e inglés, tema oscuro y claro, "Reducir movimiento", "Modo un toque" y botones de al menos 48 px. Es una PWA instalable con service worker para abrir sin conexión.
+- **Jugar como prefieras:** español e inglés, tema oscuro y claro, «Reducir movimiento», «Modo un toque», «Pulso fácil» y botones de al menos 48 px. Es una PWA instalable con service worker para abrir sin conexión.
 - **Escuchar audio sintetizado en vivo** con Web Audio: no hay archivos de sonido ni arte generado por IA.
 
 ## Capturas
 
-Todas son del sitio publicado ([bioluma-xi.vercel.app](https://bioluma-xi.vercel.app), v0.018), jugado con toques en un navegador sin pantalla.
+Son del sitio publicado ([bioluma-xi.vercel.app](https://bioluma-xi.vercel.app)) en la **v0.018**, jugado con toques en un navegador sin pantalla. Desde entonces la moneda se llama Luz, se siembra con el botón «Sembrar» y VELA es el monitor MC-7; las capturas de la [wiki](https://github.com/ronalc90/Lenia/wiki) se regeneran con `tests/e2e/wiki-shots.mjs`.
 
 <p align="center">
   <img src="docs/capturas/pantalla-de-titulo-escritorio.jpg" alt="Pantalla de título de Bioluma" width="100%">
@@ -55,8 +58,8 @@ Todas son del sitio publicado ([bioluma-xi.vercel.app](https://bioluma-xi.vercel
 
 <table>
   <tr>
-    <td align="center" width="33%"><img src="docs/capturas/sesion-en-movil.jpg" alt="Una sesión en el teléfono: una criatura viva y otra naciendo" width="100%"><br><sub>En el teléfono: una criatura ya viva da Esencia y otra está naciendo.</sub></td>
-    <td align="center" width="33%"><img src="docs/capturas/resumen-de-sesion-movil.jpg" alt="Resumen de la sesión: la Esencia se vuelve Datos" width="100%"><br><sub>Fin de la sesión: la Esencia se vuelve Datos, con la cuenta a la vista.</sub></td>
+    <td align="center" width="33%"><img src="docs/capturas/sesion-en-movil.jpg" alt="Una sesión en el teléfono: una criatura viva y otra naciendo" width="100%"><br><sub>En el teléfono: una criatura ya viva da Luz y otra está naciendo.</sub></td>
+    <td align="center" width="33%"><img src="docs/capturas/resumen-de-sesion-movil.jpg" alt="Resumen de la sesión: la Luz se vuelve Datos" width="100%"><br><sub>Fin de la sesión: la Luz se vuelve Datos, con la cuenta a la vista.</sub></td>
     <td align="center" width="33%"><img src="docs/capturas/arbol-antes-y-despues-movil.jpg" alt="Una mejora del Árbol con su antes y después" width="100%"><br><sub>El Árbol: cada mejora muestra el antes y el después.</sub></td>
   </tr>
 </table>
@@ -65,16 +68,16 @@ Todas son del sitio publicado ([bioluma-xi.vercel.app](https://bioluma-xi.vercel
 
 1. **Simulación en la GPU** ([`src/sim/`](src/sim)). La placa es una textura `RGBA16F` que se actualiza en *ping-pong* con shaders de WebGL2. Cada paso aplica la regla de Chan: `A ← clip01(A + dt · G(K * A))`, con un núcleo en anillo de perfil `(4r(1−r))⁴` y crecimiento `G(u) = 2·max(0, 1 − (u−μ)²/(9σ²))⁴ − 1`. Una referencia en CPU con FFT (`cpu.ts`) usa las mismas fórmulas para las pruebas y los bots.
 2. **Detector en CPU** ([`src/detect/`](src/detect)). Cada 10 pasos se lee una instantánea de la placa (nunca `readPixels` por fotograma). El detector separa las manchas, las sigue entre lecturas y decide su estado (naciendo, estable, explotó, muerta), su comportamiento (quieta, late, nada, gira…) y su especie por firma.
-3. **Juego sin DOM** ([`src/game/`](src/game)). Solo las criaturas estables pagan Esencia (una sopa uniforme da 0). El reloj de sesión, la conversión a Datos, el Árbol, los mundos y las noches son funciones puras; todos los números de balance viven en [`src/game/balance.ts`](src/game/balance.ts) y [`src/game/cycleBalance.ts`](src/game/cycleBalance.ts).
+3. **Juego sin DOM** ([`src/game/`](src/game)). Solo las criaturas estables pagan Luz (`essence` en el código; una sopa uniforme da 0) y solo un toque sobre una criatura estable da Pulso. El reloj de sesión, la conversión a Datos, el Árbol, los mundos y las noches son funciones puras; todos los números de balance viven en [`src/game/balance.ts`](src/game/balance.ts) y [`src/game/cycleBalance.ts`](src/game/cycleBalance.ts).
 4. **Interfaz y audio** ([`src/ui/`](src/ui), [`src/audio/`](src/audio)). TypeScript y DOM sin framework; el sonido se sintetiza con Web Audio a partir de los eventos del juego.
 5. **Integración** ([`src/main.ts`](src/main.ts)). Une todo en el bucle de `requestAnimationFrame` y guarda la partida en `localStorage`.
 
 ```mermaid
 flowchart TD
-    T["Toque del jugador"] --> S["Semilla con ruido<br/>(src/sim/seed.ts)"]
+    T["Botón Sembrar"] --> S["Semilla con ruido<br/>(src/sim/seed.ts)"]
     S --> G["Lenia en la GPU<br/>WebGL2 · RGBA16F ping-pong<br/>(src/sim)"]
     G -- "instantánea cada 10 pasos" --> D["Detector en CPU<br/>estado · comportamiento · especie<br/>(src/detect)"]
-    D --> J["Juego sin DOM<br/>Esencia · reloj · Datos · Árbol · mundos<br/>(src/game)"]
+    D --> J["Juego sin DOM<br/>Luz · Pulso · reloj · Datos · Árbol · mundos<br/>(src/game)"]
     G -- "render de la placa" --> U["Interfaz y audio<br/>DOM + Web Audio<br/>(src/ui, src/audio)"]
     J --> U
     J --> L[("Guardado local<br/>localStorage")]
@@ -128,7 +131,7 @@ npm run bot            # bot de sesiones: juega el ciclo integrado e imprime el 
 Pruebas de navegador (usan `playwright-core` con un Chromium en `/opt/pw-browsers`; nunca `playwright install`):
 
 ```bash
-npm run e2e            # build con VITE_E2E=1 y prueba de humo (tests/e2e/smoke.mjs)
+npm run e2e            # build con VITE_E2E=1 en dist-e2e/ y prueba de humo (tests/e2e/smoke.mjs)
 npm run e2e:layers     # ningún botón queda tapado, en móvil y escritorio
 npm run e2e:release    # revisión final: toques de 48 px, una sola cifra antes de sembrar, exportar/importar
 npm run e2e:sim        # la simulación en GPU comparada con la referencia en CPU
@@ -163,10 +166,10 @@ docs/capturas/  las capturas de este README
 
 ## Estado del proyecto
 
-- **Versión 0.018** ([`version.json`](version.json)), publicada en **[bioluma-xi.vercel.app](https://bioluma-xi.vercel.app)**. El juego completo se juega en el navegador, en el teléfono y en el computador, y se puede instalar como PWA.
+- **Versión 0.027** ([`version.json`](version.json)), publicada en **[bioluma-xi.vercel.app](https://bioluma-xi.vercel.app)**. El juego completo se juega en el navegador, en el teléfono y en el computador, y se puede instalar como PWA.
 - **Tiendas: próximamente.** Las builds de escritorio y Android ya se generan en CI, pero todavía no están publicadas en Google Play, Steam, Microsoft Store, itch.io ni galaxy.click ([`docs/PLATAFORMAS.md`](docs/PLATAFORMAS.md)).
 - **Pagos apagados.** La tienda de cosméticos (solo visual, nunca toca la economía) existe en el código con `STORE_ENABLED = false`.
-- **"Bioluma" es el nombre de trabajo** (antes "Petri"). Lo que sigue está en [`docs/ROADMAP.md`](docs/ROADMAP.md).
+- **"Bioluma" es el nombre definitivo** (antes "Petri", [ADR-023](DECISIONS.md)). Lo que sigue está en [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Wiki y documentación
 
@@ -205,21 +208,23 @@ Las especies, sus nombres y sus parámetros vienen del catálogo de **Lenia** de
 
 ### What it is
 
-Picture a grid of tiny lights, each glowing between 0 and 1. On every step each light looks at its neighbours in a ring around it: if it likes what it sees it glows a little more, otherwise it fades. Apply that single rule to every light at once, many times per second, and blobs of light appear that **swim, spin and pulse on their own**. Nobody animated them: the motion *emerges* from the rule. Bioluma turns this into a game: tap the dish to seed it, watch what survives, stable creatures earn **Essence**, and at the end of each short session that Essence becomes **Data** to buy upgrades.
+Picture a grid of tiny lights, each glowing between 0 and 1. On every step each light looks at its neighbours in a ring around it: if it likes what it sees it glows a little more, otherwise it fades. Apply that single rule to every light at once, many times per second, and blobs of light appear that **swim, spin and pulse on their own**. Nobody animated them: the motion *emerges* from the rule. Bioluma turns this into a game: sow with the **Sow** button, watch what survives, stable creatures fill drops of **Glow** that you collect with a finger (tapping one gives it a **Pulse** that shines and pays), and at the end of each short session that Glow becomes **Data** to buy upgrades.
 
 ### What you can do
 
-- **Seed with a tap**: many seeds dissolve, some come alive; in the first session the first three seeds always live.
-- **Short lab sessions**: the first lasts **15 seconds** and the clock starts with your first drop; the Clock route stretches it up to **2:30**.
-- **Research Tree**: 54 nodes on **7 straight routes** (Clock, Dropper, Dish, Life, Discover, Worlds, Spark), each purchase shows "before → after".
+- **Sow with the Sow button**: the game picks the safest free spot (or drag the seed where you like); tapping the dish never sows. A seed that does not take refunds its price, and after two misses the next one is sure; in the first session the first three seeds always live.
+- **Collect the Glow and pulse your creatures**: every stable creature fills its own drop; a tap or a swipe collects it and Glow made is never lost. A tap on a stable creature is a **Pulse**: taps in a row build a **streak** that boosts all incoming Glow, and every 10th hit in a row is a ×5 **Flash**. An idle player never earns less.
+- **Short lab sessions**: the first lasts **15 seconds** of play and its clock waits for VELA; the Clock route stretches them up to **2:30**. Glow becomes Data at "Time!" (1 Data per 25 Glow, plus discoveries, Requests and records).
+- **Research Tree**: 62 upgrades on **8 straight routes** (Clock, Dropper, Dish, Life, ↓ Collect, Discover, Worlds, ✦ Pulse), each purchase shows "before → after".
 - **7 worlds**, each a different set of Lenia parameters with its own species, and a **Bestiary** where a detector names every stable creature against Bert Chan's catalog (26 species).
-- **Nights and a story** with VELA, requests during sessions, the golden **Spark**, achievements and spoiler-free [secrets](https://github.com/ronalc90/Lenia/wiki/Secrets-en).
+- **VELA, the MC-7 culture monitor**, warns before a collision while you can still act (drag a swimmer to steer it) and explains every fusion, overflow and failed seed; the first death of each cause pays Data.
+- **Nights and a story**, Requests during sessions, Nutrients, the golden **Spark**, achievements and spoiler-free [secrets](https://github.com/ronalc90/Lenia/wiki/Secrets-en).
 - **Optional global leaderboard** (nothing is sent until you pick a name; submissions are signed), local autosave plus **Export** and **Import** in Settings.
-- **Spanish and English**, dark and light themes, "Reduce motion", "One-touch mode", 48 px touch targets; installable PWA; audio synthesised live with Web Audio (no sound files, no AI-generated art).
+- **Spanish and English**, dark and light themes, "Reduce motion", "One-touch mode", "Easy pulse", 48 px touch targets; installable PWA; audio synthesised live with Web Audio (no sound files, no AI-generated art).
 
 ### How it works
 
-Lenia runs in WebGL2 shaders on an `RGBA16F` ping-pong texture with Chan's exact kernel and growth function (a CPU FFT reference checks it in tests). Every 10 steps a snapshot goes to a CPU **detector** that tracks blobs and decides state, behaviour and species. A DOM-free **game** module turns stable creatures into Essence, runs the session clock, Data, Tree, worlds and nights; a framework-free **UI** and a Web Audio **synth** react to its events. See the diagram above and [`DECISIONS.md`](DECISIONS.md).
+Lenia runs in WebGL2 shaders on an `RGBA16F` ping-pong texture with Chan's exact kernel and growth function (a CPU FFT reference checks it in tests). Every 10 steps a snapshot goes to a CPU **detector** that tracks blobs and decides state, behaviour and species. A DOM-free **game** module turns stable creatures into Glow (`essence` in code), pays pulses, runs the session clock, Data, Tree, worlds and nights; a framework-free **UI** and a Web Audio **synth** react to its events. See the diagram above and [`DECISIONS.md`](DECISIONS.md).
 
 **Stack:** TypeScript (strict) · Vite · WebGL2 · vanilla DOM · Web Audio · Vitest · playwright-core · zero runtime dependencies · Vercel (site and Edge Functions for the leaderboard) · Electron and Capacitor wrappers in [`platforms/`](platforms).
 
@@ -239,7 +244,7 @@ npm run build:single   # single-file build into dist-single/
 ```bash
 npm run typecheck      # tsc --noEmit
 npm test               # Vitest: simulation, detector, economy, save, leaderboard…
-npm run e2e            # Playwright smoke test (builds with VITE_E2E=1; Chromium under /opt/pw-browsers)
+npm run e2e            # Playwright smoke test (builds dist-e2e/ with VITE_E2E=1; Chromium under /opt/pw-browsers)
 npm run bot            # session bot: plays the sessions cycle and prints the pacing report
 ```
 
@@ -247,7 +252,7 @@ npm run bot            # session bot: plays the sessions cycle and prints the pa
 
 ### Project status
 
-Version **0.018**, live at **[bioluma-xi.vercel.app](https://bioluma-xi.vercel.app)** and playable on phones and desktops as a PWA. Desktop and Android builds are produced by CI but not yet published to any store; payments are switched off (`STORE_ENABLED = false`). "Bioluma" is a working title (formerly "Petri"). Next steps: [`docs/ROADMAP.md`](docs/ROADMAP.md). Player guide: the **[wiki](https://github.com/ronalc90/Lenia/wiki/Home-en)**.
+Version **0.027**, live at **[bioluma-xi.vercel.app](https://bioluma-xi.vercel.app)** and playable on phones and desktops as a PWA. Desktop and Android builds are produced by CI but not yet published to any store; payments are switched off (`STORE_ENABLED = false`). "Bioluma" is the final name (formerly "Petri", ADR-023). Next steps: [`docs/ROADMAP.md`](docs/ROADMAP.md). Player guide: the **[wiki](https://github.com/ronalc90/Lenia/wiki/Home-en)**.
 
 ### Author and license
 

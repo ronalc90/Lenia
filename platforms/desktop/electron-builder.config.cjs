@@ -98,7 +98,7 @@ const config = {
     icon: 'build/icons',
     category: 'Game',
     synopsis: 'Incremental game grown from live Lenia artificial life',
-    description: 'Bioluma: sow matter, discover Lenia species, trigger an extinction and return with better genes.',
+    description: 'Bioluma: sow real Lenia artificial life in a petri dish, tap the creatures that are born to gather Glow and discover species, session by session.',
     maintainer: 'Bioluma contributors',
     desktop: { entry: { StartupWMClass: 'Bioluma', Keywords: 'game;idle;incremental;lenia;artificial life;' } },
   },
