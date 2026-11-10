@@ -20,6 +20,7 @@ import { DishInput } from './input';
 import { dropAt, dropsOnSegment, motesOnSegment, pillTapRoute, routeTap, SweepHits, type TapReach } from './dishTap';
 import { boostDenial, deniedShortKey } from './boostWhy';
 import { copyPick } from './copyPick';
+import { HandGather } from './handGather';
 import { installScreenGuard, PressGuard, screenChanged } from './pressGuard';
 import { stackLabel, type LabelObstacles, type LabelPlacement, type StackRequest } from './labelPlace';
 import { FlyLayer, flyDuration } from './fx/fly';
@@ -348,6 +349,8 @@ class BiolumaUI implements UI {
   private flyQ = '';
   // Collecting by hand and guiding (ADR-030)
   private readonly sweepIds: number[] = [];
+  /** A ripple's or a sweep's drops in one call of the game (one hit at most, code review v0.027 #4). */
+  private readonly hand: HandGather;
   // ADR-031 (PB's dishTap): the session finger's scratch: the empty-agar reach, the sweep's glimmers and creatures.
   private readonly reach: TapReach = { drops: [], dropN: 0, motes: [], moteN: 0 };
   private readonly sweepMotes: number[] = [];
@@ -507,6 +510,7 @@ class BiolumaUI implements UI {
   ) {
     this.camera = deps.camera;
     this.actions = deps.actions;
+    this.hand = new HandGather(() => this.actions, this.camera);
     this.prefs = sanitizePrefs(loadJSON<unknown>(PREFS_KEY, {}));
     this.el = h('div', { class: 'bl' });
     this.overlay = new Overlay(this.camera);
@@ -2233,7 +2237,8 @@ class BiolumaUI implements UI {
     const a = this.actions;
     const ov = this.overlay;
     this.lastTapAt = performance.now();
-    const route = routeTap('tap', px, py, ov.tapScene(), this.reach);
+    const scene = ov.tapScene();
+    const route = routeTap('tap', px, py, scene, this.reach);
     if (route.kind !== 'pulse') this.closeCard();
     switch (route.kind) {
       case 'catch':
@@ -2257,7 +2262,8 @@ class BiolumaUI implements UI {
       case 'ripple': {
         ov.agarTap(px, py);
         const r = this.reach;
-        for (let i = 0; i < r.dropN; i++) this.collectDrop(r.drops[i]);
+        // The drops in reach come in one call: one tap, one hit (the game draws each one in through lightCollected).
+        if (r.dropN > 0 && this.hand.ripple(px, py, scene.reachPx) > 0) this.hideFirstHint();
         for (let i = 0; i < r.moteN; i++) this.catchMote(r.motes[i]);
         return;
       }
@@ -2345,10 +2351,12 @@ class BiolumaUI implements UI {
       let at = e.by === 'hand' && this.handAt ? this.handAt : null;
       this.handTold = this.handTold || e.by === 'hand';
       if (!at) {
-        // Where that drop is drawn (an owned one sits on its creature's outline), else its grid point.
+        // Where that drop is drawn (an owned one sits on its creature's outline), else its grid point. A drop the hand
+        // gathered (a ripple, a sweep: HandGather) draws in now, the one the game named.
         const d = ov.drops.atGrid(e.x, e.y, 4);
+        const took = d && e.by === 'hand' && this.hand.active ? ov.drops.take(d.id, this.overlayNow()) : null;
         const p = d ? null : ov.screenOf(e.x, e.y);
-        at = d ? { x: d.x, y: d.y, hue: ov.drops.hueOf(d.id) } : { x: p!.x, y: p!.y, hue: ov.drops.hueOf(-1) };
+        at = took ?? (d ? { x: d.x, y: d.y, hue: ov.drops.hueOf(d.id) } : { x: p!.x, y: p!.y, hue: ov.drops.hueOf(-1) });
       }
       this.collectedAt(at.x, at.y, at.hue, e.amount, e.by);
     });
@@ -2471,7 +2479,8 @@ class BiolumaUI implements UI {
     const scene = this.overlay.tapScene();
     const before = this.sweepN;
     this.sweepN = dropsOnSegment(scene, x0, y0, x1, y1, this.sweepIds, this.sweepN);
-    for (let i = before; i < this.sweepN; i++) this.collectDrop(this.sweepIds[i]);
+    // The game collects the drops on this stretch of the path, no hit (code review v0.027 #4).
+    if (this.sweepN > before && this.hand.sweep(x0, y0, x1, y1, scene.dropPx) > 0) this.hideFirstHint();
     if (!scene.pulsing) return;
     // ADR-031 (PB): the glimmers on the path are caught, and every creature it crosses glows (once per SWEEP_REHIT_S).
     const m0 = this.sweepMoteN;
