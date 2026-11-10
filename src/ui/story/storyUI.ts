@@ -272,7 +272,10 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
       return;
     }
     const ghost = box.cloneNode(true) as HTMLElement;
+    // A copy for the fade only: none of its test ids (v0.028 smoke: two «Saltar tutorial» on screen made every strict
+    // locator throw while a slow frame held the fade for a second, and the tutorial was never skipped).
     ghost.removeAttribute('data-testid');
+    for (const el of ghost.querySelectorAll('[data-testid]')) el.removeAttribute('data-testid');
     ghost.setAttribute('aria-hidden', 'true');
     ghost.style.pointerEvents = 'none';
     box.after(ghost);

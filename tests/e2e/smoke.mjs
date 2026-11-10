@@ -46,6 +46,17 @@ try {
     page.on('pageerror', (e) => errors.push(`[${vp.name}] pageerror: ${e.message}`));
     await page.goto(`http://localhost:${port}/`);
     await page.waitForFunction(() => !!window.bioluma, null, { timeout: 15000 });
+    // Every frame: VELA's controls exist once. Her box fades out as a copy when it moves (storyUI hideBox); in v0.028
+    // the copy kept «Saltar tutorial»'s test id, every strict locator on it threw and the tutorial was never skipped.
+    await page.evaluate(() => {
+      window.__dupIds = [];
+      const look = () => {
+        for (const id of ['tutorial-skip', 'story-skip', 'tutorial-next', 'sow'])
+          if (document.querySelectorAll(`[data-testid="${id}"]`).length > 1 && !window.__dupIds.includes(id)) window.__dupIds.push(id);
+        requestAnimationFrame(look);
+      };
+      look();
+    });
     await page.waitForTimeout(800);
     if (shotsDir) await page.screenshot({ path: `${shotsDir}/${vp.name}-0-start.png` });
 
@@ -178,6 +189,8 @@ try {
     if (state.seeds < 1) throw new Error(`[${vp.name}] no seeds registered from the Sembrar button`);
     // The live game plays lab sessions: the first seed started the clock, shown in the HUD (a first run
     // lasts ~15 s, ADR-027, so by now it may be over already).
+    const dup = await page.evaluate(() => window.__dupIds);
+    if (dup.length) throw new Error(`[${vp.name}] two elements at once with the test id ${dup.join(', ')}`);
     if (!state.session || state.session.phase === 'ready') throw new Error(`[${vp.name}] the session clock is not running: ${JSON.stringify(state.session)}`);
     if (!state.clock) throw new Error(`[${vp.name}] no session clock in the HUD`);
     if (shotsDir) await page.screenshot({ path: `${shotsDir}/${vp.name}-2-running.png` });
