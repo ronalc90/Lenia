@@ -24,7 +24,7 @@
     "bump": "node scripts/bump-version.mjs"
   },
   "devDependencies": {
-    "playwright-core": "^1.63.0",
+    "playwright-core": "^1.65.0",
     "typescript": "^5.9.3",
     "vite": "^6.4.3",
     "vite-node": "^3.2.4",
