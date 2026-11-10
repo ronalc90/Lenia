@@ -855,7 +855,9 @@ export function createGame(deps: GameDeps, save?: string): Game {
     const f = tapFinger();
     if (!f) return ownDrop(c); // a paused dish: the drop the finger drew in still comes, nothing else
     const r = registerHit(f.ps, { kind: 'pulse', P: pulseLight(), fx: f.pf, nowMs: now(), at: { x: c.x, y: c.y, owner: c.id }, R: s.calib.R, place: motePlace });
-    if (!r) return 0; // nothing pays on this dish: not even a hit
+    // Nothing pays on this dish (a flooded one: P = 0), not even a hit; but the drop the finger drew in comes (code
+    // review v0.027 #7: it flew to the counter on screen and stayed in the game).
+    if (!r) return ownDrop(c);
     let got = 0;
     const L = collectable();
     const d = L?.drops.find((q) => q.owner === c.id && q.amount > 0);

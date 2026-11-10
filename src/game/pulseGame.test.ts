@@ -131,6 +131,23 @@ describe('the pulse in the game (ADR-031)', () => {
     expect(t.g.actions.pulse!(1)).toBeGreaterThan(0); // the finger works again
   });
 
+  // Code review v0.027 #7: on a flooded dish (P = 0) the tap's drop flew to the counter on screen and stayed in the game.
+  it('on a flooded dish a tap on a creature pays no pulse but still collects the drop it drew in', () => {
+    const t = tapGame();
+    run(t.g, 2, report(ONE), 0.5);
+    const flood = { ...report(ONE), fill: 0.6 };
+    run(t.g, 1, flood, 0.25);
+    expect(t.g.view().essencePerSec).toBe(0);
+    const drop = t.g.view().drops!.find((d) => d.owner === 1)!.amount;
+    expect(drop).toBeGreaterThan(0);
+    const wallet = t.g.view().essence;
+    expect(t.g.actions.pulse!(1)).toBeCloseTo(drop, 9);
+    expect(t.g.view().essence).toBeCloseTo(wallet + drop, 9);
+    expect(t.g.view().drops!.filter((d) => d.owner === 1 && d.amount > 0)).toHaveLength(0);
+    expect(t.g.view().streak?.hits ?? 0).toBe(0); // nothing pays on this dish: not even a hit
+    expect(pulses(t.log)).toHaveLength(0);
+  });
+
   it('a paused dish keeps its glimmers and its streak: a tap there catches nothing', () => {
     const t = tapGame();
     t.g.actions.endSessionNow!();
