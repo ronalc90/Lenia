@@ -1,8 +1,8 @@
 # Diseño del juego: Bioluma (Lenia incremental)
 
-> **Nombre de trabajo: Bioluma** (antes "Petri"). Documento original v1 del 3 de oct. de 2026, autor Ronald Demian Cipagauta Penagos (PDF fuente en [`docs/source/GDD-Petri-v1.pdf`](source/GDD-Petri-v1.pdf)).
+> **Nombre: Bioluma** (antes "Petri"; definitivo desde ADR-023). Documento original v1 del 3 de oct. de 2026, autor Ronald Demian Cipagauta Penagos (PDF fuente en [`docs/source/GDD-Petri-v1.pdf`](source/GDD-Petri-v1.pdf)).
 >
-> **Versión v1.1.** Este documento es el original convertido a Markdown, con las correcciones aprobadas aplicadas *en el lugar* y marcadas con **(Corrección v1.1)**. Cada corrección tiene su ADR en [`DECISIONS.md`](../DECISIONS.md). Se añade la sección [Capa de diversión](#23-capa-de-diversión-añadida-en-v11). Las rutas de código se actualizaron a la estructura real del repo (`src/game/balance.ts`, etc.).
+> **Versión v1.5** (la v1.1 más las correcciones v1.2–v1.5 de la segunda tabla). Este documento es el original convertido a Markdown, con las correcciones aprobadas aplicadas *en el lugar* y marcadas con **(Corrección v1.1)**. Cada corrección tiene su ADR en [`DECISIONS.md`](../DECISIONS.md). Se añade la sección [Capa de diversión](#23-capa-de-diversión-añadida-en-v11). Las rutas de código se actualizaron a la estructura real del repo (`src/game/balance.ts`, etc.).
 >
 > **Cambios v1.1 de un vistazo:**
 >
