@@ -109,6 +109,9 @@ export function installScreenGuard(win: Window, guard: ScreenGuard = screenGuard
   const down = (e: PointerEvent) => {
     if (guard.allows(e.timeStamp)) {
       swallowed.delete(e.pointerId);
+      // Code review v0.027 #3: a swallowed press that made no click (a swipe, a target replaced) left the window
+      // open, and it ate the click of this press, the player's next deliberate tap. A new press closes it.
+      clickUntil = -Infinity;
       return;
     }
     swallowed.add(e.pointerId);

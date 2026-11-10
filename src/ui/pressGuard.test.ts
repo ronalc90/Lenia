@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { PressGuard, SCREEN_TAP_GUARD_MS, ScreenGuard } from './pressGuard';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { installScreenGuard, PressGuard, SCREEN_TAP_GUARD_MS, ScreenGuard } from './pressGuard';
 import { DOCK_UNCOVER_GUARD_MS } from '../game/balance';
 
 // QA-CLARIDAD #17 (docs/CLARIDAD2.md §2.7): Nutrientes «se compró solo». It was a tap meant for VELA's
@@ -85,5 +85,55 @@ describe('a screen that just opened ignores the taps that were not aimed at it (
     g.changed(2000);
     g.changed(1500);
     expect(g.allows(2100)).toBe(false);
+  });
+});
+
+/** A window that only routes listeners, and the events the screen guard reads (what reached the page is kept). */
+function fakeWindow() {
+  const listeners = new Map<string, ((e: Event) => void)[]>();
+  const win = {
+    addEventListener: (type: string, fn: (e: Event) => void) => listeners.set(type, [...(listeners.get(type) ?? []), fn]),
+    removeEventListener: (type: string, fn: (e: Event) => void) => listeners.set(type, (listeners.get(type) ?? []).filter((f) => f !== fn)),
+  } as unknown as Window;
+  /** Fire `type` at `at` ms (its timeStamp and the clock); true when it reached the page (the guard let it through). */
+  const fire = (type: string, at: number, pointerId = 1): boolean => {
+    vi.spyOn(performance, 'now').mockReturnValue(at);
+    let stopped = false;
+    const e = { type, pointerId, timeStamp: at, detail: type === 'click' ? 1 : 0, cancelable: true, stopImmediatePropagation: () => (stopped = true), preventDefault: () => undefined };
+    for (const fn of listeners.get(type) ?? []) fn(e as unknown as Event);
+    return !stopped;
+  };
+  return { win, fire };
+}
+
+describe('the screen guard swallows only the press it refused', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  // Code review v0.027 #3: a swipe swallowed right after the Tree opened made no click, so the swallow window stayed
+  // armed and ate the click of the player's next, deliberate tap on «Comprar» 600 ms later.
+  it('a swallowed swipe (no click) never eats the click of the next tap the guard allows', () => {
+    const g = new ScreenGuard(SCREEN_TAP_GUARD_MS);
+    const { win, fire } = fakeWindow();
+    const off = installScreenGuard(win, g);
+    g.changed(1000); // the Tree opens
+    expect(fire('pointerdown', 1100)).toBe(false); // too soon: the whole press is swallowed…
+    expect(fire('pointermove', 1150)).toBe(false);
+    expect(fire('pointerup', 1200)).toBe(false); // …and, a swipe, it makes no click
+    const at = 1800;
+    expect(fire('pointerdown', at)).toBe(true);
+    expect(fire('pointerup', at + 60)).toBe(true);
+    expect(fire('click', at + 62)).toBe(true);
+    off();
+  });
+
+  it('the click of a swallowed tap is still swallowed', () => {
+    const g = new ScreenGuard(SCREEN_TAP_GUARD_MS);
+    const { win, fire } = fakeWindow();
+    const off = installScreenGuard(win, g);
+    g.changed(1000);
+    expect(fire('pointerdown', 1100)).toBe(false);
+    expect(fire('pointerup', 1500)).toBe(false);
+    expect(fire('click', 1502)).toBe(false); // its down came too soon, though the click itself is late
+    off();
   });
 });
