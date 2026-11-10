@@ -54,3 +54,18 @@ describe('VELA\'s Tree lines stay in the Tree (QA-3 N6)', () => {
     expect(storyHold(null, { treeOpen: false, cardOpen: false })).toBeNull();
   });
 });
+
+// QA-4 N5: from session 2 a story beat (the Committee's telex, Albor's tapes) no longer plays on the dish before the
+// clock: it plays in the Tree, between runs, docked at the top like the Tree's own lines, and ends with the Tree.
+describe('story beats play in the Tree, between runs (QA-4 N5)', () => {
+  it('QA-4 N5: a story beat docks in the Tree; a tutorial step about the dish stays hidden there', () => {
+    expect(storyHold('a1_committee', { treeOpen: true, cardOpen: false, beat: true })).toBe('dock');
+    expect(storyHold('t_bestiary', { treeOpen: true, cardOpen: false, beat: false })).toBe('hide');
+    expect(storyHold('a1_committee', { treeOpen: false, cardOpen: true, beat: true })).toBe('hide');
+  });
+
+  it('QA-4 N5: closing the Tree ends a story beat too (it never follows the player onto the next run)', () => {
+    expect(endsWithTree('a1_committee', true, false, true)).toBe(true);
+    expect(endsWithTree('t_bestiary', true, false, false)).toBe(false);
+  });
+});

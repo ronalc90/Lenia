@@ -358,6 +358,11 @@ function boot(): void {
   bridge = linkStory(moments, story);
   story.on('journal', ({ id, text }) => bus.emit('journalNew', { id, text }));
   extraJournal.addSource(() => story.journalViews());
+  /** The scene on screen is a story beat, not a tutorial step (nor a replay from the archive): QA-4 N5. */
+  const storyBeat = (): boolean => {
+    const sc = story.current()?.scene;
+    return !!sc && !sc.tutorial && !sc.replay;
+  };
   let storyArchive: StoryArchive | null = null;
   let introEntry: { dispose(): void } | null = null;
   let momentsHelp: HelpSheet | null = null;
@@ -649,7 +654,8 @@ function boot(): void {
     // One layer at a time (QA4 F-01): never over the summary, the start card, "¡Tiempo!" or the welcome
     // card (the scene waits); in the Tree only the scenes about the Tree, docked at the top.
     // A Tree scene never shows over the dish (QA-3 N6): ui/story/dock storyHold.
-    hold: (id) => storyHold(id, { treeOpen: !!flowRef?.treeOpen, cardOpen: !!(flowRef?.cardOpen || flowRef?.busy) || welcomeOpen() }),
+    // QA-4 N5: a story beat (not a tutorial step) docks in the Tree, where it plays from session 2.
+    hold: (id) => storyHold(id, { treeOpen: !!flowRef?.treeOpen, cardOpen: !!(flowRef?.cardOpen || flowRef?.busy) || welcomeOpen(), beat: storyBeat() }),
     onSound: (kind) => {
       // Mute the blips while the Momentos bridge consumes a scene it already told.
       if (bridge?.consuming) return;
@@ -1589,7 +1595,8 @@ function boot(): void {
       // The Tree closed with one of its scenes on: it ends there instead of following the player (QA-3 N6). A
       // choice is put off (story.skip) and comes back in the Tree.
       const cur = story.current();
-      if (endsWithTree(cur?.scene.id ?? null, treeWasOpen, flow.treeOpen)) for (let i = 0; i < 3 && story.current() && endsWithTree(story.current()!.scene.id, true, false); i++) story.skip();
+      if (endsWithTree(cur?.scene.id ?? null, treeWasOpen, flow.treeOpen, storyBeat()))
+        for (let i = 0; i < 3 && story.current() && endsWithTree(story.current()!.scene.id, true, false, storyBeat()); i++) story.skip();
       treeWasOpen = flow.treeOpen;
       setPause('cards', flowBusy());
       const cp = clockPauses({ talking: story.talking, phase: game.session?.phase, sheet: ui.drawerOpen || sheetOpen() || ui.blocked() });

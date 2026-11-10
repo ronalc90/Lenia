@@ -36,6 +36,11 @@ export interface HoldScreen {
   treeOpen: boolean;
   /** A session card («¡Tiempo!», the report, the start card), a busy flow or the welcome card. */
   cardOpen: boolean;
+  /**
+   * The scene is a story beat, not a tutorial step (QA-4 N5): from session 2 beats play in the Tree, between runs,
+   * docked like the Tree's own lines. Absent = a tutorial step (it belongs to the dish).
+   */
+  beat?: boolean;
 }
 
 /**
@@ -45,12 +50,15 @@ export interface HoldScreen {
  */
 export function storyHold(id: string | null, s: HoldScreen): StoryHold {
   const tree = !!id && TREE_SCENES.has(id);
-  if (s.treeOpen) return tree ? 'dock' : 'hide';
+  if (s.treeOpen) return tree || (!!id && !!s.beat) ? 'dock' : 'hide';
   if (tree || s.cardOpen) return 'hide';
   return null;
 }
 
-/** The Tree just closed with one of its scenes on: it ends there (a choice is put off and comes back in the Tree). */
-export function endsWithTree(id: string | null, treeWasOpen: boolean, treeOpen: boolean): boolean {
-  return treeWasOpen && !treeOpen && !!id && TREE_SCENES.has(id);
+/**
+ * The Tree just closed with one of its scenes, or a story beat (`beat`, QA-4 N5), on: it ends there (a choice is put
+ * off and comes back in the Tree); it never follows the player onto the next run.
+ */
+export function endsWithTree(id: string | null, treeWasOpen: boolean, treeOpen: boolean, beat = false): boolean {
+  return treeWasOpen && !treeOpen && !!id && (TREE_SCENES.has(id) || beat);
 }
