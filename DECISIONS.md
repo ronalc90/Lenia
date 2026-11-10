@@ -747,7 +747,10 @@ ADR that supersedes the old one.
     after `STREAK_GRACE_S` and never resets at once. Every `CHISPAZO_EVERY`-th hit pays ×`CHISPAZO_MULT` and throws
     glimmers; a glimmer not caught settles as a loose drop. At most `TAP_HITS_MAX_PER_S` hits a second pay.
   - Sowing is a button: the game picks the safest free spot (`findFreeSpot`), or the nearest safe spot to where the
-    seed is dragged; it is never refused for spacing.
+    seed is dragged; it is never refused for spacing. *(Amendment v0.028, code review of v0.027: when the dish has no
+    safe spot at all, the button greys out with «Sin sitio» and charges nothing, and a tap names «Placa más grande»;
+    the game never sows inside the spacing margin. Goma-erased seeds get no refund and count neither as failures nor
+    toward the sure seed, so sow → erase is not a free loop.)*
   - A seed that never becomes stable refunds its price, and after `SEED_FAIL_PITY` failures the next seed is sure. A
     stable creature that dies of glass, fusion or lost shape adds `DEATH_BURST_SECONDS` of its Luz/s to its drop. The
     first death of each cause ever pays `FIRST_ACCIDENT_DATOS`. A contact is worded only when the player can act.

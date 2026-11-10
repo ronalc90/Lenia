@@ -398,7 +398,7 @@ aguanta poco.
 | **Globo de VELA** | Solo el tutorial (con pausa `story`) | **Ninguno**, salvo el primer Destello de la partida (`t_golden`, con pausa) | Sí: tarjeta de inicio, informe, Árbol, Noche. |
 | **Globo de Encargo / Comité** | Ninguno (CLARIDAD §3.3) | **Ninguno.** Un Encargo nuevo cambia la barra de meta (sonido corto). Uno cumplido hace brillar la barra: «✓ +2 Datos · +3 s». | El globo completo va en la tarjeta de inicio y el «gracias», en el informe. |
 | **Secreto** | Ninguno | Un aviso de ≤ 1,5 s: «Secreto: Viejo amigo» | Su tarjeta, en el informe. |
-| **Aviso** (toast) | ≤ 1,5 s | ≤ 1,5 s, separados ≥ 4 s (`TOAST_GAP_S`) | — |
+| **Aviso** (toast) | ≤ 1,5 s | ≤ 1,5 s, separados ≥ 4 s (`TOAST_GAP_S`) *(Corrección v0.028: 2,5–6 s según su largo, para que se lean; ceden el sitio cuando VELA habla y nunca entran dos veces)* | — |
 | **Etiqueta breve en la placa** | Sí | Sí, de una en una (regla de ARTE §10) | — |
 
 - **Nunca se pasa nada a la sesión siguiente:** hoy, los Momentos que esperan saltan al empezar la sesión 3 (4 tarjetas
