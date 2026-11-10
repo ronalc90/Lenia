@@ -55,7 +55,18 @@ describe('every loss is named where it happens and says what it left (ADR-031, d
     expect(deathLabel('faded', false, { amount: 4, free: false })!.es).toBe('No prendió · +4 de vuelta');
     // The first time a cause is seen it teaches, for Datos (one line, a chip without a pause).
     expect(learnedLabel('faded', 2).es).toBe('Aprendiste: no todas prenden. +2 Datos');
-    expect(learnedLabel('touch', 2).en).toBe('Now you know why: +2 Data');
+    expect(learnedLabel('touch', 2).en).toMatch(/\+2 Data/);
+  });
+
+  // QA-4 N12 (raw/qa-c4-part1.json): «Aprendiste por qué pasa: +2 Datos» twice, 25 s apart: two causes, one text.
+  it('QA-4 N12: each first accident names its own cause, so two in a run never read as a duplicate', () => {
+    const causes = ['faded', 'touch', 'glass', 'lost', 'runaway'] as const;
+    const es = causes.map((c) => learnedLabel(c, 2).es);
+    const en = causes.map((c) => learnedLabel(c, 2).en);
+    expect(new Set(es).size).toBe(causes.length);
+    expect(new Set(en).size).toBe(causes.length);
+    for (const s of es) expect(s).toMatch(/\+2 Datos/);
+    expect(learnedLabel('glass', 1).es).toMatch(/\+1 Dato\b/);
   });
 
   it('a runaway blob says VELA dissolved it and pays nothing', () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ToastKind } from './ctx';
-import { TOAST_CALM_MS, TOAST_READ_MS, ToastQueue } from './toastQueue';
+import { SESSION_TOAST_MAX_MS } from '../game/cycleBalance';
+import { RecentToasts, TOAST_CALM_MS, TOAST_MIN_MS, TOAST_READ_MS, TOAST_REPEAT_MS, ToastQueue, toastMs } from './toastQueue';
 
 interface T {
   text: string;
@@ -101,5 +102,37 @@ describe('a toast enters once and stays readable (QA-3 §1a, N12)', () => {
     play(q, 0, 4000, () => false, log, 1500);
     expect(shownFor(log)).toEqual([expect.any(Number)]);
     expect(shownFor(log)[0]).toBeGreaterThanOrEqual(1500 - 16);
+  });
+});
+
+// QA-4 N12: «Logro: Nadadora» stayed 1.3 s and «New note in the Journal» 1.4 s (raw/qa-c1-part2, qa-c2-part2), and
+// «Aprendiste por qué pasa» came twice. A toast stays at least 2.5 s plus a little per character, and the same
+// text never comes back within half a minute.
+describe('every toast can be read (QA-4 N12)', () => {
+  it('QA-4 N12: a toast stays at least 2.5 s, longer when it is longer', () => {
+    expect(TOAST_MIN_MS).toBeGreaterThanOrEqual(2500);
+    expect(toastMs('Logro: Nadadora', false)).toBeGreaterThanOrEqual(2500);
+    expect(toastMs('Logro: Nadadora', true)).toBeGreaterThanOrEqual(2500);
+    expect(toastMs('Ahora 2 luz/s → con Nutrientes 3 luz/s. Hasta el final de la sesión.', false)).toBeGreaterThan(toastMs('Logro: Nadadora', false));
+    const q = new ToastQueue<T>();
+    const log: { t: number; what: string; text: string }[] = [];
+    q.push({ text: '2 notas nuevas', kind: 'info' }, 0);
+    q.push({ text: 'Logro: Nadadora', kind: 'gold' }, 0);
+    q.push({ text: 'Logro: Archivista', kind: 'gold' }, 0);
+    play(q, 0, 20000, () => false, log, Infinity);
+    for (const ms of shownFor(log)) expect(ms).toBeGreaterThanOrEqual(2500 - 16);
+  });
+
+  it('QA-4 N12: in a run a toast is still readable (the run cap is the 2.5 s floor)', () => {
+    expect(SESSION_TOAST_MAX_MS).toBeGreaterThanOrEqual(TOAST_MIN_MS);
+  });
+
+  it('QA-4 N12: the same text is not shown again within half a minute; warnings may repeat', () => {
+    const r = new RecentToasts();
+    expect(r.repeat('Aprendiste por qué pasa', 'good', 0)).toBe(false);
+    expect(r.repeat('Aprendiste por qué pasa', 'good', 25_000)).toBe(true);
+    expect(r.repeat('Aprendiste por qué pasa', 'good', TOAST_REPEAT_MS + 1)).toBe(false);
+    expect(r.repeat('Placa llena', 'warn', 0)).toBe(false);
+    expect(r.repeat('Placa llena', 'warn', 100)).toBe(false);
   });
 });

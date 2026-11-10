@@ -198,7 +198,12 @@ export const SESSION_GOLDEN_LIFE = 8;
  * the summary. A card in a 15 s run eats the run. Short toasts (≤ SESSION_TOAST_MAX_MS) still show. [design]
  */
 export const MOMENT_MIN_RUN_SECONDS = 60;
-export const SESSION_TOAST_MAX_MS = 1500;
+/**
+ * Longest toast in a running session. 2.5 s, not 1.5 s (QA-4 N12: «Logro: Nadadora» and «Aprendiste…» could not be
+ * read): toasts come one at a time in their own slot and give way to VELA once read (ui/toastQueue), so a longer one
+ * never stacks; a run of 15–45 s sees a handful. No economy effect (the session bot has no toasts). [QA-4; design]
+ */
+export const SESSION_TOAST_MAX_MS = 2500;
 
 // ───────────────────────────── Interruptions (ADR-030; replaces MOMENT_MIN_RUN_SECONDS) ──
 

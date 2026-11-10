@@ -62,7 +62,20 @@ export function dissolvedLabel(wasBlob: boolean, byPlayer: boolean): Text | null
   return wasBlob && !byPlayer ? TEXT.blobDissolved : null;
 }
 
-/** The first death of a cause ever (bus 'accidentLearned'): «aprendiste por qué», for its Datos. */
+/**
+ * What each first accident taught (QA-4 N12: one text, «Aprendiste por qué pasa», for every cause read as the same
+ * toast twice). A seed that never took keeps the game's own line.
+ */
+const LEARNED: Record<Exclude<GameEvents['accidentLearned']['cause'], 'faded'>, Text> = {
+  touch: { es: 'Aprendiste: si se tocan, se juntan.', en: 'You learned: if they touch, they merge.' },
+  glass: { es: 'Aprendiste: el cristal las apaga.', en: 'You learned: the glass puts them out.' },
+  lost: { es: 'Aprendiste: a veces pierden la forma.', en: 'You learned: sometimes they lose their shape.' },
+  runaway: { es: 'Aprendiste: VELA disuelve las manchas que crecen.', en: 'You learned: VELA dissolves blobs that keep growing.' },
+};
+
+/** The first death of a cause ever (bus 'accidentLearned'): what it taught, for its Datos. */
 export function learnedLabel(cause: GameEvents['accidentLearned']['cause'], datos: number): Text {
-  return cause === 'faded' ? TEXT.learnedSeed(datos) : TEXT.learned(datos);
+  if (cause === 'faded') return TEXT.learnedSeed(datos);
+  const l = LEARNED[cause];
+  return { es: `${l.es} +${datos} ${datos === 1 ? 'Dato' : 'Datos'}`, en: `${l.en} +${datos} Data` };
 }

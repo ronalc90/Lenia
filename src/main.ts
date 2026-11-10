@@ -41,6 +41,7 @@ import { RunawayWatch } from './sim/runaway';
 import { SUPPORTER_JOURNAL } from './store/catalog';
 import { setPortraitPalette } from './ui/portrait';
 import { createEncargos, createStory, ENCARGOS_STORAGE_KEY, gameGrantOf, type EncargoReward, type EncargoView } from './story';
+import { SLOW_DEVICE_TEXT, SlowDeviceNote } from './ui/slowDevice';
 import { createEncargoUI, createStoryUI, endsWithTree, storyHold, type StoryArchive, type StorySound } from './ui/story';
 import type { UI, UISound } from './ui/ui';
 import { createMoments, linkStory, type StoryBridge } from './moments';
@@ -1410,22 +1411,25 @@ function boot(): void {
    */
   let paceDish = 0;
   let paceWall = 0;
-  let paceTold = false;
+  // Once per game, not per page load (QA-4 N12).
+  const slowNote = new SlowDeviceNote(
+    (() => {
+      try {
+        return localStorage;
+      } catch {
+        return null;
+      }
+    })(),
+  );
   function noteDishPace(dishDt: number, wallDt: number): void {
     // (The clock waiting for the starter's incubation is not a slow device.)
-    if (paceTold || game.session?.phase !== 'running' || isPaused() || document.hidden || culture.incubating) return;
+    if (!slowNote.shouldTell() || game.session?.phase !== 'running' || isPaused() || document.hidden || culture.incubating) return;
     paceDish += dishDt;
     paceWall += wallDt;
     if (paceWall < SLOW_DISH_WINDOW_S) return;
     if (paceDish < SLOW_DISH_RATIO * paceWall) {
-      paceTold = true;
-      bus.emit('toast', {
-        kind: 'info',
-        text: {
-          es: 'Este aparato va despacio: el reloj cuenta el tiempo de la placa, así tus criaturas no pierden ni un segundo.',
-          en: 'This device runs slowly: the clock counts dish time, so your creatures never lose a second.',
-        },
-      });
+      slowNote.told();
+      bus.emit('toast', { kind: 'info', text: SLOW_DEVICE_TEXT });
     }
     paceDish = 0;
     paceWall = 0;

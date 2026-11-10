@@ -30,6 +30,39 @@ export const TOAST_READ_MS = 1200;
  */
 export const TOAST_SETTLE_MS = 300;
 
+/**
+ * Shortest time a toast stays on a calm screen (QA-4 N12: «Logro: Nadadora» 1.3 s, «New note in the Journal» 1.4 s
+ * could not be read). A longer text stays TOAST_MS_PER_CHAR more per character, up to TOAST_MAX_MS; with others
+ * waiting it stays TOAST_MIN_MS to TOAST_BUSY_MS, so a queue drains. A run's cap (SESSION_TOAST_MAX_MS) still applies.
+ */
+export const TOAST_MIN_MS = 2500;
+export const TOAST_MS_PER_CHAR = 40;
+export const TOAST_MAX_MS = 6000;
+export const TOAST_BUSY_MS = 3000;
+/** The same non-warning text does not come back within this time (QA-4 N12: «Aprendiste por qué pasa» twice in 25 s). */
+export const TOAST_REPEAT_MS = 30_000;
+
+/** How long a toast with this text stays (ms), before any run cap; `others` = more toasts are waiting. */
+export function toastMs(text: string | undefined, others: boolean): number {
+  const read = Math.min(TOAST_MAX_MS, Math.max(TOAST_MIN_MS, 1500 + TOAST_MS_PER_CHAR * (text?.length ?? 0)));
+  return others ? Math.min(read, TOAST_BUSY_MS) : read;
+}
+
+/** Texts shown lately: a repeat within TOAST_REPEAT_MS is dropped, a warning is always shown. */
+export class RecentToasts {
+  private readonly at = new Map<string, number>();
+
+  /** Is this toast a repeat now? If not, it is remembered as shown at `now`. */
+  repeat(text: string, kind: ToastKind, now: number): boolean {
+    if (toastCritical(kind)) return false;
+    const last = this.at.get(text);
+    if (last !== undefined && now - last < TOAST_REPEAT_MS) return true;
+    this.at.set(text, now);
+    if (this.at.size > 64) for (const [k, t] of this.at) if (now - t >= TOAST_REPEAT_MS) this.at.delete(k);
+    return false;
+  }
+}
+
 /** A warning (it is about what the finger just did) enters and stays whoever talks. */
 export function toastCritical(kind: ToastKind): boolean {
   return kind === 'warn' || kind === 'bad';
@@ -66,7 +99,7 @@ interface Waiting<T> {
   at: number;
 }
 
-export class ToastQueue<T extends { kind: ToastKind }> {
+export class ToastQueue<T extends { kind: ToastKind; text?: string }> {
   private readonly wait: Waiting<T>[] = [];
   private shown: (Waiting<T> & { since: number; ms: number }) | null = null;
   private out: T | null = null;
@@ -109,7 +142,7 @@ export class ToastQueue<T extends { kind: ToastKind }> {
     const i = this.wait.findIndex((w) => toastMayEnter(toastCritical(w.item.kind), now, held ? now : this.lastBusyAt, w.at));
     if (i < 0) return null;
     const w = this.wait.splice(i, 1)[0];
-    const ms = Math.min(capMs, this.wait.length ? 2400 : 3000);
+    const ms = Math.min(capMs, toastMs(w.item.text, this.wait.length > 0));
     this.shown = { ...w, since: now, ms };
     return { enter: w.item, ms };
   }

@@ -1,5 +1,5 @@
 /**
- * Toasts: one line at the top of the dish, 3 s each, one visible at a time, at most 3 waiting (the
+ * Toasts: one line at the top of the dish, 2.5–6 s each by length (toastMs), one visible at a time, at most 3 waiting (the
  * oldest waiting one is dropped). Every toast closes when tapped or swiped up (owner bug, B-10.4); one
  * with an action (an achievement → its card) carries a 48-px «Ver» button for it. A thin line shows the
  * time left, so it is clear the toast will go by itself. In: 220 ms `enter`; out: 160 ms `exit`.
@@ -7,7 +7,7 @@
 import type { ToastKind } from './ctx';
 import { h, ic } from './dom';
 import { DURATION, EASING, reduceMotion } from './art/motion';
-import { ToastQueue } from './toastQueue';
+import { RecentToasts, ToastQueue } from './toastQueue';
 
 export { TOAST_CALM_MS, TOAST_READ_MS, TOAST_SETTLE_MS, toastMayEnter, toastYieldAction, toastYields } from './toastQueue';
 
@@ -58,6 +58,8 @@ const SEE = { es: 'Ver', en: 'View' } as const;
 export class Toasts {
   readonly el = h('div', { class: 'toasts bl-nodish', role: 'status', 'aria-live': 'polite' });
   private readonly q = new ToastQueue<ToastItem>();
+  /** QA-4 N12: the same text twice within half a minute is one toast. */
+  private readonly recent = new RecentToasts();
   /** The element on screen (also while it plays its exit). */
   private current: HTMLElement | null = null;
   private timer = 0;
@@ -81,6 +83,7 @@ export class Toasts {
     // Skip exact duplicates of what is showing or queued.
     const q = this.q;
     if (q.showing?.text === text || q.leaving?.text === text || q.waiting.some((w) => w.text === text)) return;
+    if (this.recent.repeat(text, kind, performance.now())) return;
     this.enqueue({ text, kind, icon: icon ?? DEFAULT_ICON[kind], onClick });
   }
 
