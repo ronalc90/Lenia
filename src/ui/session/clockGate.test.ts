@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Bus, type GameEvents } from '../../core/bus';
 import { createGame } from '../../game/game';
 import { START_WAKE_MAX_S } from '../../game/cycleBalance';
+import { seededRng } from '../../game/testUtil';
 import { clockPauses, shouldStartClock, startGo, TUTORIAL_CLOCK_FAILSAFE_MS, TUTORIAL_CLOCK_HARD_MS, TutorialHold } from './clockGate';
 
 describe('the clock waits for the player (ADR-030, CLARIDAD2 §2.3, §2.4)', () => {
@@ -33,7 +34,7 @@ describe('the clock waits for the player (ADR-030, CLARIDAD2 §2.3, §2.4)', () 
 
   it('QA#19/#40: the clock does not move while a sheet is open, so a session cannot end behind it', () => {
     const bus = new Bus<GameEvents>();
-    const game = createGame({ bus, cycle: 'sessions' });
+    const game = createGame({ bus, cycle: 'sessions', rng: seededRng(51) });
     game.setGridSize(128, 128);
     const se = () => game.view().session!;
     // Start the clock the way the game does (the first seed, or the tutorial's startClock).

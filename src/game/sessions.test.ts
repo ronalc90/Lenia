@@ -369,7 +369,7 @@ describe('sessions cycle: saves', () => {
     g.actions.seedAt(50, 50);
     const data = JSON.parse(g.serialize()).data;
     const s = JSON.stringify(data);
-    const h = createGame({ cycle: 'classic', bus: recordingBus().bus }, `{"v":1,"sum":"${checksum(s)}","data":${s}}`);
+    const h = createGame({ cycle: 'classic', bus: recordingBus().bus, rng: seededRng(41) }, `{"v":1,"sum":"${checksum(s)}","data":${s}}`);
     expect(h.state.stats.seeds).toBe(1);
     expect(h.cycle).toBe('classic');
     expect(h.research).toBeNull();

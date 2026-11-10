@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { Bus, type GameEvents } from '../../src/core/bus';
 import { createGame } from '../../src/game/game';
+import { seededRng } from '../../src/game/testUtil';
 import { runPolicy, type PolicyName } from '../../scripts/sessionBotCore';
 import type { GameState } from '../../src/game/state';
 import { createIntegrity, runStatsOf } from '../../src/net/integrity';
@@ -166,7 +167,7 @@ describe('a classic save migrated to the sessions cycle (RF-01b)', () => {
   const BASE = Date.UTC(2026, 9, 1);
   const NOW = BASE + 4 * 3600_000;
   function migrated() {
-    const classic = createGame({ bus: new Bus<GameEvents>(), cycle: 'classic', now: () => BASE + 3 * 3600_000 });
+    const classic = createGame({ bus: new Bus<GameEvents>(), cycle: 'classic', rng: seededRng(61), now: () => BASE + 3 * 3600_000 });
     const st = classic.state as GameState;
     st.genome = 4;
     st.genomeSpent = 7;
@@ -178,7 +179,7 @@ describe('a classic save migrated to the sessions cycle (RF-01b)', () => {
     st.stats.epsPeak = 200;
     st.stats.seeds = 300;
     expect(validateSubmission(null, runStatsOf(st), NOW).verdict).toBe('accept');
-    const g = createGame({ bus: new Bus<GameEvents>(), cycle: 'sessions', now: () => NOW }, classic.serialize());
+    const g = createGame({ bus: new Bus<GameEvents>(), cycle: 'sessions', rng: seededRng(62), now: () => NOW }, classic.serialize());
     expect(g.migration).not.toBeNull();
     return g;
   }

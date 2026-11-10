@@ -130,7 +130,7 @@ describe('species identity', () => {
     const g = createGame({ cycle: 'classic', bus, rng: seededRng(5) });
     g.tick(0.5, report([creature({ id: 1, signature: NOVEL, behavior: 'swimmer', ...settled })]));
     const { name, hue } = g.view().species[0];
-    const g2 = createGame({ cycle: 'classic', bus: recordingBus().bus }, g.serialize());
+    const g2 = createGame({ cycle: 'classic', bus: recordingBus().bus, rng: seededRng(31) }, g.serialize());
     expect(g2.view().species[0].name).toBe(name);
     expect(g2.view().species[0].hue).toBe(hue);
     // An old save has none of the identity fields: the loader computes them deterministically.
@@ -139,8 +139,8 @@ describe('species identity', () => {
     delete st.species[0].hue;
     delete st.species[0].shape;
     delete st.species[0].common;
-    const g3 = createGame({ cycle: 'classic', bus: recordingBus().bus }, g2.serialize());
-    const g4 = createGame({ cycle: 'classic', bus: recordingBus().bus }, g2.serialize());
+    const g3 = createGame({ cycle: 'classic', bus: recordingBus().bus, rng: seededRng(32) }, g2.serialize());
+    const g4 = createGame({ cycle: 'classic', bus: recordingBus().bus, rng: seededRng(33) }, g2.serialize());
     expect(g3.view().species[0].name).toMatch(/^[A-ZÁÉÍÓÚ][a-záéíóúñ]+( [a-záéíóúñ]+)+$/u);
     expect(g3.view().species[0].scientificName).toMatch(/^[A-Z][a-z]+ [a-z]+$/);
     expect(g4.view().species[0].name).toBe(g3.view().species[0].name);

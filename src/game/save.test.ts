@@ -26,11 +26,11 @@ describe('serialize / import', () => {
     const g = played();
     const str = g.serialize();
     const { bus } = recordingBus();
-    const g2 = createGame({ cycle: 'classic', bus }, str);
+    const g2 = createGame({ cycle: 'classic', bus, rng: seededRng(21) }, str);
     expect(JSON.stringify(g2.state)).toBe(JSON.stringify(g.state));
     const exp = g.exportString();
     expect(exp.startsWith('BIOLUMA1.')).toBe(true);
-    const g3 = createGame({ cycle: 'classic', bus: recordingBus().bus });
+    const g3 = createGame({ cycle: 'classic', bus: recordingBus().bus, rng: seededRng(22) });
     expect(g3.importString(exp)).toBe(true);
     expect(JSON.stringify(g3.state)).toBe(JSON.stringify(g.state));
     expect(g3.view().species[1].name).toBe('Remolino ñandú');
@@ -111,7 +111,7 @@ describe('serialize / import', () => {
 
   it('a corrupt save string passed to createGame starts a fresh game', () => {
     const { bus } = recordingBus();
-    const g = createGame({ cycle: 'classic', bus }, '{"v":1,"sum":"00000000","data":{}}');
+    const g = createGame({ cycle: 'classic', bus, rng: seededRng(23) }, '{"v":1,"sum":"00000000","data":{}}');
     expect(g.view().essence).toBe(20);
     expect(g.view().era).toBe(1);
   });
