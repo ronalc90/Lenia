@@ -1037,9 +1037,12 @@ export function createGame(deps: GameDeps, save?: string): Game {
     return ledger.some(waking);
   }
 
-  /** A planted creature the detector sees forming (linked, not stable yet, not gone): it is waking. */
+  /**
+   * A planted creature the detector sees forming (linked, not stable yet, not gone): it is waking, for at most
+   * PLANT_WAKE_MAX_STEPS since it was planted (code review v0.027 #2: one stuck in 'born' kept the run from starting).
+   */
   function waking(e: (typeof ledger)[number]): boolean {
-    if (!e.plant || e.id === null) return false;
+    if (!e.plant || e.id === null || reportStep - e.step >= C.PLANT_WAKE_MAX_STEPS) return false;
     const id = e.id;
     return creatures.some((c) => c.id === id && c.state === 'born');
   }

@@ -77,6 +77,34 @@ describe('a planted creature still waking (QA-3 §3)', () => {
     expect(slow.g.session!.elapsed).toBeGreaterThan(1.5);
   });
 
+  // Code review v0.027 #2: a plant the detector kept calling 'born' held Sembrar on «Espera…» for good: 60 s of dish,
+  // 60 refused seeds, and the run (whose first seed starts the clock) never began.
+  it('a plant that never lives stops holding the nursery: the run can always start', () => {
+    const { g, plant, log } = plantedGame();
+    const stepsPerTick = (C.SIM_STEPS_PER_SEC * C.SESSION_SIM_PACE) / 10;
+    let step = 60;
+    const young = () => report([creature({ id: 1, x: plant.x, y: plant.y, state: 'born', age: step, behavior: null })], [], step);
+    g.tick(0.1, young());
+    let sown: SeedSpec | null = null;
+    let sownAt = -1;
+    for (let i = 0; i < 600 && !sown; i++) {
+      step += stepsPerTick;
+      g.tick(0.1, young());
+      sown = g.actions.sow!();
+      if (sown) sownAt = step;
+    }
+    expect(sown).not.toBeNull();
+    // Young, it held the nursery; past its age cap it no longer does, and the first seed starts the clock.
+    expect(sownAt).toBeGreaterThanOrEqual(C.PLANT_WAKE_MAX_STEPS);
+    expect(sownAt).toBeLessThan(C.PLANT_WAKE_MAX_STEPS + 2 * stepsPerTick);
+    expect(((log.get('seedBlocked') ?? []) as GameEvents['seedBlocked'][]).every((e) => e.reason === 'growing')).toBe(true);
+    expect(g.session!.phase).toBe('running');
+    expect(g.view().session!.wakeHold).toBe(false);
+    // The clock does not wait for it either: it runs.
+    run(g, 2, young(), 0.25);
+    expect(g.session!.elapsed).toBeGreaterThan(1.5);
+  });
+
   it('lost before it lived: the player hears why and gets a free sure seed back', () => {
     const { g, st, plant, log } = plantedGame();
     g.tick(0.1, report([creature({ id: 1, x: plant.x, y: plant.y, state: 'born', age: 60, behavior: null })], [], 60));

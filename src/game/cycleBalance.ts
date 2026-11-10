@@ -132,6 +132,15 @@ export const INCUBATE_MAX_S = 5;
  */
 export const WAKE_HOLD_MAX_S = 10;
 /**
+ * Detector steps since it was planted that a starter / Nevera creature may stay waking ('born') and still hold the
+ * nursery, the first seed and the clock (game.ts plantWaking, wakeHolding). Code review v0.027 #2: one the detector
+ * kept calling 'born' held Sembrar on «Espera…» for good, so the run (its first seed starts the clock) never began.
+ * Three times a seed's whole growing time: a plant lives within STABLE_AGE_STEPS plus the detector's cadence (under
+ * the start card, or WAKE_HOLD_MAX_S into a cut incubation); one that has not by then never will. Past it the plant
+ * holds nothing; lost later, it still gives back its sure seed. [review; 3 × STABLE_AGE_STEPS]
+ */
+export const PLANT_WAKE_MAX_STEPS = 3 * STABLE_AGE_STEPS;
+/**
  * Seconds the start card's «¡Empezar!» may wait for the culture at most, counting down on the button
  * (QA-CLARIDAD-2 B1: «que nunca haya un botón gris sin una cuenta atrás visible»). The cap above plus the
  * 700 ms light-up, rounded up: normally the culture is lit first; this only covers a stalled readback.
