@@ -635,10 +635,30 @@ export function createStory(deps: StoryDeps): Story {
     }
   }
 
+  /**
+   * «Tu reloj» can never play any more: session 1's clock has run (or this is a later session), and its `when` needs
+   * the clock waiting. Code review v0.027 #9: a failsafe that started the clock first (the flow's
+   * TUTORIAL_CLOCK_FAILSAFE_MS, the game's TUTORIAL_HOLD_MAX_S, a lost dish) left holdsClock() true for good.
+   */
+  function clockGone(v: GameView): boolean {
+    const se = v.cycle === 'sessions' ? v.session : null;
+    if (!se) return false;
+    return !(se.first ?? se.n <= 1) || se.phase !== 'ready';
+  }
+
+  /** Its moment is gone: «Tu reloj» counts as done, never watched (no doneAt: it stays out of the archive, as consume()). */
+  function clockMissed(): void {
+    st.done.add('t_clock');
+  }
+
   function tick(): void {
     if (disposed) return;
     const v = view();
     trackEra(v);
+    if (!st.done.has('t_clock') && active?.def.id !== 't_clock' && suspended?.def.id !== 't_clock' && clockGone(v)) {
+      clockMissed();
+      persist();
+    }
     const t = now();
     if (active) checkWait();
     if (st.enabled && !(deps.isBlocked?.() ?? false)) {
@@ -739,6 +759,13 @@ export function createStory(deps: StoryDeps): Story {
   // ───────────── boot ─────────────
 
   const hadSave = readStored();
+  // A save whose session-1 clock already ran without «Tu reloj» (code review v0.027 #9): before main.ts asks
+  // holdsClock() at boot; later, the first tick that sees the clock running does the same.
+  try {
+    if (!st.done.has('t_clock') && clockGone(view())) clockMissed();
+  } catch {
+    /* view not ready: the first tick looks again */
+  }
   if (!hadSave) {
     // A veteran save without story state: don't teach what they already know.
     try {

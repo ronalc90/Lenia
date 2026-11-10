@@ -539,6 +539,36 @@ describe('story: session 1, the player sows first and the clock starts after VEL
     expect(all.join('\n')).not.toMatch(/primera semilla, colega|Espera… ¡mira!/);
   });
 
+  // Code review v0.027 #9: a session-1 clock started by a failsafe (the flow's 30 s, the game's dish hold, a lost dish)
+  // before «Tu reloj» could play left holdsClock() true for the life of the save: main.ts held every later boot.
+  it('a session-1 clock that started without «Tu reloj» holds nothing, now and after a reload', () => {
+    const h = harness(sessionView(1, 'ready'));
+    h.story.setFlag('introSeen');
+    h.wait(1);
+    expect(h.story.holdsClock()).toBe(true);
+    h.set({ session: { ...h.v.session!, phase: 'running' } }); // the failsafe started it
+    h.wait(0.25); // the story's next look at the game
+    expect(h.story.holdsClock()).toBe(false);
+    const saved = h.story.serialize();
+    expect(saved.done).toContain('t_clock');
+    expect(saved.doneAt.t_clock).toBeUndefined(); // never watched: it stays out of the archive
+    expect(h.story.archive().scenes.find((x) => x.id === 't_clock')?.seen ?? false).toBe(false);
+    // A reload in session 2 with that save: nothing holds the clock, whatever the session.
+    const again = harness(sessionView(2, 'ready'), h.storage);
+    expect(again.story.holdsClock()).toBe(false);
+    again.set(sessionView(1, 'ready'));
+    expect(again.story.holdsClock()).toBe(false);
+  });
+
+  it('a save past session 1 that never saw «Tu reloj» does not hold the clock at boot (main.ts asks before any tick)', () => {
+    const storage = memoryStorage();
+    storage.setItem(STORY_STORAGE_KEY, JSON.stringify({ v: 1, done: ['t_intro', 't_born', 't_stable'], doneAt: {}, choices: {}, counters: {}, flags: [], endings: [], tutorialSkipped: false }));
+    const h = harness(sessionView(3, 'ready'), storage);
+    expect(h.story.holdsClock()).toBe(false);
+    // A fresh game's first session still waits for VELA.
+    expect(harness(sessionView(1, 'ready')).story.holdsClock()).toBe(true);
+  });
+
   it('with the tutorial skipped the clock is never held by VELA', () => {
     const h = harness(sessionView(1, 'ready'));
     h.story.tick();
