@@ -127,3 +127,13 @@ export function nodeWhy(id: string, level: number, lang: Lang, ctx: WhyCtx): Nod
 export function whySentences(w: NodeWhy): string[] {
   return [w.forWhat, w.matters, w.unlocks, w.rule, ...w.next].filter(Boolean);
 }
+
+/**
+ * The node sheet's chips (QA-4 pulido 2: «Ruta Placa · paso 2 de 7» next to three level dots were two counters of
+ * different things): the route by name, and one count, the node's level (null for a one-level node).
+ */
+export function sheetCounters(route: Text, level: number, maxLevel: number, l: Lang): { route: string; level: string | null } {
+  const name = l === 'es' ? `Ruta ${route.es}` : `${route.en} route`;
+  if (maxLevel <= 1) return { route: name, level: null };
+  return { route: name, level: TREE_UI.levelOf(level, maxLevel >= 99 ? '∞' : String(maxLevel))[l] };
+}

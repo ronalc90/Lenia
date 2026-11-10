@@ -9,7 +9,7 @@
  *    node; a tap on a visible node leaves the camera where it is (one under the sheet moves the least it can,
  *    same zoom, and comes back when the sheet closes); a tap within 350 ms of a camera move is ignored.
  *  - «Puedes comprar (n)» at the bottom: the buyable nodes in a row (tap = its sheet), or the cheapest one.
- *  - Tap a node: a sheet with NAME, «Ruta Placa · paso 2 de 7» and its levels as dots, "antes → después" with numbers
+ *  - Tap a node: a sheet with NAME, «Ruta Placa» and «Nivel 1 de 3 ●○○» (one counter, QA-4), "antes → después" with numbers
  *    ("Sesión 3:30 → 4:00"), a one-line description, the price as an equation with its one rule in
  *    plain words (tap it: the shared "¿Por qué cuesta esto?" sheet, src/ui/moments/price.ts), a bar
  *    chart of the next levels, the "Datos have/need" bar ("te faltan 12 — unas 2 sesiones") and a
@@ -38,7 +38,6 @@ import {
   nightNotYetText,
   nodeText,
   priceRule,
-  routeNodes,
   sessionsToAfford,
   treeEffects,
   treeStates,
@@ -55,7 +54,7 @@ import '../moments/moments.css';
 import { mountPortrait } from '../portrait';
 import { ROUTE_ICON } from '../art/icons';
 import { DURATION, EASING, pop, staggerIn } from '../art/motion';
-import { nodeWhy, WHY_UI } from './why';
+import { nodeWhy, sheetCounters, WHY_UI } from './why';
 import { D, FAR_Z, PHONE_Z_MIN, Z_MAX, Z_MIN, buyPressAllowed, freeTop, gateLabelAngle, openingCam, revealCam, tapAllowed, type Area, type Cam } from './camera';
 import { treeIcon } from './icons';
 import { screenChanged } from '../pressGuard';
@@ -952,11 +951,12 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
   }
 
   /** The levels as dots ●●○ (∞ routes: «nivel 3»), with the words for a screen reader. */
-  function levelDots(level: number, max: number, l: Lang): string {
-    const words = tx(TREE_UI.levelOf(level, max >= 99 ? '∞' : String(max)), l);
+  function levelDots(level: number, max: number, l: Lang, label?: string): string {
+    const words = label ?? tx(TREE_UI.levelOf(level, max >= 99 ? '∞' : String(max)), l);
     if (max >= 99 || max > 10) return `<span class="rt-chip lv">${esc(words)}</span>`;
     const dots = Array.from({ length: max }, (_, i) => `<i class="${i < level ? 'on' : ''}"></i>`).join('');
-    return `<span class="rt-chip lv rt-dots" role="img" aria-label="${esc(words)}">${dots}</span>`;
+    // The words say what the dots count (QA-4 pulido 2).
+    return `<span class="rt-chip lv rt-dots" aria-label="${esc(words)}"><b>${esc(words)}</b>${dots}</span>`;
   }
 
   function renderSheet(force = false): void {
@@ -983,13 +983,13 @@ export function createTreeView(root: HTMLElement, opts: TreeViewOptions): TreeVi
     const chips: string[] = [];
     const devMax = isDeviceMax(st);
     if (!mystery && br !== 'core') {
-      // ONE counter (QA-CLARIDAD: «Mejora 1 de 7» next to «Nivel 0 de 6»): «Ruta Placa · paso 1 de 7», and the
-      // levels as dots ●●○ beside it.
-      const n = routeNodes(br).length;
-      chips.push(`<span class="rt-chip br">${treeIcon(ROUTE_ICON[br], 14)}${esc(tx(TREE_UI.routeStep(BRANCH_TEXT[br].name, def.step, n), l))}</span>`);
+      // ONE counter (QA-4 pulido 2: «paso 2 de 7» beside three level dots were two counts): the route by name, then
+      // the node's level, in words and dots.
+      const c = sheetCounters(BRANCH_TEXT[br].name, st.level, def.maxLevel, l);
+      chips.push(`<span class="rt-chip br">${treeIcon(ROUTE_ICON[br], 14)}${esc(c.route)}</span>`);
       if (devMax) chips.push(`<span class="rt-chip done">${esc(tx(TREE_UI.deviceMax, l))}</span>`);
       else if (st.maxed) chips.push(`<span class="rt-chip done">${treeIcon('check', 14)}${esc(tx(TREE_UI.maxed, l))}</span>`);
-      else if (def.maxLevel > 1) chips.push(levelDots(st.level, def.maxLevel, l));
+      else if (c.level) chips.push(levelDots(st.level, def.maxLevel, l, c.level));
     }
     let body = '';
     if (selected === 'lab') body = nightSheet(st, l);

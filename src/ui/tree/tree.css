@@ -1772,6 +1772,11 @@
 .rt-dots i.on {
   background: var(--bc, var(--bl-text2));
 }
+/* QA-4 pulido 2: the words say what the dots count. */
+.rt-dots b {
+  margin-right: 4px;
+  font-weight: 600;
+}
 
 /* «Comprar Más tiempo · 2»: the button names its node; the price reads as a cost on the accent. */
 .rt-buy .rt-buy-c {
