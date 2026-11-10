@@ -655,12 +655,26 @@ export function createStory(deps: StoryDeps): Story {
     st.done.add('t_clock');
   }
 
+  /**
+   * «Siembra una semilla» can never play any more: the player sowed before VELA's first line (the story still blocked
+   * by the intro's fade, a Momento or a slow frame). Its `when` needs no seed and every later tutorial step comes after
+   * it, so the v0.028 smoke run lost the whole tutorial and the session-1 clock waited for the failsafe with Sembrar on
+   * «Espera…». It counts as done, never watched (no doneAt, as clockMissed), and VELA goes on with «Está naciendo».
+   */
+  function introGone(v: GameView): boolean {
+    return !st.done.has('t_intro') && active?.def.id !== 't_intro' && suspended?.def.id !== 't_intro' && (st.counters.seeds > 0 || v.stats.seeds > 0);
+  }
+
   function tick(): void {
     if (disposed) return;
     const v = view();
     trackEra(v);
     if (!st.done.has('t_clock') && active?.def.id !== 't_clock' && suspended?.def.id !== 't_clock' && clockGone(v)) {
       clockMissed();
+      persist();
+    }
+    if (introGone(v)) {
+      st.done.add('t_intro');
       persist();
     }
     const t = now();

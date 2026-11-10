@@ -536,6 +536,32 @@ describe('story: session 1, the player sows first and the clock starts after VEL
     expect(clock).toBeGreaterThan(0);
   });
 
+  // v0.028 smoke: a player who sows before VELA's first line (the story still blocked by the intro's fade or a slow
+  // frame) lost the whole tutorial: «Siembra una semilla» could never start again (its `when` needs no seed) and every
+  // later step comes after it, so nothing ever said «Tu reloj» and Sembrar showed «Espera…» until the 30 s failsafe.
+  it('sowing before VELA\'s first line goes on with «Está naciendo» and still reaches «Tu reloj»', async () => {
+    const h = harness(sessionView(1, 'ready'));
+    h.story.setFlag('introSeen');
+    seed(h); // before the story's first look at the game
+    h.set({ session: { ...h.v.session!, tutorialHold: true }, creatures: [creature(1, 'born')], stats: { ...h.v.stats, seeds: 1 } });
+    await Promise.resolve();
+    h.wait(2);
+    expect(h.id()).toBe('t_born');
+    expect(h.story.serialize().doneAt.t_intro).toBeUndefined(); // never watched: it stays out of the archive
+    h.playLines();
+    h.set({ creatures: [creature(1)] });
+    h.bus.emit('creatureStable', { id: 1, x: 50, y: 50 });
+    h.wait(2);
+    expect(h.id()).toBe('t_stable');
+    h.playLines();
+    h.wait(1);
+    expect(h.id()).toBe('t_clock');
+    expect(h.story.holdsClock()).toBe(true);
+    h.playLines();
+    h.wait(0.25);
+    expect(h.story.holdsClock()).toBe(false);
+  });
+
   it('the old lines are gone: no «Tu primera semilla, colega», no «Espera… ¡mira!»', () => {
     const all = SCENES.flatMap((s) => (typeof s.lines === 'function' ? [] : s.lines)).map((l) => l.text.es);
     for (const s of [T_INTRO_LINES, T_INTRO_AFTER_INTRO, T_STABLE_LINES, T_STABLE_SESSIONS]) all.push(...s.map((l) => l.text.es));
