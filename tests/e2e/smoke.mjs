@@ -113,6 +113,14 @@ try {
       [0.25, 0.75],
       [0.75, 0.75],
     ];
+    // While the run's starter is still waking, Sembrar says «Espera…» and the clock waits (ADR-027 v0.027, the one
+    // clock rule of v0.028): a player waits for the button. A slow software-GL dish can take a while.
+    for (let i = 0; i < 120; i++) {
+      const wait = await page.evaluate(() => window.bioluma.game.view().session?.clockWait ?? null).catch(() => null);
+      if (wait !== 'waking') break;
+      await gotIt();
+      await page.waitForTimeout(500);
+    }
     for (const [fx, fy] of taps) {
       await gotIt();
       const x = box.x + box.width * fx;
