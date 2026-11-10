@@ -24,7 +24,7 @@
  */
 import type { Text } from '../core/types';
 import { TEXT } from '../game/content';
-import { REACHABLE_BEHAVIORS, WORLD_BY_ID } from '../game/worlds';
+import { REACHABLE_BEHAVIORS } from '../game/worlds';
 import { catalogGroup } from '../species/identity';
 import { CATALOG, catalogByCode } from '../sim/catalog';
 import type { Act, JournalDef, LineDef, Mood, SceneDef, Speaker, StoryCtx, TargetId, WaitDef } from './types';
@@ -84,8 +84,6 @@ export function alborSpeciesFound(catalogNames: readonly (string | null | undefi
 }
 /** Ways of moving a player can find (measured per world: game/worlds.ts WORLD_BEHAVIORS). */
 export { REACHABLE_BEHAVIORS };
-/** The world each of Albor's species lives in (for hints). */
-export const ALBOR_SPECIES_WORLDS: readonly string[] = ALBOR_SPECIES_CODES.map((c) => Object.values(WORLD_BY_ID).find((w) => w.species.includes(c))?.id ?? 'classic');
 
 // ───────────────────────────── Journal (Bitácora) ─────────────────────────────
 

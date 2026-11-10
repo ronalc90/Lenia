@@ -894,10 +894,6 @@ export function itemsForSlot<S extends Slot>(slot: S): Extract<CosmeticItem, { s
   return COSMETICS.filter((i) => i.slot === slot) as Extract<CosmeticItem, { slot: S }>[];
 }
 
-export function itemsForTab(tab: StoreTab): StoreItem[] {
-  return ALL_ITEMS.filter((i) => i.tab === tab);
-}
-
 /** The free starting item of each slot. */
 export const DEFAULT_ITEM: Record<Slot, string> = {
   palette: 'palette.bioluma',

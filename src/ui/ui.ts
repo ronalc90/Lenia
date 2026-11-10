@@ -312,21 +312,6 @@ export function shortRunRunning(se: { phase: string; limit: number; bonus: numbe
 const AGE_STEPS_PER_SEC = SIM_STEPS_PER_SEC;
 
 /**
- * Bring an element into view by scrolling ONLY its nearest vertically scrollable ancestor (a panel, a
- * sheet). `scrollIntoView` would also scroll overflow:hidden ancestors sideways and shift the whole
- * layout by a few pixels (measured on desktop: HUD, dish and tabs moved 6 px).
- */
-export function scrollIntoViewY(el: HTMLElement, margin = 8): void {
-  let sc: HTMLElement | null = el.parentElement;
-  while (sc && !(sc.scrollHeight > sc.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(sc).overflowY))) sc = sc.parentElement;
-  if (!sc) return;
-  const r = el.getBoundingClientRect();
-  const b = sc.getBoundingClientRect();
-  if (r.top < b.top + margin) sc.scrollTop += r.top - b.top - margin;
-  else if (r.bottom > b.bottom - margin) sc.scrollTop += Math.min(r.bottom - b.bottom + margin, r.top - b.top - margin);
-}
-
-/**
  * Restart a one-shot CSS animation class now (a style read, never a forced layout: P3). Re-adding the
  * class on the next frame lost the restart when called from a tap: no style recalc came between the
  * remove and the add, so a second refused tap never shook (integrator review of v0.019).

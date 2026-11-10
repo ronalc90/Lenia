@@ -269,10 +269,6 @@ export const FONT = {
   mono: "'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace",
 } as const;
 
-/** Google Fonts URL with exactly the weights the bible uses (one request). */
-export const FONT_URL =
-  'https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,500..800,100;1,9..144,500..700,100&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap';
-
 /** Type scale (px, line-height px). Major third (×1.25) from 16, rounded to the 2-px grid. */
 export const TYPE = {
   caption: { size: 13, line: 18, weight: 600 },

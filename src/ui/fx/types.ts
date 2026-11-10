@@ -13,12 +13,6 @@ export interface FxAnchors {
   arrive(id: FxAnchorId, n: number): void;
 }
 
-/** Anchors that know nothing: motes fly to the fallback point and nothing reacts. */
-export const NO_ANCHORS: FxAnchors = {
-  rect: () => null,
-  arrive: () => undefined,
-};
-
 /**
  * Effect budgets per profile (docs/ARTE-PULIDO.md §6.1). The grid quality picks the profile; a
  * device that cannot hold 45 fps for 2 s steps down one profile of effects (never of simulation).

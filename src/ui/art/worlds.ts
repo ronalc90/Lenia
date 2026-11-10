@@ -279,9 +279,3 @@ export function worldArt(id: WorldArtId, opts: WorldArtOptions = {}): string {
     `</g></svg>`
   );
 }
-
-/** Put a world's art into an element (as its first child, behind the card text). */
-export function mountWorldArt(el: HTMLElement, id: WorldArtId, opts: WorldArtOptions = {}): void {
-  el.querySelector(':scope > svg.bl-world')?.remove();
-  el.insertAdjacentHTML('afterbegin', worldArt(id, opts));
-}

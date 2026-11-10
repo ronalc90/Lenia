@@ -2,7 +2,6 @@
  * Small DOM helpers and shared visual bits for the store UI (independent of src/ui/dom.ts so this
  * folder can ship before/without the main UI changes).
  */
-import type { Lang } from '../../core/types';
 import type { BadgeData, FrameData, NameColorData, PaletteData } from '../../store/catalog';
 import { paletteCss } from '../../store/apply';
 import { restartClass } from '../art/motion';
@@ -95,5 +94,3 @@ export function ensureStyles(css: string): void {
   s.textContent = css;
   document.head.appendChild(s);
 }
-
-export const isLang = (l: string): l is Lang => l === 'es' || l === 'en';

@@ -2144,6 +2144,3 @@ export function drawPilotLamp(ctx: Ctx2D, x: number, y: number, mood: ArtMood, t
   paintHalo(ctx, SCRATCH_LAMP.on, SCRATCH_LAMP.K, 24, null);
   ctx.restore();
 }
-
-/** @deprecated The flask's candle is gone (ADR-029): this is `drawPilotLamp`, kept until the scenes move over. */
-export const drawCandleFlame = drawPilotLamp;

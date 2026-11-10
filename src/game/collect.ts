@@ -89,11 +89,6 @@ export function dropFill(d: LightDrop): number {
   return Math.min(1, d.amount / d.cap);
 }
 
-/** Total Luz waiting in drops. */
-export function waitingLight(st: CollectState): number {
-  return st.drops.reduce((a, d) => a + d.amount, 0);
-}
-
 /**
  * One economic tick: every paying creature pours `rate × dt` into its own drop (one is made on its first
  * tick), up to the cap; what does not fit waits as `capped` (it was never made, so it never counted).

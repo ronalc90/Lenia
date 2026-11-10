@@ -83,10 +83,6 @@ export function setStyle(el: HTMLElement, prop: string, value: string): void {
   if (el.style.getPropertyValue(prop) !== value) el.style.setProperty(prop, value);
 }
 
-export function setDisabled(el: HTMLButtonElement | HTMLInputElement, d: boolean): void {
-  if (el.disabled !== d) el.disabled = d;
-}
-
 /** Keep `container`'s children in the order/key set of `items`, reusing rows. */
 export function reconcile<T, R extends { el: HTMLElement }>(
   container: HTMLElement,

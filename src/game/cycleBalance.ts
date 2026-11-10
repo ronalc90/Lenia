@@ -197,8 +197,6 @@ export const SESSION_TOAST_MAX_MS = 1500;
 export const RUN_CARD_MAX = 1;
 /** No card in the first seconds of a run. [QA-CLARIDAD §6.9] */
 export const RUN_QUIET_START_S = 5;
-/** Seconds between two toasts in a run (each ≤ SESSION_TOAST_MAX_MS). [design] */
-export const TOAST_GAP_S = 4;
 /** Collision warning horizon, seconds of dish time (game/contact.ts). [design: one swerve of the deflector plus a reaction] */
 export const CONTACT_WARN_S = 2;
 
@@ -218,11 +216,8 @@ export const LIGHT_CAP_BY_LEVEL = [LIGHT_CAP_SECONDS, 6, 8, 10];
 export const LIGHT_RIPE_SHARE = 0.75;
 /** Touch radius of a drop in CSS px at any zoom: a 64 px target, above CLAUDE.md's 48 px. [design] */
 export const LIGHT_TAP_RADIUS_PX = 32;
-/** A creature's touch area is its outline plus this many CSS px. [design] */
-export const LIGHT_BODY_PAD_PX = 16;
-/** Collect pop and flight to the counter (reduceMotion: a 120 ms fade). [design; RITMO §4.4] */
+/** Collect pop (reduceMotion: a 120 ms fade). [design; RITMO §4.4] */
 export const LIGHT_POP_MS = 150;
-export const LIGHT_FLY_MS = 450;
 /** Most drops on the dish at once; past it the oldest loose drop is swept into the wallet (never lost). [design: overlay budget, 16 drops at 30 fps] */
 export const LIGHT_DROPS_MAX = 24;
 /** Pipeta: pipettes by level (index = level); Más pipetas adds PIPETTES_MORE_PER_LEVEL per level (→ 8). [owner: "más cositas"] */

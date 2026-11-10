@@ -252,8 +252,6 @@ export const SEED_BIAS_GOTERO = [0, 0.04, 0.045, 0.05, 0.055, 0.06];
 export const SEED_BIAS_STABILIZER = 0.004;
 /** Hard ceiling of the bias of a random seed (pure template is reserved to Mutágeno/prints). [design] */
 export const SEED_BIAS_MAX = 0.985;
-/** Noise amplitude of a spore seed with no upgrades. [brief] */
-export const SEED_NOISE_BASE = 0.35;
 /** Noise amplitude by Gotero level (index = level). Lower noise = more consistent seeds. [brief] */
 export const SEED_NOISE_GOTERO = [0.35, 0.25, 0.23, 0.21, 0.19, 0.17];
 /** Noise removed per Estabilizador level. [design] */
@@ -320,8 +318,6 @@ export const AUTOSEED_INTERVAL = 20;
 export const AUTOSEED_DECAY = 0.92;
 /** Minimum Sembrador interval, seconds. [doc §8] */
 export const AUTOSEED_MIN_INTERVAL = 2;
-/** Free spot = farther than this many R from every creature (wrap-aware). [brief] */
-export const AUTOSEED_SPACING = 3;
 /** Random candidate points tried per auto-seed. [design] */
 export const AUTOSEED_TRIES = 40;
 /** The Sembrador only seeds when the seed costs at most this fraction of the bank. [design] */

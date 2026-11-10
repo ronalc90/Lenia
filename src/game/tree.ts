@@ -25,9 +25,9 @@ import type { Text } from '../core/types';
 import { DISH_DIAMETERS } from '../core/dish';
 import { SEED_NURSERY_MAX } from './balance';
 import * as C from './cycleBalance';
-import { formatDuration, formatNumber, multText } from './format';
+import { formatNumber, multText } from './format';
 import { NODE_TEXT, TREE_UI, VALUE_TEXT as V, type BranchId } from './treeText';
-import { BASE_WORLD, WORLD_BY_ID, WORLDS, worldSpeciesCount, type WorldId } from './worlds';
+import { BASE_WORLD, WORLD_BY_ID, worldSpeciesCount, type WorldId } from './worlds';
 
 export type { BranchId } from './treeText';
 export { multText } from './format';
@@ -490,9 +490,6 @@ let dishLevelLimit = Infinity;
 export function setDishLevelLimit(level: number): void {
   dishLevelLimit = Number.isFinite(level) ? Math.max(0, Math.floor(level)) : Infinity;
 }
-export function dishLevelLimitNow(): number {
-  return dishLevelLimit;
-}
 /** The dish level one more level of a Placa node would give (null for other nodes). */
 function dishLevelAfter(id: string, level: number): number | null {
   if (id === 'dish') return level + 1;
@@ -852,11 +849,6 @@ export function effectLine(id: string, level: number, levels: Readonly<Record<st
   return next ?? now ?? same('');
 }
 
-/** "3:00" style, for the session length shown on the Reloj nodes and the start card. */
-export function clockText(seconds: number): string {
-  return seconds >= 3600 ? formatDuration(seconds) : clock(seconds);
-}
-
 // ───────────────────────────── layout ──────────────────────────────
 
 export interface TreePoint {
@@ -936,21 +928,3 @@ export const TREE_LAYOUT: ReadonlyMap<string, TreePoint> = new Map(TREE_NODES.ma
 
 /** Lines of the graph: from each prerequisite to the node that needs it. */
 export const TREE_EDGES: readonly { from: string; to: string }[] = TREE_NODES.flatMap((n) => n.requires.map((r) => ({ from: r, to: n.id })));
-
-/** Bounding box of the layout. */
-export function treeBounds(): { minX: number; minY: number; maxX: number; maxY: number } {
-  let minX = 0;
-  let minY = 0;
-  let maxX = 0;
-  let maxY = 0;
-  for (const p of TREE_LAYOUT.values()) {
-    minX = Math.min(minX, p.x);
-    minY = Math.min(minY, p.y);
-    maxX = Math.max(maxX, p.x);
-    maxY = Math.max(maxY, p.y);
-  }
-  return { minX, minY, maxX, maxY };
-}
-
-/** Worlds in route order (the start card lists the unlocked ones). */
-export const WORLD_ORDER: readonly WorldId[] = WORLDS.map((w) => w.id);

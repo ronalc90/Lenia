@@ -1,6 +1,5 @@
 /** Shared context handed to panels and modals by the UI root. */
-import type { BuyQty, Currency, GameActions, GameView } from '../core/types';
-import { restartClass } from './art/motion';
+import type { BuyQty, GameActions, GameView } from '../core/types';
 import { h, ic } from './dom';
 import { t, type StrKey } from './i18n';
 import type { UIDeps, UISound } from './ui';
@@ -47,14 +46,6 @@ export interface Panel {
   onShow?(): void;
 }
 
-export function currencyIcon(c: Currency): string {
-  return c === 'essence' ? 'essence' : c === 'samples' ? 'samples' : 'genome';
-}
-
-export function currencyAmount(v: GameView, c: Currency): number {
-  return c === 'essence' ? v.essence : c === 'samples' ? v.samples : v.genome;
-}
-
 const INTRO_KEY: Record<TabId, StrKey> = {
   bestiary: 'introBestiary',
 };
@@ -77,9 +68,4 @@ export function introEl(ctx: Ctx, tab: TabId): HTMLElement | null {
     }),
   );
   return el;
-}
-
-/** Restart a one-shot CSS animation class. */
-export function retrigger(el: Element, cls: string): void {
-  restartClass(el, cls);
 }

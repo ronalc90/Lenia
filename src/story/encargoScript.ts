@@ -754,5 +754,3 @@ export const SIDE: EncargoDef[] = [
 ];
 
 export const ENCARGO_BY_ID: ReadonlyMap<string, EncargoDef> = new Map([...CHAIN, ...SIDE].map((e) => [e.id, e]));
-
-export const ALL_BEHAVIOR_IDS: readonly Behavior[] = ['still', 'pulsing', 'swimmer', 'spinner', 'divider', 'colony'];

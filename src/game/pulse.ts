@@ -255,12 +255,6 @@ export function tickStreak(st: PulseState, dt: number, paused = false): void {
   }
 }
 
-/** The streak's extra on light that comes in (a drop by hand or pipette, the Spark): amount × (mult − 1). */
-export function streakExtra(st: PulseState | null | undefined, amount: number): number {
-  if (!st || !(amount > 0) || st.hits <= 0) return 0;
-  return amount * (streakMult(st) - 1);
-}
-
 /** Lenient validation of a stored PulseState (anything damaged: a fresh one). Glimmers and the window are kept only when sane. */
 export function validatePulse(x: unknown): PulseState {
   const d = freshPulse();
