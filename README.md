@@ -44,7 +44,7 @@ Imagina una cuadrícula de lucecitas, cada una con un brillo entre 0 (apagada) y
 - **Ver una placa redonda que crece**, con borde de vidrio que absorbe y desvía a las nadadoras.
 - **Competir en un ranking global opcional:** no se envía nada hasta que eliges un nombre, y cada envío va firmado ([`docs/RANKING.md`](docs/RANKING.md)).
 - **Llevarte la partida:** guardado local automático y, en **Ajustes**, los botones **Exportar** e **Importar** para pasarla a otro aparato.
-- **Jugar como prefieras:** español e inglés, tema oscuro y claro, «Reducir movimiento», «Modo un toque», «Pulso fácil» y botones de al menos 48 px. Es una PWA instalable con service worker para abrir sin conexión.
+- **Jugar como prefieras:** español e inglés, tema oscuro y claro, «Reducir movimiento», «Modo un toque», «Recoger la luz sola» y botones de al menos 48 px. Es una PWA instalable con service worker para abrir sin conexión.
 - **Escuchar audio sintetizado en vivo** con Web Audio: no hay archivos de sonido ni arte generado por IA.
 
 ## Capturas
@@ -220,7 +220,7 @@ Picture a grid of tiny lights, each glowing between 0 and 1. On every step each 
 - **VELA, the MC-7 culture monitor**, warns before a collision while you can still act (drag a swimmer to steer it) and explains every fusion, overflow and failed seed; the first death of each cause pays Data.
 - **Nights and a story**, Requests during sessions, Nutrients, the golden **Spark**, achievements and spoiler-free [secrets](https://github.com/ronalc90/Lenia/wiki/Secrets-en).
 - **Optional global leaderboard** (nothing is sent until you pick a name; submissions are signed), local autosave plus **Export** and **Import** in Settings.
-- **Spanish and English**, dark and light themes, "Reduce motion", "One-touch mode", "Easy pulse", 48 px touch targets; installable PWA; audio synthesised live with Web Audio (no sound files, no AI-generated art).
+- **Spanish and English**, dark and light themes, "Reduce motion", "One-touch mode", "Collect glow for me", 48 px touch targets; installable PWA; audio synthesised live with Web Audio (no sound files, no AI-generated art).
 
 ### How it works
 
