@@ -22,7 +22,7 @@ import { Cinematic } from './cinematic';
 import { HintLayer } from './hints';
 import { Portrait } from './portraits';
 import { Spotlight, type Rect } from './spotlight';
-import { boxOnTop, sceneShowing, skipLabel, storyLook, type Box } from './dock';
+import { boxOnTop, sceneShowing, skipLabel, skipsTutorial, storyLook, type Box } from './dock';
 import { visibleShare, VISIBLE_SHARE } from './occlusion';
 import { DURATION, EASING } from '../art/motion';
 import { S, tr } from './strings';
@@ -203,9 +203,12 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
     box.classList.toggle('done', typed >= fullText.length);
   }
 
+  /** This box's «Saltar» skips the whole tutorial (dock.ts skipsTutorial: VELA's first line, or all of it if never watched). */
+  const wholeSkip = (): boolean => skipsTutorial(scene, story.serialize().doneAt.t_intro !== undefined);
+
   /** «Saltar tutorial ›», or «Saltar ›» on a narrow box (QA-4 N15: it ran into «VELA · MC-7» at 360 px). */
   function setSkipText(sure: boolean): void {
-    const k = skipLabel(scene?.id === 't_intro', sure)[L()];
+    const k = skipLabel(wholeSkip(), sure)[L()];
     skipBtn.innerHTML = '';
     const long = document.createElement('span');
     long.className = 'sk-long';
@@ -221,7 +224,7 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
   function relabelSkip(): void {
     setSkipText(false);
     // QA selectors shared with the former coach-mark tutorial (tests/e2e/smoke.mjs, tests/e2e/qa).
-    skipBtn.dataset.testid = scene?.id === 't_intro' ? 'tutorial-skip' : 'story-skip';
+    skipBtn.dataset.testid = wholeSkip() ? 'tutorial-skip' : 'story-skip';
     taskX.setAttribute('aria-label', tr(S.closeTask, L()));
     box.setAttribute('aria-label', tr(S.tapToContinue, L()));
   }
@@ -649,7 +652,7 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
   let skipArmedUntil = 0;
   skipBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (scene?.id !== 't_intro') {
+    if (!wholeSkip()) {
       story.skip();
       return;
     }

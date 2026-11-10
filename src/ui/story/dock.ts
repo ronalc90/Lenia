@@ -84,6 +84,16 @@ export function boxOnTop(target: Box | null, big: boolean, sow: Box | null, H: n
 }
 
 /**
+ * Does «Saltar» skip the WHOLE tutorial here (two taps) rather than this one scene? On VELA's first line; and on every
+ * tutorial box when that line was never watched (v0.028: a player who sowed before it could play lost its button, and
+ * story.ts counts it done unwatched). An archive replay only skips itself.
+ */
+export function skipsTutorial(scene: { id: string; tutorial: boolean; replay: boolean } | null, introWatched: boolean): boolean {
+  if (!scene || scene.replay || !scene.tutorial) return false;
+  return scene.id === 't_intro' || !introWatched;
+}
+
+/**
  * The «Saltar» button's label, long and short (QA-4 N15: at 360 px «Saltar tutorial ›» ran into «VELA · MC-7»; a
  * narrow box shows the short one). `tutorial`: it skips the whole tutorial; `sure`: the second tap it asks for.
  */

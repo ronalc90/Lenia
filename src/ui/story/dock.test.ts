@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boxOnTop, endsWithTree, sceneShowing, skipLabel, storyHold, storyLook } from './dock';
+import { boxOnTop, endsWithTree, sceneShowing, skipLabel, skipsTutorial, storyHold, storyLook } from './dock';
 
 describe('VELA docks over a sheet without dimming it (owner bug B-10.2)', () => {
   it('docked: no dim, no scrim, no spotlight behind the sheet', () => {
@@ -93,5 +93,17 @@ describe('VELA\'s box never sits on the Sembrar button (QA-4 N15)', () => {
       expect(skipLabel(true, true)[l].short.length).toBeLessThanOrEqual(10);
       expect(skipLabel(false, false)[l].long).toBe(skipLabel(false, false)[l].short);
     }
+  });
+
+  // v0.028: a player who sowed before VELA's first line never saw «Saltar tutorial ›» (only that line had it).
+  it('«Saltar tutorial» is on VELA\'s first line, or on every tutorial box when that line was never watched', () => {
+    const sc = (id: string, tutorial = true, replay = false) => ({ id, tutorial, replay });
+    expect(skipsTutorial(sc('t_intro'), true)).toBe(true);
+    expect(skipsTutorial(sc('t_born'), true)).toBe(false);
+    expect(skipsTutorial(sc('t_born'), false)).toBe(true);
+    expect(skipsTutorial(sc('t_clock'), false)).toBe(true);
+    expect(skipsTutorial(sc('a1_night', false), false)).toBe(false);
+    expect(skipsTutorial(sc('t_born', true, true), false)).toBe(false); // an archive replay skips only itself
+    expect(skipsTutorial(null, false)).toBe(false);
   });
 });
