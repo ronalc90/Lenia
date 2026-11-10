@@ -41,6 +41,7 @@ const T = {
   pill1: { es: 'Cabe 1 más', en: '1 more' },
   pillN: { es: 'Caben {n} más', en: '{n} more' },
   pillFull: { es: 'Llena ({n} de {n})', en: 'Full ({n} of {n})' },
+  fullErase: { es: 'Borra una con la goma para sembrar', en: 'Erase one to sow again' },
   big: { es: 'Mantén pulsado: semilla grande {m}', en: 'Hold: big seed {m}' },
   growing: { es: 'Hay semillas naciendo: espera un poco.', en: 'Seeds are hatching: wait a moment.' },
   ruleSession: { es: 'Una semilla cuesta lo mismo toda la sesión.', en: 'A seed costs the same all session long.' },
@@ -113,6 +114,15 @@ function roomText(s: { free: number; used: number; over: number }, lang: Lang): 
 export function pillRoomText(s: { free: number; used: number; over: number }, lang: Lang): string {
   const left = Math.max(0, s.free - s.used);
   return s.over > 0 ? tr(T.roomOver, lang, { n: s.over }) : left === 0 ? tr(T.pillFull, lang, { n: s.free }) : left === 1 ? tr(T.pill1, lang) : tr(T.pillN, lang, { n: left });
+}
+
+/**
+ * The room line over the Sembrar button (`sow`: the button is there and already says «Llena (3 de 3)»): when full,
+ * what to do instead (QA-4 pulido 1 and N1); otherwise the pill's words.
+ */
+export function meterRoomText(s: { free: number; used: number; over: number }, lang: Lang, sow: boolean): string {
+  if (sow && s.over <= 0 && s.free - s.used <= 0) return tr(T.fullErase, lang);
+  return pillRoomText(s, lang);
 }
 
 /**
@@ -251,14 +261,14 @@ export function createSeedMeter(lang: () => Lang): SeedMeter {
       const p = v.seedPrice as SeedPriceParts | undefined;
       const slots = p ? slotsOf(p) : null;
       const L = lang();
-      const key = slots ? `${slots.free}|${slots.used}|${L}` : '';
+      const key = slots ? `${slots.free}|${slots.used}|${L}|${v.cycle}` : '';
       if (key !== dotsKey) {
         dotsKey = key;
         dots.hidden = !slots;
         el.classList.toggle('over', !!slots && slots.over > 0);
         if (slots) {
           const left = Math.max(0, slots.free - slots.used);
-          const words = pillRoomText(slots, L);
+          const words = meterRoomText(slots, L, v.cycle === 'sessions');
           dots.innerHTML = `${moIcon('creatures', 14)}<span>${words}</span>`;
           dots.classList.toggle('full', left === 0 || slots.over > 0);
           el.setAttribute('aria-label', roomText(slots, L));

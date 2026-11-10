@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { GameView } from '../core/types';
 import { makeView } from '../story/testUtil';
 import { priceSheetHtml } from './moments/price';
-import { bigSeedChip, pillRoomText, seedPriceChange, seedPriceRule, seedPriceSheetExplain, seedPriceSnap, seedPriceTerms, type SeedPriceParts } from './seed-price';
+import { bigSeedChip, meterRoomText, pillRoomText, seedPriceChange, seedPriceRule, seedPriceSheetExplain, seedPriceSnap, seedPriceTerms, type SeedPriceParts } from './seed-price';
 
 /** The sessions loop as the game sends it (docs/CICLO.md, ADR-030): no crowding, room from the Tree. */
 const ses: SeedPriceParts = { base: 4, alive: 3, crowdMult: 1, freeSlots: 4, used: 3, satMult: 1, bigMult: 2.25, freeSeeds: 0, cheapMult: 1, stepMult: 1, bought: 2, capacity: 4 };
@@ -109,5 +109,17 @@ describe('the seed sheet while the Nevera creature wakes (SessionClockView.wakeH
     const es = words(view(ses, 4, { session, seedsGrowing: true }), 'es');
     expect(es).toContain('la de la nevera se está despertando');
     expect(es).not.toContain('Hay semillas naciendo');
+  });
+});
+
+// QA-4 pulido 1 (c1-045, c2-024, c3-023, c4-020): «Llena (3 de 3)» above «Sembrar» and again inside it. Over the
+// button the line says what to do instead (QA-4 N1: «borra una con la goma»).
+describe('the room line over Sembrar never repeats the button (QA-4 pulido 1)', () => {
+  it('QA-4: full, it says how to make room; otherwise the room left', () => {
+    expect(meterRoomText({ free: 3, used: 3, over: 0 }, 'es', true)).toBe('Borra una con la goma para sembrar');
+    expect(meterRoomText({ free: 3, used: 3, over: 0 }, 'en', true)).toBe('Erase one to sow again');
+    expect(meterRoomText({ free: 3, used: 1, over: 0 }, 'es', true)).toBe('Caben 2 más');
+    // Without the button (the classic loop) the pill keeps its words.
+    expect(meterRoomText({ free: 3, used: 3, over: 0 }, 'es', false)).toBe('Llena (3 de 3)');
   });
 });
