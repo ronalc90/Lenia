@@ -16,7 +16,7 @@
  *   (fewer Datos than the session before: why, on a neutral line, and what to do)
  *   Colección 3/7 · la siguiente vive en el Mundo 4
  *   Láminas de hoy: [LÁMINA 07 · Dos especies] …
- *   Tu dedo: 74 toques · mejor racha +25 % · 4 Chispazos · +96 de luz     (ADR-031: fingerLines)
+ *   Tu dedo: 74 toques en criaturas · mejor racha +25 % · 4 Chispazos · +96 de luz   (ADR-031: fingerLines)
  *   Semillas que no prendieron: 2 (te devolví 8 de luz) · Salvaste a 1 · se juntaron 1 · su luz: +18
  *   VELA's line · [Ir al Árbol · 3 mejoras listas] [Nueva sesión]
  *
@@ -26,6 +26,7 @@
 import type { Lang, Pattern, Text } from '../../core/types';
 import * as C from '../../game/cycleBalance';
 import { BEHAVIOR_NAMES } from '../../game/content';
+import { multWords } from '../../game/format';
 import type { DatosBreakdown, RecordHit, SessionGoal, SessionSummary } from '../../game/session';
 import { velaLine } from '../../game/session';
 import { DATO_NAME, DATOS_NAME, NODE_TEXT, SESSION_UI, TREE_UI, WORLD_TEXT } from '../../game/treeText';
@@ -36,6 +37,7 @@ import { mountPortrait } from '../portrait';
 import { Portrait } from '../story/portraits';
 import { treeIcon } from '../tree/icons';
 import { screenChanged } from '../pressGuard';
+import { scrollCue } from './scrollCue';
 import { countUp, DURATION, EASING } from '../art/motion';
 import '../art/art.css';
 import './session.css';
@@ -192,8 +194,22 @@ export const REPORT_TEXT = {
   total: tx('Total', 'Total'),
   registered: tx('Registrado', 'Recorded'),
   plates: tx('Láminas de hoy', 'Today’s plates'),
+  /** On the «Luz recogida» row: the drops VELA swept at «¡Tiempo!» (already counted in it). */
+  sweptIn: (n: string) => tx(`incluye +${n} que VELA recogió al final`, `incl. +${n} VELA collected at the end`),
   /** Session 2 on: the ¡Chispazo! glimmers caught out of the ones thrown (MECANICAS §6.2). */
-  glimmers: (caught: number, thrown: number) => tx(`chispitas ${caught} de ${thrown}`, `glimmers ${caught} of ${thrown}`),
+  // QA-4 pulido 12: «chispitas» was a fourth word with «chispa» in it (Chispazo, Destello, chispa dorada…).
+  glimmers: (caught: number, thrown: number) => tx(`brillos atrapados ${caught} de ${thrown}`, `glimmers ${caught} of ${thrown}`),
+  /**
+   * The finger's line: the hits that paid, on creatures (QA-4 N19: «Tu dedo: 1 toque» after many taps on the agar
+   * read as a bug). `best` is the best streak's multiplier, `luz` the Luz the finger added (formatted).
+   */
+  finger: (taps: number, best: number, flashes: number, luz: string) => {
+    const m = multWords(best);
+    return tx(
+      `Tu dedo: ${taps} ${taps === 1 ? 'toque' : 'toques'} en criaturas · mejor racha ${m.es} · ${flashes} ${flashes === 1 ? 'Chispazo' : 'Chispazos'} · +${luz} de luz`,
+      `Your finger: ${taps} ${taps === 1 ? 'tap' : 'taps'} on creatures · best streak ${m.en} · ${flashes} ${flashes === 1 ? 'Flash' : 'Flashes'} · +${luz} glow`,
+    );
+  },
   /** Free seeds that never took came back as free seeds (no Luz to name: «te devolví 0 de luz» read as nothing). */
   refundFree: (seeds: number) => tx(`Semillas que no prendieron: ${seeds} (volvieron como semillas gratis)`, `Seeds that didn’t take: ${seeds} (back as free seeds)`),
   /** QA-3 §3: `faded` never formed, `crashed` formed and then hit another body or the glass; `luz` null = free seeds back. */
@@ -231,7 +247,21 @@ export interface ReportCtx {
 
 function recordValue(r: RecordHit, l: Lang): { now: string; before: string } {
   const f = (v: number) => (r.kind === 'eps' ? fmtPerSec(v, l) : fmt(v, l));
-  return { now: f(r.value), before: f(r.previous) };
+  const now = f(r.value);
+  const before = f(r.previous);
+  if (now !== before) return { now, before };
+  // QA-4 N7: «14 (antes 14)» read as a tie; the record is real, so show the decimal that tells them apart.
+  const d = (v: number) => v.toLocaleString(l === 'es' ? 'es-ES' : 'en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return { now: d(r.value), before: d(r.previous) };
+}
+
+/**
+ * How far the report scrolls on opening to show its total over the sticky buttons (`over` px): only when its
+ * headline (`heroTop` px down the card) stays in sight. A long report starts at the top, with the new species
+ * (QA-4 N16: it opened at the total and the player never saw the species they had just found).
+ */
+export function reportScroll(over: number, heroTop: number): number {
+  return over > 0 && over <= heroTop ? over : 0;
 }
 
 function term(d: DatosBreakdown, kind: DatosBreakdown['terms'][number]['kind']) {
@@ -285,7 +315,10 @@ export function reportRows(sum: SessionSummary, data: ReportData, l: Lang, ctx: 
   const Dn = (n: number) => (n === 1 ? DATO_NAME : DATOS_NAME)[l];
   const plus = (n: number) => `+${fmt(n, l)}`;
   const prev = data.previous ?? null;
-  rows.push({ kind: 'light', label: SESSION_UI.collected[l], value: fmt(d.essence, l), adds: 0 });
+  // The drops VELA swept at «¡Tiempo!» are already in this light: said on its row (QA-4 pulido 11: a row of their own,
+  // «+92 luz», read as a gain that the sum left out).
+  const swept = (data.swept ?? 0) > 0 ? REPORT_TEXT.sweptIn(fmt(data.swept!, l))[l] : undefined;
+  rows.push({ kind: 'light', label: SESSION_UI.collected[l], value: fmt(d.essence, l), adds: 0, note: swept, noteTone: swept ? 'off' : undefined });
   const trend = prev ? (d.fromEssence > prev.fromLight ? '↑' : d.fromEssence < prev.fromLight ? '↓' : '=') : '';
   // «↓ ayer 29» sits next to the Datos the light gave today: on the ÷ row, or, with a night bonus, on the night
   // row as «= 27 ↓ ayer 29» (QA-CLARIDAD-2 C1: «25 Datos ↓ ayer 29» compared 25 with 29 while 27 was meant).
@@ -352,8 +385,6 @@ export function reportRows(sum: SessionSummary, data: ReportData, l: Lang, ctx: 
   if (go) rows.push({ kind: 'sparks', label: `${cap(SESSION_UI.sparks[l])} ${go.count} × ${fmt(go.each, l)}`, value: plus(go.value), adds: go.value, tone: 'gain' });
   if (d.book > 0) rows.push({ kind: 'book', label: `${NODE_TEXT.encyclopedia.name[l]} ${fmtMult(d.bookMult, l)}`, value: plus(d.book), adds: d.book, tone: 'gain' });
   if (d.minimum > 0) rows.push({ kind: 'minimum', label: SESSION_UI.minimumNote(C.DATOS_MIN)[l], value: plus(d.minimum), adds: d.minimum, tone: 'gain' });
-  if ((data.swept ?? 0) > 0)
-    rows.push({ kind: 'swept', label: SESSION_UI.sweptEnd[l], value: `+${fmt(data.swept!, l)} ${SESSION_UI.luz[l].toLowerCase()}`, adds: 0, note: SESSION_UI.sweptNote[l], tone: 'off' });
   rows.push({ kind: 'total', label: REPORT_TEXT.total[l], value: `${fmt(d.total, l)} ${Dn(d.total)}`, adds: 0 });
   // Fewer Datos than the session before (QA-CLARIDAD #36): why, on a neutral line (never red), and what to do.
   if (prev && d.total < prev.total) {
@@ -424,7 +455,7 @@ export function fingerLines(data: ReportData, l: Lang): string[] {
   const out: string[] = [];
   const f = data.finger;
   if (f && f.taps > 0) {
-    let line = SESSION_UI.finger(f.taps, f.bestStreak, f.chispazos, fmt(Math.round(f.luz), l))[l];
+    let line = REPORT_TEXT.finger(f.taps, f.bestStreak, f.chispazos, fmt(Math.round(f.luz), l))[l];
     if (f.motes && f.motes.thrown > 0) line += ` · ${REPORT_TEXT.glimmers(f.motes.caught, f.motes.thrown)[l]}`;
     out.push(line);
   }
@@ -468,6 +499,8 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
   layer.innerHTML = `<div class="ss-scrim"></div><section class="ss-card ss-report" role="dialog" aria-modal="true"></section>`;
   root.appendChild(layer);
   const card = layer.querySelector('.ss-card') as HTMLElement;
+  /** QA-4 N16: a fade and a chevron over the buttons while the report goes on below. */
+  const moreCue = scrollCue(card);
   let open = false;
   let timers: ReturnType<typeof setTimeout>[] = [];
   let raf = 0;
@@ -567,7 +600,11 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
     const actions = card.querySelector('.ss-actions');
     if (!total || !actions || !open) return;
     const over = total.getBoundingClientRect().bottom - (actions.getBoundingClientRect().top - 8);
-    if (over > 0) card.scrollBy({ top: over, behavior: smooth && !rm() ? 'smooth' : 'auto' });
+    const hero = card.querySelector('.ss-rp-hero');
+    const heroTop = hero ? hero.getBoundingClientRect().top - card.getBoundingClientRect().top : 0;
+    const by = reportScroll(over, heroTop);
+    if (by > 0) card.scrollBy({ top: by, behavior: smooth && !rm() ? 'smooth' : 'auto' });
+    moreCue();
   }
 
   /**
@@ -682,6 +719,9 @@ export function createSessionSummary(root: HTMLElement, opts: SessionSummaryOpti
       requestAnimationFrame(() => layer.classList.add('show'));
       paintPortraits();
       startVela(vela);
+      // A long report starts at the top (QA-4 N16): its scroll position is never carried from the last one.
+      card.scrollTop = 0;
+      requestAnimationFrame(moreCue);
       if (!staged) requestAnimationFrame(() => revealTotal(false));
       // The report comes up like a drawer (§6.4): 220-ms ease-out, no overshoot.
       if (!rm() && typeof card.animate === 'function')

@@ -18,6 +18,7 @@ import { artIcon, WORLD_ICON } from '../art/icons';
 import { worldArt, worldColors } from '../art/worlds';
 import { treeIcon } from '../tree/icons';
 import { screenChanged } from '../pressGuard';
+import { scrollCue } from './scrollCue';
 import '../art/art.css';
 import './session.css';
 
@@ -68,6 +69,8 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
   layer.innerHTML = `<div class="ss-scrim"></div><section class="ss-card" role="dialog" aria-modal="true"></section>`;
   root.appendChild(layer);
   const card = layer.querySelector('.ss-card') as HTMLElement;
+  /** QA-4 N16 (c4-016): «Nuevo desde la última vez» ended under the button with nothing saying the card went on. */
+  const moreCue = scrollCue(card);
   let open = false;
   let current: { start: SessionStart; extras: SessionStartExtras } | null = null;
   let raf = 0;
@@ -234,6 +237,7 @@ export function createSessionStart(root: HTMLElement, opts: SessionStartOptions)
       layer.hidden = false;
       layer.classList.toggle('rm', rm());
       open = true;
+      requestAnimationFrame(moreCue);
       if (velaLine) startVela(velaLine);
       // The picked world in view (it may be the newest, at the end of the row).
       const list = card.querySelector('.ss-worlds') as HTMLElement | null;

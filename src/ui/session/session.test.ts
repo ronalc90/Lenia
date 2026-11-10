@@ -7,7 +7,8 @@ import { fmt } from '../format';
 import { NEEDLE, dialTarget, extendChip, hudSub, hudWaitSub, stepNeedle, streakChip } from './hud';
 import { TEXT } from '../../game/content';
 import { hudState } from './hud';
-import { datosExplain, fingerLines, reportDataOf, reportHeadline, reportRows, velaTip, type ReportData } from './summary';
+import { moreBelow } from './scrollCue';
+import { datosExplain, fingerLines, reportDataOf, reportHeadline, reportRows, reportScroll, velaTip, type ReportData } from './summary';
 import type { SessionSummary } from '../../game/session';
 
 const NAMES: Record<string, string> = { a: 'Remolino violeta', b: 'Nadadora celeste' };
@@ -146,19 +147,22 @@ describe('the session report tells a story (docs/CLARIDAD2.md §2.9)', () => {
     const { session } = beginSession(freshResearch(), fx);
     noteEssence(session, 90);
     const sum = summaryOf({ datos: computeDatos(session, fx, 0) });
-    const sweep = reportRows(sum, { swept: 53 }, 'es', ctxOf(1)).find((r) => r.kind === 'swept')!;
+    const sweep = reportRows(sum, { swept: 53 }, 'es', ctxOf(1)).find((r) => r.kind === 'light')!;
     expect(`${sweep.label} ${sweep.value} ${sweep.note ?? ''}`).not.toMatch(/luz de arriba/);
-    expect(sweep.label).toBe('VELA recogió las gotas que quedaban');
+    expect(sweep.note).toBe('incluye +53 que VELA recogió al final');
     expect(sweep.adds).toBe(0);
   });
 
-  it('the final sweep is told but not added twice', () => {
+  // QA-4 pulido 11 (c1-152): «VELA recogió las gotas que quedaban +92 luz · ya contada…» on a row of its own read as a
+  // gain the sum left out. It is said on the «Luz recogida» row it belongs to.
+  it('QA-4: the final sweep is told on «Luz recogida», never as a row of its own', () => {
     const fx = treeEffects({});
     const { session } = beginSession(freshResearch(), fx);
     noteEssence(session, 90);
     const sum = summaryOf({ datos: computeDatos(session, fx, 0) });
-    const sweep = reportRows(sum, { swept: 24 }, 'es', ctxOf(1)).find((r) => r.kind === 'swept')!;
-    expect(sweep).toMatchObject({ label: 'VELA recogió las gotas que quedaban', value: '+24 luz', adds: 0, note: 'ya contada en «Luz recogida»' });
+    const rows = reportRows(sum, { swept: 24 }, 'es', ctxOf(1));
+    expect(rows.find((r) => r.kind === 'swept')).toBeUndefined();
+    expect(rows.find((r) => r.kind === 'light')).toMatchObject({ adds: 0, note: 'incluye +24 que VELA recogió al final' });
   });
 
   it('no two-decimal multiplier anywhere in the report', () => {
@@ -201,7 +205,7 @@ describe('the report reads the game\'s own summary (ADR-030 integration)', () =>
     // Rows still add up: the collect step adds nothing of its own.
     expect(rows.filter((r) => r.kind !== 'total').reduce((a, r) => a + r.adds, 0)).toBe(d.total);
     expect(rows.find((r) => r.kind === 'less')?.note).toBe('Para descubrir otra: compra Mundo 3 en el Árbol.');
-    expect(rows.find((r) => r.kind === 'swept')?.value).toBe('+25 luz');
+    expect(rows.find((r) => r.kind === 'light')?.note).toMatch(/\+25/);
   });
 });
 
@@ -326,11 +330,11 @@ describe('the finger in the report (ADR-031, docs/MECANICAS.md §6.1 step 11, §
     const es = fingerLines(data, 'es');
     const en = fingerLines(data, 'en');
     // The main flow's multiplier words (docs/CLARIDAD2.md §2.13): «+25 %», never «×1,25».
-    expect(es[0]).toBe('Tu dedo: 74 toques · mejor racha +25 % · 4 Chispazos · +96 de luz');
-    expect(en[0]).toBe('Your finger: 74 taps · best streak +25% · 4 Flashes · +96 glow');
+    expect(es[0]).toBe('Tu dedo: 74 toques en criaturas · mejor racha +25 % · 4 Chispazos · +96 de luz');
+    expect(en[0]).toBe('Your finger: 74 taps on creatures · best streak +25% · 4 Flashes · +96 glow');
     // Session 2: the glimmers caught out of the ones thrown.
     const s2 = fingerLines({ finger: { taps: 160, bestStreak: 1.25, chispazos: 9, luz: 300, motes: { caught: 27, thrown: 45 } } }, 'es');
-    expect(s2[0]).toMatch(/· chispitas 27 de 45$/);
+    expect(s2[0]).toMatch(/· brillos atrapados 27 de 45$/);
     expect(fingerLines({ finger: { taps: 160, bestStreak: 1.25, chispazos: 9, luz: 300, motes: { caught: 27, thrown: 45 } } }, 'en')[0]).toMatch(/· glimmers 27 of 45$/);
     for (const l of [...es, ...en, ...s2]) expect(l).not.toMatch(two);
     // A player who only watched has no finger line (never a «0 toques» that reads like a reproach).
@@ -421,5 +425,46 @@ describe('the streak chip by the counter (ADR-031, docs/MECANICAS.md §3.2)', ()
       }
     // Draining after a pause: it greys and goes down slowly (the game never resets it at once).
     expect(streakChip(st(6, { draining: true }), 'es')!.draining).toBe(true);
+  });
+});
+
+// QA-4 N7 (c4-025): «¡Récord! Más luz en una sesión 14 (antes 14)»: the record was real but both
+// numbers were rounded down to the same one (14,6 over 14,2). When they read the same, the report shows the decimals.
+// QA-4 N16 (c1-152, c1-186): long reports opened scrolled down to the total, the new species above out of sight.
+describe('the report says true things and starts at the top (QA-4 N7, N16, N19)', () => {
+  const fx = treeEffects({ lab: 2 });
+  it('QA-4 N7: a record never reads «14 (antes 14)»', () => {
+    const sum = summaryOf({ datos: computeDatos(beginSession(freshResearch(), fx).session, fx, 1), records: [{ kind: 'essence', value: 14.6, previous: 14.2, name: { es: '', en: '' } }] });
+    for (const l of ['es', 'en'] as const) {
+      const h = reportHeadline(sum, l, ctxOf());
+      expect(h.kind).toBe('record');
+      const m = h.note!.match(/^(.+?) \((?:antes|before) (.+)\)$/);
+      expect(m, h.note).not.toBeNull();
+      expect(m![1]).not.toBe(m![2]);
+    }
+    expect(reportHeadline(sum, 'es', ctxOf()).note).toBe('14,6 (antes 14,2)');
+  });
+
+  it('QA-4 N16: the report scrolls to its total only when the headline stays in sight', () => {
+    // Short report: the total is 40 px under the buttons and the headline 120 px down: reveal the total.
+    expect(reportScroll(40, 120)).toBe(40);
+    // Long report (1362 px): revealing the total would hide the new species: it starts at the top.
+    expect(reportScroll(600, 120)).toBe(0);
+    expect(reportScroll(-10, 120)).toBe(0);
+  });
+
+  it('QA-4 N19: the finger line says the taps were on creatures', () => {
+    const es = fingerLines({ finger: { taps: 12, bestStreak: 1.1, chispazos: 1, luz: 30 } }, 'es')[0];
+    const en = fingerLines({ finger: { taps: 1, bestStreak: 1.03, chispazos: 0, luz: 1 } }, 'en')[0];
+    expect(es).toMatch(/12 toques en criaturas/);
+    expect(en).toMatch(/1 tap on creatures/);
+  });
+});
+
+describe('a long session card says it goes on (QA-4 N16)', () => {
+  it('QA-4 N16: «more» while content hides below the buttons, not at the end', () => {
+    expect(moreBelow(0, 600, 1362)).toBe(true);
+    expect(moreBelow(762, 600, 1362)).toBe(false);
+    expect(moreBelow(0, 600, 604)).toBe(false);
   });
 });

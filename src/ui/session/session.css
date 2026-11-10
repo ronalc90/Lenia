@@ -386,6 +386,23 @@
   color: var(--bl-text2);
 }
 
+/* QA-4 N16: while the card goes on below, a fade and a chevron over the buttons' edge say so. */
+.ss-card.more .ss-actions::before {
+  content: '⌄';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 36px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 2px;
+  background: linear-gradient(to top, var(--bl-surface), color-mix(in srgb, var(--bl-surface) 0%, transparent));
+  color: var(--bl-text2);
+  font: 700 var(--bl-fs-body)/1 var(--bl-font-ui);
+  pointer-events: none;
+}
 .ss-actions {
   position: sticky;
   bottom: calc(-1 * max(16px, env(safe-area-inset-bottom)));
