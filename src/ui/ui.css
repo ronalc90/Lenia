@@ -5259,6 +5259,11 @@ button.chip {
   bottom: calc(100% + 6px);
   transform: translateX(-50%);
   white-space: nowrap;
+  /* QA-4 pulido 7 (c2-019): «2 more» was grey on the light dish (≈ 2:1); on its own plate it reads in both themes. */
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bl-surface) 86%, transparent);
+  color: var(--bl-text);
 }
 .sow-btn {
   position: relative;
