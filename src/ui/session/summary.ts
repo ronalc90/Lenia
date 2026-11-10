@@ -261,8 +261,11 @@ function recordValue(r: RecordHit, l: Lang): { now: string; before: string } {
  * (QA-4 N16: it opened at the total and the player never saw the species they had just found).
  */
 export function reportScroll(over: number, heroTop: number): number {
-  return over > 0 && over <= heroTop ? over : 0;
+  return over > 0 && over <= Math.min(heroTop, REPORT_NUDGE_MAX_PX) ? over : 0;
 }
+
+/** The most the report scrolls by itself to show its total: a nudge, never the title away (QA-4 N16). */
+export const REPORT_NUDGE_MAX_PX = 48;
 
 function term(d: DatosBreakdown, kind: DatosBreakdown['terms'][number]['kind']) {
   return d.terms.find((t) => t.kind === kind) ?? null;

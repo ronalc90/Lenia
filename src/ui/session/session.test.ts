@@ -453,6 +453,8 @@ describe('the report says true things and starts at the top (QA-4 N7, N16, N19)'
     // Long report (1362 px): revealing the total would hide the new species: it starts at the top.
     expect(reportScroll(600, 120)).toBe(0);
     expect(reportScroll(-10, 120)).toBe(0);
+    // A middle one (390 px, a rich session): the title would scroll away. It starts at the top too.
+    expect(reportScroll(77, 120)).toBe(0);
   });
 
   it('QA-4 N19: the finger line says the taps were on creatures', () => {
