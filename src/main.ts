@@ -36,7 +36,7 @@ import { setupCosmetics } from './app/cosmetics';
 import { createExtraJournal, EXTRA_JOURNAL_KEY } from './app/journal';
 import { createSaveTransfer } from './app/saveBundle';
 import { LYSIS_TOAST_MS, lysisTargets } from './app/lysis';
-import { momentWaits } from './app/momentGate';
+import { momentWaits, secretWaitsForRun } from './app/momentGate';
 import { RunawayWatch } from './sim/runaway';
 import { SUPPORTER_JOURNAL } from './store/catalog';
 import { setPortraitPalette } from './ui/portrait';
@@ -821,8 +821,7 @@ function boot(): void {
     // A reveal card waits while a Momento card is open, VELA is talking (not during a task hint), or a
     // sheet / modal covers the dish (it would time out unseen behind it).
     // A secret found at boot (a full moon, the dish's birthday) waits for VELA's first words.
-    // Session 1 is calm (CLARIDAD §3): its Momento cards come one after another, so a reveal waits for
-    // the next session (a date secret like the dish's birthday is found at boot).
+    // Never with a run's clock running (QA-4 N11, CLARIDAD2 §2.8): it waits for the clock to stop.
     hold: () =>
       momentsUI.busy ||
       (bridge?.storyShowing() ?? false) ||
@@ -832,7 +831,7 @@ function boot(): void {
       flowBusy() ||
       encargoShowing() ||
       !introDone ||
-      (game.session?.n === 1 && game.session.phase === 'running'),
+      secretWaitsForRun(game.session),
     onSound: (k) => audio.playUI?.(k === 'secret' ? 'confirm' : 'open'),
     // iOS asks for the motion sensor from a tap (the basement's button): "shake" works there too.
     requestMotion: secretInputs.requestMotionPermission,

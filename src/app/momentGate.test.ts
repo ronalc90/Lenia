@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Bus, type GameEvents } from '../core/bus';
 import { createMoments } from '../moments/moments';
 import { makeView, memoryStorage, species } from '../moments/testUtil';
-import { momentWaits, type MomentScreen } from './momentGate';
+import { momentWaits, secretWaitsForRun, type MomentScreen } from './momentGate';
 
 const free: MomentScreen = { covered: false, intro: false, flow: false, story: false, sheet: false, celebration: false, drawer: false, lit: true };
 
@@ -36,5 +36,17 @@ describe('a Momento waits for a free screen', () => {
       m.tick();
     }
     expect(m.current()?.id).toBe('species');
+  });
+});
+
+// QA-4 N11 (c1-176): «SECRETO DESCUBIERTO · Ya no es un número» opened mid-run (after the Bestiary closed), over the
+// Encargo and the dish. A secret's card waits for the clock to stop, in every session (docs/CLARIDAD2.md §2.8).
+describe('a secret card never opens with the clock running (QA-4 N11)', () => {
+  it('QA-4 N11: running → it waits; ready or between runs → it may show', () => {
+    expect(secretWaitsForRun({ phase: 'running', n: 5 })).toBe(true);
+    expect(secretWaitsForRun({ phase: 'running', n: 1 })).toBe(true);
+    expect(secretWaitsForRun({ phase: 'ready', n: 5 })).toBe(false);
+    expect(secretWaitsForRun({ phase: 'over', n: 5 })).toBe(false);
+    expect(secretWaitsForRun(null)).toBe(false);
   });
 });

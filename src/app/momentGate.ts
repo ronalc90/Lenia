@@ -29,3 +29,11 @@ export interface MomentScreen {
 export function momentWaits(s: MomentScreen): boolean {
   return s.covered || s.intro || s.flow || s.story || s.sheet || s.celebration || s.drawer || !s.lit;
 }
+
+/**
+ * A secret's reveal card waits while a run's clock runs, in every session (QA-4 N11: «Ya no es un número» opened
+ * mid-run over the Encargo and the dish; docs/CLARIDAD2.md §2.8 gives secrets no card with the clock running).
+ */
+export function secretWaitsForRun(s: { phase: 'ready' | 'running' | 'over'; n: number } | null | undefined): boolean {
+  return !!s && s.phase === 'running';
+}
