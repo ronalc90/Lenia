@@ -185,7 +185,8 @@ export const INTRO_SEEN_FLAG = 'introSeen';
 /** The tap VELA asks for on an empty dish: the player plants the first creature (§2.4 step 2; the classic loop). */
 const SOW_LINE = vela('happy', 'Toca la placa para poner una semilla de luz.', 'Tap the dish to drop a seed of light.', at('dish'));
 /** Sessions (ADR-031, MECANICAS §6.1 step 2): sowing is the Sembrar button; VELA points at it, never at the dish. */
-const SOW_BUTTON_LINE = vela('happy', TEXT.tutSow.es, TEXT.tutSow.en, at('seed', 'dish'));
+// QA-4 pulido 18: it named the button, not «la semilla» (no seed is in sight, the button says «Sembrar»).
+const SOW_BUTTON_LINE = vela('happy', 'Toca el botón Sembrar.', 'Tap the Sow button.', at('seed', 'dish'));
 /** VELA's hello (t_intro) for a player who did not watch the intro. */
 export const T_INTRO_LINES: LineDef[] = [
   vela('awed', '¡Oh! ¡Hola, hola! Esto es la Estación Vigilia.', 'Oh! Hello, hello! This is Vigil Station.'),

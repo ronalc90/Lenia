@@ -224,11 +224,12 @@ describe('session 1 teaches the Sembrar button and the pulse (ADR-031, docs/MECA
     expect(r.holds).toBe(false);
     // The words of §6.1, in order: sow with the seed button, tap the creature, taps in a row.
     const lines = r.seen.map((x) => x.line);
-    expect(lines).toContain('Toca la semilla para sembrar.');
+    // QA-4 pulido 18: «Toca la semilla para sembrar» while the button says «Sembrar» and no seed is in sight.
+    expect(lines).toContain('Toca el botón Sembrar.');
     expect(lines).toContain('Tócala: brilla y te da luz.');
     expect(lines).toContain('¡Más! Toques seguidos dan más luz.');
     // VELA points at the button, never at the dish, to sow: a tap on the dish never sows.
-    expect(r.seen.find((x) => x.line === 'Toca la semilla para sembrar.')!.target[0]).toBe('seed');
+    expect(r.seen.find((x) => x.line === 'Toca el botón Sembrar.')!.target[0]).toBe('seed');
     expect(r.task!.target?.[0]).toBe('seed');
     expect(r.task!.text.es).not.toMatch(/placa/i);
     expect(lines.join(' ')).not.toMatch(/Toca la placa/);

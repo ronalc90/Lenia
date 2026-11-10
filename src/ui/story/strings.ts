@@ -8,6 +8,8 @@ export const S = {
   skip: t('Saltar', 'Skip'),
   skipTutorial: t('Saltar tutorial', 'Skip tutorial'),
   skipTutorialSure: t('¿Seguro? Toca otra vez', 'Sure? Tap again'),
+  /** The same on a narrow box (QA-4 N15). */
+  skipSureShort: t('¿Seguro?', 'Sure?'),
   later: t('Todavía no', 'Not yet'),
   continueExp: t('Continuar el experimento', 'Continue the experiment'),
   tapToContinue: t('Toca para seguir', 'Tap to continue'),

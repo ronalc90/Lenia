@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { endsWithTree, sceneShowing, storyHold, storyLook } from './dock';
+import { boxOnTop, endsWithTree, sceneShowing, skipLabel, storyHold, storyLook } from './dock';
 
 describe('VELA docks over a sheet without dimming it (owner bug B-10.2)', () => {
   it('docked: no dim, no scrim, no spotlight behind the sheet', () => {
@@ -67,5 +67,31 @@ describe('story beats play in the Tree, between runs (QA-4 N5)', () => {
   it('QA-4 N5: closing the Tree ends a story beat too (it never follows the player onto the next run)', () => {
     expect(endsWithTree('a1_committee', true, false, true)).toBe(true);
     expect(endsWithTree('t_bestiary', true, false, false)).toBe(false);
+  });
+});
+
+// QA-4 N15 (c1-018, c3-007): «Hola. Soy VELA…» sat at the bottom over «Sembrar» until tapped (and on a desktop while
+// she said «Toca la semilla»). QA-4 N15 (c4-007): at 360 px «VELA · MC-7» ran into «Saltar tutorial ›».
+describe('VELA\'s box never sits on the Sembrar button (QA-4 N15)', () => {
+  const H = 844;
+  const sow = { x: 100, y: 690, w: 150, h: 64 };
+  it('QA-4 N15: a line with no target, or about the whole dish, goes on top while Sembrar is low', () => {
+    expect(boxOnTop(null, false, sow, H)).toBe(true);
+    expect(boxOnTop({ x: 0, y: 70, w: 390, h: 600 }, true, sow, H)).toBe(true);
+    // Without the button (the classic loop, a card) the box stays at the bottom.
+    expect(boxOnTop(null, false, null, H)).toBe(false);
+  });
+
+  it('a small target decides: low → top, high → bottom (it is never covered)', () => {
+    expect(boxOnTop({ x: 120, y: 700, w: 140, h: 60 }, false, sow, H)).toBe(true);
+    expect(boxOnTop({ x: 120, y: 200, w: 40, h: 40 }, false, sow, H)).toBe(false);
+  });
+
+  it('QA-4 N15: the skip label fits next to the name plate on a narrow phone', () => {
+    for (const l of ['es', 'en'] as const) {
+      expect(skipLabel(true, false)[l].short.length).toBeLessThanOrEqual(8);
+      expect(skipLabel(true, true)[l].short.length).toBeLessThanOrEqual(10);
+      expect(skipLabel(false, false)[l].long).toBe(skipLabel(false, false)[l].short);
+    }
   });
 });

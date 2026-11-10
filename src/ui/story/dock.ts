@@ -1,3 +1,5 @@
+import { S } from './strings';
+
 /**
  * How VELA's layer looks over the screen under it (owner bug, docs/ARTE-PULIDO.md B-10.2). 'dock' = a
  * screen of its own is up (the Tree and its sheets): her bubble sits above it like a note pinned on top,
@@ -61,4 +63,32 @@ export function storyHold(id: string | null, s: HoldScreen): StoryHold {
  */
 export function endsWithTree(id: string | null, treeWasOpen: boolean, treeOpen: boolean, beat = false): boolean {
   return treeWasOpen && !treeOpen && !!id && (TREE_SCENES.has(id) || beat);
+}
+
+/** A box on screen (px of the story layer). */
+export interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Does VELA's box go on top? A small target decides (the box never covers it: low → top, high → bottom). A line
+ * with no target, or about the whole dish (`big`), goes on top while the Sembrar button sits low (`sow`): QA-4 N15,
+ * «Hola. Soy VELA…» sat over «Sembrar» until the player tapped her. `H` = the layer's height.
+ */
+export function boxOnTop(target: Box | null, big: boolean, sow: Box | null, H: number): boolean {
+  if (target && !big) return target.y + target.h / 2 > H * 0.55;
+  return !!sow && sow.w > 0 && sow.y + sow.h / 2 > H * 0.55;
+}
+
+/**
+ * The «Saltar» button's label, long and short (QA-4 N15: at 360 px «Saltar tutorial ›» ran into «VELA · MC-7»; a
+ * narrow box shows the short one). `tutorial`: it skips the whole tutorial; `sure`: the second tap it asks for.
+ */
+export function skipLabel(tutorial: boolean, sure: boolean): Record<'es' | 'en', { long: string; short: string }> {
+  const long = sure ? S.skipTutorialSure : tutorial ? S.skipTutorial : S.skip;
+  const short = sure ? S.skipSureShort : S.skip;
+  return { es: { long: long.es, short: short.es }, en: { long: long.en, short: short.en } };
 }

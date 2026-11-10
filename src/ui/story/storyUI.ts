@@ -22,7 +22,7 @@ import { Cinematic } from './cinematic';
 import { HintLayer } from './hints';
 import { Portrait } from './portraits';
 import { Spotlight, type Rect } from './spotlight';
-import { sceneShowing, storyLook } from './dock';
+import { boxOnTop, sceneShowing, skipLabel, storyLook, type Box } from './dock';
 import { visibleShare, VISIBLE_SHARE } from './occlusion';
 import { DURATION, EASING } from '../art/motion';
 import { S, tr } from './strings';
@@ -203,11 +203,25 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
     box.classList.toggle('done', typed >= fullText.length);
   }
 
+  /** «Saltar tutorial ›», or «Saltar ›» on a narrow box (QA-4 N15: it ran into «VELA · MC-7» at 360 px). */
+  function setSkipText(sure: boolean): void {
+    const k = skipLabel(scene?.id === 't_intro', sure)[L()];
+    skipBtn.innerHTML = '';
+    const long = document.createElement('span');
+    long.className = 'sk-long';
+    long.textContent = `${k.long} ›`;
+    const short = document.createElement('span');
+    short.className = 'sk-short';
+    short.textContent = `${k.short} ›`;
+    skipBtn.append(long, short);
+    skipBtn.classList.toggle('long', k.long !== k.short);
+    skipBtn.setAttribute('aria-label', k.long);
+  }
+
   function relabelSkip(): void {
-    skipBtn.textContent = scene?.id === 't_intro' ? `${tr(S.skipTutorial, L())} ›` : `${tr(S.skip, L())} ›`;
+    setSkipText(false);
     // QA selectors shared with the former coach-mark tutorial (tests/e2e/smoke.mjs, tests/e2e/qa).
     skipBtn.dataset.testid = scene?.id === 't_intro' ? 'tutorial-skip' : 'story-skip';
-    skipBtn.setAttribute('aria-label', skipBtn.textContent);
     taskX.setAttribute('aria-label', tr(S.closeTask, L()));
     box.setAttribute('aria-label', tr(S.tapToContinue, L()));
   }
@@ -405,7 +419,12 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
     if ((opts.hold?.(scene?.id ?? null) ?? null) === 'dock') return true;
     const tg = targetRect(ids, r0);
     const big = !!tg && (tg.id === 'dish' || tg.rect.w * tg.rect.h > r0.width * r0.height * 0.3);
-    return !!tg && !big && tg.rect.y + tg.rect.h / 2 > r0.height * 0.55;
+    return boxOnTop(tg?.rect ?? null, big, sowRect(r0), r0.height);
+  }
+
+  /** The Sembrar button, when it is on screen (QA-4 N15: VELA's box never sits on it). */
+  function sowRect(r0: DOMRect): Box | null {
+    return targetRect(['seed'], r0)?.rect ?? null;
   }
 
   function applySide(): void {
@@ -439,7 +458,7 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
       showBox();
     }
     if (!box.hidden || reenter) {
-      const wantTop = held === 'dock' || (!!tg && !big && tg.rect.y + tg.rect.h / 2 > H * 0.55);
+      const wantTop = held === 'dock' || boxOnTop(tg?.rect ?? null, big, sowRect(r0), H);
       if (wantTop !== boxTop) {
         boxTop = wantTop;
         if (!box.hidden && !rm()) {
@@ -637,7 +656,7 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
       return;
     }
     skipArmedUntil = now + 3000;
-    skipBtn.textContent = `${tr(S.skipTutorialSure, L())} ›`;
+    setSkipText(true);
     skipBtn.classList.add('armed');
     window.setTimeout(() => {
       if (skipArmedUntil && performance.now() >= skipArmedUntil) {

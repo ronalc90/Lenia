@@ -225,6 +225,24 @@
   cursor: pointer;
   pointer-events: auto;
 }
+/* QA-4 N15: «Saltar tutorial ›» needs its room next to the name plate; a narrow box says «Saltar ›». */
+.sty-skip .sk-short {
+  display: none;
+}
+.sty-box:has(.sty-skip.long) .sty-name {
+  margin-right: 150px;
+}
+@media (max-width: 440px) {
+  .sty-skip.long .sk-long {
+    display: none;
+  }
+  .sty-skip.long .sk-short {
+    display: inline;
+  }
+  .sty-box:has(.sty-skip.long) .sty-name {
+    margin-right: 70px;
+  }
+}
 .sty-skip:hover,
 .sty-skip:focus-visible {
   color: var(--sty-text);
