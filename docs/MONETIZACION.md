@@ -101,7 +101,8 @@ Al expirar, lo equipado que dependía de la suscripción vuelve al estándar aut
 Cifras orientativas: verifica las tablas vigentes antes de lanzar. Alternativa MoR a Lemon Squeezy: Paddle
 (tarifa similar). Código: `src/store/providers/{lemonsqueezy,googleplay,apple,steam,devmock}.ts`.
 
-**Dev mock**: compras falsas instantáneas, solo en `vite dev` o con `?store=mock`, con banner amarillo
+**Dev mock**: compras falsas instantáneas, solo en `vite dev` o con `?store=mock` en una build de prueba
+(`VITE_E2E=1` o `VITE_STORE_MOCK=1`; la build de producción ignora `?store=mock`), con banner amarillo
 "MODO PRUEBA". Nunca llega al ranking (el servidor no lo conoce).
 
 ## 4. Reglas de plataforma

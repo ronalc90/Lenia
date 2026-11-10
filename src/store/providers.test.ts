@@ -1,14 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PALETTES } from './catalog';
 import { Entitlements } from './entitlements';
-import { STORE_ENABLED, resolveStoreFlags } from './flags';
+import { STORE_ENABLED, resolveStoreFlags, storeFlagsFromEnv } from './flags';
 import { createProviders, DevMockProvider, LemonSqueezyProvider, playProductFor } from './providers';
 import { StoreController } from './store';
 
 const DAY = 86_400_000;
 
 function setup(search = '?store=mock', clock = { t: Date.UTC(2026, 10, 10) }) {
-  const flags = resolveStoreFlags({ hostname: 'bioluma.example', search });
+  const flags = resolveStoreFlags({ hostname: 'bioluma.example', search, mockAllowed: true });
   const entitlements = new Entitlements({ storage: null, now: () => clock.t });
   const providers = createProviders(flags, { entitlements, now: () => clock.t }, { devmock: { latencyMs: 1 } });
   return { flags, entitlements, providers, store: new StoreController(flags, entitlements, providers, () => clock.t), clock };
@@ -37,10 +37,29 @@ describe('store flags', () => {
     }
   });
 
-  it('uses the mock in dev and with ?store=mock; ?store=off hides', () => {
+  it('uses the mock in dev and with ?store=mock on a test build; ?store=off hides', () => {
     expect(resolveStoreFlags({ isDev: true, hostname: 'localhost' })).toMatchObject({ visible: true, mock: true, payments: false, providers: ['devmock'] });
-    expect(resolveStoreFlags({ hostname: 'bioluma.example', search: '?store=mock' })).toMatchObject({ visible: true, mock: true });
+    expect(resolveStoreFlags({ isDev: true, hostname: 'localhost', search: '?store=live' }).mock).toBe(false);
+    expect(resolveStoreFlags({ hostname: 'localhost', search: '?store=mock', mockAllowed: true })).toMatchObject({ visible: true, mock: true });
     expect(resolveStoreFlags({ hostname: 'bioluma.example', search: '?store=off', storeEnabled: true }).visible).toBe(false);
+  });
+
+  it('a production build ignores ?store=mock on every host', () => {
+    for (const input of [
+      { hostname: 'bioluma.example' },
+      { hostname: 'bioluma-xi.vercel.app' },
+      { hostname: 'bioluma.pages.dev' },
+      { hostname: 'localhost' },
+      { platform: { kind: 'twa', os: 'android', portal: null, steam: false } },
+      { platform: { kind: 'electron', os: 'windows', portal: null, steam: true } },
+      { platform: { kind: 'electron', os: 'linux', portal: null, steam: false } },
+    ]) {
+      for (const storeEnabled of [false, true]) {
+        const f = resolveStoreFlags({ ...input, storeEnabled, search: '?store=mock' });
+        expect(f.mock, JSON.stringify(input)).toBe(false);
+        expect(f.providers, JSON.stringify(input)).not.toContain('devmock');
+      }
+    }
   });
 
   it('takes live payments only on cleared hosts once enabled', () => {
@@ -64,6 +83,28 @@ describe('store flags', () => {
     const store = new StoreController(flags, ent, []);
     expect(store.visible).toBe(false);
     expect(store.canBuy('palette.aurora')).toEqual({ ok: false, reason: 'disabled' });
+  });
+});
+
+describe('store flags from the build env', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('a production build ignores ?store=mock', () => {
+    vi.stubEnv('DEV', false);
+    vi.stubEnv('VITE_E2E', '');
+    vi.stubEnv('VITE_STORE_MOCK', '');
+    vi.stubGlobal('location', { search: '?store=mock', hostname: 'bioluma-xi.vercel.app' });
+    expect(storeFlagsFromEnv()).toMatchObject({ mock: false, visible: false, providers: [] });
+  });
+
+  it('an e2e build honours ?store=mock', () => {
+    vi.stubEnv('DEV', false);
+    vi.stubEnv('VITE_E2E', '1');
+    vi.stubGlobal('location', { search: '?store=mock', hostname: 'localhost' });
+    expect(storeFlagsFromEnv()).toMatchObject({ mock: true, providers: ['devmock'] });
   });
 });
 

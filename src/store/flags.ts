@@ -6,8 +6,10 @@
  * - Per-host rules apply even when it is on: the store is never shown on galaxy.click (portal
  *   rules), itch.io or CrazyGames (unverified rules), and never takes live payments on a Vercel
  *   Hobby preview (*.vercel.app: Hobby forbids charging; previews use the mock or test mode).
- * - The mock store (fake purchases, clearly labelled) is available in `vite dev` and with
- *   `?store=mock` on hosts where the store could appear. `?store=off` hides everything.
+ * - The mock store (fake purchases, clearly labelled) exists only in test builds: `vite dev`, and
+ *   `?store=mock` on an e2e/preview build (VITE_E2E=1 or VITE_STORE_MOCK=1) on hosts where the
+ *   store could appear. A production build ignores `?store=mock` (it would hand out every paid
+ *   cosmetic for free). `?store=off` hides everything.
  * - The wardrobe (equipping free/owned cosmetics) involves no money and is always available.
  *
  * resolveStoreFlags is pure so the rules are unit tested; storeFlagsFromEnv reads the browser.
@@ -91,6 +93,11 @@ export interface StoreFlagInput {
   storeEnabled?: boolean;
   /** import.meta.env.DEV */
   isDev?: boolean;
+  /**
+   * Test build that may honour `?store=mock` (VITE_E2E=1 or VITE_STORE_MOCK=1). Never set in a
+   * production build; dev (isDev) always allows the mock.
+   */
+  mockAllowed?: boolean;
   /** location.search */
   search?: string;
   /** location.hostname */
@@ -135,7 +142,8 @@ export function resolveStoreFlags(i: StoreFlagInput = {}): StoreFlags {
   if (q === 'off') {
     return { ...base, visible: false, payments: false, mock: false, providers: [], reason: '?store=off' };
   }
-  const mock = q === 'mock' || (host === 'dev' && q !== 'live');
+  const mockBuild = i.isDev === true || i.mockAllowed === true;
+  const mock = mockBuild && (q === 'mock' || (host === 'dev' && q !== 'live'));
   if (mock) {
     return { ...base, visible: true, payments: false, mock: true, testMode: true, providers: ['devmock'], reason: 'mock store (fake purchases)' };
   }
@@ -155,11 +163,12 @@ export function resolveStoreFlags(i: StoreFlagInput = {}): StoreFlags {
 
 /** Browser convenience: reads Vite env, location and an optional platform detection result. */
 export function storeFlagsFromEnv(platform?: HostPlatformInfo): StoreFlags {
-  const env = (import.meta as unknown as { env?: Record<string, string | boolean | undefined> }).env ?? {};
+  const env = import.meta.env as Record<string, string | boolean | undefined>;
   const loc = typeof location !== 'undefined' ? location : undefined;
   return resolveStoreFlags({
     storeEnabled: env.VITE_STORE_ENABLED === '1' || env.VITE_STORE_ENABLED === 'true' || STORE_ENABLED,
     isDev: env.DEV === true,
+    mockAllowed: env.VITE_E2E === '1' || env.VITE_STORE_MOCK === '1',
     search: loc?.search ?? '',
     hostname: loc?.hostname ?? '',
     platform,

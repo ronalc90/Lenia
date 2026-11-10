@@ -1,5 +1,6 @@
 /**
- * DEV MOCK — FAKE PURCHASES, NO MONEY. Enabled only by flags.mock (vite dev or ?store=mock).
+ * DEV MOCK — FAKE PURCHASES, NO MONEY. Enabled only by flags.mock (vite dev, or ?store=mock
+ * on a VITE_E2E / VITE_STORE_MOCK test build; production builds ignore it).
  * Grants instantly with source 'dev', so a later server snapshot never removes or confuses them,
  * and they never reach the ranking (the server does not know about them).
  */
