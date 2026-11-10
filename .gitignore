@@ -6,3 +6,13 @@ coverage/
 .DS_Store
 test-results/
 playwright-report/
+# e2e builds carry the debug handle (VITE_E2E): never next to dist/
+dist-e2e/
+dist-e2e-single/
+play-shots/
+overgrown-shots/
+release-steam/
+.env*
+.vercel/
+.cache/
+vite.config.ts.timestamp-*
