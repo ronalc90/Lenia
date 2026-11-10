@@ -55,7 +55,6 @@ jobs:
         run: node --experimental-strip-types --no-warnings platforms/shared/platform.selftest.ts
 
       - name: Steam achievement plan is in sync with the game
-        continue-on-error: true
         run: npx vite-node platforms/steam/scripts/gen-achievements.ts --check
 
       - name: Portal zip (itch.io / galaxy.click / CrazyGames)
@@ -259,8 +258,14 @@ jobs:
 
       - name: Install butler and push the html5 channel
         if: env.BUTLER_API_KEY != '' && env.ITCH_TARGET != ''
+        # Pinned butler build (released 2026-10-06) checked against its SHA-256 before it runs with the key.
+        # To update: pick a version from https://broth.itch.zone/butler/linux-amd64 and hash its archive.
+        env:
+          BUTLER_VERSION: 15.32.0
+          BUTLER_SHA256: 2335971394ef6596f95ded0833e85ee28755e13761716ef4c91d6b11f69162f5
         run: |
-          curl -fsSL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          curl -fsSL -o butler.zip "https://broth.itch.zone/butler/linux-amd64/$BUTLER_VERSION/archive/default"
+          echo "$BUTLER_SHA256  butler.zip" | sha256sum -c -
           unzip -q butler.zip -d "$RUNNER_TEMP/butler" && chmod +x "$RUNNER_TEMP/butler/butler"
           BUTLER="$RUNNER_TEMP/butler/butler" platforms/portals/itch-push.sh
 

@@ -246,8 +246,8 @@
       "source": "game",
       "category": "start",
       "name": {
-        "es": "Primera gota",
-        "en": "First drop"
+        "es": "Primera semilla",
+        "en": "First seed"
       },
       "desc": {
         "es": "Siembra por primera vez.",
@@ -276,8 +276,8 @@
         "en": "Something stayed"
       },
       "desc": {
-        "es": "Consigue una criatura estable.",
-        "en": "Get a stable creature."
+        "es": "Consigue una criatura viva.",
+        "en": "Get a living creature."
       },
       "hidden": false,
       "unlock": {
@@ -366,8 +366,8 @@
         "en": "Naturalist"
       },
       "desc": {
-        "es": "Registra 3 especies.",
-        "en": "Register 3 species."
+        "es": "Descubre 3 especies.",
+        "en": "Discover 3 species."
       },
       "hidden": false,
       "unlock": {
@@ -394,12 +394,12 @@
       "source": "game",
       "category": "bestiary",
       "name": {
-        "es": "Taxónoma",
-        "en": "Taxonomist"
+        "es": "Coleccionista",
+        "en": "Collector"
       },
       "desc": {
-        "es": "Registra 10 especies.",
-        "en": "Register 10 species."
+        "es": "Descubre 10 especies.",
+        "en": "Discover 10 species."
       },
       "hidden": false,
       "unlock": {
@@ -426,12 +426,12 @@
       "source": "game",
       "category": "bestiary",
       "name": {
-        "es": "Fauna propia",
-        "en": "A fauna of my own"
+        "es": "Mi propia familia",
+        "en": "A family of my own"
       },
       "desc": {
-        "es": "Registra 20 especies.",
-        "en": "Register 20 species."
+        "es": "Descubre 20 especies.",
+        "en": "Discover 20 species."
       },
       "hidden": false,
       "unlock": {
@@ -462,8 +462,8 @@
         "en": "Swimmer"
       },
       "desc": {
-        "es": "Observa una criatura nadadora.",
-        "en": "Observe a swimming creature."
+        "es": "Mira una criatura que nada.",
+        "en": "See a creature that swims."
       },
       "hidden": false,
       "unlock": {
@@ -488,8 +488,8 @@
         "en": "Whirl"
       },
       "desc": {
-        "es": "Observa una criatura giratoria.",
-        "en": "Observe a spinning creature."
+        "es": "Mira una criatura que gira.",
+        "en": "See a creature that spins."
       },
       "hidden": false,
       "unlock": {
@@ -514,8 +514,8 @@
         "en": "Heartbeat"
       },
       "desc": {
-        "es": "Observa una criatura pulsante.",
-        "en": "Observe a pulsing creature."
+        "es": "Mira una criatura que late.",
+        "en": "See a creature that pulses."
       },
       "hidden": false,
       "unlock": {
@@ -536,12 +536,12 @@
       "source": "game",
       "category": "behaviour",
       "name": {
-        "es": "Mitosis",
-        "en": "Mitosis"
+        "es": "Una se hace dos",
+        "en": "One becomes two"
       },
       "desc": {
-        "es": "Observa una criatura divisora.",
-        "en": "Observe a dividing creature."
+        "es": "Mira una criatura que se divide.",
+        "en": "See a creature that splits."
       },
       "hidden": false,
       "unlock": {
@@ -566,8 +566,8 @@
         "en": "Colony"
       },
       "desc": {
-        "es": "Forma una colonia.",
-        "en": "Form a colony."
+        "es": "Junta tres iguales: una colonia.",
+        "en": "Gather three alike: a colony."
       },
       "hidden": false,
       "unlock": {
@@ -588,12 +588,12 @@
       "source": "game",
       "category": "behaviour",
       "name": {
-        "es": "Etóloga",
-        "en": "Ethologist"
+        "es": "Observadora",
+        "en": "Watcher"
       },
       "desc": {
-        "es": "Observa los 6 comportamientos.",
-        "en": "Observe all 6 behaviours."
+        "es": "Mira todas las maneras de moverse.",
+        "en": "See every way of moving."
       },
       "hidden": false,
       "unlock": {
@@ -624,8 +624,8 @@
         "en": "Productive"
       },
       "desc": {
-        "es": "Alcanza 10 Esencia/s.",
-        "en": "Reach 10 Essence/s."
+        "es": "Haz 10 de luz por segundo.",
+        "en": "Make 10 glow per second."
       },
       "hidden": false,
       "unlock": {
@@ -656,8 +656,8 @@
         "en": "Flourishing"
       },
       "desc": {
-        "es": "Alcanza 100 Esencia/s.",
-        "en": "Reach 100 Essence/s."
+        "es": "Haz 100 de luz por segundo.",
+        "en": "Make 100 glow per second."
       },
       "hidden": false,
       "unlock": {
@@ -684,12 +684,12 @@
       "source": "game",
       "category": "economy",
       "name": {
-        "es": "Ecosistema",
-        "en": "Ecosystem"
+        "es": "Jardín de luz",
+        "en": "Garden of light"
       },
       "desc": {
-        "es": "Alcanza 1 000 Esencia/s.",
-        "en": "Reach 1,000 Essence/s."
+        "es": "Haz 1 000 de luz por segundo.",
+        "en": "Make 1,000 glow per second."
       },
       "hidden": false,
       "unlock": {
@@ -720,8 +720,8 @@
         "en": "Ten thousand"
       },
       "desc": {
-        "es": "Gana 10 000 Esencia en total.",
-        "en": "Earn 10,000 Essence in total."
+        "es": "Haz 10 000 de luz en total.",
+        "en": "Make 10,000 glow in total."
       },
       "hidden": false,
       "unlock": {
@@ -752,8 +752,8 @@
         "en": "Millionaire"
       },
       "desc": {
-        "es": "Gana 1 000 000 de Esencia en total.",
-        "en": "Earn 1,000,000 Essence in total."
+        "es": "Haz 1 000 000 de luz en total.",
+        "en": "Make 1,000,000 glow in total."
       },
       "hidden": false,
       "unlock": {
@@ -874,8 +874,8 @@
         "en": "Rarity"
       },
       "desc": {
-        "es": "Registra una especie rara.",
-        "en": "Register a rare species."
+        "es": "Descubre una especie rara.",
+        "en": "Discover a rare species."
       },
       "hidden": false,
       "unlock": {
@@ -900,8 +900,8 @@
         "en": "Jewel"
       },
       "desc": {
-        "es": "Registra una especie muy rara.",
-        "en": "Register a very rare species."
+        "es": "Descubre una especie muy rara.",
+        "en": "Discover a very rare species."
       },
       "hidden": false,
       "unlock": {
@@ -926,8 +926,8 @@
         "en": "Living dish"
       },
       "desc": {
-        "es": "Ten 5 criaturas estables a la vez.",
-        "en": "Have 5 stable creatures at once."
+        "es": "Ten 5 criaturas vivas a la vez.",
+        "en": "Have 5 living creatures at once."
       },
       "hidden": false,
       "unlock": {
@@ -958,8 +958,8 @@
         "en": "Bustle"
       },
       "desc": {
-        "es": "Ten 10 criaturas estables a la vez.",
-        "en": "Have 10 stable creatures at once."
+        "es": "Ten 10 criaturas vivas a la vez.",
+        "en": "Have 10 living creatures at once."
       },
       "hidden": false,
       "unlock": {
@@ -986,12 +986,12 @@
       "source": "game",
       "category": "tools",
       "name": {
-        "es": "Impresora",
-        "en": "Printer"
+        "es": "Copiona",
+        "en": "Copycat"
       },
       "desc": {
-        "es": "Imprime una especie.",
-        "en": "Print a species."
+        "es": "Haz una copia con la Copiadora.",
+        "en": "Make a copy with the Copier."
       },
       "hidden": false,
       "unlock": {
@@ -1012,12 +1012,12 @@
       "source": "game",
       "category": "tools",
       "name": {
-        "es": "Ajuste fino",
-        "en": "Fine tuning"
+        "es": "Viajera",
+        "en": "Traveller"
       },
       "desc": {
-        "es": "Cambia la calibración.",
-        "en": "Change the calibration."
+        "es": "Visita 3 mundos.",
+        "en": "Visit 3 worlds."
       },
       "hidden": false,
       "unlock": {
@@ -1042,8 +1042,8 @@
         "en": "Archivist"
       },
       "desc": {
-        "es": "Guarda un régimen.",
-        "en": "Save a regime."
+        "es": "Encuentra todas las especies de un mundo.",
+        "en": "Find every species of one world."
       },
       "hidden": false,
       "unlock": {
@@ -1064,12 +1064,12 @@
       "source": "game",
       "category": "prestige",
       "name": {
-        "es": "Tabula rasa",
-        "en": "Tabula rasa"
+        "es": "Primera noche",
+        "en": "First night"
       },
       "desc": {
-        "es": "Provoca una Extinción.",
-        "en": "Trigger an Extinction."
+        "es": "Empieza una noche nueva.",
+        "en": "Start a new night."
       },
       "hidden": false,
       "unlock": {
@@ -1090,12 +1090,12 @@
       "source": "game",
       "category": "prestige",
       "name": {
-        "es": "Herencia",
-        "en": "Heritage"
+        "es": "Jardinera",
+        "en": "Gardener"
       },
       "desc": {
-        "es": "Compra un nodo del Genoma.",
-        "en": "Buy a Genome node."
+        "es": "Compra 10 mejoras del Árbol.",
+        "en": "Buy 10 upgrades in the Tree."
       },
       "hidden": false,
       "unlock": {
@@ -1120,8 +1120,8 @@
         "en": "Variation"
       },
       "desc": {
-        "es": "Registra una variante mutada.",
-        "en": "Register a mutated variant."
+        "es": "Encuentra una copia que salió distinta.",
+        "en": "Find a copy that came out different."
       },
       "hidden": false,
       "unlock": {
@@ -1142,12 +1142,12 @@
       "source": "game",
       "category": "bestiary",
       "name": {
-        "es": "Simbiosis",
-        "en": "Symbiosis"
+        "es": "Amistad",
+        "en": "Friendship"
       },
       "desc": {
-        "es": "Forma una pareja simbiótica.",
-        "en": "Form a symbiotic pair."
+        "es": "Junta dos especies amigas.",
+        "en": "Put two friend species together."
       },
       "hidden": false,
       "unlock": {
@@ -1172,8 +1172,8 @@
         "en": "Back again"
       },
       "desc": {
-        "es": "Vuelve tras una ausencia.",
-        "en": "Return after being away."
+        "es": "Vuelve a jugar otro día.",
+        "en": "Come back to play another day."
       },
       "hidden": false,
       "unlock": {
