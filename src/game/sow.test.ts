@@ -1,6 +1,7 @@
 /**
  * The Sembrar button (ADR-031, docs/MECANICAS.md §3.1, §4): the game picks the safest spot (or the nearest safe
- * spot to a drag) and never refuses a seed for spacing; a seed that never takes gives back what it cost, and after
+ * spot to a drag) and never refuses a seed for spacing while a spot has room (none: refused for free, never sown
+ * unsafe); a seed that never takes gives back what it cost, and after
  * SEED_FAIL_PITY failures in a row the next one is sure.
  */
 import { describe, expect, it } from 'vitest';
@@ -89,6 +90,43 @@ describe('the Sembrar button (ADR-031)', () => {
     expect(g.actions.sow!()).toBeNull();
     expect(g.state.essence).toBe(before);
     expect((log.get('seedBlocked') as GameEvents['seedBlocked'][]).at(-1)).toMatchObject({ reason: 'full' });
+  });
+
+  // Code review v0.027 #8: on a Ø128 dish (room for 3) with two swimmers the button sowed 40.1 cells from a swimmer's
+  // centre where the spacing rule needs 43: «never refused» stamped a seed inside the margin when no spot had room.
+  it('with no safe spot left the button sows nothing, for free, and says the dish has no room', () => {
+    const rec = recordingBus();
+    const g = createGame({ bus: rec.bus, rng: seededRng(1), cycle: 'sessions', grid: { w: 168, h: 168 } });
+    g.setDish({ cx: 84, cy: 84, radius: 64 });
+    g.actions.startClock!();
+    g.tick(0.1, report([]));
+    (g.state as unknown as { research: { levels: Record<string, number> } }).research.levels = { lab: 1 };
+    g.setDeviceDish(Infinity);
+    st(g).charges = { free: 0, guaranteed: 0 };
+    st(g).essence = 1000;
+    const n = C.DISH_CAPACITY[0] - 1; // under capacity: the dish is not counted full
+    const swimmers = Array.from({ length: n }, (_, i) => {
+      const a = (2 * Math.PI * i) / n;
+      return creature({ id: i + 1, x: 84 + 30 * Math.cos(a), y: 84 + 30 * Math.sin(a), radius: 7, behavior: 'swimmer', vx: -0.5 * Math.sin(a), vy: 0.5 * Math.cos(a) });
+    });
+    g.tick(0.1, report(swimmers, [], 100));
+    expect(g.view().seedPrice!.full).toBe(false);
+    const fits = (spec: { x: number; y: number; radius: number; pattern?: { w: number; h: number } | null }) => {
+      const seedR = Math.max(spec.radius, spec.pattern ? Math.max(spec.pattern.w, spec.pattern.h) / 2 : 0);
+      return swimmers.every((c) => Math.hypot(spec.x - c.x, spec.y - c.y) >= seedR + bodyR(c) + B.SEED_GAP * R - 1e-6);
+    };
+    // A tap and a drag onto the middle: each one either fits or is refused, never stamped inside the margin.
+    const tap = g.actions.sow!();
+    const drag = g.actions.sow!({ at: { x: 84, y: 84 } });
+    for (const spec of [tap, drag]) if (spec) expect(fits(spec)).toBe(true);
+    // Here nothing fits: the button shows no spot (it greys and says why) and every refusal is free.
+    expect(g.view().sowSpot).toBeNull();
+    expect(tap).toBeNull();
+    expect(drag).toBeNull();
+    expect(g.state.essence).toBe(1000);
+    const blocked = (rec.log.get('seedBlocked') ?? []) as GameEvents['seedBlocked'][];
+    expect(blocked.map((e) => e.reason)).toEqual(['full', 'full']);
+    expect(blocked.every((e) => e.crowded === true)).toBe(true);
   });
 
   it('a seed that never takes gives back what it cost', () => {

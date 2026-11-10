@@ -71,6 +71,21 @@ describe('the Sembrar button (ADR-031, docs/MECANICAS.md §3.1)', () => {
     expect(sowModel(s1).disabled).toBe(false);
   });
 
+  // Code review v0.027 #8: a crowded dish under its capacity has no safe spot left (GameView.sowSpot null).
+  it('a dish with no safe spot greys the button, says there is no room and names the Placa upgrade', () => {
+    const m = sowModel(sessionView({ sowSpot: null }));
+    expect(m.state).toBe('full');
+    expect(m.disabled).toBe(true);
+    expect(m.sub).toEqual(TEXT.sowNoRoom);
+    expect(m.hint).toEqual(TEXT.dishNoRoom);
+    expect(m.hint!.es).toContain(NODE_TEXT.dish.name.es);
+    expect(m.hint!.en).toContain(NODE_TEXT.dish.name.en);
+    // Free seeds waiting change nothing: there is still nowhere safe to put one.
+    expect(sowModel(sessionView({ sowSpot: null, charges: { free: 2, guaranteed: 0 } })).state).toBe('full');
+    // A view without the field (an older game) keeps the button as it was.
+    expect(sowModel(sessionView()).state).toBe('ready');
+  });
+
   it('three failures light the sure-seed ring after the second', () => {
     const ring = [0, 1, 2, 3].map((fails) => sowModel(sessionView({ seedLuck: { fails, need: 2 } })));
     expect(ring.map((m) => m.sure)).toEqual([false, false, true, true]);

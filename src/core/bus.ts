@@ -17,7 +17,8 @@ export interface GameEvents {
    */
   /** `near` (tooClose): the body in the way, in grid cells, for the red ring. */
   /** `near.id`: the creature in the way (optional, QA4 F-13: the warning follows it as it swims). */
-  seedBlocked: { x: number; y: number; reason: 'tooClose' | 'growing' | 'full'; near?: { x: number; y: number; r: number; id?: number } };
+  /** `crowded` (optional, code review v0.027 #8): 'full' because no spot has room, though the dish is under its count. */
+  seedBlocked: { x: number; y: number; reason: 'tooClose' | 'growing' | 'full'; near?: { x: number; y: number; r: number; id?: number }; crowded?: boolean };
   /** Seeding refused for lack of essence. */
   seedDenied: { x: number; y: number; cost: number };
   creatureBorn: { id: number; x: number; y: number };

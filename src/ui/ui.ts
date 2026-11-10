@@ -769,7 +769,12 @@ class BiolumaUI implements UI {
       lang: () => this.lang,
       reduceMotion: () => !!this.v?.settings.reduceMotion,
       onSow: (req) => this.sowNow(req),
-      onDenied: () => retriggerClass(this.sowBtn.el, 'shake'),
+      onDenied: (m) => {
+        retriggerClass(this.sowBtn.el, 'shake');
+        // A full dish, or one with no safe spot left (code review v0.027 #8): why, and the way out, on the dish.
+        const d = this.v?.dish;
+        if (m.state === 'full' && m.hint && d) this.sayBlocked(d.cx, d.cy, tx(m.hint));
+      },
       onSound: (k) => this.sound(k),
       vibrate: (p) => this.vibrate(p),
     });
@@ -2391,6 +2396,12 @@ class BiolumaUI implements UI {
     }
   }
 
+  /** A refused seed, said at grid (x, y): a red ring, the first sentence big and the rest small. */
+  private sayBlocked(x: number, y: number, msg: string, near?: { x: number; y: number; r: number; id?: number }): void {
+    const cut = msg.search(/[.!] /);
+    this.overlay.seedBlocked(x, y, cut > 0 ? msg.slice(0, cut + 1) : msg, cut > 0 ? msg.slice(cut + 2) : '', near);
+  }
+
   /** The overlay's effect clock (s) for effects started from the UI. */
   private overlayNow(): number {
     return this.overlay.clock;
@@ -2800,11 +2811,9 @@ class BiolumaUI implements UI {
       const sessions = this.v?.cycle === 'sessions';
       // (ADR-027 v0.027) The run's Nevera creature is still waking: the true reason, where the finger is.
       const waking = e.reason === 'growing' && !!this.v?.session?.wakeHold;
-      const msg = waking ? tx(TEXT.wakeSow) : e.reason === 'tooClose' ? (sessions ? '' : t('tooCloseSeed')) : e.reason === 'full' && room ? tx(TEXT.dishFull(room)) : '';
-      if (msg) {
-        const cut = msg.search(/[.!] /);
-        ov.seedBlocked(e.x, e.y, cut > 0 ? msg.slice(0, cut + 1) : msg, cut > 0 ? msg.slice(cut + 2) : '', e.near);
-      }
+      const full = e.crowded ? tx(TEXT.dishNoRoom) : room ? tx(TEXT.dishFull(room)) : '';
+      const msg = waking ? tx(TEXT.wakeSow) : e.reason === 'tooClose' ? (sessions ? '' : t('tooCloseSeed')) : e.reason === 'full' ? full : '';
+      if (msg) this.sayBlocked(e.x, e.y, msg, e.near);
       // A full dish: every creature's place blinks, so "full" is something you can see (CLARIDAD J-160).
       if (e.reason === 'full' && this.v) {
         let n = 0;

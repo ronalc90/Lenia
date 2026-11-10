@@ -464,6 +464,9 @@ export const TEXT = {
   sowCost: (n: number) => t(`${f(n)} de luz`, `${f(n)} glow`),
   /** The dish holds all it can (`n` = its room): the button greys and says so. */
   sowFull: (n: number) => t(`Llena (${n} de ${n})`, `Full (${n} of ${n})`),
+  /** (Code review v0.027 #8) Under its count, but no spot has room for a seed: the button greys and says why. */
+  sowNoRoom: t('Sin sitio', 'No room'),
+  dishNoRoom: t('No queda sitio seguro. Compra «Placa más grande» en el Árbol.', 'No safe spot left. Buy “Bigger dish” in the Tree.'),
   /** A seed dragged onto a bad spot snapped to the nearest safe one (once a run, never a scolding). */
   sowSnap: t('Aquí cabe mejor', 'There’s more room here'),
   /** After SEED_FAIL_PITY failed seeds in a row: the gold ring on the button. */

@@ -72,6 +72,8 @@ export function sowModel(v: GameView): SowModel {
   const room = v.seedPrice?.capacity ?? v.seedPrice?.freeSlots ?? 0;
   if (v.seedPrice?.full) return { ...base, state: 'full', sub: TEXT.sowFull(room), hint: TEXT.dishFull(room), disabled: true };
   if (v.seedsGrowing) return { ...base, state: 'growing', sub: STRINGS.seedWait, hint: null, disabled: true };
+  // Under its count, but no spot has room (the game never sows inside the spacing margin): the same grey, its reason.
+  if (v.sowSpot === null) return { ...base, state: 'full', sub: TEXT.sowNoRoom, hint: TEXT.dishNoRoom, disabled: true };
   const hint = sure ? TEXT.sowSure : null;
   // The first seed of the game is the sure creature, on the house (game.ts plantFirst).
   const firstFree = !!se.first && se.phase === 'ready';

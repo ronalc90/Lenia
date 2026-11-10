@@ -1266,7 +1266,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     return bestD > minD && best && seedFits(best.x, best.y, B.SEED_RADIUS * R * 1.3, obstacles) ? best : null;
   }
 
-  // ── The Sembrar button (ADR-031): the safest spot, never refused for spacing ──
+  // ── The Sembrar button (ADR-031): the safest spot, never refused for spacing while one has room ──
 
   /** Body radius the button plans for: a spore, or the biggest template of this world (its seeds are templates). */
   function sowBodyR(big = false): number {
@@ -1285,9 +1285,10 @@ export function createGame(deps: GameDeps, save?: string): Game {
 
   /**
    * The safest spot for a seed of body radius `bodyR`: on a fixed lattice (R/2 apart, centred on the dish; no
-   * randomness, so the button can show it before the tap), the point farthest from every body, its path, every
-   * fresh seed and the glass. With `near` (a drag): that point if it has room, else the nearest spot with room
-   * (clearSpotNear, then the lattice), else the safest. Null only when no lattice point lies inside the glass.
+   * randomness, so the button can show it before the tap), the point with room (seedFits) farthest from every body,
+   * its path, every fresh seed and the glass. With `near` (a drag): that point if it has room, else the nearest spot
+   * with room (clearSpotNear, then the lattice). Null when no spot has room: code review v0.027 #8, the least-bad
+   * point used to be returned and the button stamped a seed inside the spacing margin («never sow unsafe»).
    */
   function safeSpot(bodyR: number, near?: { x: number; y: number }): { x: number; y: number } | null {
     const R = s.calib.R;
@@ -1298,6 +1299,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     }
     const obstacles = seedObstacles();
     const rimMargin = bodyR + B.SEED_RIM_MARGIN * R;
+    const gap = B.SEED_GAP * R;
     const step = Math.max(1, R / 2);
     const cx = dish ? dish.cx : grid.w / 2;
     const cy = dish ? dish.cy : grid.h / 2;
@@ -1311,13 +1313,16 @@ export function createGame(deps: GameDeps, save?: string): Game {
         const x = cx + i * step;
         const y = cy + j * step;
         if (dish ? !insideDish(dish, x, y, rimMargin) : x < 0 || y < 0 || x >= grid.w || y >= grid.h) continue;
-        let clear = dish ? rimDistance(dish, x, y) - bodyR : Infinity;
-        for (const o of obstacles) clear = Math.min(clear, gdist(x, y, o.x, o.y) - o.r - bodyR);
+        // Room: SEED_GAP·R of empty dish between it and every body (seedFits, in one pass with the clearance).
+        let room = Infinity;
+        for (const o of obstacles) room = Math.min(room, gdist(x, y, o.x, o.y) - o.r - bodyR);
+        if (!(room >= gap)) continue;
+        const clear = Math.min(room, dish ? rimDistance(dish, x, y) - bodyR : Infinity);
         if (clear > bestClear + 1e-9) {
           bestClear = clear;
           best = { x, y };
         }
-        if (hasNear && seedFits(x, y, bodyR, obstacles)) {
+        if (hasNear) {
           const d = gdist(x, y, near!.x, near!.y);
           if (d < fitD - 1e-9) {
             fitD = d;
@@ -1329,7 +1334,7 @@ export function createGame(deps: GameDeps, save?: string): Game {
     return (hasNear ? fit : null) ?? best;
   }
 
-  /** Where the Sembrar button would sow a normal seed now (GameView.sowSpot): null when the dish is full. */
+  /** Where the Sembrar button would sow a normal seed now (GameView.sowSpot): null when the dish is full or has no safe spot. */
   function sowSpotNow(): { x: number; y: number } | null {
     if (!sessions || dishFull()) return null;
     const key = `${reportStep}|${recentSeeds.length}|${creatures.length}|${dish ? `${dish.cx},${dish.cy},${dish.radius}` : `${grid.w}x${grid.h}`}|${s.calib.R}|${worldNow()}`;
@@ -3364,7 +3369,12 @@ export function createGame(deps: GameDeps, save?: string): Game {
       const planR = sowBodyR(big);
       // The spot the button showed (GameView.sowSpot), whenever this seed fits the body it planned for.
       spot = !at && !big && bodyR <= planR ? sowSpotNow() : safeSpot(Math.max(bodyR, planR), at);
-      spot ??= clearSpotNear(x, y, bodyR) ?? { x, y };
+      spot ??= clearSpotNear(x, y, bodyR);
+      if (!spot) {
+        // No spot has room (a crowded dish under its count): refused for free, never stamped inside the margin.
+        bus.emit('seedBlocked', { x, y, reason: 'full', crowded: true });
+        return null;
+      }
     } else {
       // Spacing: never stamp a spore onto or right next to other matter (they fuse into a maze).
       spot = clearSpotNear(x, y, bodyR);
