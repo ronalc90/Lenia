@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Bus, type GameEvents } from '../core/bus';
 import { INTRO_MAX_WORDS, INTRO_PANELS, INTRO_SECONDS, INTRO_UI } from './introScript';
-import { INTRO_SEEN_FLAG, MAX_WORDS_TUTORIAL, T_INTRO_AFTER_INTRO, T_INTRO_LINES } from './script';
+import { INTRO_SEEN_FLAG, MAX_WORDS_TUTORIAL, SCENE_BY_ID, T_INTRO_AFTER_INTRO, T_INTRO_LINES } from './script';
 import { createStory } from './story';
 import { makeView, memoryStorage } from './testUtil';
 import { CHAIN, SIDE } from './encargoScript';
@@ -106,5 +106,23 @@ describe('the intro and the Encargos send the finger to the Sembrar button to so
   it('no Encargo of the sessions cycle tells the player to tap the dish to sow', () => {
     for (const e of [...CHAIN, ...SIDE]) for (const x of [e.how?.es ?? '', e.how?.en ?? '']) expect(x, e.id).not.toMatch(/Toca la placa|Tap the dish|lejos del cristal|away from the glass/);
     expect(sowsOnDish.test('Toca el botón Sembrar')).toBe(false);
+  });
+});
+
+// QA-4 pulido 3 and 6: VELA was «la ayudante del laboratorio» in the intro and «el monitor de esta placa» in the
+// tutorial; in English «glow» was a verb and the currency in one line («makes glow», «it glows and gives you glow»).
+describe('one VELA, one word for the currency (QA-4)', () => {
+  it('QA-4: VELA introduces herself with the same role as in the tutorial', () => {
+    const all = INTRO_PANELS.flatMap((p) => p.lines).filter((l) => l.who === 'vela');
+    expect(all.map((l) => l.text.es).join(' ')).not.toMatch(/ayudante/);
+    expect(all.map((l) => l.text.es).join(' ')).toMatch(/monitor/);
+  });
+
+  it('QA-4: English never uses «glow» as the verb next to the currency', () => {
+    const lines = INTRO_PANELS.flatMap((p) => p.lines).map((l) => l.text.en);
+    for (const s of lines) expect(s).not.toMatch(/makes glow|gives you glow/i);
+    const pulse = SCENE_BY_ID.get('t_pulse')!;
+    const en = (typeof pulse.lines === 'function' ? [] : pulse.lines).map((l) => l.text.en).join(' ');
+    expect(en).not.toMatch(/glows and gives you glow/);
   });
 });

@@ -417,7 +417,9 @@ describe('the streak chip by the counter (ADR-031, docs/MECANICAS.md §3.2)', ()
     expect(full.full).toBe(true);
     expect(full.text).toBe('¡Racha máxima! +25 %');
     expect(full.line).toBe('+25 % por tu racha');
-    expect(full.dots).toBe(0);
+    // QA-4 pulido 5 (c1-087, c1-143, c1-151): «¡Racha máxima!» with half its dots empty read as «not full». Full = all lit.
+    expect(full.dots).toBe(full.every);
+    expect(streakChip(st(10, { toChispazo: 4 }), 'es')!.dots).toBe(10);
     for (let n = 1; n <= 30; n++)
       for (const l of ['es', 'en'] as const) {
         const c = streakChip(st(n, { max: 30 }), l)!;

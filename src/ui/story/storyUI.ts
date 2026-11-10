@@ -300,6 +300,8 @@ export function createStoryUI(root: HTMLElement, story: Story, opts: StoryUIOpti
 
   function renderChoice(): void {
     choice.innerHTML = '';
+    // QA-4 pulido 4 (c1-099): no «▼ continue» on the box while it waits for a pick.
+    box.classList.toggle('choosing', !!options);
     scrim.classList.toggle('show', !!options && held !== 'dock');
     if (!options) {
       choice.hidden = true;

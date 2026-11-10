@@ -480,7 +480,7 @@ export function createSessionHud(container: HTMLElement, opts: SessionHudOptions
 export interface StreakChipView {
   /** «Racha +20 %», or «¡Racha máxima! +25 %» when full. */
   text: string;
-  /** Dots lit towards the next ¡Chispazo! (0 right after one) out of `every`. */
+  /** Dots lit towards the next ¡Chispazo! (0 right after one) out of `every`; all of them at the maximum. */
   dots: number;
   every: number;
   full: boolean;
@@ -497,7 +497,8 @@ export function streakChip(s: GameView['streak'] | undefined, l: Lang): StreakCh
   const shown = s.mult;
   const full = s.hits >= s.max;
   // Hits left to the next one (every … 1): every − left are lit; right after a ¡Chispazo! (left = every) none.
-  const dots = (every - (Math.max(0, Math.round(s.toChispazo)) % every)) % every;
+  // At the maximum every dot is lit (QA-4 pulido 5: «¡Racha máxima!» with half of them empty read as «not full»).
+  const dots = full ? every : (every - (Math.max(0, Math.round(s.toChispazo)) % every)) % every;
   return {
     text: full ? `${TEXT.streakMax[l]} ${multWords(shown)[l]}` : TEXT.streak(shown)[l],
     dots,

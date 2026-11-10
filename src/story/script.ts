@@ -318,7 +318,8 @@ export const SCENES: SceneDef[] = [
     // Momento): then she says it anyway, as long as the player never tapped a creature.
     when: (c) => firstSession(c) && pulseLesson(c) && (clockWaits(c) || c.n('pulses') === 0),
     // Her line moves on by itself: the step ends on three taps on the creature, not on a tap on her box (§6.1).
-    lines: [vela('happy', TEXT.tutPulse.es, TEXT.tutPulse.en, { target: ['creature', 'dish'], auto: 1.5 })],
+    // QA-4 pulido 6: «it glows and gives you glow» used the currency's name as a verb.
+    lines: [vela('happy', TEXT.tutPulse.es, 'Tap it: it shines and you get Glow.', { target: ['creature', 'dish'], auto: 1.5 })],
     // Taps that pulsed since she started, counted even while she talks (the streak itself may drain meanwhile).
     wait: {
       event: 'pulses',

@@ -204,6 +204,10 @@
   /* A ready LED, not a bouncing arrow (§6.4): it blinks, it does not move. */
   animation: sty-ready calc(var(--bl-t-celebrate) * 2) steps(1, end) infinite;
 }
+/* QA-4 pulido 4: waiting for a pick, the box has nothing to continue to. */
+.sty-box.choosing .sty-next {
+  visibility: hidden;
+}
 @keyframes sty-ready {
   50% {
     opacity: 0.35;

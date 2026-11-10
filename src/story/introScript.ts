@@ -69,7 +69,8 @@ export const INTRO_PANELS: readonly IntroPanel[] = [
     id: 'candle',
     seconds: 3.5,
     lines: [
-      { who: 'vela', mood: 'awed', text: t('¡Hola! Soy VELA, la ayudante del laboratorio.', 'Hi! I\'m VELA, the lab assistant.') },
+      // QA-4 pulido 3: the same role as in the tutorial («el monitor de esta placa»).
+      { who: 'vela', mood: 'awed', text: t('¡Hola! Soy VELA, el monitor del laboratorio.', 'Hi! I\'m VELA, the lab\'s monitor.') },
       { who: 'vela', mood: 'happy', text: t('Mi lámpara nunca se apaga. ¡Y la placa da luz!', 'My lamp never goes out. And the dish gives light!') },
     ],
   },
@@ -93,7 +94,7 @@ export const INTRO_PANELS: readonly IntroPanel[] = [
     id: 'essence',
     kicker: how(2),
     seconds: 2.5,
-    lines: [{ who: 'narrator', text: t('Una criatura con forma hace luz. ¡Tócala y recógela!', 'A creature with a shape makes glow. Tap to collect it!') }],
+    lines: [{ who: 'narrator', text: t('Una criatura con forma hace luz. ¡Tócala y recógela!', 'A shaped creature gives off light. Tap it to collect Glow!') }],
   },
   {
     id: 'clock',
